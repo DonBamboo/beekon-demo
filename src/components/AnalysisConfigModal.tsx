@@ -71,7 +71,7 @@ export function AnalysisConfigModal({
   websiteId,
 }: AnalysisConfigModalProps) {
   const { toast } = useToast();
-  const { consumeCredit } = useSubscriptionEnforcement();
+  const { consumeCredit, restoreCredit } = useSubscriptionEnforcement();
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [customTopic, setCustomTopic] = useState("");
@@ -197,12 +197,16 @@ export function AnalysisConfigModal({
     }
 
     setIsLoading(true);
+    let creditConsumed = false;
+    
     try {
       // Check if user can consume credits
       const canConsume = await consumeCredit();
       if (!canConsume) {
+        setIsLoading(false);
         return;
       }
+      creditConsumed = true;
 
       // Create analysis configuration
       const config = {
@@ -254,6 +258,10 @@ export function AnalysisConfigModal({
             variant: "destructive",
           });
 
+          // Restore credit if analysis failed after starting
+          console.log("Restoring credit due to failed analysis");
+          await restoreCredit();
+
           setTimeout(() => {
             handleClose();
           }, 2000);
@@ -266,6 +274,13 @@ export function AnalysisConfigModal({
       });
     } catch (error) {
       console.error("Failed to start analysis:", error);
+      
+      // If we consumed a credit but the operation failed, restore it
+      if (creditConsumed) {
+        console.log("Restoring credit due to failed analysis start");
+        await restoreCredit();
+      }
+      
       toast({
         title: "Error",
         description: "Failed to start analysis. Please try again.",

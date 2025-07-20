@@ -1,5 +1,6 @@
 import { useToast } from "@/hooks/use-toast";
 import { SubscriptionTier, useWorkspace } from "./useWorkspace";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface SubscriptionLimits {
   websiteAnalyses: number;
@@ -160,9 +161,109 @@ export function useSubscriptionEnforcement() {
       return false;
     }
 
-    // Here you would typically make an API call to consume a credit
-    // For now, we'll just update the local state
-    return true;
+    try {
+      // Make actual database call to consume a credit
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .from("workspaces")
+        .update({ 
+          credits_remaining: credits - 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", currentWorkspace.id)
+        .select("credits_remaining")
+        .single();
+
+      if (error) {
+        console.error("Failed to consume credit:", error);
+        toast({
+          title: "Credit Deduction Failed",
+          description: "Failed to deduct credit. Please try again.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      // Update local workspace state with new credit count
+      // This will trigger a re-render with updated credits
+      console.log(`Credit consumed successfully. Remaining credits: ${data.credits_remaining}`);
+      
+      return true;
+    } catch (error) {
+      console.error("Error consuming credit:", error);
+      toast({
+        title: "Credit Deduction Error",
+        description: "An error occurred while deducting your credit. Please try again.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const consumeCreditForCompetitor = async (): Promise<boolean> => {
+    if (!currentWorkspace) {
+      toast({
+        title: "Workspace Required",
+        description: "Please create a workspace to add competitors.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    const tier = getSubscriptionTier();
+    const limits = getCurrentLimits();
+
+    // Check if competitor tracking is allowed for this tier
+    if (limits.competitorTracking === 0) {
+      toast({
+        title: "Feature Not Available",
+        description: `Competitor tracking is not available in the ${tier} plan. Please upgrade to Starter or higher.`,
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    // For professional/enterprise (unlimited), don't consume credits
+    if (limits.competitorTracking === -1) {
+      return true;
+    }
+
+    // For starter tier, consume credits for competitor addition
+    return await consumeCredit();
+  };
+
+  const restoreCredit = async (): Promise<boolean> => {
+    if (!currentWorkspace) {
+      console.error("Cannot restore credit: No workspace available");
+      return false;
+    }
+
+    try {
+      const currentCredits = currentWorkspace.credits_remaining || 0;
+      
+      // Restore one credit to the workspace
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .from("workspaces")
+        .update({ 
+          credits_remaining: currentCredits + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", currentWorkspace.id)
+        .select("credits_remaining")
+        .single();
+
+      if (error) {
+        console.error("Failed to restore credit:", error);
+        return false;
+      }
+
+      console.log(`Credit restored successfully. New credit count: ${data.credits_remaining}`);
+      return true;
+    } catch (error) {
+      console.error("Error restoring credit:", error);
+      return false;
+    }
   };
 
   const getRemainingCredits = (): number => {
@@ -182,6 +283,8 @@ export function useSubscriptionEnforcement() {
     canPerformAction,
     enforceLimit,
     consumeCredit,
+    consumeCreditForCompetitor,
+    restoreCredit,
     getRemainingCredits,
     getSubscriptionTier,
     isFeatureAvailable,
