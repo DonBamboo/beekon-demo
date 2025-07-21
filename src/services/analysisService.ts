@@ -58,12 +58,19 @@ export class AnalysisService {
     return AnalysisService.instance;
   }
 
-  async createAnalysis(config: AnalysisConfig, userId?: string, workspaceId?: string): Promise<string> {
+  async createAnalysis(
+    config: AnalysisConfig,
+    userId?: string,
+    workspaceId?: string
+  ): Promise<string> {
     try {
       // Get current user if not provided
       if (!userId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("User must be authenticated to create analysis");
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user)
+          throw new Error("User must be authenticated to create analysis");
         userId = user.id;
       }
 
@@ -75,13 +82,17 @@ export class AnalysisService {
           .select("workspace_id")
           .eq("id", config.websiteId)
           .single();
-        
+
         if (!website) throw new Error("Website not found");
         workspaceId = website.workspace_id;
       }
 
       // Create analysis session first
-      const analysisSession = await this.createAnalysisSession(config, userId, workspaceId);
+      const analysisSession = await this.createAnalysisSession(
+        config,
+        userId,
+        workspaceId
+      );
 
       // First, create topics if they don't exist
       const topicIds = await this.ensureTopicsExist(
@@ -205,7 +216,21 @@ export class AnalysisService {
       .single();
 
     if (error) throw error;
-    return data as AnalysisSession;
+
+    console.log("config", config);
+    console.log("workspaceId", workspaceId);
+
+    const response = await sendN8nWebhook("webhook/manually-added-analysis", {
+      workspaceId,
+      config,
+      userId,
+    });
+
+    if (!response.success) {
+      console.error("An error occurred" + response.messages);
+    }
+
+    return data as unknown as AnalysisSession;
   }
 
   private async startAnalysis(
@@ -311,12 +336,12 @@ export class AnalysisService {
       let recommendationText: string | null = null;
       let promptStrengths: string[] | null = null;
       let promptOpportunities: string[] | null = null;
-      
+
       // Extract analysis session information
       const analysisSessionId = row.analysis_session_id as string | null;
       let analysisName: string | null = null;
       let analysisSessionStatus: string | null = null;
-      
+
       // Check if we have analysis session data from joins
       if (row.analysis_sessions) {
         const session = row.analysis_sessions as {
@@ -458,7 +483,8 @@ export class AnalysisService {
           (result) =>
             result.prompt.toLowerCase().includes(searchTerm) ||
             result.topic.toLowerCase().includes(searchTerm) ||
-            (result.analysis_name && result.analysis_name.toLowerCase().includes(searchTerm)) ||
+            (result.analysis_name &&
+              result.analysis_name.toLowerCase().includes(searchTerm)) ||
             result.llm_results.some((llm) =>
               llm.response_text?.toLowerCase().includes(searchTerm)
             )
@@ -602,7 +628,7 @@ export class AnalysisService {
   }
 
   private async updateAnalysisSession(
-    sessionId: string, 
+    sessionId: string,
     updates: Partial<{
       status: AnalysisStatus;
       progress_data: AnalysisProgress;
@@ -639,7 +665,9 @@ export class AnalysisService {
     return data as AnalysisSession;
   }
 
-  async getAnalysisSessionsForWebsite(websiteId: string): Promise<AnalysisSession[]> {
+  async getAnalysisSessionsForWebsite(
+    websiteId: string
+  ): Promise<AnalysisSession[]> {
     const { data, error } = await supabase
       .schema("beekon_data")
       .from("analysis_sessions")
@@ -652,7 +680,7 @@ export class AnalysisService {
       return [];
     }
 
-    return data as AnalysisSession[];
+    return data as unknown as AnalysisSession[];
   }
 
   // This method would be called by webhook handlers or polling
@@ -668,13 +696,13 @@ export class AnalysisService {
 
     await this.updateAnalysisSession(sessionId, {
       progress_data: progressData as AnalysisProgress,
-      ...(update.status === "completed" && { 
-        status: "completed", 
-        completed_at: new Date().toISOString() 
+      ...(update.status === "completed" && {
+        status: "completed",
+        completed_at: new Date().toISOString(),
       }),
-      ...(update.status === "failed" && { 
-        status: "failed", 
-        error_message: update.error 
+      ...(update.status === "failed" && {
+        status: "failed",
+        error_message: update.error,
       }),
     });
 
@@ -686,9 +714,11 @@ export class AnalysisService {
     }
   }
 
-  private async getCurrentProgress(sessionId: string): Promise<AnalysisProgress> {
+  private async getCurrentProgress(
+    sessionId: string
+  ): Promise<AnalysisProgress> {
     const session = await this.getAnalysisSession(sessionId);
-    
+
     if (session && session.progress_data) {
       return session.progress_data;
     }
@@ -780,10 +810,10 @@ export class AnalysisService {
           analysisIds: analysisIds,
         },
       };
-      
-      return await exportService.exportData(exportData, format, { 
-        exportType: "analysis", 
-        customFilename: `analysis_results_${results.length}_items` 
+
+      return await exportService.exportData(exportData, format, {
+        exportType: "analysis",
+        customFilename: `analysis_results_${results.length}_items`,
       });
     } catch (error) {
       console.error("Failed to export analysis results:", error);

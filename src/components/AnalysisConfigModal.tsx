@@ -29,7 +29,7 @@ import {
   type AnalysisProgress,
   type AnalysisSession,
 } from "@/services/analysisService";
-import { ExportFormat, useExportHandler } from "@/lib/export-utils";
+import { useExportHandler } from "@/lib/export-utils";
 import { exportService } from "@/services/exportService";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -44,6 +44,7 @@ import {
 import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
+import { ExportFormat } from "@/types/database";
 
 const analysisConfigSchema = z.object({
   analysisName: z.string().min(1, "Analysis name is required"),
@@ -198,7 +199,7 @@ export function AnalysisConfigModal({
 
     setIsLoading(true);
     let creditConsumed = false;
-    
+
     try {
       // Check if user can consume credits
       const canConsume = await consumeCredit();
@@ -231,7 +232,7 @@ export function AnalysisConfigModal({
       setCurrentAnalysisSession(session);
 
       // Subscribe to progress updates
-      analysisService.subscribeToProgress(sessionId, (progress) => {
+      analysisService.subscribeToProgress(sessionId, async (progress) => {
         setAnalysisProgress(progress);
 
         if (progress.status === "completed") {
@@ -274,13 +275,13 @@ export function AnalysisConfigModal({
       });
     } catch (error) {
       console.error("Failed to start analysis:", error);
-      
+
       // If we consumed a credit but the operation failed, restore it
       if (creditConsumed) {
         console.log("Restoring credit due to failed analysis start");
         await restoreCredit();
       }
-      
+
       toast({
         title: "Error",
         description: "Failed to start analysis. Please try again.",
