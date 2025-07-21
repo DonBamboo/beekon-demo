@@ -65,6 +65,18 @@ interface AnalysisConfigModalProps {
   websiteId?: string;
 }
 
+// Fallback topics if no database topics exist - moved outside component for stable reference
+const FALLBACK_TOPICS = [
+  "AI Tools",
+  "Software Solutions",
+  "Machine Learning",
+  "Data Analytics",
+  "Cloud Services",
+  "Automation",
+  "Business Intelligence",
+  "Customer Support",
+];
+
 export function AnalysisConfigModal({
   isOpen,
   onClose,
@@ -89,18 +101,6 @@ export function AnalysisConfigModal({
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
   const [topicError, setTopicError] = useState<string | null>(null);
   const { handleExport } = useExportHandler();
-
-  // Fallback topics if no database topics exist
-  const fallbackTopics = [
-    "AI Tools",
-    "Software Solutions",
-    "Machine Learning",
-    "Data Analytics",
-    "Cloud Services",
-    "Automation",
-    "Business Intelligence",
-    "Customer Support",
-  ];
 
   const availableLLMs = [
     {
@@ -133,7 +133,7 @@ export function AnalysisConfigModal({
       } else {
         // If no topics exist for this website, show fallback topics as suggestions
         setAvailableTopics(
-          fallbackTopics.map((topic, index) => ({
+          FALLBACK_TOPICS.map((topic, index) => ({
             id: `fallback-${index}`,
             name: topic,
             resultCount: 0,
@@ -146,7 +146,7 @@ export function AnalysisConfigModal({
 
       // Fallback to default topics on error
       setAvailableTopics(
-        fallbackTopics.map((topic, index) => ({
+        FALLBACK_TOPICS.map((topic, index) => ({
           id: `fallback-${index}`,
           name: topic,
           resultCount: 0,
@@ -162,7 +162,7 @@ export function AnalysisConfigModal({
     } finally {
       setIsLoadingTopics(false);
     }
-  }, [websiteId, toast, fallbackTopics]);
+  }, [websiteId, toast]);
 
   // Load topics when websiteId changes or modal opens
   useEffect(() => {
