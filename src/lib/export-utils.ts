@@ -1,9 +1,13 @@
 // Unified export utilities for consistent export functionality across the application
 
 import { toast } from "@/hooks/use-toast";
+import jsPDF from "jspdf";
+import * as XLSX from "xlsx";
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } from "docx";
+import { saveAs } from "file-saver";
 
-// Export format types
-export type ExportFormat = "pdf" | "csv" | "json" | "excel" | "word";
+// Export format types - import from database types for consistency
+import type { ExportFormat } from "@/types/database";
 
 // Export configuration interface
 export interface ExportConfig {
@@ -11,8 +15,8 @@ export interface ExportConfig {
   format: ExportFormat;
   includeTimestamp?: boolean;
   dateRange?: { start: string; end: string };
-  filters?: Record<string, any>;
-  metadata?: Record<string, any>;
+  filters?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 // Field mapping configuration for professional column names
@@ -99,18 +103,18 @@ export interface ExportResult {
 // Export data structure for consistent formatting
 export interface ExportData {
   title: string;
-  data: any;
+  data: Record<string, unknown>[] | Record<string, unknown>;
   exportedAt: string;
   totalRecords: number;
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown>;
   dateRange?: { start: string; end: string };
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   dataType?: string; // For field mapping
 }
 
 // MIME type mappings for different export formats
 export const EXPORT_MIME_TYPES: Record<ExportFormat, string> = {
-  pdf: "text/plain", // Use text/plain for PDF until we implement real PDF generation
+  pdf: "application/pdf",
   csv: "text/csv",
   json: "application/json",
   excel: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -119,7 +123,7 @@ export const EXPORT_MIME_TYPES: Record<ExportFormat, string> = {
 
 // File extension mappings
 export const EXPORT_FILE_EXTENSIONS: Record<ExportFormat, string> = {
-  pdf: "txt", // Use .txt extension for PDF until we implement real PDF generation
+  pdf: "pdf",
   csv: "csv",
   json: "json",
   excel: "xlsx",
@@ -127,40 +131,45 @@ export const EXPORT_FILE_EXTENSIONS: Record<ExportFormat, string> = {
 };
 
 // Format value according to field mapping
-export function formatValue(value: any, fieldMapping?: FieldMapping[string]): string {
+export function formatValue(value: unknown, fieldMapping?: FieldMapping[string]): string {
   if (value === null || value === undefined) return '';
   
   const format = fieldMapping?.format || 'text';
   
   switch (format) {
-    case 'percentage':
-      const numValue = parseFloat(value);
+    case 'percentage': {
+      const numValue = parseFloat(String(value));
       return isNaN(numValue) ? '0%' : `${numValue.toFixed(1)}%`;
+    }
     
-    case 'number':
-      const num = parseFloat(value);
+    case 'number': {
+      const num = parseFloat(String(value));
       return isNaN(num) ? '0' : num.toLocaleString();
+    }
     
-    case 'currency':
-      const currencyNum = parseFloat(value);
+    case 'currency': {
+      const currencyNum = parseFloat(String(value));
       return isNaN(currencyNum) ? '$0.00' : `$${currencyNum.toFixed(2)}`;
+    }
     
-    case 'date':
-      const date = new Date(value);
+    case 'date': {
+      const date = new Date(String(value));
       return isNaN(date.getTime()) ? '' : date.toLocaleDateString();
+    }
     
-    case 'datetime':
-      const datetime = new Date(value);
+    case 'datetime': {
+      const datetime = new Date(String(value));
       return isNaN(datetime.getTime()) ? '' : datetime.toLocaleString();
+    }
     
     case 'boolean':
       return value === true ? 'Yes' : value === false ? 'No' : '';
     
     case 'url':
-      return value.toString();
+      return String(value);
     
     default:
-      return value.toString();
+      return String(value);
   }
 }
 
@@ -170,11 +179,11 @@ export function getFieldMapping(dataType: string): FieldMapping {
 }
 
 // Apply field mapping to transform data
-export function applyFieldMapping(data: any[], dataType: string): any[] {
+export function applyFieldMapping(data: Record<string, unknown>[], dataType: string): Record<string, unknown>[] {
   const fieldMapping = getFieldMapping(dataType);
   
   return data.map(item => {
-    const transformedItem: any = {};
+    const transformedItem: Record<string, unknown> = {};
     
     Object.entries(item).forEach(([key, value]) => {
       const mapping = fieldMapping[key];
@@ -257,41 +266,68 @@ export function downloadBlob(
         type: blob.type
       });
 
-      // Create download URL
+      // Use the file-saver library for better compatibility
+      try {
+        saveAs(blob, filename);
+        resolve({
+          success: true,
+          filename,
+          format,
+          size: blob.size,
+        });
+        return;
+      } catch (saveAsError) {
+        console.warn("file-saver failed, falling back to manual download:", saveAsError);
+      }
+
+      // Fallback to manual download method
       const url = window.URL.createObjectURL(blob);
       
-      // Create download link
+      // Create download link with better browser compatibility
       const link = document.createElement("a");
       link.href = url;
       link.download = filename;
       link.style.display = "none";
+      link.style.visibility = "hidden";
       
-      // Add click handler to detect if download was initiated
-      let downloadStarted = false;
-      link.addEventListener('click', () => {
-        downloadStarted = true;
-      });
-      
-      // Trigger download
+      // Add to DOM
       document.body.appendChild(link);
       
-      // Use setTimeout to ensure click event is processed
-      setTimeout(() => {
-        link.click();
+      // Create a more reliable download trigger
+      const triggerDownload = () => {
+        // For better compatibility across browsers
+        if (link.click) {
+          link.click();
+        } else if (document.createEvent) {
+          const evt = document.createEvent('MouseEvents');
+          evt.initEvent('click', true, true);
+          link.dispatchEvent(evt);
+        }
+      };
+      
+      // Use requestAnimationFrame for better timing
+      requestAnimationFrame(() => {
+        triggerDownload();
         
-        // Give browser time to start download before cleanup
+        // Clean up after a reasonable delay
         setTimeout(() => {
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
+          try {
+            if (document.body.contains(link)) {
+              document.body.removeChild(link);
+            }
+            window.URL.revokeObjectURL(url);
+          } catch (cleanupError) {
+            console.warn("Cleanup error:", cleanupError);
+          }
           
           resolve({
-            success: downloadStarted,
+            success: true,
             filename,
             format,
             size: blob.size,
           });
-        }, 100);
-      }, 10);
+        }, 500); // Increased delay for better reliability
+      });
       
     } catch (error) {
       console.error("Download failed:", error);
@@ -347,57 +383,533 @@ export function formatCsvExport(data: ExportData, dataType?: string): Blob {
   return new Blob([csvContent], { type: EXPORT_MIME_TYPES.csv });
 }
 
-// Format data for PDF export (enhanced text format)
+// Format data for PDF export using jsPDF for professional PDF documents
 export function formatPdfExport(data: ExportData, dataType?: string): Blob {
-  let textContent = `╔${"═".repeat(Math.max(data.title.length + 20, 60))}╗\n`;
-  textContent += `║${" ".repeat(10)}${data.title.toUpperCase()}${" ".repeat(10)}║\n`;
-  textContent += `╚${"═".repeat(Math.max(data.title.length + 20, 60))}╝\n\n`;
+  const doc = new jsPDF();
+  let yPosition = 20;
+  const pageHeight = doc.internal.pageSize.height;
+  const marginBottom = 20;
   
-  // Professional document header
-  textContent += `📊 BEEKON AI REPORT\n`;
-  textContent += `${"─".repeat(50)}\n\n`;
+  // Helper function to add page break if needed
+  const checkPageBreak = (neededHeight: number = 10) => {
+    if (yPosition + neededHeight > pageHeight - marginBottom) {
+      doc.addPage();
+      yPosition = 20;
+    }
+  };
   
-  textContent += `📅 Generated: ${new Date(data.exportedAt).toLocaleString()}\n`;
-  textContent += `📈 Total Records: ${data.totalRecords.toLocaleString()}\n`;
+  // Document title
+  doc.setFontSize(20);
+  doc.setFont(undefined, 'bold');
+  doc.text(data.title.toUpperCase(), 20, yPosition);
+  yPosition += 15;
+  
+  // Subtitle
+  doc.setFontSize(12);
+  doc.setFont(undefined, 'normal');
+  doc.text('BEEKON AI REPORT', 20, yPosition);
+  yPosition += 15;
+  
+  // Document metadata
+  doc.setFontSize(10);
+  doc.text(`Generated: ${new Date(data.exportedAt).toLocaleString()}`, 20, yPosition);
+  yPosition += 6;
+  doc.text(`Total Records: ${data.totalRecords.toLocaleString()}`, 20, yPosition);
+  yPosition += 6;
   
   // Add date range if present
   if (data.dateRange) {
     const startDate = new Date(data.dateRange.start).toLocaleDateString();
     const endDate = new Date(data.dateRange.end).toLocaleDateString();
-    textContent += `📆 Date Range: ${startDate} to ${endDate}\n`;
+    doc.text(`Date Range: ${startDate} to ${endDate}`, 20, yPosition);
+    yPosition += 6;
   }
   
-  textContent += `\n`;
+  yPosition += 10;
   
   // Add filters if present
   if (data.filters && Object.keys(data.filters).length > 0) {
-    textContent += `🔍 APPLIED FILTERS\n`;
-    textContent += `${"─".repeat(20)}\n`;
+    checkPageBreak(20);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('APPLIED FILTERS', 20, yPosition);
+    yPosition += 8;
+    
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
     Object.entries(data.filters).forEach(([key, value]) => {
+      checkPageBreak();
       const cleanKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      textContent += `• ${cleanKey}: ${value}\n`;
+      doc.text(`• ${cleanKey}: ${value}`, 25, yPosition);
+      yPosition += 6;
     });
-    textContent += `\n`;
+    yPosition += 10;
   }
   
   // Add the main data
+  checkPageBreak(20);
+  doc.setFontSize(12);
+  doc.setFont(undefined, 'bold');
+  doc.text('DATA', 20, yPosition);
+  yPosition += 10;
+  
+  doc.setFontSize(9);
+  doc.setFont(undefined, 'normal');
+  
   if (Array.isArray(data.data)) {
-    textContent += formatArrayToPdf(data.data, dataType);
+    const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
+    
+    if (processedData.length > 0) {
+      // Create table-like structure
+      const headers = Object.keys(processedData[0]);
+      const maxCharsPerColumn = Math.floor(170 / headers.length);
+      
+      // Headers
+      checkPageBreak(15);
+      doc.setFont(undefined, 'bold');
+      let xPosition = 20;
+      headers.forEach(header => {
+        const truncatedHeader = header.length > maxCharsPerColumn ? 
+          header.substring(0, maxCharsPerColumn - 3) + '...' : header;
+        doc.text(truncatedHeader, xPosition, yPosition);
+        xPosition += maxCharsPerColumn * 1.2;
+      });
+      yPosition += 8;
+      
+      // Add separator line
+      doc.line(20, yPosition - 3, 190, yPosition - 3);
+      
+      // Data rows
+      doc.setFont(undefined, 'normal');
+      processedData.slice(0, 50).forEach((row, index) => { // Limit to 50 rows for PDF readability
+        checkPageBreak();
+        xPosition = 20;
+        headers.forEach(header => {
+          const value = String(row[header] ?? '');
+          const truncatedValue = value.length > maxCharsPerColumn ? 
+            value.substring(0, maxCharsPerColumn - 3) + '...' : value;
+          doc.text(truncatedValue, xPosition, yPosition);
+          xPosition += maxCharsPerColumn * 1.2;
+        });
+        yPosition += 6;
+      });
+      
+      if (processedData.length > 50) {
+        yPosition += 5;
+        doc.setFont(undefined, 'italic');
+        doc.text(`... and ${processedData.length - 50} more records`, 20, yPosition);
+      }
+    }
   } else if (typeof data.data === 'object') {
-    textContent += formatObjectToPdf(data.data, dataType);
+    const fieldMapping = dataType ? getFieldMapping(dataType) : {};
+    
+    Object.entries(data.data).forEach(([key, value]) => {
+      checkPageBreak();
+      const mapping = fieldMapping[key];
+      const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const formattedValue = mapping ? formatValue(value, mapping) : String(value ?? '');
+      
+      doc.setFont(undefined, 'bold');
+      doc.text(`${displayName}:`, 20, yPosition);
+      doc.setFont(undefined, 'normal');
+      
+      // Handle long values by wrapping text
+      const maxWidth = 170;
+      const splitText = doc.splitTextToSize(formattedValue, maxWidth - 40);
+      
+      if (Array.isArray(splitText)) {
+        splitText.forEach((line: string, index: number) => {
+          if (index === 0) {
+            doc.text(line, 60, yPosition);
+          } else {
+            yPosition += 5;
+            checkPageBreak();
+            doc.text(line, 60, yPosition);
+          }
+        });
+      } else {
+        doc.text(splitText, 60, yPosition);
+      }
+      
+      yPosition += 8;
+    });
   }
   
   // Add footer
-  textContent += `\n${"═".repeat(60)}\n`;
-  textContent += `🚀 Generated by Beekon AI - ${new Date().toLocaleDateString()}\n`;
-  textContent += `📊 This report contains ${data.totalRecords.toLocaleString()} records.\n`;
-  textContent += `🌐 For more insights, visit your Beekon AI dashboard.\n`;
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'normal');
+    doc.text(
+      `Generated by Beekon AI - ${new Date().toLocaleDateString()} | Page ${i} of ${totalPages}`, 
+      20, 
+      pageHeight - 10
+    );
+  }
   
-  return new Blob([textContent], { type: EXPORT_MIME_TYPES.pdf });
+  return new Blob([doc.output('blob')], { type: EXPORT_MIME_TYPES.pdf });
+}
+
+// Format data for Excel export using xlsx library for real Excel files
+export function formatExcelExport(data: ExportData, dataType?: string): Blob {
+  const workbook = XLSX.utils.book_new();
+  
+  // Create metadata worksheet
+  const metadataSheet = XLSX.utils.aoa_to_sheet([
+    ['Export Information'],
+    ['Title', data.title],
+    ['Generated By', 'Beekon AI'],
+    ['Exported At', new Date(data.exportedAt).toLocaleString()],
+    ['Total Records', data.totalRecords.toString()],
+    ...(data.dateRange ? [
+      ['Date Range Start', new Date(data.dateRange.start).toLocaleDateString()],
+      ['Date Range End', new Date(data.dateRange.end).toLocaleDateString()]
+    ] : []),
+    [''],
+    ...(data.filters && Object.keys(data.filters).length > 0 ? [
+      ['Applied Filters'],
+      ...Object.entries(data.filters).map(([key, value]) => [
+        key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        String(value)
+      ])
+    ] : [])
+  ]);
+  
+  XLSX.utils.book_append_sheet(workbook, metadataSheet, 'Export Info');
+  
+  // Create main data worksheet
+  if (Array.isArray(data.data)) {
+    const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
+    
+    if (processedData.length > 0) {
+      const dataSheet = XLSX.utils.json_to_sheet(processedData);
+      
+      // Apply styling to headers
+      const range = XLSX.utils.decode_range(dataSheet['!ref'] || 'A1:A1');
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (!dataSheet[cellAddress]) continue;
+        
+        dataSheet[cellAddress].s = {
+          font: { bold: true },
+          fill: { fgColor: { rgb: 'E2E8F0' } },
+          alignment: { horizontal: 'center' }
+        };
+      }
+      
+      // Auto-size columns
+      const columnWidths = Object.keys(processedData[0]).map(key => ({
+        wch: Math.max(key.length, 15)
+      }));
+      dataSheet['!cols'] = columnWidths;
+      
+      XLSX.utils.book_append_sheet(workbook, dataSheet, 'Data');
+    }
+  } else if (typeof data.data === 'object') {
+    const fieldMapping = dataType ? getFieldMapping(dataType) : {};
+    const formattedData = Object.entries(data.data).map(([key, value]) => {
+      const mapping = fieldMapping[key];
+      const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const formattedValue = mapping ? formatValue(value, mapping) : String(value ?? '');
+      
+      return {
+        Property: displayName,
+        Value: formattedValue
+      };
+    });
+    
+    const dataSheet = XLSX.utils.json_to_sheet(formattedData);
+    
+    // Style headers
+    dataSheet['A1'].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E2E8F0' } } };
+    dataSheet['B1'].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E2E8F0' } } };
+    
+    // Auto-size columns
+    dataSheet['!cols'] = [{ wch: 30 }, { wch: 50 }];
+    
+    XLSX.utils.book_append_sheet(workbook, dataSheet, 'Data');
+  }
+  
+  // Generate Excel file
+  const excelBuffer = XLSX.write(workbook, { 
+    bookType: 'xlsx', 
+    type: 'array',
+    cellStyles: true
+  });
+  
+  return new Blob([excelBuffer], { type: EXPORT_MIME_TYPES.excel });
+}
+
+// Format data for Word export using docx library for professional Word documents
+export async function formatWordExport(data: ExportData, dataType?: string): Promise<Blob> {
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        // Document title
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: data.title.toUpperCase(),
+              bold: true,
+              size: 32,
+            }),
+          ],
+          alignment: "center",
+          spacing: { after: 300 }
+        }),
+        
+        // Subtitle
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "BEEKON AI REPORT",
+              bold: true,
+              size: 24,
+            }),
+          ],
+          alignment: "center",
+          spacing: { after: 600 }
+        }),
+        
+        // Document metadata
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "Document Information",
+              bold: true,
+              size: 20,
+            }),
+          ],
+          spacing: { after: 200 }
+        }),
+        
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Generated: ", bold: true }),
+            new TextRun({ text: new Date(data.exportedAt).toLocaleString() }),
+          ],
+          spacing: { after: 100 }
+        }),
+        
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Total Records: ", bold: true }),
+            new TextRun({ text: data.totalRecords.toLocaleString() }),
+          ],
+          spacing: { after: 100 }
+        }),
+        
+        ...(data.dateRange ? [
+          new Paragraph({
+            children: [
+              new TextRun({ text: "Date Range: ", bold: true }),
+              new TextRun({ 
+                text: `${new Date(data.dateRange.start).toLocaleDateString()} to ${new Date(data.dateRange.end).toLocaleDateString()}` 
+              }),
+            ],
+            spacing: { after: 100 }
+          })
+        ] : []),
+        
+        // Add spacing before next section
+        new Paragraph({
+          children: [new TextRun({ text: "" })],
+          spacing: { after: 300 }
+        }),
+        
+        // Add filters section if present
+        ...(data.filters && Object.keys(data.filters).length > 0 ? [
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "Applied Filters",
+                bold: true,
+                size: 20,
+              }),
+            ],
+            spacing: { after: 200 }
+          }),
+          ...Object.entries(data.filters).map(([key, value]) => 
+            new Paragraph({
+              children: [
+                new TextRun({ text: "• " }),
+                new TextRun({ 
+                  text: `${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}: `,
+                  bold: true 
+                }),
+                new TextRun({ text: String(value) }),
+              ],
+              spacing: { after: 100 }
+            })
+          ),
+          new Paragraph({
+            children: [new TextRun({ text: "" })],
+            spacing: { after: 300 }
+          })
+        ] : []),
+        
+        // Data section header
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "Data",
+              bold: true,
+              size: 20,
+            }),
+          ],
+          spacing: { after: 200 }
+        }),
+      ]
+    }]
+  });
+  
+  // Add data content
+  const section = doc.sections[0];
+  
+  if (Array.isArray(data.data)) {
+    const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
+    
+    if (processedData.length > 0) {
+      const headers = Object.keys(processedData[0]);
+      
+      // Create table with data
+      const tableRows = [
+        // Header row
+        new TableRow({
+          children: headers.map(header => 
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: header,
+                      bold: true
+                    })
+                  ]
+                })
+              ],
+              width: { size: Math.floor(100 / headers.length), type: WidthType.PERCENTAGE }
+            })
+          )
+        }),
+        // Data rows (limit to 100 for document size)
+        ...processedData.slice(0, 100).map(row => 
+          new TableRow({
+            children: headers.map(header => 
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: String(row[header] ?? '')
+                      })
+                    ]
+                  })
+                ],
+                width: { size: Math.floor(100 / headers.length), type: WidthType.PERCENTAGE }
+              })
+            )
+          })
+        )
+      ];
+      
+      const table = new Table({
+        rows: tableRows,
+        width: { size: 100, type: WidthType.PERCENTAGE }
+      });
+      
+      section.children.push(table);
+      
+      // Add note if data was truncated
+      if (processedData.length > 100) {
+        section.children.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `... and ${processedData.length - 100} more records`,
+                italics: true
+              })
+            ],
+            spacing: { before: 200 }
+          })
+        );
+      }
+    }
+  } else if (typeof data.data === 'object') {
+    const fieldMapping = dataType ? getFieldMapping(dataType) : {};
+    
+    // Create a two-column table for key-value pairs
+    const tableRows = Object.entries(data.data).map(([key, value]) => {
+      const mapping = fieldMapping[key];
+      const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const formattedValue = mapping ? formatValue(value, mapping) : String(value ?? '');
+      
+      return new TableRow({
+        children: [
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: displayName,
+                    bold: true
+                  })
+                ]
+              })
+            ],
+            width: { size: 30, type: WidthType.PERCENTAGE }
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: formattedValue
+                  })
+                ]
+              })
+            ],
+            width: { size: 70, type: WidthType.PERCENTAGE }
+          })
+        ]
+      });
+    });
+    
+    const table = new Table({
+      rows: tableRows,
+      width: { size: 100, type: WidthType.PERCENTAGE }
+    });
+    
+    section.children.push(table);
+  }
+  
+  // Add footer
+  section.children.push(
+    new Paragraph({
+      children: [new TextRun({ text: "" })],
+      spacing: { before: 600, after: 200 }
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: `Generated by Beekon AI - ${new Date().toLocaleDateString()}`,
+          italics: true,
+          size: 18
+        })
+      ],
+      alignment: "center"
+    })
+  );
+  
+  // Generate Word document
+  const buffer = await Packer.toBlob(doc);
+  return new Blob([buffer], { type: EXPORT_MIME_TYPES.word });
 }
 
 // Helper function to format array data to CSV
-function formatArrayToCsv(data: any[], dataType?: string): string {
+function formatArrayToCsv(data: Record<string, unknown>[], dataType?: string): string {
   if (data.length === 0) return `"No data available"\n`;
   
   // Apply field mapping if dataType is provided
@@ -430,7 +942,7 @@ function formatArrayToCsv(data: any[], dataType?: string): string {
 }
 
 // Helper function to format object data to CSV
-function formatObjectToCsv(data: Record<string, any>, dataType?: string): string {
+function formatObjectToCsv(data: Record<string, unknown>, dataType?: string): string {
   let csvContent = `"Property","Value"\n`;
   
   const fieldMapping = dataType ? getFieldMapping(dataType) : {};
@@ -447,7 +959,7 @@ function formatObjectToCsv(data: Record<string, any>, dataType?: string): string
 }
 
 // Helper function to format array data to PDF
-function formatArrayToPdf(data: any[], dataType?: string): string {
+function formatArrayToPdf(data: Record<string, unknown>[], dataType?: string): string {
   if (data.length === 0) return "No data available\n";
   
   // Apply field mapping if dataType is provided
@@ -480,7 +992,7 @@ function formatArrayToPdf(data: any[], dataType?: string): string {
 }
 
 // Helper function to format object data to PDF
-function formatObjectToPdf(data: Record<string, any>, dataType?: string): string {
+function formatObjectToPdf(data: Record<string, unknown>, dataType?: string): string {
   let pdfContent = "DATA SUMMARY\n";
   pdfContent += "-".repeat(20) + "\n\n";
   
@@ -573,12 +1085,91 @@ export function useExportHandler() {
   return { handleExport };
 }
 
+// Validate export data before processing
+export function validateExportData(data: ExportData): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  
+  // Validate required fields
+  if (!data.title?.trim()) {
+    errors.push("Export title is required");
+  }
+  
+  if (!data.exportedAt) {
+    errors.push("Export timestamp is required");
+  } else {
+    const exportDate = new Date(data.exportedAt);
+    if (isNaN(exportDate.getTime())) {
+      errors.push("Invalid export timestamp");
+    }
+  }
+  
+  if (typeof data.totalRecords !== 'number' || data.totalRecords < 0) {
+    errors.push("Total records must be a non-negative number");
+  }
+  
+  // Validate data content
+  if (!data.data) {
+    errors.push("Export data is required");
+  } else if (Array.isArray(data.data)) {
+    if (data.data.length === 0 && data.totalRecords > 0) {
+      errors.push("Data array is empty but total records indicates data should exist");
+    }
+    
+    // Check for consistent data structure in arrays
+    if (data.data.length > 0) {
+      const firstItemKeys = Object.keys(data.data[0]);
+      const hasInconsistentStructure = data.data.some((item, index) => {
+        if (typeof item !== 'object' || item === null) {
+          errors.push(`Data item at index ${index} is not a valid object`);
+          return true;
+        }
+        return false;
+      });
+    }
+  } else if (typeof data.data !== 'object') {
+    errors.push("Export data must be an object or array");
+  }
+  
+  // Validate date range if provided
+  if (data.dateRange) {
+    const start = new Date(data.dateRange.start);
+    const end = new Date(data.dateRange.end);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      errors.push("Invalid date range");
+    } else if (start >= end) {
+      errors.push("Start date must be before end date");
+    }
+  }
+  
+  // Validate filters if provided
+  if (data.filters && typeof data.filters !== 'object') {
+    errors.push("Filters must be an object");
+  }
+  
+  // Validate metadata if provided
+  if (data.metadata && typeof data.metadata !== 'object') {
+    errors.push("Metadata must be an object");
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
 // Validate export configuration
 export function validateExportConfig(config: ExportConfig): { isValid: boolean; errors: string[] } {
   const errors: string[] = [];
   
   if (!config.filename.trim()) {
     errors.push("Filename is required");
+  }
+  
+  // Check for invalid filename characters
+  const invalidChars = /[<>:"/\\|?*]/g;
+  if (invalidChars.test(config.filename)) {
+    errors.push("Filename contains invalid characters");
   }
   
   if (!Object.values(EXPORT_FILE_EXTENSIONS).includes(EXPORT_FILE_EXTENSIONS[config.format])) {
@@ -602,6 +1193,39 @@ export function validateExportConfig(config: ExportConfig): { isValid: boolean; 
   };
 }
 
+// Sanitize export data to prevent potential issues
+export function sanitizeExportData(data: ExportData): ExportData {
+  const sanitized: ExportData = {
+    ...data,
+    title: data.title?.trim() || 'Untitled Export',
+    exportedAt: data.exportedAt || new Date().toISOString(),
+    totalRecords: Math.max(0, data.totalRecords || 0),
+  };
+  
+  // Sanitize data content
+  if (Array.isArray(data.data)) {
+    sanitized.data = data.data.map(item => {
+      if (typeof item === 'object' && item !== null) {
+        const sanitizedItem: Record<string, unknown> = {};
+        Object.entries(item).forEach(([key, value]) => {
+          // Replace null/undefined with empty string for better export compatibility
+          sanitizedItem[key] = value ?? '';
+        });
+        return sanitizedItem;
+      }
+      return item;
+    });
+  } else if (typeof data.data === 'object' && data.data !== null) {
+    const sanitizedData: Record<string, unknown> = {};
+    Object.entries(data.data).forEach(([key, value]) => {
+      sanitizedData[key] = value ?? '';
+    });
+    sanitized.data = sanitizedData;
+  }
+  
+  return sanitized;
+}
+
 // Get export format display name
 export function getExportFormatDisplayName(format: ExportFormat): string {
   const displayNames: Record<ExportFormat, string> = {
@@ -616,7 +1240,7 @@ export function getExportFormatDisplayName(format: ExportFormat): string {
 }
 
 // Calculate estimated file size based on data
-export function estimateExportSize(data: any, format: ExportFormat): string {
+export function estimateExportSize(data: unknown, format: ExportFormat): string {
   const dataSize = JSON.stringify(data).length;
   
   // Rough size multipliers for different formats

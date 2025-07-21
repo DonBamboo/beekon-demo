@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ExportDropdown } from "@/components/ui/export-components";
+import { AdvancedExportDropdown } from "@/components/ui/export-components";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionEnforcement } from "@/hooks/useSubscriptionEnforcement";
 import {
@@ -29,13 +29,22 @@ import {
   type AnalysisProgress,
   type AnalysisSession,
 } from "@/services/analysisService";
-import { ExportFormat, useExportHandler } from "@/lib/export-utils";
+import { useExportHandler } from "@/lib/export-utils";
 import { exportService } from "@/services/exportService";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, CheckCircle, Plus, Search, X, Zap, Loader2 } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle,
+  Plus,
+  Search,
+  X,
+  Zap,
+  Loader2,
+} from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
+import { ExportFormat } from "@/types/database";
 
 const analysisConfigSchema = z.object({
   analysisName: z.string().min(1, "Analysis name is required"),
@@ -57,13 +66,25 @@ interface AnalysisConfigModalProps {
   websiteId?: string;
 }
 
+// Fallback topics if no database topics exist - moved outside component for stable reference
+const FALLBACK_TOPICS = [
+  "AI Tools",
+  "Software Solutions",
+  "Machine Learning",
+  "Data Analytics",
+  "Cloud Services",
+  "Automation",
+  "Business Intelligence",
+  "Customer Support",
+];
+
 export function AnalysisConfigModal({
   isOpen,
   onClose,
   websiteId,
 }: AnalysisConfigModalProps) {
   const { toast } = useToast();
-  const { consumeCredit } = useSubscriptionEnforcement();
+  const { consumeCredit, restoreCredit } = useSubscriptionEnforcement();
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [customTopic, setCustomTopic] = useState("");
@@ -73,27 +94,14 @@ export function AnalysisConfigModal({
   const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(
     null
   );
-  const [currentAnalysisSession, setCurrentAnalysisSession] = useState<AnalysisSession | null>(
-    null
-  );
+  const [currentAnalysisSession, setCurrentAnalysisSession] =
+    useState<AnalysisSession | null>(null);
   const [availableTopics, setAvailableTopics] = useState<
     Array<{ id: string; name: string; resultCount: number }>
   >([]);
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
   const [topicError, setTopicError] = useState<string | null>(null);
   const { handleExport } = useExportHandler();
-
-  // Fallback topics if no database topics exist
-  const fallbackTopics = [
-    "AI Tools",
-    "Software Solutions", 
-    "Machine Learning",
-    "Data Analytics",
-    "Cloud Services",
-    "Automation",
-    "Business Intelligence",
-    "Customer Support",
-  ];
 
   const availableLLMs = [
     {
@@ -117,14 +125,16 @@ export function AnalysisConfigModal({
     setTopicError(null);
 
     try {
-      const websiteTopics = await analysisService.getTopicsForWebsite(websiteId);
-      
+      const websiteTopics = await analysisService.getTopicsForWebsite(
+        websiteId
+      );
+
       if (websiteTopics.length > 0) {
         setAvailableTopics(websiteTopics);
       } else {
         // If no topics exist for this website, show fallback topics as suggestions
         setAvailableTopics(
-          fallbackTopics.map((topic, index) => ({
+          FALLBACK_TOPICS.map((topic, index) => ({
             id: `fallback-${index}`,
             name: topic,
             resultCount: 0,
@@ -134,19 +144,20 @@ export function AnalysisConfigModal({
     } catch (error) {
       console.error("Failed to load website topics:", error);
       setTopicError("Failed to load topics. Using default suggestions.");
-      
+
       // Fallback to default topics on error
       setAvailableTopics(
-        fallbackTopics.map((topic, index) => ({
+        FALLBACK_TOPICS.map((topic, index) => ({
           id: `fallback-${index}`,
           name: topic,
           resultCount: 0,
         }))
       );
-      
+
       toast({
         title: "Warning",
-        description: "Could not load website-specific topics. Using default suggestions.",
+        description:
+          "Could not load website-specific topics. Using default suggestions.",
         variant: "destructive",
       });
     } finally {
@@ -187,12 +198,16 @@ export function AnalysisConfigModal({
     }
 
     setIsLoading(true);
+    let creditConsumed = false;
+
     try {
       // Check if user can consume credits
       const canConsume = await consumeCredit();
       if (!canConsume) {
+        setIsLoading(false);
         return;
       }
+      creditConsumed = true;
 
       // Create analysis configuration
       const config = {
@@ -211,13 +226,13 @@ export function AnalysisConfigModal({
       // Start the analysis
       const sessionId = await analysisService.createAnalysis(config);
       setCurrentAnalysisId(sessionId);
-      
+
       // Get the created session for display purposes
       const session = await analysisService.getAnalysisSession(sessionId);
       setCurrentAnalysisSession(session);
 
       // Subscribe to progress updates
-      analysisService.subscribeToProgress(sessionId, (progress) => {
+      analysisService.subscribeToProgress(sessionId, async (progress) => {
         setAnalysisProgress(progress);
 
         if (progress.status === "completed") {
@@ -244,6 +259,10 @@ export function AnalysisConfigModal({
             variant: "destructive",
           });
 
+          // Restore credit if analysis failed after starting
+          console.log("Restoring credit due to failed analysis");
+          await restoreCredit();
+
           setTimeout(() => {
             handleClose();
           }, 2000);
@@ -256,6 +275,13 @@ export function AnalysisConfigModal({
       });
     } catch (error) {
       console.error("Failed to start analysis:", error);
+
+      // If we consumed a credit but the operation failed, restore it
+      if (creditConsumed) {
+        console.log("Restoring credit due to failed analysis start");
+        await restoreCredit();
+      }
+
       toast({
         title: "Error",
         description: "Failed to start analysis. Please try again.",
@@ -285,14 +311,14 @@ export function AnalysisConfigModal({
     if (!trimmedTopic) return;
 
     const currentTopics = form.watch("topics");
-    
+
     // Check for duplicates (case-insensitive)
     const isDuplicate = currentTopics.some(
-      topic => topic.toLowerCase() === trimmedTopic.toLowerCase()
+      (topic) => topic.toLowerCase() === trimmedTopic.toLowerCase()
     );
-    
+
     const existsInAvailable = availableTopics.some(
-      topic => topic.name.toLowerCase() === trimmedTopic.toLowerCase()
+      (topic) => topic.name.toLowerCase() === trimmedTopic.toLowerCase()
     );
 
     if (isDuplicate) {
@@ -307,7 +333,7 @@ export function AnalysisConfigModal({
     if (existsInAvailable && !currentTopics.includes(trimmedTopic)) {
       // If it exists in available topics, use the exact name from database
       const existingTopic = availableTopics.find(
-        topic => topic.name.toLowerCase() === trimmedTopic.toLowerCase()
+        (topic) => topic.name.toLowerCase() === trimmedTopic.toLowerCase()
       );
       if (existingTopic) {
         form.setValue("topics", [...currentTopics, existingTopic.name]);
@@ -316,7 +342,7 @@ export function AnalysisConfigModal({
       // Add as new custom topic
       form.setValue("topics", [...currentTopics, trimmedTopic]);
     }
-    
+
     setCustomTopic("");
   };
 
@@ -359,10 +385,10 @@ export function AnalysisConfigModal({
   // Export current analysis configuration
   const handleExportConfiguration = async (format: ExportFormat) => {
     setIsExporting(true);
-    
+
     try {
       const currentConfig = form.getValues();
-      
+
       // Prepare configuration data for export
       const configData = {
         ...currentConfig,
@@ -373,7 +399,8 @@ export function AnalysisConfigModal({
         metadata: {
           exportType: "analysis_configuration",
           configVersion: "1.0",
-          description: "Analysis configuration template that can be imported and reused",
+          description:
+            "Analysis configuration template that can be imported and reused",
         },
       };
 
@@ -384,22 +411,19 @@ export function AnalysisConfigModal({
       );
 
       const configName = currentConfig.analysisName || "analysis-config";
-      
-      await handleExport(
-        () => Promise.resolve(blob),
-        {
-          filename: `${configName.replace(/[^a-zA-Z0-9]/g, '-')}-template`,
-          format,
-          includeTimestamp: true,
-          metadata: {
-            configType: "analysis",
-            configName,
-            topics: currentConfig.topics.length,
-            llmModels: currentConfig.llmModels.length,
-            customPrompts: currentConfig.customPrompts.length,
-          },
-        }
-      );
+
+      await handleExport(() => Promise.resolve(blob), {
+        filename: `${configName.replace(/[^a-zA-Z0-9]/g, "-")}-template`,
+        format,
+        includeTimestamp: true,
+        metadata: {
+          configType: "analysis",
+          configName,
+          topics: currentConfig.topics.length,
+          llmModels: currentConfig.llmModels.length,
+          customPrompts: currentConfig.customPrompts.length,
+        },
+      });
     } catch (error) {
       console.error("Export failed:", error);
       toast({
@@ -427,12 +451,15 @@ export function AnalysisConfigModal({
                 platforms
               </DialogDescription>
             </div>
-            <ExportDropdown
+            <AdvancedExportDropdown
               onExport={handleExportConfiguration}
               isLoading={isExporting}
               formats={["json", "csv", "pdf"]}
               data={form.getValues()}
+              title="Analysis Configuration"
+              exportType="analysis_configuration"
               className="ml-4"
+              showEstimatedSize={true}
             />
           </div>
         </DialogHeader>
@@ -449,7 +476,8 @@ export function AnalysisConfigModal({
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              Analysis session created. You can reference this analysis using the session ID.
+              Analysis session created. You can reference this analysis using
+              the session ID.
             </p>
           </div>
         )}
@@ -528,7 +556,7 @@ export function AnalysisConfigModal({
                 </div>
               )}
             </div>
-            
+
             <div className="flex flex-wrap gap-2 mb-3">
               {form.watch("topics").map((topic) => (
                 <Badge
@@ -554,7 +582,9 @@ export function AnalysisConfigModal({
               {!isLoadingTopics && (
                 <div className="flex flex-wrap gap-2">
                   {availableTopics
-                    .filter((topic) => !form.watch("topics").includes(topic.name))
+                    .filter(
+                      (topic) => !form.watch("topics").includes(topic.name)
+                    )
                     .map((topic) => (
                       <Badge
                         key={topic.id}
@@ -562,7 +592,10 @@ export function AnalysisConfigModal({
                         className="cursor-pointer hover:bg-accent flex items-center gap-1"
                         onClick={() => {
                           const currentTopics = form.watch("topics");
-                          form.setValue("topics", [...currentTopics, topic.name]);
+                          form.setValue("topics", [
+                            ...currentTopics,
+                            topic.name,
+                          ]);
                         }}
                       >
                         <Plus className="h-3 w-3" />
@@ -576,11 +609,13 @@ export function AnalysisConfigModal({
                     ))}
                 </div>
               )}
-              
+
               {isLoadingTopics && (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  <span className="text-sm text-muted-foreground">Loading available topics...</span>
+                  <span className="text-sm text-muted-foreground">
+                    Loading available topics...
+                  </span>
                 </div>
               )}
 

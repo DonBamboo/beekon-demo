@@ -1,5 +1,6 @@
 import { AnalysisConfigModal } from "@/components/AnalysisConfigModal";
 import { AnalysisErrorBoundary } from "@/components/AnalysisErrorBoundary";
+import { AnalysisHistoryModal } from "@/components/AnalysisHistoryModal";
 import {
   AnalysisFilterSkeleton,
   AnalysisListSkeleton,
@@ -42,6 +43,7 @@ import {
   Eye,
   EyeOff,
   Filter,
+  History,
   Plus,
   RefreshCw,
   Search,
@@ -70,6 +72,7 @@ export default function Analysis() {
   );
   const [isFiltering, setIsFiltering] = useState(false);
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<UIAnalysisResult[]>(
     []
   );
@@ -82,6 +85,7 @@ export default function Analysis() {
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [selectedWebsite, setSelectedWebsite] = useState<string>("");
   const [showVisualization, setShowVisualization] = useState(true);
+  const [groupBySession, setGroupBySession] = useState(false);
 
   // Set selected website to first website when websites load
   useEffect(() => {
@@ -229,6 +233,30 @@ export default function Analysis() {
 
   // No need for legacy format transformation - work directly with modern format
   const filteredResults = analysisResults;
+
+  // Group results by session if requested
+  const groupedResults = useMemo(() => {
+    if (!groupBySession) {
+      return { ungrouped: filteredResults };
+    }
+
+    const groups: Record<string, UIAnalysisResult[]> = {};
+    const ungrouped: UIAnalysisResult[] = [];
+
+    filteredResults.forEach((result) => {
+      if (result.analysis_session_id && result.analysis_name) {
+        const key = `${result.analysis_session_id}:${result.analysis_name}`;
+        if (!groups[key]) {
+          groups[key] = [];
+        }
+        groups[key].push(result);
+      } else {
+        ungrouped.push(result);
+      }
+    });
+
+    return { groups, ungrouped };
+  }, [filteredResults, groupBySession]);
 
   // Memoize expensive statistics calculations
   const resultStats = useMemo(() => {
@@ -505,19 +533,21 @@ export default function Analysis() {
               {/* Website Selection */}
               {websites && websites.length > 1 && (
                 <div className="flex items-center space-x-2">
-                  <Building className="h-4 w-4 text-muted-foreground" />
+                  <Building className="h-4 w-4 text-muted-foreground shrink-0" />
                   <Select
                     value={selectedWebsite}
                     onValueChange={setSelectedWebsite}
                     disabled={isLoadingResults}
                   >
-                    <SelectTrigger className="w-[250px]">
+                    <SelectTrigger className="w-full sm:w-[250px] min-w-[200px]">
                       <SelectValue placeholder="Select website" />
                     </SelectTrigger>
                     <SelectContent>
                       {websites.map((website) => (
                         <SelectItem key={website.id} value={website.id}>
-                          {website.display_name || website.domain}
+                          <span className="truncate">
+                            {website.display_name || website.domain}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -526,22 +556,23 @@ export default function Analysis() {
               )}
 
               {/* Search and Filters */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex gap-3">
+              <div className="space-y-4">
+                {/* Top Row: Search and Topic Filter */}
+                <div className="flex flex-col sm:flex-row gap-3">
                   {/* Search Input */}
-                  <div className="flex items-center space-x-2">
-                    <Search className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center space-x-2 flex-1">
+                    <Search className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Input
                       placeholder="Search by analysis name, topic, or prompt..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full sm:w-[300px]"
+                      className="w-full min-w-0"
                       disabled={isLoadingResults}
                     />
                   </div>
 
                   {/* Topic Filter */}
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 shrink-0">
                     <Filter className="h-4 w-4 text-muted-foreground" />
                     <Select
                       value={selectedTopic}
@@ -550,15 +581,15 @@ export default function Analysis() {
                       }
                       disabled={isFiltering || isLoadingResults}
                     >
-                      <SelectTrigger className="w-[200px]">
+                      <SelectTrigger className="w-full sm:w-[200px] min-w-[150px]">
                         <SelectValue placeholder="Select topic" />
                       </SelectTrigger>
                       <SelectContent>
                         {topics.map((topic) => (
                           <SelectItem key={topic.id} value={topic.id}>
                             <div className="flex justify-between items-center w-full">
-                              <span>{topic.name}</span>
-                              <Badge variant="outline" className="ml-2 text-xs">
+                              <span className="truncate">{topic.name}</span>
+                              <Badge variant="outline" className="ml-2 text-xs shrink-0">
                                 {topic.resultCount}
                               </Badge>
                             </div>
@@ -567,46 +598,80 @@ export default function Analysis() {
                       </SelectContent>
                     </Select>
                   </div>
-
-                  {/* LLM Filter Buttons */}
-                  <div className="flex gap-3">
-                    {llmFilters.map((filter) => (
-                      <LoadingButton
-                        key={filter.id}
-                        variant={
-                          selectedLLM === filter.id ? "default" : "outline"
-                        }
-                        size="sm"
-                        loading={isFiltering && selectedLLM !== filter.id}
-                        onClick={() => handleFilterChange("llm", filter.id)}
-                        disabled={isLoadingResults || filter.resultCount === 0}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span>{filter.name}</span>
-                          <Badge
-                            variant="outline"
-                            className="text-xs text-default"
-                          >
-                            {filter.resultCount}
-                          </Badge>
-                        </div>
-                      </LoadingButton>
-                    ))}
-                  </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                {/* Second Row: LLM Filter Buttons */}
+                <div className="flex flex-wrap gap-2">
+                  {llmFilters.map((filter) => (
+                    <LoadingButton
+                      key={filter.id}
+                      variant={
+                        selectedLLM === filter.id ? "default" : "outline"
+                      }
+                      size="sm"
+                      loading={isFiltering && selectedLLM !== filter.id}
+                      onClick={() => handleFilterChange("llm", filter.id)}
+                      disabled={isLoadingResults || filter.resultCount === 0}
+                      className="shrink-0"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="whitespace-nowrap">{filter.name}</span>
+                        <Badge
+                          variant="outline"
+                          className="text-xs text-default"
+                        >
+                          {filter.resultCount}
+                        </Badge>
+                      </div>
+                    </LoadingButton>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons Row */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                {/* View Controls Group */}
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowVisualization(!showVisualization)}
+                    className="shrink-0"
                   >
                     {showVisualization ? (
                       <EyeOff className="h-4 w-4" />
                     ) : (
                       <Eye className="h-4 w-4" />
                     )}
-                    {showVisualization ? "Hide" : "Show"} Analytics
+                    <span className="hidden sm:inline ml-2">
+                      {showVisualization ? "Hide" : "Show"} Analytics
+                    </span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setGroupBySession(!groupBySession)}
+                    disabled={!selectedWebsite || isLoadingResults}
+                    className="shrink-0"
+                  >
+                    <span className="whitespace-nowrap">
+                      {groupBySession ? "Ungroup" : "Group"} by Session
+                    </span>
+                  </Button>
+                </div>
+
+                {/* Actions Group */}
+                <div className="flex flex-wrap gap-2 sm:justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsHistoryModalOpen(true)}
+                    disabled={!selectedWebsite}
+                    className="shrink-0"
+                  >
+                    <History className="h-4 w-4" />
+                    <span className="hidden sm:inline ml-2">History</span>
                   </Button>
 
                   <LoadingButton
@@ -617,11 +682,12 @@ export default function Analysis() {
                     }}
                     icon={<Plus className="h-4 w-4" />}
                     disabled={!selectedWebsite || isLoadingResults}
+                    className="shrink-0"
                   >
-                    New Analysis
+                    <span className="whitespace-nowrap">New Analysis</span>
                     {currentWorkspace && (
-                      <Badge variant="outline" className="ml-2 text-xs">
-                        <span className="text-background">
+                      <Badge variant="outline" className="ml-2 text-xs shrink-0">
+                        <span className="text-background whitespace-nowrap">
                           {getRemainingCredits()} left
                         </span>
                       </Badge>
@@ -672,7 +738,145 @@ export default function Analysis() {
           <div className="space-y-4">
             {isLoadingResults ? (
               <AnalysisListSkeleton />
+            ) : groupBySession ? (
+              // Grouped view
+              <div className="space-y-6">
+                {Object.entries(groupedResults.groups || {}).map(([sessionKey, sessionResults]) => {
+                  const [sessionId, sessionName] = sessionKey.split(':');
+                  return (
+                    <div key={sessionKey} className="space-y-3">
+                      <div className="flex items-center space-x-2 px-2">
+                        <Badge variant="default" className="text-sm">
+                          {sessionName}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {sessionResults.length} results
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          ID: {sessionId?.slice(0, 8)}...
+                        </Badge>
+                      </div>
+                      {sessionResults.map((result) => (
+                        <Card key={result.id} className="ml-4">
+                          <CardHeader>
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1 flex flex-col gap-3">
+                                <CardTitle>{result.prompt}</CardTitle>
+                                <div className="flex items-center space-x-2">
+                                  <Badge variant="outline">{result.topic}</Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    <Calendar className="h-3 w-3 mr-1" />
+                                    {new Date(result.created_at).toLocaleDateString()}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    Confidence:{" "}
+                                    {parseFloat(result.confidence.toFixed(2)) * 100}%
+                                  </Badge>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewDetails(result)}
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
+                              <MentionIndicator
+                                llmResult={result.llm_results.find(
+                                  (r) => r.llm_provider === "chatgpt"
+                                )}
+                                llmName="ChatGPT"
+                              />
+                              <MentionIndicator
+                                llmResult={result.llm_results.find(
+                                  (r) => r.llm_provider === "claude"
+                                )}
+                                llmName="Claude"
+                              />
+                              <MentionIndicator
+                                llmResult={result.llm_results.find(
+                                  (r) => r.llm_provider === "gemini"
+                                )}
+                                llmName="Gemini"
+                              />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  );
+                })}
+                {/* Ungrouped results */}
+                {groupedResults.ungrouped && groupedResults.ungrouped.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2 px-2">
+                      <Badge variant="outline" className="text-sm">
+                        Ungrouped Results
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {groupedResults.ungrouped.length} results
+                      </Badge>
+                    </div>
+                    {groupedResults.ungrouped.map((result) => (
+                      <Card key={result.id} className="ml-4">
+                        <CardHeader>
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1 flex flex-col gap-3">
+                              <CardTitle>{result.prompt}</CardTitle>
+                              <div className="flex items-center space-x-2">
+                                <Badge variant="outline">{result.topic}</Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  <Calendar className="h-3 w-3 mr-1" />
+                                  {new Date(result.created_at).toLocaleDateString()}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  Confidence:{" "}
+                                  {parseFloat(result.confidence.toFixed(2)) * 100}%
+                                </Badge>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewDetails(result)}
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
+                            <MentionIndicator
+                              llmResult={result.llm_results.find(
+                                (r) => r.llm_provider === "chatgpt"
+                              )}
+                              llmName="ChatGPT"
+                            />
+                            <MentionIndicator
+                              llmResult={result.llm_results.find(
+                                (r) => r.llm_provider === "claude"
+                              )}
+                              llmName="Claude"
+                            />
+                            <MentionIndicator
+                              llmResult={result.llm_results.find(
+                                (r) => r.llm_provider === "gemini"
+                              )}
+                              llmName="Gemini"
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
+              // Ungrouped view
               filteredResults.map((result) => (
                 <Card key={result.id}>
                   <CardHeader>
@@ -706,7 +910,7 @@ export default function Analysis() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
                       <MentionIndicator
                         llmResult={result.llm_results.find(
                           (r) => r.llm_provider === "chatgpt"
@@ -753,20 +957,24 @@ export default function Analysis() {
             <AnalysisStatsSkeleton />
           ) : (
             filteredResults.length > 0 && (
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-muted-foreground">
+                <span className="truncate">
                   Showing {resultStats.totalCount} of {analysisResults.length}{" "}
                   results
-                  {searchQuery && ` for "${searchQuery}"`}
+                  {searchQuery && (
+                    <span className="hidden sm:inline">
+                      {` for "${searchQuery}"`}
+                    </span>
+                  )}
                 </span>
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-4 shrink-0">
                   <div className="flex items-center space-x-1">
                     <TrendingUp className="h-4 w-4 text-success" />
-                    <span>{resultStats.mentionedCount} mentions</span>
+                    <span className="whitespace-nowrap">{resultStats.mentionedCount} mentions</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <TrendingDown className="h-4 w-4 text-muted-foreground" />
-                    <span>{resultStats.noMentionCount} no mentions</span>
+                    <span className="whitespace-nowrap">{resultStats.noMentionCount} no mentions</span>
                   </div>
                 </div>
               </div>
@@ -784,6 +992,16 @@ export default function Analysis() {
           isOpen={isDetailModalOpen}
           onClose={() => setIsDetailModalOpen(false)}
           analysisResult={selectedResult}
+        />
+
+        <AnalysisHistoryModal
+          isOpen={isHistoryModalOpen}
+          onClose={() => setIsHistoryModalOpen(false)}
+          websiteId={selectedWebsite}
+          onSelectSession={(sessionId) => {
+            // Future: Navigate to session details or filter by session
+            console.log("Selected session:", sessionId);
+          }}
         />
       </>
     </AnalysisErrorBoundary>

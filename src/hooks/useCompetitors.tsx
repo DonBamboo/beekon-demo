@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "./use-toast";
 import { useWorkspace } from "./useWorkspace";
+import { useSubscriptionEnforcement } from "./useSubscriptionEnforcement";
 import {
   competitorService,
   type Competitor,
@@ -35,6 +36,7 @@ export function useCompetitors(
 ) {
   const { websites, loading: workspaceLoading } = useWorkspace();
   const { toast } = useToast();
+  const { consumeCreditForCompetitor, restoreCredit } = useSubscriptionEnforcement();
   const [state, setState] = useState<CompetitorState>({
     competitors: [],
     performance: [],
@@ -145,7 +147,16 @@ export function useCompetitors(
     async (domain: string, name?: string) => {
       if (!targetWebsiteId) return;
 
+      let creditConsumed = false;
+
       try {
+        // Check if user can consume credits for competitor addition
+        const canConsume = await consumeCreditForCompetitor();
+        if (!canConsume) {
+          return;
+        }
+        creditConsumed = true;
+
         const newCompetitor = await competitorService.addCompetitor(
           targetWebsiteId,
           domain,
@@ -167,6 +178,12 @@ export function useCompetitors(
       } catch (error) {
         console.error("Failed to add competitor:", error);
 
+        // If we consumed a credit but the operation failed, restore it
+        if (creditConsumed) {
+          console.log("Restoring credit due to failed competitor addition");
+          await restoreCredit();
+        }
+
         const competitorError: CompetitorError = {
           message:
             error instanceof Error ? error.message : "Failed to add competitor",
@@ -187,7 +204,7 @@ export function useCompetitors(
         throw error;
       }
     },
-    [targetWebsiteId, loadCompetitorData, toast]
+    [targetWebsiteId, loadCompetitorData, toast, consumeCreditForCompetitor, restoreCredit]
   );
 
   const updateCompetitor = useCallback(

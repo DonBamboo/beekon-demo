@@ -1,7 +1,7 @@
 // Reusable export UI components for consistent user interface patterns
 
-import React from "react";
-import { Download, FileText, Table, Code, File, FileSpreadsheet } from "lucide-react";
+import React, { useState } from "react";
+import { Download, FileText, Table, Code, File, FileSpreadsheet, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import {
@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ExportFormat, getExportFormatDisplayName, estimateExportSize } from "@/lib/export-utils";
+import { ExportPreviewModal, ExportOptions } from "@/components/ExportPreviewModal";
 
 // Export button props
 export interface ExportButtonProps {
@@ -404,5 +405,109 @@ export function ExportToolbar({
         formats={formats}
       />
     </div>
+  );
+}
+
+// Advanced export dropdown with preview option
+export interface AdvancedExportDropdownProps extends ExportButtonProps {
+  title: string;
+  exportType: string;
+  onExportWithOptions?: (format: ExportFormat, options: ExportOptions) => Promise<void>;
+}
+
+export function AdvancedExportDropdown({
+  onExport,
+  onExportWithOptions,
+  isLoading = false,
+  disabled = false,
+  formats = ["pdf", "csv", "json"],
+  data,
+  title,
+  exportType,
+  className = "",
+  showEstimatedSize = false,
+}: AdvancedExportDropdownProps) {
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const availableFormats = EXPORT_FORMAT_OPTIONS.filter(opt => 
+    formats.includes(opt.format)
+  );
+
+  const handleQuickExport = async (format: ExportFormat) => {
+    await onExport(format);
+  };
+
+  const handleExportWithOptions = async (format: ExportFormat, options: ExportOptions) => {
+    if (onExportWithOptions) {
+      await onExportWithOptions(format, options);
+    } else {
+      await onExport(format);
+    }
+  };
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={disabled || isLoading}
+            className={className}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuLabel>Quick Export</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {availableFormats.map((formatOption) => (
+            <DropdownMenuItem
+              key={formatOption.format}
+              onClick={() => handleQuickExport(formatOption.format)}
+              disabled={isLoading}
+              className="cursor-pointer"
+            >
+              <formatOption.icon className="h-4 w-4 mr-3" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{formatOption.label}</span>
+                  {showEstimatedSize && data && (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      {estimateExportSize(data, formatOption.format)}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formatOption.description}
+                </p>
+              </div>
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setIsPreviewOpen(true)}
+            className="cursor-pointer"
+          >
+            <Settings className="h-4 w-4 mr-3" />
+            <div>
+              <span className="font-medium">Advanced Options</span>
+              <p className="text-xs text-muted-foreground mt-1">
+                Preview and customize export settings
+              </p>
+            </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ExportPreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        data={data}
+        title={title}
+        exportType={exportType}
+        onExport={handleExportWithOptions}
+      />
+    </>
   );
 }

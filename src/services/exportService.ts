@@ -2,17 +2,21 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import {
-  ExportFormat,
   ExportData,
   ExportConfig,
   formatJsonExport,
   formatCsvExport,
   formatPdfExport,
+  formatExcelExport,
+  formatWordExport,
   generateExportFilename,
   applyFieldMapping,
   getFieldMapping,
   formatValue,
+  validateExportData,
+  sanitizeExportData,
 } from "@/lib/export-utils";
+import type { ExportFormat } from "@/types/database";
 import { exportHistoryService } from "./exportHistoryService";
 import { ExportType, ExportHistoryRecord } from "@/types/database";
 
@@ -247,6 +251,15 @@ export class ExportService {
   ): Promise<Blob> {
     const { trackHistory = true, exportType = "filtered_data", customFilename } = options;
     
+    // Validate export data before processing
+    const validation = validateExportData(data);
+    if (!validation.isValid) {
+      throw new Error(`Export validation failed: ${validation.errors.join(', ')}`);
+    }
+    
+    // Sanitize data to prevent issues
+    const sanitizedData = sanitizeExportData(data);
+    
     let exportRecord: ExportHistoryRecord | null = null;
     let historyTrackingFailed = false;
     
@@ -291,19 +304,19 @@ export class ExportService {
       let blob: Blob;
       switch (format) {
         case "json":
-          blob = formatJsonExport(data);
+          blob = formatJsonExport(sanitizedData);
           break;
         case "csv":
-          blob = formatCsvExport(data, data.dataType);
+          blob = formatCsvExport(sanitizedData, sanitizedData.dataType);
           break;
         case "pdf":
-          blob = formatPdfExport(data, data.dataType);
+          blob = formatPdfExport(sanitizedData, sanitizedData.dataType);
           break;
         case "excel":
-          blob = this.generateExcelExport(data);
+          blob = formatExcelExport(sanitizedData, sanitizedData.dataType);
           break;
         case "word":
-          blob = this.generateWordExport(data);
+          blob = await formatWordExport(sanitizedData, sanitizedData.dataType);
           break;
         default:
           throw new Error(`Unsupported export format: ${format}`);
