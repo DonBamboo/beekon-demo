@@ -28,19 +28,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { WebsiteSettingsModal } from "@/components/WebsiteSettingsModal";
-import { ExportDropdown } from "@/components/ui/export-components";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace, Website } from "@/hooks/useWorkspace";
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { addProtocol } from "@/lib/utils";
-import { ExportFormat, useExportHandler } from "@/lib/export-utils";
-import { exportService } from "@/services/exportService";
 import {
   BarChart3,
   Calendar,
-  Download,
   Globe,
   MoreHorizontal,
   Play,
@@ -64,11 +60,9 @@ export default function Websites() {
   const [websiteMetrics, setWebsiteMetrics] = useState<
     Record<string, { totalTopics: number; avgVisibility: number }>
   >({});
-  const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
   const { websites, deleteWebsite, refetchWebsites } = useWorkspace();
   const { workspaceId } = useAuth();
-  const { handleExport } = useExportHandler();
 
   useEffect(() => {
     websites?.forEach(async (website) => {
@@ -255,108 +249,6 @@ export default function Websites() {
     setShowDeleteConfirm(true);
   };
 
-  // Export all websites data
-  const handleExportAllWebsites = async (format: ExportFormat) => {
-    if (!websites || websites.length === 0) {
-      toast({
-        title: "No data to export",
-        description: "Add some websites first to export their data.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsExporting(true);
-    
-    try {
-      const websiteIds = websites.map(w => w.id);
-      const blob = await exportService.exportWebsiteData(websiteIds, format, {
-        includeMetrics: true,
-        includeAnalysisHistory: true,
-      });
-
-      // Use the enhanced export handler
-      await handleExport(
-        () => Promise.resolve(blob),
-        {
-          filename: "website-portfolio-report",
-          format,
-          includeTimestamp: true,
-          metadata: {
-            websiteCount: websites.length,
-            activeWebsites: websites.filter(w => w.is_active).length,
-            monitoringEnabled: websites.filter(w => w.monitoring_enabled).length,
-            exportType: "website_portfolio",
-            generatedBy: "Beekon AI",
-          },
-        }
-      );
-
-      toast({
-        title: "Export Successful",
-        description: `Website portfolio exported as ${format.toUpperCase()}`,
-      });
-    } catch (error) {
-      console.error("Export failed:", error);
-      toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Failed to export websites data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  // Export individual website data
-  const handleExportWebsite = async (websiteId: string, format: ExportFormat) => {
-    setIsExporting(true);
-    
-    try {
-      const blob = await exportService.exportWebsiteData([websiteId], format, {
-        includeMetrics: true,
-        includeAnalysisHistory: true,
-      });
-
-      const website = websites?.find(w => w.id === websiteId);
-      const websiteName = website?.display_name || website?.domain || "website";
-      const metrics = getWebsiteMetrics(websiteId);
-
-      await handleExport(
-        () => Promise.resolve(blob),
-        {
-          filename: `${websiteName.replace(/[^a-zA-Z0-9]/g, '-')}-detailed-report`,
-          format,
-          includeTimestamp: true,
-          metadata: {
-            websiteId,
-            websiteName,
-            websiteDomain: website?.domain,
-            totalTopics: metrics?.totalTopics || 0,
-            avgVisibility: metrics?.avgVisibility || 0,
-            isActive: website?.is_active,
-            monitoringEnabled: website?.monitoring_enabled,
-            exportType: "single_website_detailed",
-            generatedBy: "Beekon AI",
-          },
-        }
-      );
-
-      toast({
-        title: "Export Successful",
-        description: `${websiteName} data exported as ${format.toUpperCase()}`,
-      });
-    } catch (error) {
-      console.error("Export failed:", error);
-      toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Failed to export website data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -369,15 +261,6 @@ export default function Websites() {
         </div>
 
         <div className="flex items-center space-x-2">
-          {websites && websites.length > 0 && (
-            <ExportDropdown
-              onExport={handleExportAllWebsites}
-              isLoading={isExporting}
-              formats={["pdf", "csv", "json", "excel"]}
-              data={websites}
-              showEstimatedSize={true}
-            />
-          )}
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -568,13 +451,6 @@ export default function Websites() {
                       >
                         <Settings className="h-4 w-4 mr-2" />
                         Settings
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleExportWebsite(website.id, "pdf")}
-                        disabled={isExporting}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Export Data
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive"

@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, RefreshCw, Download, Filter, Globe } from "lucide-react";
+import { Plus, RefreshCw, Filter, Globe } from "lucide-react";
 import { Website } from "@/hooks/useWorkspace";
 
 interface CompetitorsHeaderProps {
@@ -28,7 +28,6 @@ interface CompetitorsHeaderProps {
   dateFilter: "7d" | "30d" | "90d";
   sortBy: "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore";
   isRefreshing: boolean;
-  isExporting: boolean;
   hasData: boolean;
   isAddDialogOpen: boolean;
   competitorDomain: string;
@@ -46,7 +45,6 @@ interface CompetitorsHeaderProps {
   setCompetitorName: (value: string) => void;
   setSelectedWebsiteId: (value: string) => void;
   refreshData: () => void;
-  handleExportData: (format: "csv") => void;
   handleAddCompetitor: () => void;
 }
 
@@ -56,7 +54,6 @@ export default function CompetitorsHeader({
   dateFilter,
   sortBy,
   isRefreshing,
-  isExporting,
   hasData,
   isAddDialogOpen,
   competitorDomain,
@@ -72,7 +69,6 @@ export default function CompetitorsHeader({
   setCompetitorName,
   setSelectedWebsiteId,
   refreshData,
-  handleExportData,
   handleAddCompetitor,
 }: CompetitorsHeaderProps) {
   return (
@@ -195,17 +191,6 @@ export default function CompetitorsHeader({
             Refresh
           </LoadingButton>
 
-          <LoadingButton
-            variant="outline"
-            size="sm"
-            loading={isExporting}
-            loadingText="Exporting..."
-            onClick={() => handleExportData("csv")}
-            icon={<Download className="h-4 w-4" />}
-            disabled={!hasData}
-          >
-            Export
-          </LoadingButton>
         </div>
 
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

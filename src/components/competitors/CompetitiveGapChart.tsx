@@ -26,7 +26,7 @@ import {
   ScatterChart,
   Scatter,
 } from "recharts";
-import { Download, TrendingUp, TrendingDown, Target, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, Target, AlertTriangle } from "lucide-react";
 import { CompetitorAnalytics, type CompetitiveGapAnalysis } from "@/services/competitorService";
 import { useMemo } from "react";
 
@@ -35,8 +35,6 @@ interface CompetitiveGapChartProps {
   analytics: CompetitorAnalytics | null;
   gapAnalysis: CompetitiveGapAnalysis[];
   dateFilter: "7d" | "30d" | "90d";
-  isExporting: boolean;
-  handleExportData: (format: "json") => void;
 }
 
 export default function CompetitiveGapChart({
@@ -44,8 +42,6 @@ export default function CompetitiveGapChart({
   analytics,
   gapAnalysis,
   dateFilter,
-  isExporting,
-  handleExportData,
 }: CompetitiveGapChartProps) {
   // Enhanced data processing
   const processedData = useMemo(() => {
@@ -149,15 +145,6 @@ export default function CompetitiveGapChart({
               Topic-by-topic comparison with your competitors (last {dateFilter})
             </CardDescription>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleExportData("json")}
-            disabled={isExporting}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export Data
-          </Button>
         </div>
       </CardHeader>
       <CardContent>
