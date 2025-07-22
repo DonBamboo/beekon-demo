@@ -78,6 +78,11 @@ export const COMMON_FIELD_MAPPINGS: Record<string, FieldMapping> = {
     response_text: { displayName: 'Full Response', format: 'text', description: 'Complete response', width: 500 },
   },
   dashboard: {
+    category: { displayName: 'Category', format: 'text', description: 'Data category', width: 120 },
+    metric: { displayName: 'Metric', format: 'text', description: 'Metric name', width: 200 },
+    value: { displayName: 'Value', format: 'text', description: 'Metric value', width: 120 },
+    unit: { displayName: 'Unit/Status', format: 'text', description: 'Unit or status information', width: 120 },
+    // Legacy mappings for backward compatibility
     totalAnalyses: { displayName: 'Total Analyses', format: 'number', description: 'Total number of analyses', width: 120 },
     averageConfidence: { displayName: 'Avg. Confidence', format: 'percentage', description: 'Average confidence score', width: 120 },
     averageSentiment: { displayName: 'Avg. Sentiment', format: 'percentage', description: 'Average sentiment score', width: 120 },
@@ -130,6 +135,62 @@ export const EXPORT_FILE_EXTENSIONS: Record<ExportFormat, string> = {
   word: "docx",
 };
 
+// Smart object serialization helper for exports
+export function serializeForExport(value: unknown, maxLength: number = 200): string {
+  if (value === null || value === undefined) return '';
+  
+  // Handle arrays
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+    
+    // For small arrays, show all items
+    if (value.length <= 3) {
+      const serialized = value.map(item => 
+        typeof item === 'object' && item !== null 
+          ? JSON.stringify(item) 
+          : String(item)
+      ).join(', ');
+      
+      return serialized.length <= maxLength 
+        ? `[${serialized}]` 
+        : `[${serialized.substring(0, maxLength - 10)}... +${value.length - 1} more]`;
+    }
+    
+    // For larger arrays, show count and first few items
+    return `[${value.length} items: ${String(value[0])}${value.length > 1 ? ', ...' : ''}]`;
+  }
+  
+  // Handle objects
+  if (typeof value === 'object' && value !== null) {
+    const keys = Object.keys(value);
+    if (keys.length === 0) return '{}';
+    
+    try {
+      const jsonString = JSON.stringify(value, null, 0);
+      
+      // If object is small enough, return full JSON
+      if (jsonString.length <= maxLength) {
+        return jsonString;
+      }
+      
+      // For large objects, show summary
+      const firstKey = keys[0];
+      const firstValue = (value as Record<string, unknown>)[firstKey];
+      const summary = `{${firstKey}: ${serializeForExport(firstValue, 50)}${keys.length > 1 ? `, ...+${keys.length - 1} more` : ''}}`;
+      
+      return summary.length <= maxLength ? summary : `{${keys.length} properties}`;
+    } catch (error) {
+      return `{${keys.length} properties}`;
+    }
+  }
+  
+  // Handle primitives
+  const stringValue = String(value);
+  return stringValue.length <= maxLength 
+    ? stringValue 
+    : `${stringValue.substring(0, maxLength - 3)}...`;
+}
+
 // Format value according to field mapping
 export function formatValue(value: unknown, fieldMapping?: FieldMapping[string]): string {
   if (value === null || value === undefined) return '';
@@ -169,6 +230,10 @@ export function formatValue(value: unknown, fieldMapping?: FieldMapping[string])
       return String(value);
     
     default:
+      // Use smart serialization for complex objects
+      if (typeof value === 'object' && value !== null) {
+        return serializeForExport(value);
+      }
       return String(value);
   }
 }
@@ -485,7 +550,12 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
         checkPageBreak();
         xPosition = 20;
         headers.forEach(header => {
-          const value = String(row[header] ?? '');
+          const rawValue = row[header];
+          // Use smart serialization for objects and arrays
+          const value = typeof rawValue === 'object' && rawValue !== null 
+            ? serializeForExport(rawValue, maxCharsPerColumn * 3) 
+            : String(rawValue ?? '');
+          
           const truncatedValue = value.length > maxCharsPerColumn ? 
             value.substring(0, maxCharsPerColumn - 3) + '...' : value;
           doc.text(truncatedValue, xPosition, yPosition);
@@ -507,7 +577,10 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
       checkPageBreak();
       const mapping = fieldMapping[key];
       const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const formattedValue = mapping ? formatValue(value, mapping) : String(value ?? '');
+      
+      // Use smart serialization for objects, otherwise use field mapping
+      const formattedValue = mapping ? formatValue(value, mapping) : 
+        (typeof value === 'object' && value !== null ? serializeForExport(value, 400) : String(value ?? ''));
       
       doc.setFont(undefined, 'bold');
       doc.text(`${displayName}:`, 20, yPosition);
@@ -926,9 +999,10 @@ function formatArrayToCsv(data: Record<string, unknown>[], dataType?: string): s
     const values = headers.map(header => {
       const value = row[header];
       
-      // Handle nested objects and arrays
+      // Handle nested objects and arrays with smart serialization
       if (typeof value === 'object' && value !== null) {
-        return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
+        const serialized = serializeForExport(value, 500); // Allow more space in CSV
+        return `"${serialized.replace(/"/g, '""')}"`;
       }
       
       // Convert to string and escape quotes
@@ -950,7 +1024,8 @@ function formatObjectToCsv(data: Record<string, unknown>, dataType?: string): st
   Object.entries(data).forEach(([key, value]) => {
     const mapping = fieldMapping[key];
     const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    const formattedValue = mapping ? formatValue(value, mapping) : (typeof value === 'object' ? JSON.stringify(value) : String(value ?? ''));
+    const formattedValue = mapping ? formatValue(value, mapping) : 
+      (typeof value === 'object' && value !== null ? serializeForExport(value, 500) : String(value ?? ''));
     
     csvContent += `"${displayName}","${formattedValue.replace(/"/g, '""')}"\n`;
   });
