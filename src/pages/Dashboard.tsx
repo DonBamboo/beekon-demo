@@ -141,7 +141,9 @@ export default function Dashboard() {
         { category: "Performance", metric: "Sentiment Trend", value: getSentimentLabel(metrics?.averageSentiment || 0), unit: "text" },
         
         // Website Statistics
-        ...(websites?.map(w => ({
+        ...(websites?.filter(w => 
+          w?.display_name && w?.domain // Only include websites with required fields
+        ).map(w => ({
           category: "Websites", 
           metric: w.display_name, 
           value: w.domain, 
@@ -149,26 +151,32 @@ export default function Dashboard() {
         })) || []),
         
         // Topic Performance (top 5)
-        ...(topicPerformance?.slice(0, 5).map((topic, index) => ({
+        ...(topicPerformance?.filter(topic => 
+          topic?.topic && typeof topic?.averageConfidence === 'number' // Only include valid topics
+        ).slice(0, 5).map((topic, index) => ({
           category: "Top Topics",
           metric: `#${index + 1} ${topic.topic}`,
-          value: `${topic.averageConfidence?.toFixed(1)}%`,
+          value: `${topic.averageConfidence.toFixed(1)}%`,
           unit: "confidence"
         })) || []),
         
         // LLM Performance
-        ...(llmPerformance?.map(llm => ({
+        ...(llmPerformance?.filter(llm => 
+          llm?.name && typeof llm?.averageConfidence === 'number' && typeof llm?.totalResults === 'number'
+        ).map(llm => ({
           category: "LLM Performance",
           metric: llm.name,
-          value: `${llm.averageConfidence?.toFixed(1)}%`,
+          value: `${llm.averageConfidence.toFixed(1)}%`,
           unit: `${llm.totalResults} results`
         })) || []),
         
         // Website Performance (top performers)
-        ...(websitePerformance?.slice(0, 5).map((site, index) => ({
+        ...(websitePerformance?.filter(site => 
+          site?.displayName && typeof site?.averageConfidence === 'number' && typeof site?.totalResults === 'number'
+        ).slice(0, 5).map((site, index) => ({
           category: "Website Performance",
           metric: `#${index + 1} ${site.displayName}`,
-          value: `${site.averageConfidence?.toFixed(1)}%`,
+          value: `${site.averageConfidence.toFixed(1)}%`,
           unit: `${site.totalResults} analyses`
         })) || []),
         

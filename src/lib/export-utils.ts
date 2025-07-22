@@ -135,6 +135,32 @@ export const EXPORT_FILE_EXTENSIONS: Record<ExportFormat, string> = {
   word: "docx",
 };
 
+// Validate export item to ensure it has required fields and no undefined values
+export function isValidExportItem(item: Record<string, unknown>): boolean {
+  // Check for null or undefined item
+  if (!item || typeof item !== 'object') return false;
+  
+  // Check for at least basic structure
+  const entries = Object.entries(item);
+  if (entries.length === 0) return false;
+  
+  // Check that critical values are not undefined/null (except for unit which can be empty)
+  const hasValidMetric = entries.some(([key, value]) => 
+    (key.toLowerCase().includes('metric') || key.toLowerCase().includes('name')) && 
+    value !== undefined && value !== null && String(value).trim() !== ''
+  );
+  
+  const hasValidValue = entries.some(([key, value]) => 
+    (key.toLowerCase().includes('value') || key.toLowerCase().includes('amount')) && 
+    value !== undefined && value !== null && String(value).trim() !== ''
+  );
+  
+  // For categorized data, require either valid metric+value OR at least 2 non-empty fields
+  return hasValidMetric && hasValidValue || entries.filter(([key, value]) => 
+    value !== undefined && value !== null && String(value).trim() !== ''
+  ).length >= 2;
+}
+
 // Smart object serialization helper for exports
 export function serializeForExport(value: unknown, maxLength: number = 200): string {
   if (value === null || value === undefined) return '';
@@ -578,12 +604,16 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
           doc.setFontSize(9);
           doc.setFont(undefined, 'normal');
           
-          categoryData.slice(0, 20).forEach((item, index) => { // Limit items per category
+          // Filter and process valid items only
+          const validCategoryData = categoryData.filter(item => isValidExportItem(item));
+          
+          validCategoryData.slice(0, 20).forEach((item, index) => { // Limit items per category
             checkPageBreak(8);
             
             // Extract metric and value (skip category field)
-            const itemEntries = Object.entries(item).filter(([key]) => 
-              key !== categoryKey && key !== 'category' && key !== 'Category'
+            const itemEntries = Object.entries(item).filter(([key, value]) => 
+              key !== categoryKey && key !== 'category' && key !== 'Category' &&
+              value !== undefined && value !== null && String(value).trim() !== ''
             );
             
             if (itemEntries.length >= 2) {
@@ -600,10 +630,20 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
                 key.toLowerCase().includes('unit') || key.toLowerCase().includes('status')
               )?.[1] || '';
               
+              // Skip if critical values are undefined
+              if (metric === undefined || metric === null || value === undefined || value === null) {
+                return; // Skip this item
+              }
+              
               // Format the line
               const metricText = String(metric || '');
               const valueText = String(value || '');
-              const unitText = unit ? ` (${String(unit)})` : '';
+              const unitText = unit && String(unit).trim() ? ` (${String(unit)})` : '';
+              
+              // Skip empty entries
+              if (!metricText.trim() || !valueText.trim()) {
+                return; // Skip this item
+              }
               
               // Metric name (left-aligned)
               doc.setFont(undefined, 'bold');
@@ -616,10 +656,15 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
               const truncatedValue = displayValue.length > 40 ? displayValue.substring(0, 37) + '...' : displayValue;
               doc.text(truncatedValue, 110, yPosition);
             } else {
-              // Fallback: display all non-category fields
+              // Fallback: display all non-category fields that are not undefined/null
               const displayText = itemEntries.map(([key, value]) => 
-                `${key}: ${String(value || '')}`
+                `${key}: ${String(value)}`
               ).join(' | ');
+              
+              // Skip if no valid content
+              if (!displayText.trim() || displayText.trim() === '') {
+                return; // Skip this item
+              }
               
               const truncatedText = displayText.length > 70 ? displayText.substring(0, 67) + '...' : displayText;
               doc.text(truncatedText, 25, yPosition);
@@ -628,12 +673,16 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
             yPosition += 6;
           });
           
-          // Add note if category has more items
-          if (categoryData.length > 20) {
+          // Update count message to reflect actual valid items
+          const validItemsShown = Math.min(validCategoryData.length, 20);
+          const remainingValidItems = Math.max(0, validCategoryData.length - 20);
+          
+          // Add note if category has more valid items
+          if (remainingValidItems > 0) {
             checkPageBreak();
             doc.setFont(undefined, 'italic');
             doc.setFontSize(8);
-            doc.text(`... and ${categoryData.length - 20} more ${category.toLowerCase()} items`, 25, yPosition);
+            doc.text(`... and ${remainingValidItems} more ${category.toLowerCase()} items`, 25, yPosition);
             yPosition += 5;
           }
           
