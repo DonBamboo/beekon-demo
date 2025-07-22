@@ -525,49 +525,169 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
     const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
     
     if (processedData.length > 0) {
-      // Create table-like structure
-      const headers = Object.keys(processedData[0]);
-      const maxCharsPerColumn = Math.floor(170 / headers.length);
+      // Check if data has category field for organized display
+      const hasCategoryField = processedData.some(item => item.hasOwnProperty('category') || item.hasOwnProperty('Category'));
       
-      // Headers
-      checkPageBreak(15);
-      doc.setFont(undefined, 'bold');
-      let xPosition = 20;
-      headers.forEach(header => {
-        const truncatedHeader = header.length > maxCharsPerColumn ? 
-          header.substring(0, maxCharsPerColumn - 3) + '...' : header;
-        doc.text(truncatedHeader, xPosition, yPosition);
-        xPosition += maxCharsPerColumn * 1.2;
-      });
-      yPosition += 8;
-      
-      // Add separator line
-      doc.line(20, yPosition - 3, 190, yPosition - 3);
-      
-      // Data rows
-      doc.setFont(undefined, 'normal');
-      processedData.slice(0, 50).forEach((row, index) => { // Limit to 50 rows for PDF readability
-        checkPageBreak();
-        xPosition = 20;
-        headers.forEach(header => {
-          const rawValue = row[header];
-          // Use smart serialization for objects and arrays
-          const value = typeof rawValue === 'object' && rawValue !== null 
-            ? serializeForExport(rawValue, maxCharsPerColumn * 3) 
-            : String(rawValue ?? '');
+      if (hasCategoryField) {
+        // Group data by category for organized sections
+        const categoryKey = processedData[0].hasOwnProperty('category') ? 'category' : 'Category';
+        const groupedData = processedData.reduce((groups, item) => {
+          const category = String(item[categoryKey] || 'Uncategorized');
+          if (!groups[category]) {
+            groups[category] = [];
+          }
+          groups[category].push(item);
+          return groups;
+        }, {} as Record<string, typeof processedData>);
+        
+        // Define category display order for better organization
+        const categoryOrder = [
+          'Summary', 'Performance', 'Metrics', 'Websites', 'Website Performance', 
+          'Top Topics', 'LLM Performance', 'Time Series', 'Analysis', 'Configuration'
+        ];
+        
+        // Sort categories by predefined order, then alphabetically
+        const sortedCategories = Object.keys(groupedData).sort((a, b) => {
+          const orderA = categoryOrder.indexOf(a);
+          const orderB = categoryOrder.indexOf(b);
           
-          const truncatedValue = value.length > maxCharsPerColumn ? 
-            value.substring(0, maxCharsPerColumn - 3) + '...' : value;
-          doc.text(truncatedValue, xPosition, yPosition);
+          if (orderA !== -1 && orderB !== -1) return orderA - orderB;
+          if (orderA !== -1) return -1;
+          if (orderB !== -1) return 1;
+          return a.localeCompare(b);
+        });
+        
+        // Render each category as a separate section
+        sortedCategories.forEach((category, categoryIndex) => {
+          const categoryData = groupedData[category];
+          
+          checkPageBreak(25);
+          
+          // Category header
+          doc.setFontSize(12);
+          doc.setFont(undefined, 'bold');
+          doc.text(category.toUpperCase(), 20, yPosition);
+          yPosition += 8;
+          
+          // Add underline for category
+          doc.setLineWidth(0.5);
+          doc.line(20, yPosition - 3, 20 + (category.length * 2.5), yPosition - 3);
+          yPosition += 6;
+          
+          // Create two-column layout for better readability
+          doc.setFontSize(9);
+          doc.setFont(undefined, 'normal');
+          
+          categoryData.slice(0, 20).forEach((item, index) => { // Limit items per category
+            checkPageBreak(8);
+            
+            // Extract metric and value (skip category field)
+            const itemEntries = Object.entries(item).filter(([key]) => 
+              key !== categoryKey && key !== 'category' && key !== 'Category'
+            );
+            
+            if (itemEntries.length >= 2) {
+              // Use metric and value format for cleaner display
+              const metric = itemEntries.find(([key]) => 
+                key.toLowerCase().includes('metric') || key.toLowerCase().includes('name')
+              )?.[1] || itemEntries[0][1];
+              
+              const value = itemEntries.find(([key]) => 
+                key.toLowerCase().includes('value') || key.toLowerCase().includes('amount')
+              )?.[1] || itemEntries[1][1];
+              
+              const unit = itemEntries.find(([key]) => 
+                key.toLowerCase().includes('unit') || key.toLowerCase().includes('status')
+              )?.[1] || '';
+              
+              // Format the line
+              const metricText = String(metric || '');
+              const valueText = String(value || '');
+              const unitText = unit ? ` (${String(unit)})` : '';
+              
+              // Metric name (left-aligned)
+              doc.setFont(undefined, 'bold');
+              const truncatedMetric = metricText.length > 35 ? metricText.substring(0, 32) + '...' : metricText;
+              doc.text(truncatedMetric, 25, yPosition);
+              
+              // Value and unit (right-aligned area)
+              doc.setFont(undefined, 'normal');
+              const displayValue = `${valueText}${unitText}`;
+              const truncatedValue = displayValue.length > 40 ? displayValue.substring(0, 37) + '...' : displayValue;
+              doc.text(truncatedValue, 110, yPosition);
+            } else {
+              // Fallback: display all non-category fields
+              const displayText = itemEntries.map(([key, value]) => 
+                `${key}: ${String(value || '')}`
+              ).join(' | ');
+              
+              const truncatedText = displayText.length > 70 ? displayText.substring(0, 67) + '...' : displayText;
+              doc.text(truncatedText, 25, yPosition);
+            }
+            
+            yPosition += 6;
+          });
+          
+          // Add note if category has more items
+          if (categoryData.length > 20) {
+            checkPageBreak();
+            doc.setFont(undefined, 'italic');
+            doc.setFontSize(8);
+            doc.text(`... and ${categoryData.length - 20} more ${category.toLowerCase()} items`, 25, yPosition);
+            yPosition += 5;
+          }
+          
+          // Add spacing between categories (except last)
+          if (categoryIndex < sortedCategories.length - 1) {
+            yPosition += 10;
+          }
+        });
+        
+      } else {
+        // Fallback to original table format for non-categorized data
+        const headers = Object.keys(processedData[0]);
+        const maxCharsPerColumn = Math.floor(170 / headers.length);
+        
+        // Headers
+        checkPageBreak(15);
+        doc.setFont(undefined, 'bold');
+        let xPosition = 20;
+        headers.forEach(header => {
+          const truncatedHeader = header.length > maxCharsPerColumn ? 
+            header.substring(0, maxCharsPerColumn - 3) + '...' : header;
+          doc.text(truncatedHeader, xPosition, yPosition);
           xPosition += maxCharsPerColumn * 1.2;
         });
-        yPosition += 6;
-      });
-      
-      if (processedData.length > 50) {
-        yPosition += 5;
-        doc.setFont(undefined, 'italic');
-        doc.text(`... and ${processedData.length - 50} more records`, 20, yPosition);
+        yPosition += 8;
+        
+        // Add separator line
+        doc.line(20, yPosition - 3, 190, yPosition - 3);
+        
+        // Data rows
+        doc.setFont(undefined, 'normal');
+        processedData.slice(0, 50).forEach((row, index) => { // Limit to 50 rows for PDF readability
+          checkPageBreak();
+          xPosition = 20;
+          headers.forEach(header => {
+            const rawValue = row[header];
+            // Use smart serialization for objects and arrays
+            const value = typeof rawValue === 'object' && rawValue !== null 
+              ? serializeForExport(rawValue, maxCharsPerColumn * 3) 
+              : String(rawValue ?? '');
+            
+            const truncatedValue = value.length > maxCharsPerColumn ? 
+              value.substring(0, maxCharsPerColumn - 3) + '...' : value;
+            doc.text(truncatedValue, xPosition, yPosition);
+            xPosition += maxCharsPerColumn * 1.2;
+          });
+          yPosition += 6;
+        });
+        
+        if (processedData.length > 50) {
+          yPosition += 5;
+          doc.setFont(undefined, 'italic');
+          doc.text(`... and ${processedData.length - 50} more records`, 20, yPosition);
+        }
       }
     }
   } else if (typeof data.data === 'object') {
