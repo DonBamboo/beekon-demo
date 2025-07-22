@@ -531,7 +531,25 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
     Object.entries(data.filters).forEach(([key, value]) => {
       checkPageBreak();
       const cleanKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      doc.text(`• ${cleanKey}: ${value}`, 25, yPosition);
+      
+      // Handle arrays with better formatting
+      let displayValue;
+      if (Array.isArray(value)) {
+        displayValue = value.map(item => {
+          // Convert camelCase to readable format
+          return String(item)
+            .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+            .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
+            .trim();
+        }).join(', ');
+      } else if (typeof value === 'object' && value !== null) {
+        // Handle objects by serializing them
+        displayValue = serializeForExport(value, 100);
+      } else {
+        displayValue = String(value || '');
+      }
+      
+      doc.text(`• ${cleanKey}: ${displayValue}`, 25, yPosition);
       yPosition += 6;
     });
     yPosition += 10;
