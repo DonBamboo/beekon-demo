@@ -15,6 +15,7 @@ import {
   formatValue,
   validateExportData,
   sanitizeExportData,
+  ChartInfo,
 } from "@/lib/export-utils";
 import type { ExportFormat } from "@/types/database";
 import { exportHistoryService } from "./exportHistoryService";
@@ -247,9 +248,10 @@ export class ExportService {
       trackHistory?: boolean;
       exportType?: ExportType;
       customFilename?: string;
+      charts?: ChartInfo[];
     } = {}
   ): Promise<Blob> {
-    const { trackHistory = true, exportType = "filtered_data", customFilename } = options;
+    const { trackHistory = true, exportType = "filtered_data", customFilename, charts } = options;
     
     // Validate export data before processing
     const validation = validateExportData(data);
@@ -310,7 +312,7 @@ export class ExportService {
           blob = formatCsvExport(sanitizedData, sanitizedData.dataType);
           break;
         case "pdf":
-          blob = formatPdfExport(sanitizedData, sanitizedData.dataType);
+          blob = formatPdfExport(sanitizedData, sanitizedData.dataType, charts);
           break;
         case "excel":
           blob = formatExcelExport(sanitizedData, sanitizedData.dataType);

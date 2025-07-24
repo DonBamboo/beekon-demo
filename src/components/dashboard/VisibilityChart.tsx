@@ -1,3 +1,4 @@
+import React, { forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download } from "lucide-react";
@@ -21,16 +22,16 @@ interface VisibilityChartProps {
   onExportData: (format: "csv") => void;
 }
 
-export function VisibilityChart({
+export const VisibilityChart = forwardRef<HTMLDivElement, VisibilityChartProps>(({
   timeSeriesData,
   dateFilter,
   hasData,
   onExportData,
-}: VisibilityChartProps) {
+}, ref) => {
   if (timeSeriesData.length === 0) return null;
 
   return (
-    <Card>
+    <Card ref={ref}>
       <CardHeader>
         <div className="flex justify-between items-center">
           <div>
@@ -82,4 +83,6 @@ export function VisibilityChart({
       </CardContent>
     </Card>
   );
-}
+});
+
+VisibilityChart.displayName = "VisibilityChart";

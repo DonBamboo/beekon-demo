@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } from "docx";
 import { saveAs } from "file-saver";
+import html2canvas from "html2canvas";
 
 // Export format types - import from database types for consistency
 import type { ExportFormat } from "@/types/database";
@@ -117,6 +118,34 @@ export interface ExportData {
   dataType?: string; // For field mapping
 }
 
+// Chart capture configuration interface
+export interface ChartCaptureConfig {
+  backgroundColor?: string;
+  scale?: number;
+  width?: number;
+  height?: number;
+  useCORS?: boolean;
+  quality?: number;
+}
+
+// Chart capture result interface
+export interface ChartCaptureResult {
+  success: boolean;
+  imageData?: string; // base64 encoded image
+  width?: number;
+  height?: number;
+  error?: string;
+}
+
+// Chart information for PDF integration
+export interface ChartInfo {
+  id: string;
+  title: string;
+  imageData: string;
+  width: number;
+  height: number;
+}
+
 // MIME type mappings for different export formats
 export const EXPORT_MIME_TYPES: Record<ExportFormat, string> = {
   pdf: "application/pdf",
@@ -215,6 +244,181 @@ export function serializeForExport(value: unknown, maxLength: number = 200): str
   return stringValue.length <= maxLength 
     ? stringValue 
     : `${stringValue.substring(0, maxLength - 3)}...`;
+}
+
+/**
+ * Capture a chart element as a base64 image using html2canvas
+ * @param element - The DOM element to capture (chart container)
+ * @param config - Configuration options for capture
+ * @returns Promise<ChartCaptureResult>
+ */
+export async function captureChartAsImage(
+  element: HTMLElement, 
+  config: ChartCaptureConfig = {}
+): Promise<ChartCaptureResult> {
+  try {
+    // Get element's actual dimensions for dynamic sizing
+    const elementRect = element.getBoundingClientRect();
+    const computedStyle = window.getComputedStyle(element);
+    
+    // Calculate actual content dimensions including padding/margins
+    const actualWidth = element.offsetWidth;
+    const actualHeight = element.offsetHeight;
+    
+    // Default configuration with dynamic sizing
+    const defaultConfig: ChartCaptureConfig = {
+      backgroundColor: 'white',
+      scale: 2, // High DPI for crisp charts
+      // Use dynamic dimensions with reasonable constraints
+      width: Math.max(600, Math.min(1200, actualWidth || 800)), // Min 600px, Max 1200px
+      height: Math.max(300, Math.min(800, actualHeight || 400)), // Min 300px, Max 800px
+      useCORS: true,
+      quality: 0.95,
+    };
+
+    const finalConfig = { ...defaultConfig, ...config };
+
+    // Wait longer for layout stabilization, especially for responsive elements
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Ensure element is visible and properly laid out
+    if (elementRect.width === 0 || elementRect.height === 0) {
+      console.warn('Element has zero dimensions, using fallback sizing');
+    }
+
+    // Capture the element as canvas with dynamic sizing
+    const canvas = await html2canvas(element, {
+      backgroundColor: finalConfig.backgroundColor,
+      scale: finalConfig.scale,
+      width: finalConfig.width,
+      height: finalConfig.height,
+      useCORS: finalConfig.useCORS,
+      allowTaint: true,
+      logging: false, // Disable logging for cleaner output
+      removeContainer: true,
+      scrollX: 0,
+      scrollY: 0,
+      onclone: (clonedDoc, clonedElement) => {
+        // Ensure proper styling is applied in the cloned document
+        const style = clonedDoc.createElement('style');
+        style.textContent = `
+          * { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important;
+            box-sizing: border-box !important;
+          }
+          .recharts-responsive-container {
+            position: relative !important;
+            width: 100% !important;
+            height: 100% !important;
+          }
+        `;
+        clonedDoc.head.appendChild(style);
+        
+        // Ensure the cloned element maintains proper dimensions
+        if (clonedElement) {
+          clonedElement.style.width = `${finalConfig.width}px`;
+          clonedElement.style.height = `${finalConfig.height}px`;
+          clonedElement.style.overflow = 'visible';
+        }
+      }
+    });
+
+    // Convert to base64 image data
+    const imageData = canvas.toDataURL('image/png', finalConfig.quality);
+
+    return {
+      success: true,
+      imageData,
+      width: canvas.width,
+      height: canvas.height,
+    };
+
+  } catch (error) {
+    console.error('Chart capture failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown capture error',
+    };
+  }
+}
+
+/**
+ * Capture multiple charts concurrently with element-specific configurations
+ * @param chartElements - Array of chart elements with their IDs and titles
+ * @param globalConfig - Global configuration options for capture
+ * @returns Promise<ChartInfo[]>
+ */
+export async function captureMultipleCharts(
+  chartElements: Array<{ element: HTMLElement; id: string; title: string; config?: ChartCaptureConfig }>,
+  globalConfig: ChartCaptureConfig = {}
+): Promise<ChartInfo[]> {
+  const capturePromises = chartElements.map(async ({ element, id, title, config: elementConfig }) => {
+    // Merge global config with element-specific config, with element config taking precedence
+    const mergedConfig = { ...globalConfig, ...elementConfig };
+    
+    // Apply chart-specific optimizations
+    const chartSpecificConfig = getChartSpecificConfig(id, mergedConfig);
+    
+    const result = await captureChartAsImage(element, chartSpecificConfig);
+    
+    if (result.success && result.imageData) {
+      return {
+        id,
+        title,
+        imageData: result.imageData,
+        width: result.width || 800,
+        height: result.height || 400,
+      };
+    }
+    
+    console.warn(`Failed to capture chart: ${title}`, result.error);
+    return null;
+  });
+
+  const results = await Promise.all(capturePromises);
+  return results.filter((result): result is ChartInfo => result !== null);
+}
+
+/**
+ * Get chart-specific configuration based on chart ID
+ * @param chartId - The ID of the chart
+ * @param baseConfig - Base configuration to extend
+ * @returns ChartCaptureConfig with chart-specific optimizations
+ */
+function getChartSpecificConfig(chartId: string, baseConfig: ChartCaptureConfig): ChartCaptureConfig {
+  const chartConfigs: Record<string, Partial<ChartCaptureConfig>> = {
+    'visibility-chart': {
+      // Visibility chart tends to be taller due to export button in header
+      height: Math.max(450, baseConfig.height || 400), // Ensure minimum 450px height
+      // Give extra time for responsive container to stabilize
+    },
+    'llm-performance': {
+      // LLM performance chart is typically wider due to multiple bars
+      width: Math.max(700, baseConfig.width || 600),
+    },
+    'sentiment-distribution': {
+      // Pie chart needs square-ish dimensions for proper aspect ratio
+      width: Math.max(500, Math.min(600, baseConfig.width || 500)),
+      height: Math.max(400, Math.min(500, baseConfig.height || 400)),
+    },
+    'mention-trends': {
+      // Time series chart benefits from wider format
+      width: Math.max(750, baseConfig.width || 600),
+    },
+    'topic-radar': {
+      // Radar chart works best with square dimensions
+      width: Math.max(500, Math.min(600, baseConfig.width || 500)),
+      height: Math.max(500, Math.min(600, baseConfig.height || 500)),
+    },
+    'website-performance': {
+      // Website performance uses progress bars, can be more compact
+      height: Math.max(350, baseConfig.height || 300),
+    },
+  };
+
+  const specificConfig = chartConfigs[chartId] || {};
+  return { ...baseConfig, ...specificConfig };
 }
 
 // Format value according to field mapping
@@ -475,7 +679,7 @@ export function formatCsvExport(data: ExportData, dataType?: string): Blob {
 }
 
 // Format data for PDF export using jsPDF for professional PDF documents
-export function formatPdfExport(data: ExportData, dataType?: string): Blob {
+export function formatPdfExport(data: ExportData, dataType?: string, charts?: ChartInfo[]): Blob {
   const doc = new jsPDF();
   let yPosition = 20;
   const pageHeight = doc.internal.pageSize.height;
@@ -793,6 +997,81 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
       
       yPosition += 8;
     });
+  }
+  
+  // Add charts if provided
+  if (charts && charts.length > 0) {
+    checkPageBreak(40); // Ensure space for charts section header
+    
+    // Charts section header
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text('DASHBOARD CHARTS', 20, yPosition);
+    yPosition += 15;
+    
+    // Add separator line
+    doc.setLineWidth(1);
+    doc.line(20, yPosition - 5, 190, yPosition - 5);
+    yPosition += 10;
+    
+    // Process each chart
+    charts.forEach((chart, index) => {
+      checkPageBreak(100); // Ensure enough space for chart (including title)
+      
+      // Chart title
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text(chart.title, 20, yPosition);
+      yPosition += 8;
+      
+      try {
+        // Calculate image dimensions to fit page width
+        const pageWidth = doc.internal.pageSize.width;
+        const maxImageWidth = pageWidth - 40; // 20px margin on each side
+        const maxImageHeight = 80; // Maximum height to prevent overflow
+        
+        // Calculate scaled dimensions maintaining aspect ratio
+        const aspectRatio = chart.width / chart.height;
+        let imageWidth = Math.min(maxImageWidth, chart.width * 0.1); // Scale down for PDF
+        let imageHeight = imageWidth / aspectRatio;
+        
+        // Adjust if height exceeds maximum
+        if (imageHeight > maxImageHeight) {
+          imageHeight = maxImageHeight;
+          imageWidth = imageHeight * aspectRatio;
+        }
+        
+        // Add the chart image
+        doc.addImage(
+          chart.imageData,
+          'PNG',
+          20, // x position
+          yPosition, // y position
+          imageWidth,
+          imageHeight,
+          `chart-${index}`, // alias
+          'MEDIUM' // compression
+        );
+        
+        yPosition += imageHeight + 15; // Move position after image + spacing
+        
+      } catch (error) {
+        console.error(`Failed to add chart "${chart.title}" to PDF:`, error);
+        
+        // Add error message instead of chart
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'italic');
+        doc.text(`[Chart could not be rendered: ${chart.title}]`, 20, yPosition);
+        yPosition += 10;
+      }
+      
+      // Add spacing between charts
+      if (index < charts.length - 1) {
+        yPosition += 10;
+      }
+    });
+    
+    yPosition += 10; // Extra spacing after charts section
   }
   
   // Add footer
