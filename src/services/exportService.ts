@@ -8,7 +8,6 @@ import {
   formatCsvExport,
   formatPdfExport,
   formatExcelExport,
-  formatWordExport,
   generateExportFilename,
   applyFieldMapping,
   getFieldMapping,
@@ -316,9 +315,6 @@ export class ExportService {
           break;
         case "excel":
           blob = formatExcelExport(sanitizedData, sanitizedData.dataType);
-          break;
-        case "word":
-          blob = await formatWordExport(sanitizedData, sanitizedData.dataType);
           break;
         default:
           throw new Error(`Unsupported export format: ${format}`);

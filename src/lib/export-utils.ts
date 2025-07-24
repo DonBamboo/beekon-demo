@@ -3,7 +3,6 @@
 import { toast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } from "docx";
 import { saveAs } from "file-saver";
 import html2canvas from "html2canvas";
 
@@ -177,7 +176,6 @@ export const EXPORT_MIME_TYPES: Record<ExportFormat, string> = {
   csv: "text/csv",
   json: "application/json",
   excel: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  word: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
 // File extension mappings
@@ -186,7 +184,6 @@ export const EXPORT_FILE_EXTENSIONS: Record<ExportFormat, string> = {
   csv: "csv",
   json: "json",
   excel: "xlsx",
-  word: "docx",
 };
 
 // Validate export item to ensure it has required fields and no undefined values
@@ -1968,272 +1965,6 @@ export function formatExcelExport(data: ExportData, dataType?: string): Blob {
   return new Blob([excelBuffer], { type: EXPORT_MIME_TYPES.excel });
 }
 
-// Format data for Word export using docx library for professional Word documents
-export async function formatWordExport(data: ExportData, dataType?: string): Promise<Blob> {
-  const doc = new Document({
-    sections: [{
-      properties: {},
-      children: [
-        // Document title
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: data.title.toUpperCase(),
-              bold: true,
-              size: 32,
-            }),
-          ],
-          alignment: "center",
-          spacing: { after: 300 }
-        }),
-        
-        // Subtitle
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: "BEEKON AI REPORT",
-              bold: true,
-              size: 24,
-            }),
-          ],
-          alignment: "center",
-          spacing: { after: 600 }
-        }),
-        
-        // Document metadata
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: "Document Information",
-              bold: true,
-              size: 20,
-            }),
-          ],
-          spacing: { after: 200 }
-        }),
-        
-        new Paragraph({
-          children: [
-            new TextRun({ text: "Generated: ", bold: true }),
-            new TextRun({ text: new Date(data.exportedAt).toLocaleString() }),
-          ],
-          spacing: { after: 100 }
-        }),
-        
-        new Paragraph({
-          children: [
-            new TextRun({ text: "Total Records: ", bold: true }),
-            new TextRun({ text: data.totalRecords.toLocaleString() }),
-          ],
-          spacing: { after: 100 }
-        }),
-        
-        ...(data.dateRange ? [
-          new Paragraph({
-            children: [
-              new TextRun({ text: "Date Range: ", bold: true }),
-              new TextRun({ 
-                text: `${new Date(data.dateRange.start).toLocaleDateString()} to ${new Date(data.dateRange.end).toLocaleDateString()}` 
-              }),
-            ],
-            spacing: { after: 100 }
-          })
-        ] : []),
-        
-        // Add spacing before next section
-        new Paragraph({
-          children: [new TextRun({ text: "" })],
-          spacing: { after: 300 }
-        }),
-        
-        // Add filters section if present
-        ...(data.filters && Object.keys(data.filters).length > 0 ? [
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "Applied Filters",
-                bold: true,
-                size: 20,
-              }),
-            ],
-            spacing: { after: 200 }
-          }),
-          ...Object.entries(data.filters).map(([key, value]) => 
-            new Paragraph({
-              children: [
-                new TextRun({ text: "• " }),
-                new TextRun({ 
-                  text: `${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}: `,
-                  bold: true 
-                }),
-                new TextRun({ text: String(value) }),
-              ],
-              spacing: { after: 100 }
-            })
-          ),
-          new Paragraph({
-            children: [new TextRun({ text: "" })],
-            spacing: { after: 300 }
-          })
-        ] : []),
-        
-        // Data section header
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: "Data",
-              bold: true,
-              size: 20,
-            }),
-          ],
-          spacing: { after: 200 }
-        }),
-      ]
-    }]
-  });
-  
-  // Add data content
-  const section = doc.sections[0];
-  
-  if (Array.isArray(data.data)) {
-    const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
-    
-    if (processedData.length > 0) {
-      const headers = Object.keys(processedData[0]);
-      
-      // Create table with data
-      const tableRows = [
-        // Header row
-        new TableRow({
-          children: headers.map(header => 
-            new TableCell({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: header,
-                      bold: true
-                    })
-                  ]
-                })
-              ],
-              width: { size: Math.floor(100 / headers.length), type: WidthType.PERCENTAGE }
-            })
-          )
-        }),
-        // Data rows (limit to 100 for document size)
-        ...processedData.slice(0, 100).map(row => 
-          new TableRow({
-            children: headers.map(header => 
-              new TableCell({
-                children: [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: String(row[header] ?? '')
-                      })
-                    ]
-                  })
-                ],
-                width: { size: Math.floor(100 / headers.length), type: WidthType.PERCENTAGE }
-              })
-            )
-          })
-        )
-      ];
-      
-      const table = new Table({
-        rows: tableRows,
-        width: { size: 100, type: WidthType.PERCENTAGE }
-      });
-      
-      section.children.push(table);
-      
-      // Add note if data was truncated
-      if (processedData.length > 100) {
-        section.children.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `... and ${processedData.length - 100} more records`,
-                italics: true
-              })
-            ],
-            spacing: { before: 200 }
-          })
-        );
-      }
-    }
-  } else if (typeof data.data === 'object') {
-    const fieldMapping = dataType ? getFieldMapping(dataType) : {};
-    
-    // Create a two-column table for key-value pairs
-    const tableRows = Object.entries(data.data).map(([key, value]) => {
-      const mapping = fieldMapping[key];
-      const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const formattedValue = mapping ? formatValue(value, mapping) : String(value ?? '');
-      
-      return new TableRow({
-        children: [
-          new TableCell({
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: displayName,
-                    bold: true
-                  })
-                ]
-              })
-            ],
-            width: { size: 30, type: WidthType.PERCENTAGE }
-          }),
-          new TableCell({
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: formattedValue
-                  })
-                ]
-              })
-            ],
-            width: { size: 70, type: WidthType.PERCENTAGE }
-          })
-        ]
-      });
-    });
-    
-    const table = new Table({
-      rows: tableRows,
-      width: { size: 100, type: WidthType.PERCENTAGE }
-    });
-    
-    section.children.push(table);
-  }
-  
-  // Add footer
-  section.children.push(
-    new Paragraph({
-      children: [new TextRun({ text: "" })],
-      spacing: { before: 600, after: 200 }
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: `Generated by Beekon AI - ${new Date().toLocaleDateString()}`,
-          italics: true,
-          size: 18
-        })
-      ],
-      alignment: "center"
-    })
-  );
-  
-  // Generate Word document
-  const buffer = await Packer.toBlob(doc);
-  return new Blob([buffer], { type: EXPORT_MIME_TYPES.word });
-}
 
 // Helper function to format array data to CSV
 function formatArrayToCsv(data: Record<string, unknown>[], dataType?: string): string {
@@ -2562,7 +2293,6 @@ export function getExportFormatDisplayName(format: ExportFormat): string {
     csv: "CSV Spreadsheet",
     json: "JSON Data",
     excel: "Excel Spreadsheet",
-    word: "Word Document",
   };
   
   return displayNames[format] || format.toUpperCase();
@@ -2578,7 +2308,6 @@ export function estimateExportSize(data: unknown, format: ExportFormat): string 
     csv: 0.7,
     pdf: 1.5,
     excel: 2,
-    word: 3,
   };
   
   const estimatedBytes = dataSize * sizeMultipliers[format];

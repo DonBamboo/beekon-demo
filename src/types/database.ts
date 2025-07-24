@@ -210,7 +210,7 @@ export interface DashboardMetrics {
 // Export history types
 export type ExportStatus = "pending" | "processing" | "completed" | "failed";
 export type ExportType = "analysis" | "dashboard" | "website" | "competitor" | "configuration" | "filtered_data";
-export type ExportFormat = "pdf" | "csv" | "json" | "excel" | "word";
+export type ExportFormat = "pdf" | "csv" | "json" | "excel";
 
 export interface ExportHistoryRecord {
   id: string;
