@@ -20,7 +20,6 @@ import NoAnalyticsState from "@/components/competitors/NoAnalyticsState";
 import CompetitorInsights from "@/components/competitors/CompetitorInsights";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { addProtocol } from "@/lib/utils";
-import { ExportFormat } from "@/lib/export-utils";
 
 export default function Competitors() {
   const {
@@ -44,7 +43,6 @@ export default function Competitors() {
   const [sortBy, setSortBy] = useState<
     "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore"
   >("shareOfVoice");
-  const [isExporting, setIsExporting] = useState(false);
 
   // Get first website ID for competitor tracking (fallback)
   const websiteId = websites?.[0]?.id;
@@ -93,82 +91,6 @@ export default function Competitors() {
   // Compatibility functions for existing code
   const refreshData = refetch || (() => {});
   const clearError = () => {}; // Errors clear automatically in React Query
-  
-  // Export functionality
-  const exportCompetitorData = async (format: ExportFormat) => {
-    if (!targetWebsiteId) {
-      toast({
-        title: "Export Error",
-        description: "No website selected for export",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsExporting(true);
-    try {
-      const { exportService } = await import("@/services/exportService");
-      
-      // Prepare export data with enhanced competitor information
-      const exportData = competitorsWithStatus.map(competitor => ({
-        ...competitor,
-        performance: competitor.performance || {},
-        // Add calculated fields
-        performanceScore: competitor.performance?.shareOfVoice || 0,
-        statusText: competitor.analysisStatus,
-        addedDate: competitor.addedAt,
-        isActive: competitor.is_active,
-        // Remove unnecessary fields
-        id: undefined,
-        website_id: undefined,
-        created_at: undefined,
-        updated_at: undefined,
-      })).filter(item => item); // Remove undefined items
-
-      // Create export content
-      const exportContent = {
-        title: `Competitor Analysis Report`,
-        data: exportData,
-        exportedAt: new Date().toISOString(),
-        totalRecords: exportData.length,
-        filters: {
-          dateRange: `${dateFilter} days`,
-          sortBy: sortBy,
-          websiteId: targetWebsiteId,
-        },
-        dateRange,
-        dataType: "competitor", // Use competitor field mapping
-        metadata: {
-          exportType: "competitor_analysis",
-          generatedBy: "Beekon AI Export Service",
-          websiteId: targetWebsiteId,
-          totalCompetitors: exportData.length,
-          activeCompetitors: exportData.filter(c => c.isActive).length,
-        },
-      };
-
-      const blob = await exportService.exportData(exportContent, format, { 
-        exportType: "competitor", 
-        customFilename: `competitor_analysis_${dateFilter}` 
-      });
-
-      // Success toast will be shown by the export service
-      toast({
-        title: "Export Successful",
-        description: `Competitor data exported as ${format.toUpperCase()}`,
-      });
-
-    } catch (error) {
-      console.error("Export failed:", error);
-      toast({
-        title: "Export Failed",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   // Prepare chart data from analytics (memoized to prevent unnecessary recalculations)
   const shareOfVoiceData = useMemo(() => {
@@ -337,25 +259,6 @@ export default function Competitors() {
     setShowDeleteConfirm(true);
   };
 
-  const handleExportData = async (format: "pdf" | "csv" | "json") => {
-    if (!hasData) {
-      toast({
-        title: "No data to export",
-        description: "Please add competitors before exporting.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsExporting(true);
-    try {
-      await exportCompetitorData(format);
-    } catch (error) {
-      // Error is already handled by the hook
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   // Show loading state
   if (workspaceLoading || isLoading) {
@@ -387,7 +290,6 @@ export default function Competitors() {
           dateFilter={dateFilter}
           sortBy={sortBy}
           isRefreshing={isRefreshing}
-          isExporting={isExporting}
           hasData={hasData}
           isAddDialogOpen={isAddDialogOpen}
           competitorDomain={competitorDomain}
@@ -403,7 +305,6 @@ export default function Competitors() {
           setCompetitorName={setCompetitorName}
           setSelectedWebsiteId={setSelectedWebsiteId}
           refreshData={refreshData}
-          handleExportData={handleExportData}
           handleAddCompetitor={handleAddCompetitor}
         />
 
@@ -421,8 +322,6 @@ export default function Competitors() {
         <ShareOfVoiceChart
           data={shareOfVoiceData}
           dateFilter={dateFilter}
-          isExporting={isExporting}
-          handleExportData={handleExportData}
         />
 
         {/* Competitors List */}
@@ -440,8 +339,6 @@ export default function Competitors() {
           analytics={analytics}
           gapAnalysis={analytics?.gapAnalysis || []}
           dateFilter={dateFilter}
-          isExporting={isExporting}
-          handleExportData={handleExportData}
         />
 
         {/* Competitive Intelligence */}

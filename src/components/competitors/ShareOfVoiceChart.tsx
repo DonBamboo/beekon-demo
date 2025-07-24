@@ -20,7 +20,7 @@ import {
   Pie,
   Legend,
 } from "recharts";
-import { Download, Info, TrendingUp, Award } from "lucide-react";
+import { Info, TrendingUp, Award } from "lucide-react";
 import { useMemo } from "react";
 
 interface ShareOfVoiceData {
@@ -35,15 +35,11 @@ interface ShareOfVoiceData {
 interface ShareOfVoiceChartProps {
   data: ShareOfVoiceData[];
   dateFilter: "7d" | "30d" | "90d";
-  isExporting: boolean;
-  handleExportData: (format: "pdf") => void;
 }
 
 export default function ShareOfVoiceChart({
   data,
   dateFilter,
-  isExporting,
-  handleExportData,
 }: ShareOfVoiceChartProps) {
   // Enhanced data processing
   const chartData = useMemo(() => {
@@ -122,15 +118,6 @@ export default function ShareOfVoiceChart({
               {dateFilter})
             </CardDescription>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleExportData("pdf")}
-            disabled={isExporting}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export Report
-          </Button>
         </div>
       </CardHeader>
       <CardContent>

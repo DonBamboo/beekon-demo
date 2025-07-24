@@ -78,6 +78,11 @@ export const COMMON_FIELD_MAPPINGS: Record<string, FieldMapping> = {
     response_text: { displayName: 'Full Response', format: 'text', description: 'Complete response', width: 500 },
   },
   dashboard: {
+    category: { displayName: 'Category', format: 'text', description: 'Data category', width: 120 },
+    metric: { displayName: 'Metric', format: 'text', description: 'Metric name', width: 200 },
+    value: { displayName: 'Value', format: 'text', description: 'Metric value', width: 120 },
+    unit: { displayName: 'Unit/Status', format: 'text', description: 'Unit or status information', width: 120 },
+    // Legacy mappings for backward compatibility
     totalAnalyses: { displayName: 'Total Analyses', format: 'number', description: 'Total number of analyses', width: 120 },
     averageConfidence: { displayName: 'Avg. Confidence', format: 'percentage', description: 'Average confidence score', width: 120 },
     averageSentiment: { displayName: 'Avg. Sentiment', format: 'percentage', description: 'Average sentiment score', width: 120 },
@@ -130,6 +135,88 @@ export const EXPORT_FILE_EXTENSIONS: Record<ExportFormat, string> = {
   word: "docx",
 };
 
+// Validate export item to ensure it has required fields and no undefined values
+export function isValidExportItem(item: Record<string, unknown>): boolean {
+  // Check for null or undefined item
+  if (!item || typeof item !== 'object') return false;
+  
+  // Check for at least basic structure
+  const entries = Object.entries(item);
+  if (entries.length === 0) return false;
+  
+  // Check that critical values are not undefined/null (except for unit which can be empty)
+  const hasValidMetric = entries.some(([key, value]) => 
+    (key.toLowerCase().includes('metric') || key.toLowerCase().includes('name')) && 
+    value !== undefined && value !== null && String(value).trim() !== ''
+  );
+  
+  const hasValidValue = entries.some(([key, value]) => 
+    (key.toLowerCase().includes('value') || key.toLowerCase().includes('amount')) && 
+    value !== undefined && value !== null && String(value).trim() !== ''
+  );
+  
+  // For categorized data, require either valid metric+value OR at least 2 non-empty fields
+  return hasValidMetric && hasValidValue || entries.filter(([key, value]) => 
+    value !== undefined && value !== null && String(value).trim() !== ''
+  ).length >= 2;
+}
+
+// Smart object serialization helper for exports
+export function serializeForExport(value: unknown, maxLength: number = 200): string {
+  if (value === null || value === undefined) return '';
+  
+  // Handle arrays
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+    
+    // For small arrays, show all items
+    if (value.length <= 3) {
+      const serialized = value.map(item => 
+        typeof item === 'object' && item !== null 
+          ? JSON.stringify(item) 
+          : String(item)
+      ).join(', ');
+      
+      return serialized.length <= maxLength 
+        ? `[${serialized}]` 
+        : `[${serialized.substring(0, maxLength - 10)}... +${value.length - 1} more]`;
+    }
+    
+    // For larger arrays, show count and first few items
+    return `[${value.length} items: ${String(value[0])}${value.length > 1 ? ', ...' : ''}]`;
+  }
+  
+  // Handle objects
+  if (typeof value === 'object' && value !== null) {
+    const keys = Object.keys(value);
+    if (keys.length === 0) return '{}';
+    
+    try {
+      const jsonString = JSON.stringify(value, null, 0);
+      
+      // If object is small enough, return full JSON
+      if (jsonString.length <= maxLength) {
+        return jsonString;
+      }
+      
+      // For large objects, show summary
+      const firstKey = keys[0];
+      const firstValue = (value as Record<string, unknown>)[firstKey];
+      const summary = `{${firstKey}: ${serializeForExport(firstValue, 50)}${keys.length > 1 ? `, ...+${keys.length - 1} more` : ''}}`;
+      
+      return summary.length <= maxLength ? summary : `{${keys.length} properties}`;
+    } catch (error) {
+      return `{${keys.length} properties}`;
+    }
+  }
+  
+  // Handle primitives
+  const stringValue = String(value);
+  return stringValue.length <= maxLength 
+    ? stringValue 
+    : `${stringValue.substring(0, maxLength - 3)}...`;
+}
+
 // Format value according to field mapping
 export function formatValue(value: unknown, fieldMapping?: FieldMapping[string]): string {
   if (value === null || value === undefined) return '';
@@ -169,6 +256,10 @@ export function formatValue(value: unknown, fieldMapping?: FieldMapping[string])
       return String(value);
     
     default:
+      // Use smart serialization for complex objects
+      if (typeof value === 'object' && value !== null) {
+        return serializeForExport(value);
+      }
       return String(value);
   }
 }
@@ -440,7 +531,25 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
     Object.entries(data.filters).forEach(([key, value]) => {
       checkPageBreak();
       const cleanKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      doc.text(`• ${cleanKey}: ${value}`, 25, yPosition);
+      
+      // Handle arrays with better formatting
+      let displayValue;
+      if (Array.isArray(value)) {
+        displayValue = value.map(item => {
+          // Convert camelCase to readable format
+          return String(item)
+            .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+            .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
+            .trim();
+        }).join(', ');
+      } else if (typeof value === 'object' && value !== null) {
+        // Handle objects by serializing them
+        displayValue = serializeForExport(value, 100);
+      } else {
+        displayValue = String(value || '');
+      }
+      
+      doc.text(`• ${cleanKey}: ${displayValue}`, 25, yPosition);
       yPosition += 6;
     });
     yPosition += 10;
@@ -460,44 +569,192 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
     const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
     
     if (processedData.length > 0) {
-      // Create table-like structure
-      const headers = Object.keys(processedData[0]);
-      const maxCharsPerColumn = Math.floor(170 / headers.length);
+      // Check if data has category field for organized display
+      const hasCategoryField = processedData.some(item => item.hasOwnProperty('category') || item.hasOwnProperty('Category'));
       
-      // Headers
-      checkPageBreak(15);
-      doc.setFont(undefined, 'bold');
-      let xPosition = 20;
-      headers.forEach(header => {
-        const truncatedHeader = header.length > maxCharsPerColumn ? 
-          header.substring(0, maxCharsPerColumn - 3) + '...' : header;
-        doc.text(truncatedHeader, xPosition, yPosition);
-        xPosition += maxCharsPerColumn * 1.2;
-      });
-      yPosition += 8;
-      
-      // Add separator line
-      doc.line(20, yPosition - 3, 190, yPosition - 3);
-      
-      // Data rows
-      doc.setFont(undefined, 'normal');
-      processedData.slice(0, 50).forEach((row, index) => { // Limit to 50 rows for PDF readability
-        checkPageBreak();
-        xPosition = 20;
+      if (hasCategoryField) {
+        // Group data by category for organized sections
+        const categoryKey = processedData[0].hasOwnProperty('category') ? 'category' : 'Category';
+        const groupedData = processedData.reduce((groups, item) => {
+          const category = String(item[categoryKey] || 'Uncategorized');
+          if (!groups[category]) {
+            groups[category] = [];
+          }
+          groups[category].push(item);
+          return groups;
+        }, {} as Record<string, typeof processedData>);
+        
+        // Define category display order for better organization
+        const categoryOrder = [
+          'Summary', 'Performance', 'Metrics', 'Websites', 'Website Performance', 
+          'Top Topics', 'LLM Performance', 'Time Series', 'Analysis', 'Configuration'
+        ];
+        
+        // Sort categories by predefined order, then alphabetically
+        const sortedCategories = Object.keys(groupedData).sort((a, b) => {
+          const orderA = categoryOrder.indexOf(a);
+          const orderB = categoryOrder.indexOf(b);
+          
+          if (orderA !== -1 && orderB !== -1) return orderA - orderB;
+          if (orderA !== -1) return -1;
+          if (orderB !== -1) return 1;
+          return a.localeCompare(b);
+        });
+        
+        // Render each category as a separate section
+        sortedCategories.forEach((category, categoryIndex) => {
+          const categoryData = groupedData[category];
+          
+          checkPageBreak(25);
+          
+          // Category header
+          doc.setFontSize(12);
+          doc.setFont(undefined, 'bold');
+          doc.text(category.toUpperCase(), 20, yPosition);
+          yPosition += 8;
+          
+          // Add underline for category
+          doc.setLineWidth(0.5);
+          doc.line(20, yPosition - 3, 20 + (category.length * 2.5), yPosition - 3);
+          yPosition += 6;
+          
+          // Create two-column layout for better readability
+          doc.setFontSize(9);
+          doc.setFont(undefined, 'normal');
+          
+          // Filter and process valid items only
+          const validCategoryData = categoryData.filter(item => isValidExportItem(item));
+          
+          validCategoryData.slice(0, 20).forEach((item, index) => { // Limit items per category
+            checkPageBreak(8);
+            
+            // Extract metric and value (skip category field)
+            const itemEntries = Object.entries(item).filter(([key, value]) => 
+              key !== categoryKey && key !== 'category' && key !== 'Category' &&
+              value !== undefined && value !== null && String(value).trim() !== ''
+            );
+            
+            if (itemEntries.length >= 2) {
+              // Use metric and value format for cleaner display
+              const metric = itemEntries.find(([key]) => 
+                key.toLowerCase().includes('metric') || key.toLowerCase().includes('name')
+              )?.[1] || itemEntries[0][1];
+              
+              const value = itemEntries.find(([key]) => 
+                key.toLowerCase().includes('value') || key.toLowerCase().includes('amount')
+              )?.[1] || itemEntries[1][1];
+              
+              const unit = itemEntries.find(([key]) => 
+                key.toLowerCase().includes('unit') || key.toLowerCase().includes('status')
+              )?.[1] || '';
+              
+              // Skip if critical values are undefined
+              if (metric === undefined || metric === null || value === undefined || value === null) {
+                return; // Skip this item
+              }
+              
+              // Format the line
+              const metricText = String(metric || '');
+              const valueText = String(value || '');
+              const unitText = unit && String(unit).trim() ? ` (${String(unit)})` : '';
+              
+              // Skip empty entries
+              if (!metricText.trim() || !valueText.trim()) {
+                return; // Skip this item
+              }
+              
+              // Metric name (left-aligned)
+              doc.setFont(undefined, 'bold');
+              const truncatedMetric = metricText.length > 35 ? metricText.substring(0, 32) + '...' : metricText;
+              doc.text(truncatedMetric, 25, yPosition);
+              
+              // Value and unit (right-aligned area)
+              doc.setFont(undefined, 'normal');
+              const displayValue = `${valueText}${unitText}`;
+              const truncatedValue = displayValue.length > 40 ? displayValue.substring(0, 37) + '...' : displayValue;
+              doc.text(truncatedValue, 110, yPosition);
+            } else {
+              // Fallback: display all non-category fields that are not undefined/null
+              const displayText = itemEntries.map(([key, value]) => 
+                `${key}: ${String(value)}`
+              ).join(' | ');
+              
+              // Skip if no valid content
+              if (!displayText.trim() || displayText.trim() === '') {
+                return; // Skip this item
+              }
+              
+              const truncatedText = displayText.length > 70 ? displayText.substring(0, 67) + '...' : displayText;
+              doc.text(truncatedText, 25, yPosition);
+            }
+            
+            yPosition += 6;
+          });
+          
+          // Update count message to reflect actual valid items
+          const validItemsShown = Math.min(validCategoryData.length, 20);
+          const remainingValidItems = Math.max(0, validCategoryData.length - 20);
+          
+          // Add note if category has more valid items
+          if (remainingValidItems > 0) {
+            checkPageBreak();
+            doc.setFont(undefined, 'italic');
+            doc.setFontSize(8);
+            doc.text(`... and ${remainingValidItems} more ${category.toLowerCase()} items`, 25, yPosition);
+            yPosition += 5;
+          }
+          
+          // Add spacing between categories (except last)
+          if (categoryIndex < sortedCategories.length - 1) {
+            yPosition += 10;
+          }
+        });
+        
+      } else {
+        // Fallback to original table format for non-categorized data
+        const headers = Object.keys(processedData[0]);
+        const maxCharsPerColumn = Math.floor(170 / headers.length);
+        
+        // Headers
+        checkPageBreak(15);
+        doc.setFont(undefined, 'bold');
+        let xPosition = 20;
         headers.forEach(header => {
-          const value = String(row[header] ?? '');
-          const truncatedValue = value.length > maxCharsPerColumn ? 
-            value.substring(0, maxCharsPerColumn - 3) + '...' : value;
-          doc.text(truncatedValue, xPosition, yPosition);
+          const truncatedHeader = header.length > maxCharsPerColumn ? 
+            header.substring(0, maxCharsPerColumn - 3) + '...' : header;
+          doc.text(truncatedHeader, xPosition, yPosition);
           xPosition += maxCharsPerColumn * 1.2;
         });
-        yPosition += 6;
-      });
-      
-      if (processedData.length > 50) {
-        yPosition += 5;
-        doc.setFont(undefined, 'italic');
-        doc.text(`... and ${processedData.length - 50} more records`, 20, yPosition);
+        yPosition += 8;
+        
+        // Add separator line
+        doc.line(20, yPosition - 3, 190, yPosition - 3);
+        
+        // Data rows
+        doc.setFont(undefined, 'normal');
+        processedData.slice(0, 50).forEach((row, index) => { // Limit to 50 rows for PDF readability
+          checkPageBreak();
+          xPosition = 20;
+          headers.forEach(header => {
+            const rawValue = row[header];
+            // Use smart serialization for objects and arrays
+            const value = typeof rawValue === 'object' && rawValue !== null 
+              ? serializeForExport(rawValue, maxCharsPerColumn * 3) 
+              : String(rawValue ?? '');
+            
+            const truncatedValue = value.length > maxCharsPerColumn ? 
+              value.substring(0, maxCharsPerColumn - 3) + '...' : value;
+            doc.text(truncatedValue, xPosition, yPosition);
+            xPosition += maxCharsPerColumn * 1.2;
+          });
+          yPosition += 6;
+        });
+        
+        if (processedData.length > 50) {
+          yPosition += 5;
+          doc.setFont(undefined, 'italic');
+          doc.text(`... and ${processedData.length - 50} more records`, 20, yPosition);
+        }
       }
     }
   } else if (typeof data.data === 'object') {
@@ -507,7 +764,10 @@ export function formatPdfExport(data: ExportData, dataType?: string): Blob {
       checkPageBreak();
       const mapping = fieldMapping[key];
       const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const formattedValue = mapping ? formatValue(value, mapping) : String(value ?? '');
+      
+      // Use smart serialization for objects, otherwise use field mapping
+      const formattedValue = mapping ? formatValue(value, mapping) : 
+        (typeof value === 'object' && value !== null ? serializeForExport(value, 400) : String(value ?? ''));
       
       doc.setFont(undefined, 'bold');
       doc.text(`${displayName}:`, 20, yPosition);
@@ -926,9 +1186,10 @@ function formatArrayToCsv(data: Record<string, unknown>[], dataType?: string): s
     const values = headers.map(header => {
       const value = row[header];
       
-      // Handle nested objects and arrays
+      // Handle nested objects and arrays with smart serialization
       if (typeof value === 'object' && value !== null) {
-        return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
+        const serialized = serializeForExport(value, 500); // Allow more space in CSV
+        return `"${serialized.replace(/"/g, '""')}"`;
       }
       
       // Convert to string and escape quotes
@@ -950,7 +1211,8 @@ function formatObjectToCsv(data: Record<string, unknown>, dataType?: string): st
   Object.entries(data).forEach(([key, value]) => {
     const mapping = fieldMapping[key];
     const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    const formattedValue = mapping ? formatValue(value, mapping) : (typeof value === 'object' ? JSON.stringify(value) : String(value ?? ''));
+    const formattedValue = mapping ? formatValue(value, mapping) : 
+      (typeof value === 'object' && value !== null ? serializeForExport(value, 500) : String(value ?? ''));
     
     csvContent += `"${displayName}","${formattedValue.replace(/"/g, '""')}"\n`;
   });

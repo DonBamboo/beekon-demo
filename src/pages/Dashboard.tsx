@@ -125,32 +125,67 @@ export default function Dashboard() {
       // Import the export service dynamically
       const { exportService } = await import("@/services/exportService");
       
-      // Prepare comprehensive dashboard export data
-      const dashboardExportData = {
-        summary: {
-          totalWebsites: websiteIds.length,
-          period: dateFilter,
-          exportDate: new Date().toISOString(),
-          totalAnalyses: metrics?.totalAnalyses || 0,
-          averageConfidence: metrics?.averageConfidence || 0,
-          averageSentiment: metrics?.averageSentiment || 0,
-          mentionRate: metrics?.mentionRate || 0,
-          topPerformingTopic: topicPerformance?.[0]?.topic || "N/A",
-          sentimentTrend: getSentimentLabel(metrics?.averageSentiment || 0),
-        },
-        metrics: metrics || {},
-        timeSeriesData: timeSeriesData || [],
-        topicPerformance: topicPerformance || [],
-        llmPerformance: llmPerformance || [],
-        websitePerformance: websitePerformance || [],
-        websites: websites?.map(w => ({
-          id: w.id,
-          name: w.display_name,
-          domain: w.domain,
-          isActive: w.is_active,
-          monitoringEnabled: w.monitoring_enabled,
-        })) || [],
-      };
+      // Prepare comprehensive dashboard export data as tabular format for PDF
+      const dashboardExportData = [
+        // Summary section
+        { category: "Summary", metric: "Total Websites", value: websiteIds.length.toString(), unit: "count" },
+        { category: "Summary", metric: "Time Period", value: dateFilter.toUpperCase(), unit: "period" },
+        { category: "Summary", metric: "Export Date", value: new Date().toLocaleDateString(), unit: "date" },
+        { category: "Summary", metric: "Total Analyses", value: (metrics?.totalAnalyses || 0).toLocaleString(), unit: "count" },
+        { category: "Summary", metric: "Top Performing Topic", value: topicPerformance?.[0]?.topic || "N/A", unit: "text" },
+        
+        // Performance Metrics
+        { category: "Performance", metric: "Average Confidence", value: `${(metrics?.averageConfidence || 0).toFixed(1)}%`, unit: "percentage" },
+        { category: "Performance", metric: "Average Sentiment", value: `${(metrics?.averageSentiment || 0).toFixed(1)}%`, unit: "percentage" },
+        { category: "Performance", metric: "Mention Rate", value: `${(metrics?.mentionRate || 0).toFixed(1)}%`, unit: "percentage" },
+        { category: "Performance", metric: "Sentiment Trend", value: getSentimentLabel(metrics?.averageSentiment || 0), unit: "text" },
+        
+        // Website Statistics
+        ...(websites?.filter(w => 
+          w?.display_name && w?.domain // Only include websites with required fields
+        ).map(w => ({
+          category: "Websites", 
+          metric: w.display_name, 
+          value: w.domain, 
+          unit: `${w.is_active ? 'Active' : 'Inactive'}${w.monitoring_enabled ? ' | Monitored' : ''}`
+        })) || []),
+        
+        // Topic Performance (top 5)
+        ...(topicPerformance?.filter(topic => 
+          topic?.topic && typeof topic?.averageConfidence === 'number' // Only include valid topics
+        ).slice(0, 5).map((topic, index) => ({
+          category: "Top Topics",
+          metric: `#${index + 1} ${topic.topic}`,
+          value: `${topic.averageConfidence.toFixed(1)}%`,
+          unit: "confidence"
+        })) || []),
+        
+        // LLM Performance
+        ...(llmPerformance?.filter(llm => 
+          llm?.name && typeof llm?.averageConfidence === 'number' && typeof llm?.totalResults === 'number'
+        ).map(llm => ({
+          category: "LLM Performance",
+          metric: llm.name,
+          value: `${llm.averageConfidence.toFixed(1)}%`,
+          unit: `${llm.totalResults} results`
+        })) || []),
+        
+        // Website Performance (top performers)
+        ...(websitePerformance?.filter(site => 
+          site?.displayName && typeof site?.averageConfidence === 'number' && typeof site?.totalResults === 'number'
+        ).slice(0, 5).map((site, index) => ({
+          category: "Website Performance",
+          metric: `#${index + 1} ${site.displayName}`,
+          value: `${site.averageConfidence.toFixed(1)}%`,
+          unit: `${site.totalResults} analyses`
+        })) || []),
+        
+        // Time Series Summary (if available)
+        ...(timeSeriesData && timeSeriesData.length > 0 ? [
+          { category: "Time Series", metric: "Data Points", value: timeSeriesData.length.toString(), unit: "count" },
+          { category: "Time Series", metric: "Date Range", value: `${new Date(Math.min(...timeSeriesData.map(d => new Date(d.date).getTime()))).toLocaleDateString()} - ${new Date(Math.max(...timeSeriesData.map(d => new Date(d.date).getTime()))).toLocaleDateString()}`, unit: "range" },
+        ] : []),
+      ];
 
       // Create export content with proper structure
       const exportContent = {
