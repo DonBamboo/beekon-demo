@@ -31,69 +31,94 @@ export interface FieldMapping {
   };
 }
 
-// Common field mappings for different data types
+// Enhanced field mappings with business-friendly names and proper formatting
 export const COMMON_FIELD_MAPPINGS: Record<string, FieldMapping> = {
   website: {
     id: { displayName: 'Website ID', format: 'text', description: 'Unique identifier' },
-    domain: { displayName: 'Domain', format: 'url', description: 'Website domain name', width: 200 },
-    display_name: { displayName: 'Display Name', format: 'text', description: 'Website display name', width: 150 },
-    website_type: { displayName: 'Type', format: 'text', description: 'Website category', width: 100 },
-    is_active: { displayName: 'Active', format: 'boolean', description: 'Active status', width: 80 },
+    domain: { displayName: 'Website URL', format: 'url', description: 'Website domain name', width: 200 },
+    display_name: { displayName: 'Website Name', format: 'text', description: 'Website display name', width: 150 },
+    website_type: { displayName: 'Category', format: 'text', description: 'Website category', width: 100 },
+    is_active: { displayName: 'Status', format: 'boolean', description: 'Active status', width: 80 },
     monitoring_enabled: { displayName: 'Monitoring', format: 'boolean', description: 'Monitoring status', width: 100 },
-    created_at: { displayName: 'Created Date', format: 'date', description: 'Date created', width: 120 },
-    updated_at: { displayName: 'Last Updated', format: 'date', description: 'Date last updated', width: 120 },
+    created_at: { displayName: 'Date Added', format: 'date', description: 'Date created', width: 120 },
+    updated_at: { displayName: 'Last Modified', format: 'date', description: 'Date last updated', width: 120 },
     description: { displayName: 'Description', format: 'text', description: 'Website description', width: 300 },
     totalAnalyses: { displayName: 'Total Analyses', format: 'number', description: 'Total number of analyses', width: 120 },
-    averageConfidence: { displayName: 'Avg. Confidence', format: 'percentage', description: 'Average confidence score', width: 120 },
-    averageSentiment: { displayName: 'Avg. Sentiment', format: 'percentage', description: 'Average sentiment score', width: 120 },
+    averageConfidence: { displayName: 'Confidence Score', format: 'percentage', description: 'Average confidence score', width: 120 },
+    averageSentiment: { displayName: 'Sentiment Score', format: 'percentage', description: 'Average sentiment score', width: 120 },
     mentionRate: { displayName: 'Mention Rate', format: 'percentage', description: 'Percentage of mentions', width: 120 },
-    averageRank: { displayName: 'Avg. Rank', format: 'number', description: 'Average ranking position', width: 100 },
+    averageRank: { displayName: 'Average Ranking', format: 'rank', description: 'Average ranking position', width: 100 },
   },
   competitor: {
     id: { displayName: 'Competitor ID', format: 'text', description: 'Unique identifier' },
-    competitor_domain: { displayName: 'Domain', format: 'url', description: 'Competitor domain', width: 200 },
+    competitor_domain: { displayName: 'Competitor URL', format: 'url', description: 'Competitor domain', width: 200 },
     competitor_name: { displayName: 'Company Name', format: 'text', description: 'Competitor name', width: 150 },
-    is_active: { displayName: 'Active', format: 'boolean', description: 'Active status', width: 80 },
-    created_at: { displayName: 'Added Date', format: 'date', description: 'Date added', width: 120 },
+    is_active: { displayName: 'Status', format: 'boolean', description: 'Active status', width: 80 },
+    created_at: { displayName: 'Date Added', format: 'date', description: 'Date added', width: 120 },
     updated_at: { displayName: 'Last Updated', format: 'date', description: 'Date last updated', width: 120 },
     shareOfVoice: { displayName: 'Share of Voice', format: 'percentage', description: 'Share of voice percentage', width: 120 },
-    averageRank: { displayName: 'Avg. Rank', format: 'number', description: 'Average ranking position', width: 100 },
-    mentionCount: { displayName: 'Mentions', format: 'number', description: 'Total mentions', width: 100 },
+    averageRank: { displayName: 'Average Ranking', format: 'rank', description: 'Average ranking position', width: 100 },
+    mentionCount: { displayName: 'Total Mentions', format: 'number', description: 'Total mentions', width: 100 },
     sentimentScore: { displayName: 'Sentiment Score', format: 'percentage', description: 'Average sentiment', width: 120 },
     analysisStatus: { displayName: 'Analysis Status', format: 'text', description: 'Current analysis status', width: 120 },
   },
   analysis: {
     id: { displayName: 'Analysis ID', format: 'text', description: 'Unique identifier' },
-    prompt: { displayName: 'Prompt', format: 'text', description: 'Analysis prompt', width: 300 },
+    prompt: { displayName: 'Search Query', format: 'text', description: 'Analysis prompt', width: 300 },
     topic: { displayName: 'Topic', format: 'text', description: 'Analysis topic', width: 150 },
-    website_id: { displayName: 'Website ID', format: 'text', description: 'Associated website' },
+    website_id: { displayName: 'Website', format: 'text', description: 'Associated website' },
     status: { displayName: 'Status', format: 'text', description: 'Analysis status', width: 100 },
-    confidence: { displayName: 'Confidence', format: 'percentage', description: 'Confidence score', width: 100 },
-    created_at: { displayName: 'Created Date', format: 'datetime', description: 'Date created', width: 150 },
+    confidence: { displayName: 'Confidence Score', format: 'percentage', description: 'Confidence score', width: 100 },
+    created_at: { displayName: 'Analysis Date', format: 'datetime', description: 'Date created', width: 150 },
     updated_at: { displayName: 'Last Updated', format: 'datetime', description: 'Date last updated', width: 150 },
-    llm_provider: { displayName: 'LLM Provider', format: 'text', description: 'AI provider used', width: 120 },
-    is_mentioned: { displayName: 'Mentioned', format: 'boolean', description: 'Whether mentioned', width: 100 },
-    rank_position: { displayName: 'Rank Position', format: 'number', description: 'Ranking position', width: 100 },
-    sentiment_score: { displayName: 'Sentiment', format: 'percentage', description: 'Sentiment score', width: 100 },
+    llm_provider: { displayName: 'AI Provider', format: 'text', description: 'AI provider used', width: 120 },
+    is_mentioned: { displayName: 'Website Mentioned', format: 'boolean', description: 'Whether mentioned', width: 100 },
+    rank_position: { displayName: 'Ranking Position', format: 'rank', description: 'Ranking position', width: 100 },
+    sentiment_score: { displayName: 'Sentiment Score', format: 'percentage', description: 'Sentiment score', width: 100 },
     summary_text: { displayName: 'Summary', format: 'text', description: 'Analysis summary', width: 400 },
     response_text: { displayName: 'Full Response', format: 'text', description: 'Complete response', width: 500 },
   },
   dashboard: {
     category: { displayName: 'Category', format: 'text', description: 'Data category', width: 120 },
-    metric: { displayName: 'Metric', format: 'text', description: 'Metric name', width: 200 },
-    value: { displayName: 'Value', format: 'text', description: 'Metric value', width: 120 },
-    unit: { displayName: 'Unit/Status', format: 'text', description: 'Unit or status information', width: 120 },
-    // Legacy mappings for backward compatibility
+    metric: { displayName: 'Metric Name', format: 'text', description: 'Performance metric', width: 200 },
+    value: { displayName: 'Value', format: 'auto', description: 'Metric value', width: 120 },
+    unit: { displayName: 'Unit', format: 'text', description: 'Unit or status information', width: 120 },
+    details: { displayName: 'Additional Details', format: 'text', description: 'Extra information', width: 200 },
+    // Enhanced mappings with proper formatting
     totalAnalyses: { displayName: 'Total Analyses', format: 'number', description: 'Total number of analyses', width: 120 },
-    averageConfidence: { displayName: 'Avg. Confidence', format: 'percentage', description: 'Average confidence score', width: 120 },
-    averageSentiment: { displayName: 'Avg. Sentiment', format: 'percentage', description: 'Average sentiment score', width: 120 },
+    averageConfidence: { displayName: 'Confidence Score', format: 'percentage', description: 'Average confidence score', width: 120 },
+    averageSentiment: { displayName: 'Sentiment Score', format: 'percentage', description: 'Average sentiment score', width: 120 },
     mentionRate: { displayName: 'Mention Rate', format: 'percentage', description: 'Percentage of mentions', width: 120 },
-    topPerformingTopic: { displayName: 'Top Topic', format: 'text', description: 'Best performing topic', width: 150 },
+    topPerformingTopic: { displayName: 'Top Performing Topic', format: 'text', description: 'Best performing topic', width: 150 },
     totalWebsites: { displayName: 'Total Websites', format: 'number', description: 'Number of websites', width: 120 },
     activeWebsites: { displayName: 'Active Websites', format: 'number', description: 'Number of active websites', width: 120 },
-    averageRank: { displayName: 'Avg. Rank', format: 'number', description: 'Average ranking position', width: 100 },
-    trendDirection: { displayName: 'Trend', format: 'text', description: 'Performance trend', width: 100 },
+    averageRank: { displayName: 'Average Ranking', format: 'rank', description: 'Average ranking position', width: 100 },
+    trendDirection: { displayName: 'Performance Trend', format: 'text', description: 'Performance trend indicator', width: 100 },
     period: { displayName: 'Time Period', format: 'text', description: 'Analysis time period', width: 120 },
+    overallVisibilityScore: { displayName: 'Visibility Score', format: 'percentage', description: 'Overall visibility score', width: 120 },
+    sentimentScore: { displayName: 'Sentiment Score', format: 'percentage', description: 'Sentiment score', width: 120 },
+    averageRanking: { displayName: 'Average Ranking', format: 'rank', description: 'Average ranking position', width: 100 },
+    totalMentions: { displayName: 'Total Mentions', format: 'number', description: 'Total number of mentions', width: 120 },
+    visibility: { displayName: 'Visibility Score', format: 'percentage', description: 'Topic visibility score', width: 120 },
+    sentiment: { displayName: 'Sentiment', format: 'percentage', description: 'Topic sentiment score', width: 120 },
+    mentions: { displayName: 'Mentions', format: 'number', description: 'Number of mentions', width: 100 },
+    ranking: { displayName: 'Ranking', format: 'rank', description: 'Ranking position', width: 100 },
+  },
+  // Add specific mappings for export types
+  export_summary: {
+    reportTitle: { displayName: 'Report Title', format: 'text', description: 'Export report title', width: 200 },
+    generatedAt: { displayName: 'Generated', format: 'datetime', description: 'Export generation time', width: 150 },
+    totalRecords: { displayName: 'Total Records', format: 'number', description: 'Number of records exported', width: 120 },
+    exportFormat: { displayName: 'Format', format: 'text', description: 'Export file format', width: 100 },
+    fileSize: { displayName: 'File Size', format: 'text', description: 'Approximate file size', width: 100 },
+  },
+  performance_metrics: {
+    metric_name: { displayName: 'Performance Metric', format: 'text', description: 'Name of the metric', width: 180 },
+    current_value: { displayName: 'Current Value', format: 'auto', description: 'Current metric value', width: 120 },
+    previous_value: { displayName: 'Previous Value', format: 'auto', description: 'Previous period value', width: 120 },
+    change_percent: { displayName: 'Change %', format: 'percentage', description: 'Percentage change', width: 100 },
+    trend_direction: { displayName: 'Trend', format: 'text', description: 'Trend direction', width: 80 },
+    benchmark: { displayName: 'Benchmark', format: 'auto', description: 'Industry benchmark', width: 120 },
   }
 };
 
@@ -421,50 +446,211 @@ function getChartSpecificConfig(chartId: string, baseConfig: ChartCaptureConfig)
   return { ...baseConfig, ...specificConfig };
 }
 
-// Format value according to field mapping
+// Enhanced value formatting with intelligent type detection and business-friendly output
 export function formatValue(value: unknown, fieldMapping?: FieldMapping[string]): string {
   if (value === null || value === undefined) return '';
   
-  const format = fieldMapping?.format || 'text';
+  const format = fieldMapping?.format || 'auto';
   
-  switch (format) {
+  // Auto-detect format if not specified
+  let detectedFormat = format;
+  if (format === 'auto' || format === 'text') {
+    const stringValue = String(value);
+    
+    // Detect percentages (ends with % or is a decimal between 0-1)
+    if (stringValue.endsWith('%') || (typeof value === 'number' && value >= 0 && value <= 1 && value !== Math.floor(value))) {
+      detectedFormat = 'percentage';
+    }
+    // Detect large numbers (likely counts)
+    else if (typeof value === 'number' && value > 1 && value === Math.floor(value)) {
+      detectedFormat = 'number';
+    }
+    // Detect dates
+    else if (!isNaN(Date.parse(stringValue)) && stringValue.length > 8) {
+      detectedFormat = 'date';
+    }
+    // Detect URLs
+    else if (stringValue.startsWith('http') || stringValue.includes('.com') || stringValue.includes('.org')) {
+      detectedFormat = 'url';
+    }
+    // Detect boolean-like values
+    else if (['true', 'false', 'yes', 'no', 'active', 'inactive', 'enabled', 'disabled'].includes(stringValue.toLowerCase())) {
+      detectedFormat = 'boolean';
+    }
+  }
+  
+  switch (detectedFormat) {
     case 'percentage': {
-      const numValue = parseFloat(String(value));
-      return isNaN(numValue) ? '0%' : `${numValue.toFixed(1)}%`;
+      let numValue: number;
+      
+      // Handle percentage strings (e.g., "85.3%")
+      if (String(value).endsWith('%')) {
+        numValue = parseFloat(String(value).replace('%', ''));
+      } else {
+        numValue = parseFloat(String(value));
+        // Convert decimal to percentage if it's between 0-1
+        if (numValue >= 0 && numValue <= 1 && numValue !== Math.floor(numValue)) {
+          numValue *= 100;
+        }
+      }
+      
+      return isNaN(numValue) ? '0.0%' : `${numValue.toFixed(1)}%`;
     }
     
     case 'number': {
       const num = parseFloat(String(value));
-      return isNaN(num) ? '0' : num.toLocaleString();
+      if (isNaN(num)) return '0';
+      
+      // Format based on magnitude for better readability
+      if (num >= 1000000) {
+        return `${(num / 1000000).toFixed(1)}M`;
+      } else if (num >= 1000) {
+        return `${(num / 1000).toFixed(1)}K`;
+      } else if (num === Math.floor(num)) {
+        return num.toLocaleString();
+      } else {
+        return num.toFixed(2);
+      }
     }
     
     case 'currency': {
       const currencyNum = parseFloat(String(value));
-      return isNaN(currencyNum) ? '$0.00' : `$${currencyNum.toFixed(2)}`;
+      if (isNaN(currencyNum)) return '$0.00';
+      
+      // Format currency with appropriate precision
+      if (currencyNum >= 1000000) {
+        return `$${(currencyNum / 1000000).toFixed(1)}M`;
+      } else if (currencyNum >= 1000) {
+        return `$${(currencyNum / 1000).toFixed(1)}K`;
+      } else {
+        return `$${currencyNum.toFixed(2)}`;
+      }
     }
     
     case 'date': {
       const date = new Date(String(value));
-      return isNaN(date.getTime()) ? '' : date.toLocaleDateString();
+      if (isNaN(date.getTime())) return '';
+      
+      // Return formatted date based on recency
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - date.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays <= 1) {
+        return 'Today';
+      } else if (diffDays <= 7) {
+        return date.toLocaleDateString('en-US', { weekday: 'long' });
+      } else {
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      }
     }
     
     case 'datetime': {
       const datetime = new Date(String(value));
-      return isNaN(datetime.getTime()) ? '' : datetime.toLocaleString();
+      if (isNaN(datetime.getTime())) return '';
+      
+      return datetime.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
     }
     
-    case 'boolean':
-      return value === true ? 'Yes' : value === false ? 'No' : '';
-    
-    case 'url':
-      return String(value);
-    
-    default:
-      // Use smart serialization for complex objects
-      if (typeof value === 'object' && value !== null) {
-        return serializeForExport(value);
+    case 'boolean': {
+      const stringValue = String(value).toLowerCase();
+      
+      // Enhanced boolean detection
+      if (['true', '1', 'yes', 'active', 'enabled', 'on'].includes(stringValue)) {
+        return '✓ Yes';
+      } else if (['false', '0', 'no', 'inactive', 'disabled', 'off'].includes(stringValue)) {
+        return '✗ No';
+      } else if (value === true) {
+        return '✓ Yes';
+      } else if (value === false) {
+        return '✗ No';
       }
       return String(value);
+    }
+    
+    case 'url': {
+      const url = String(value);
+      // Truncate long URLs for better readability
+      if (url.length > 50) {
+        const domain = url.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+        return `${domain}...`;
+      }
+      return url;
+    }
+    
+    case 'rank':
+    case 'position': {
+      const num = parseFloat(String(value));
+      if (isNaN(num)) return 'N/A';
+      
+      // Add ordinal suffix
+      const suffix = num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th';
+      return `${Math.round(num)}${suffix}`;
+    }
+    
+    case 'score': {
+      const num = parseFloat(String(value));
+      if (isNaN(num)) return '0.0';
+      
+      // Format score out of 100 or 10
+      if (num <= 10) {
+        return `${num.toFixed(1)}/10`;
+      } else {
+        return `${num.toFixed(1)}/100`;
+      }
+    }
+    
+    case 'duration': {
+      const num = parseFloat(String(value));
+      if (isNaN(num)) return '0s';
+      
+      // Convert to human-readable duration
+      if (num >= 86400) {
+        return `${Math.round(num / 86400)}d`;
+      } else if (num >= 3600) {
+        return `${Math.round(num / 3600)}h`;
+      } else if (num >= 60) {
+        return `${Math.round(num / 60)}m`;
+      } else {
+        return `${Math.round(num)}s`;
+      }
+    }
+    
+    default:
+      // Enhanced object/array handling
+      if (typeof value === 'object' && value !== null) {
+        if (Array.isArray(value)) {
+          // Format arrays as readable lists
+          if (value.length === 0) return 'None';
+          if (value.length <= 3) return value.join(', ');
+          return `${value.slice(0, 3).join(', ')} (+ ${value.length - 3} more)`;
+        } else {
+          // Format objects as key-value pairs
+          const entries = Object.entries(value);
+          if (entries.length === 0) return 'Empty';
+          if (entries.length === 1) return `${entries[0][0]}: ${entries[0][1]}`;
+          return `${entries.length} properties`;
+        }
+      }
+      
+      // Handle primitives with cleanup
+      const stringValue = String(value);
+      
+      // Clean up common technical strings
+      return stringValue
+        .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase to spaced
+        .replace(/_/g, ' ') // underscores to spaces
+        .replace(/\b\w/g, l => l.toUpperCase()); // capitalize words
   }
 }
 
@@ -642,40 +828,187 @@ export function formatJsonExport(data: ExportData): Blob {
   return new Blob([jsonContent], { type: EXPORT_MIME_TYPES.json });
 }
 
-// Format data for CSV export
-export function formatCsvExport(data: ExportData, dataType?: string): Blob {
-  // Professional CSV header with metadata
-  let csvContent = `"${data.title}"\n`;
-  csvContent += `"Generated by","Beekon AI"\n`;
-  csvContent += `"Exported at","${new Date(data.exportedAt).toLocaleString()}"\n`;
-  csvContent += `"Total Records","${data.totalRecords}"\n`;
+// Helper function to create hierarchical CSV sections
+function createCsvSection(title: string, data: Record<string, unknown>[], includeHeaders: boolean = true): string {
+  let section = `\n"=== ${title.toUpperCase()} ==="\n`;
   
-  // Add filters if present
-  if (data.filters && Object.keys(data.filters).length > 0) {
-    csvContent += `\n"Applied Filters:"\n`;
-    Object.entries(data.filters).forEach(([key, value]) => {
-      const cleanKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      csvContent += `"${cleanKey}","${value}"\n`;
+  if (data.length === 0) {
+    section += `"No data available"\n`;
+    return section;
+  }
+  
+  // Check if this is categorized dashboard data
+  const hasCategoryMetricStructure = data.every(item => 
+    item.hasOwnProperty('metric') && item.hasOwnProperty('value')
+  );
+  
+  if (hasCategoryMetricStructure) {
+    // Use business-friendly format for dashboard data
+    section += `"Metric","Value","Unit/Type","Additional Info"\n`;
+    data.forEach(item => {
+      const metric = String(item.metric || '').replace(/"/g, '""');
+      const value = String(item.value || '').replace(/"/g, '""');
+      const unit = String(item.unit || '').replace(/"/g, '""');
+      const details = item.details ? String(item.details).replace(/"/g, '""') : '';
+      section += `"${metric}","${value}","${unit}","${details}"\n`;
+    });
+  } else {
+    // Standard table format for other data
+    const headers = Object.keys(data[0]);
+    if (includeHeaders) {
+      section += headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+    }
+    
+    data.forEach(row => {
+      const values = headers.map(header => {
+        const value = row[header];
+        
+        // Better object/array handling
+        if (typeof value === 'object' && value !== null) {
+          if (Array.isArray(value)) {
+            return `"${value.join('; ').replace(/"/g, '""')}"`;
+          } else {
+            // Convert objects to readable key-value pairs instead of JSON
+            const objectStr = Object.entries(value)
+              .map(([k, v]) => `${k}: ${v}`)
+              .join('; ');
+            return `"${objectStr.replace(/"/g, '""')}"`;
+          }
+        }
+        
+        // Handle primitives
+        const stringValue = String(value ?? '');
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      });
+      section += values.join(',') + '\n';
     });
   }
   
-  // Add date range if present
+  return section;
+}
+
+// Enhanced CSV export with hierarchical structure and business-friendly formatting
+export function formatCsvExport(data: ExportData, dataType?: string): Blob {
+  let csvContent = '';
+  
+  // Executive Summary Header
+  csvContent += `"${data.title}"\n`;
+  csvContent += `"Generated by Beekon AI"\n`;
+  csvContent += `"Report Date: ${new Date(data.exportedAt).toLocaleDateString()}"\n`;
+  csvContent += `"Report Time: ${new Date(data.exportedAt).toLocaleTimeString()}"\n`;
+  csvContent += `"Total Records: ${data.totalRecords.toLocaleString()}"\n`;
+  
+  // Report Period Section
   if (data.dateRange) {
     const startDate = new Date(data.dateRange.start).toLocaleDateString();
     const endDate = new Date(data.dateRange.end).toLocaleDateString();
-    csvContent += `\n"Date Range","${startDate} to ${endDate}"\n`;
+    csvContent += `\n"=== REPORT PERIOD ==="\n`;
+    csvContent += `"Start Date","${startDate}"\n`;
+    csvContent += `"End Date","${endDate}"\n`;
+    csvContent += `"Period Duration","${Math.ceil((new Date(data.dateRange.end).getTime() - new Date(data.dateRange.start).getTime()) / (1000 * 60 * 60 * 24))} days"\n`;
   }
   
-  csvContent += `\n`;
+  // Filters Section
+  if (data.filters && Object.keys(data.filters).length > 0) {
+    csvContent += `\n"=== APPLIED FILTERS ==="\n`;
+    csvContent += `"Filter","Value"\n`;
+    Object.entries(data.filters).forEach(([key, value]) => {
+      const cleanKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const cleanValue = Array.isArray(value) ? value.join(', ') : String(value);
+      csvContent += `"${cleanKey}","${cleanValue.replace(/"/g, '""')}"\n`;
+    });
+  }
   
-  // Add the main data based on its structure
-  if (Array.isArray(data.data)) {
-    csvContent += formatArrayToCsv(data.data, dataType);
+  // Main Data Sections
+  if (Array.isArray(data.data) && data.data.length > 0) {
+    const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
+    
+    // Check if data has categories for organized sections
+    const hasCategories = processedData.some(item => item.hasOwnProperty('category'));
+    
+    if (hasCategories) {
+      const groupedData = groupDataByCategory(processedData);
+      
+      // Define section order for logical flow
+      const sectionOrder = [
+        'Summary', 'Performance', 'Websites', 'Top Topics', 'Performance by Topics',
+        'LLM Performance', 'Time Series', 'Website Performance', 'Metrics'
+      ];
+      
+      // Create organized sections
+      sectionOrder.forEach(category => {
+        if (groupedData[category] && groupedData[category].length > 0) {
+          csvContent += createCsvSection(category, groupedData[category]);
+        }
+      });
+      
+      // Add remaining categories
+      Object.keys(groupedData).forEach(category => {
+        if (!sectionOrder.includes(category) && groupedData[category].length > 0) {
+          csvContent += createCsvSection(category, groupedData[category]);
+        }
+      });
+      
+    } else {
+      // Single data section for non-categorized data
+      csvContent += createCsvSection('Data', processedData);
+    }
+    
   } else if (typeof data.data === 'object') {
-    csvContent += formatObjectToCsv(data.data, dataType);
+    // Handle object data as key-value pairs
+    const fieldMapping = dataType ? getFieldMapping(dataType) : {};
+    
+    csvContent += `\n"=== CONFIGURATION DATA ==="\n`;
+    csvContent += `"Property","Value","Data Type"\n`;
+    
+    Object.entries(data.data)
+      .filter(([key, value]) => value !== undefined && value !== null)
+      .forEach(([key, value]) => {
+        const mapping = fieldMapping[key];
+        const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+        let formattedValue: string;
+        let dataType: string;
+        
+        if (mapping) {
+          formattedValue = formatValue(value, mapping);
+          dataType = mapping.format || 'text';
+        } else {
+          if (typeof value === 'object' && value !== null) {
+            if (Array.isArray(value)) {
+              formattedValue = value.join('; ');
+              dataType = 'array';
+            } else {
+              formattedValue = Object.entries(value)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join('; ');
+              dataType = 'object';
+            }
+          } else {
+            formattedValue = String(value ?? '');
+            dataType = typeof value;
+          }
+        }
+        
+        csvContent += `"${displayName}","${formattedValue.replace(/"/g, '""')}","${dataType}"\n`;
+      });
   }
   
-  return new Blob([csvContent], { type: EXPORT_MIME_TYPES.csv });
+  // Footer Section
+  csvContent += `\n"=== EXPORT INFORMATION ==="\n`;
+  csvContent += `"Generated by","Beekon AI Analytics Platform"\n`;
+  csvContent += `"Export Format","CSV (Comma Separated Values)"\n`;
+  csvContent += `"File Encoding","UTF-8"\n`;
+  csvContent += `"Export Timestamp","${new Date().toISOString()}"\n`;
+  
+  if (data.metadata) {
+    csvContent += `"Workspace ID","${data.metadata.workspaceId || 'N/A'}"\n`;
+    csvContent += `"Analysis Count","${data.metadata.analysisCount || 'N/A'}"\n`;
+  }
+  
+  // Add UTF-8 BOM for better Excel compatibility
+  const BOM = '\uFEFF';
+  return new Blob([BOM + csvContent], { type: EXPORT_MIME_TYPES.csv });
 }
 
 // Format data for PDF export using jsPDF for professional PDF documents
@@ -1090,91 +1423,286 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
   return new Blob([doc.output('blob')], { type: EXPORT_MIME_TYPES.pdf });
 }
 
-// Format data for Excel export using xlsx library for real Excel files
+// Helper function to group data by category for multi-sheet organization
+function groupDataByCategory(data: Record<string, unknown>[]): Record<string, Record<string, unknown>[]> {
+  const grouped: Record<string, Record<string, unknown>[]> = {};
+  
+  data.forEach(item => {
+    const category = String(item.category || 'General');
+    if (!grouped[category]) {
+      grouped[category] = [];
+    }
+    grouped[category].push(item);
+  });
+  
+  return grouped;
+}
+
+// Helper function to create a professional Excel sheet with styling
+function createFormattedSheet(data: Record<string, unknown>[], sheetName: string, customHeaders?: string[]): any {
+  if (data.length === 0) {
+    return XLSX.utils.aoa_to_sheet([['No data available']]);
+  }
+  
+  // Create sheet from JSON data
+  const sheet = XLSX.utils.json_to_sheet(data);
+  
+  // Get the range of data
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1');
+  
+  // Apply header styling
+  for (let col = range.s.c; col <= range.e.c; col++) {
+    const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+    if (!sheet[cellAddress]) continue;
+    
+    sheet[cellAddress].s = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '1E40AF' } }, // Blue header background
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: {
+        top: { style: 'thin', color: { rgb: '000000' } },
+        bottom: { style: 'thin', color: { rgb: '000000' } },
+        left: { style: 'thin', color: { rgb: '000000' } },
+        right: { style: 'thin', color: { rgb: '000000' } }
+      }
+    };
+  }
+  
+  // Apply alternating row colors for better readability
+  for (let row = 1; row <= range.e.r; row++) {
+    const isEvenRow = row % 2 === 0;
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+      if (!sheet[cellAddress]) continue;
+      
+      sheet[cellAddress].s = {
+        ...sheet[cellAddress].s,
+        fill: { fgColor: { rgb: isEvenRow ? 'F8FAFC' : 'FFFFFF' } },
+        border: {
+          top: { style: 'thin', color: { rgb: 'E2E8F0' } },
+          bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
+          left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+          right: { style: 'thin', color: { rgb: 'E2E8F0' } }
+        },
+        alignment: { vertical: 'center' }
+      };
+    }
+  }
+  
+  // Auto-size columns based on content
+  const headers = data.length > 0 ? Object.keys(data[0]) : [];
+  const columnWidths = headers.map(header => {
+    const maxContentLength = Math.max(
+      header.length,
+      ...data.map(row => String(row[header] || '').length)
+    );
+    return { wch: Math.min(Math.max(maxContentLength + 2, 12), 50) };
+  });
+  
+  sheet['!cols'] = columnWidths;
+  
+  // Add autofilter
+  sheet['!autofilter'] = { ref: sheet['!ref'] };
+  
+  // Freeze top row
+  sheet['!freeze'] = { xSplit: 0, ySplit: 1 };
+  
+  return sheet;
+}
+
+// Helper function to create executive summary sheet
+function createExecutiveSummary(data: ExportData): any {
+  const summaryData = [
+    ['EXECUTIVE SUMMARY'],
+    [''],
+    ['Report Title', data.title],
+    ['Generated', new Date(data.exportedAt).toLocaleString()],
+    ['Total Records', data.totalRecords.toLocaleString()],
+    [''],
+    ['REPORT PERIOD'],
+    ['Start Date', data.dateRange ? new Date(data.dateRange.start).toLocaleDateString() : 'N/A'],
+    ['End Date', data.dateRange ? new Date(data.dateRange.end).toLocaleDateString() : 'N/A'],
+    [''],
+    ['FILTERS APPLIED'],
+    ...(data.filters && Object.keys(data.filters).length > 0 
+      ? Object.entries(data.filters).map(([key, value]) => [
+          key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          Array.isArray(value) ? value.join(', ') : String(value)
+        ])
+      : [['No filters applied', '']]
+    ),
+    [''],
+    ['KEY INSIGHTS']
+  ];
+
+  // Add key insights if we have categorized data
+  if (Array.isArray(data.data) && data.data.length > 0) {
+    const grouped = groupDataByCategory(data.data);
+    
+    // Performance metrics
+    if (grouped['Performance']) {
+      summaryData.push(['Performance Highlights', '']);
+      grouped['Performance'].slice(0, 5).forEach(item => {
+        summaryData.push([String(item.metric), String(item.value)]);
+      });
+      summaryData.push(['']);
+    }
+    
+    // Top topics
+    if (grouped['Top Topics']) {
+      summaryData.push(['Top Performing Topics', '']);
+      grouped['Top Topics'].slice(0, 3).forEach(item => {
+        summaryData.push([String(item.metric), String(item.value)]);
+      });
+    }
+  }
+  
+  const sheet = XLSX.utils.aoa_to_sheet(summaryData);
+  
+  // Style the summary sheet
+  sheet['A1'].s = {
+    font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' } },
+    fill: { fgColor: { rgb: '1E40AF' } },
+    alignment: { horizontal: 'center' }
+  };
+  
+  // Style section headers
+  const sectionHeaders = [6, 10, 14]; // Row indices for section headers
+  sectionHeaders.forEach(rowIndex => {
+    if (summaryData[rowIndex]) {
+      const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: 0 });
+      if (sheet[cellAddress]) {
+        sheet[cellAddress].s = {
+          font: { bold: true, color: { rgb: 'FFFFFF' } },
+          fill: { fgColor: { rgb: '3B82F6' } },
+          alignment: { horizontal: 'left' }
+        };
+      }
+    }
+  });
+  
+  // Auto-size columns
+  sheet['!cols'] = [{ wch: 25 }, { wch: 30 }];
+  
+  return sheet;
+}
+
+// Format data for Excel export using xlsx library for real Excel files with multi-sheet organization
 export function formatExcelExport(data: ExportData, dataType?: string): Blob {
   const workbook = XLSX.utils.book_new();
   
-  // Create metadata worksheet
-  const metadataSheet = XLSX.utils.aoa_to_sheet([
-    ['Export Information'],
-    ['Title', data.title],
-    ['Generated By', 'Beekon AI'],
-    ['Exported At', new Date(data.exportedAt).toLocaleString()],
-    ['Total Records', data.totalRecords.toString()],
-    ...(data.dateRange ? [
-      ['Date Range Start', new Date(data.dateRange.start).toLocaleDateString()],
-      ['Date Range End', new Date(data.dateRange.end).toLocaleDateString()]
-    ] : []),
-    [''],
-    ...(data.filters && Object.keys(data.filters).length > 0 ? [
-      ['Applied Filters'],
-      ...Object.entries(data.filters).map(([key, value]) => [
-        key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        String(value)
-      ])
-    ] : [])
-  ]);
+  // Create Executive Summary sheet
+  const summarySheet = createExecutiveSummary(data);
+  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Executive Summary');
   
-  XLSX.utils.book_append_sheet(workbook, metadataSheet, 'Export Info');
-  
-  // Create main data worksheet
-  if (Array.isArray(data.data)) {
+  // Handle array data (like dashboard exports) with category-based sheets
+  if (Array.isArray(data.data) && data.data.length > 0) {
     const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
     
-    if (processedData.length > 0) {
-      const dataSheet = XLSX.utils.json_to_sheet(processedData);
+    // Check if data has categories for multi-sheet organization
+    const hasCategories = processedData.some(item => item.hasOwnProperty('category'));
+    
+    if (hasCategories) {
+      const groupedData = groupDataByCategory(processedData);
       
-      // Apply styling to headers
-      const range = XLSX.utils.decode_range(dataSheet['!ref'] || 'A1:A1');
-      for (let col = range.s.c; col <= range.e.c; col++) {
-        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-        if (!dataSheet[cellAddress]) continue;
-        
-        dataSheet[cellAddress].s = {
-          font: { bold: true },
-          fill: { fgColor: { rgb: 'E2E8F0' } },
-          alignment: { horizontal: 'center' }
-        };
-      }
+      // Define sheet order for better organization
+      const sheetOrder = [
+        'Summary', 'Performance', 'Websites', 'Top Topics', 'Performance by Topics',
+        'LLM Performance', 'Time Series', 'Website Performance', 'Metrics'
+      ];
       
-      // Auto-size columns
-      const columnWidths = Object.keys(processedData[0]).map(key => ({
-        wch: Math.max(key.length, 15)
-      }));
-      dataSheet['!cols'] = columnWidths;
+      // Create sheets in order
+      sheetOrder.forEach(category => {
+        if (groupedData[category] && groupedData[category].length > 0) {
+          // Transform data for better Excel presentation
+          const sheetData = groupedData[category].map(item => ({
+            'Metric': String(item.metric || ''),
+            'Value': String(item.value || ''),
+            'Unit/Type': String(item.unit || ''),
+            'Details': item.details ? String(item.details) : ''
+          })).filter(row => row.Metric.trim() !== ''); // Remove empty rows
+          
+          if (sheetData.length > 0) {
+            const sheet = createFormattedSheet(sheetData, category);
+            XLSX.utils.book_append_sheet(workbook, sheet, category);
+          }
+        }
+      });
       
-      XLSX.utils.book_append_sheet(workbook, dataSheet, 'Data');
+      // Add remaining categories not in predefined order
+      Object.keys(groupedData).forEach(category => {
+        if (!sheetOrder.includes(category) && groupedData[category].length > 0) {
+          const sheetData = groupedData[category].map(item => ({
+            'Metric': String(item.metric || ''),
+            'Value': String(item.value || ''),
+            'Unit/Type': String(item.unit || ''),
+            'Details': item.details ? String(item.details) : ''
+          })).filter(row => row.Metric.trim() !== '');
+          
+          if (sheetData.length > 0) {
+            const sheet = createFormattedSheet(sheetData, category);
+            XLSX.utils.book_append_sheet(workbook, sheet, category);
+          }
+        }
+      });
+      
+    } else {
+      // Single data sheet for non-categorized data
+      const sheet = createFormattedSheet(processedData, 'Data');
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Data');
     }
+    
   } else if (typeof data.data === 'object') {
+    // Handle object data (key-value pairs)
     const fieldMapping = dataType ? getFieldMapping(dataType) : {};
-    const formattedData = Object.entries(data.data).map(([key, value]) => {
-      const mapping = fieldMapping[key];
-      const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const formattedValue = mapping ? formatValue(value, mapping) : String(value ?? '');
-      
-      return {
-        Property: displayName,
-        Value: formattedValue
-      };
-    });
+    const formattedData = Object.entries(data.data)
+      .filter(([key, value]) => value !== undefined && value !== null)
+      .map(([key, value]) => {
+        const mapping = fieldMapping[key];
+        const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const formattedValue = mapping ? formatValue(value, mapping) : 
+          (typeof value === 'object' && value !== null ? 
+            (Array.isArray(value) ? value.join(', ') : JSON.stringify(value)) : 
+            String(value ?? ''));
+        
+        return {
+          'Property': displayName,
+          'Value': formattedValue,
+          'Type': mapping?.format || typeof value
+        };
+      });
     
-    const dataSheet = XLSX.utils.json_to_sheet(formattedData);
-    
-    // Style headers
-    dataSheet['A1'].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E2E8F0' } } };
-    dataSheet['B1'].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E2E8F0' } } };
-    
-    // Auto-size columns
-    dataSheet['!cols'] = [{ wch: 30 }, { wch: 50 }];
-    
-    XLSX.utils.book_append_sheet(workbook, dataSheet, 'Data');
+    const sheet = createFormattedSheet(formattedData, 'Properties');
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Properties');
   }
   
-  // Generate Excel file
+  // Add raw data sheet for reference
+  if (Array.isArray(data.data) && data.data.length > 0) {
+    const rawDataSheet = XLSX.utils.json_to_sheet(data.data);
+    
+    // Basic styling for raw data
+    const range = XLSX.utils.decode_range(rawDataSheet['!ref'] || 'A1:A1');
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (!rawDataSheet[cellAddress]) continue;
+      
+      rawDataSheet[cellAddress].s = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: 'E5E7EB' } }
+      };
+    }
+    
+    rawDataSheet['!autofilter'] = { ref: rawDataSheet['!ref'] };
+    XLSX.utils.book_append_sheet(workbook, rawDataSheet, 'Raw Data');
+  }
+  
+  // Generate Excel file with enhanced options
   const excelBuffer = XLSX.write(workbook, { 
     bookType: 'xlsx', 
     type: 'array',
-    cellStyles: true
+    cellStyles: true,
+    cellNF: false,
+    cellHTML: false
   });
   
   return new Blob([excelBuffer], { type: EXPORT_MIME_TYPES.excel });
