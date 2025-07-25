@@ -17,6 +17,7 @@ import { FilterBreadcrumbs } from "@/components/FilterBreadcrumbs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExportDropdown } from "@/components/ui/export-components";
 import { Input } from "@/components/ui/input";
 import { LoadingButton } from "@/components/ui/loading-button";
 import {
@@ -33,7 +34,8 @@ import { useSubscriptionEnforcement } from "@/hooks/useSubscriptionEnforcement";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { capitalizeFirstLetters } from "@/lib/utils";
 import { analysisService, LLMResult } from "@/services/analysisService";
-import { UIAnalysisResult } from "@/types/database";
+import { UIAnalysisResult, ExportFormat } from "@/types/database";
+import { useExportHandler } from "@/lib/export-utils";
 import {
   AlertCircle,
   Building,
@@ -86,6 +88,8 @@ export default function Analysis() {
   const [selectedWebsite, setSelectedWebsite] = useState<string>("");
   const [showVisualization, setShowVisualization] = useState(true);
   const [groupBySession, setGroupBySession] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const { handleExport } = useExportHandler();
 
   // Set selected website to first website when websites load
   useEffect(() => {
@@ -385,6 +389,54 @@ export default function Analysis() {
     }
   };
 
+  const handleExportData = async (format: ExportFormat) => {
+    if (!filteredResults || filteredResults.length === 0) {
+      toast({
+        title: "No Data to Export",
+        description: "Please ensure you have analysis results before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    
+    try {
+      // Extract analysis IDs for export
+      const analysisIds = filteredResults.map(result => result.id);
+      
+      // Export with comprehensive options using the analysisService
+      const blob = await analysisService.exportAnalysisResults(analysisIds, format);
+
+      await handleExport(
+        () => Promise.resolve(blob),
+        {
+          filename: `analysis-results-${new Date().toISOString().split('T')[0]}`,
+          format,
+          includeTimestamp: true,
+          metadata: {
+            resultCount: filteredResults.length,
+            exportType: "analysis_results",
+            filters: {
+              topic: selectedTopic !== "all" ? getTopicName(selectedTopic) : null,
+              llm: selectedLLM !== "all" ? selectedLLM : null,
+              search: searchQuery || null,
+            },
+          },
+        }
+      );
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred during export.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const hasActiveFilters =
     selectedTopic !== "all" ||
     selectedLLM !== "all" ||
@@ -486,11 +538,23 @@ export default function Analysis() {
     <AnalysisErrorBoundary>
       <>
         <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Analysis Results</h1>
-            <p className="text-muted-foreground">
-              Detailed analysis of your brand mentions across AI platforms
-            </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold">Analysis Results</h1>
+              <p className="text-muted-foreground">
+                Detailed analysis of your brand mentions across AI platforms
+              </p>
+            </div>
+            {filteredResults && filteredResults.length > 0 && (
+              <ExportDropdown
+                onExport={handleExportData}
+                isLoading={isExporting}
+                disabled={!filteredResults || filteredResults.length === 0}
+                formats={["pdf", "csv", "json", "word"]}
+                data={filteredResults}
+                showEstimatedSize={true}
+              />
+            )}
           </div>
 
           {/* Error State */}

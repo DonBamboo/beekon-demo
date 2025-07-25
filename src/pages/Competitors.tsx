@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { ExportFormat } from "@/types/database";
+import { useExportHandler } from "@/lib/export-utils";
 import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import {
   useCompetitorData,
@@ -43,6 +45,8 @@ export default function Competitors() {
   const [sortBy, setSortBy] = useState<
     "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore"
   >("shareOfVoice");
+  const [isExporting, setIsExporting] = useState(false);
+  const { handleExport } = useExportHandler();
 
   // Get first website ID for competitor tracking (fallback)
   const websiteId = websites?.[0]?.id;
@@ -259,6 +263,72 @@ export default function Competitors() {
     setShowDeleteConfirm(true);
   };
 
+  const handleExportData = async (format: ExportFormat) => {
+    if (!selectedWebsiteId || !hasData) {
+      toast({
+        title: "No Data to Export",
+        description: "Please ensure you have competitor data before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    
+    try {
+      // Import competitorService dynamically
+      const { competitorService } = await import("@/services/competitorService");
+      
+      // Export with comprehensive options using the competitorService
+      const dateRange = (() => {
+        const end = new Date();
+        const start = new Date();
+        switch (dateFilter) {
+          case "7d":
+            start.setDate(end.getDate() - 7);
+            break;
+          case "30d":
+            start.setDate(end.getDate() - 30);
+            break;
+          case "90d":
+            start.setDate(end.getDate() - 90);
+            break;
+        }
+        return { start: start.toISOString(), end: end.toISOString() };
+      })();
+
+      const blob = await competitorService.exportCompetitorData(
+        selectedWebsiteId,
+        format as "csv" | "json" | "pdf",
+        dateRange
+      );
+
+      await handleExport(
+        () => Promise.resolve(blob),
+        {
+          filename: `competitor-analysis-${new Date().toISOString().split('T')[0]}`,
+          format,
+          includeTimestamp: true,
+          metadata: {
+            competitorCount: competitors?.length || 0,
+            exportType: "competitor_analysis",
+            dateFilter,
+            sortBy,
+          },
+        }
+      );
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred during export.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
 
   // Show loading state
   if (workspaceLoading || isLoading) {
@@ -298,6 +368,8 @@ export default function Competitors() {
           isAdding={addCompetitorMutation.isPending || isWebhookProcessing}
           websites={websites || []}
           websitesLoading={workspaceLoading}
+          isExporting={isExporting}
+          competitorsData={competitors}
           setDateFilter={setDateFilter}
           setSortBy={setSortBy}
           setIsAddDialogOpen={setIsAddDialogOpen}
@@ -306,6 +378,7 @@ export default function Competitors() {
           setSelectedWebsiteId={setSelectedWebsiteId}
           refreshData={refreshData}
           handleAddCompetitor={handleAddCompetitor}
+          handleExportData={handleExportData}
         />
 
         {/* Error State */}
