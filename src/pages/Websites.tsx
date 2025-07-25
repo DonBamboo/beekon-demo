@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ExportDropdown } from "@/components/ui/export-components";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
@@ -33,10 +34,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace, Website } from "@/hooks/useWorkspace";
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
+import { useExportHandler } from "@/lib/export-utils";
 import { addProtocol } from "@/lib/utils";
+import type { ExportFormat } from "@/types/database";
 import {
   BarChart3,
   Calendar,
+  Download,
   Globe,
   MoreHorizontal,
   Play,
@@ -57,12 +61,14 @@ export default function Websites() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [websiteToDelete, setWebsiteToDelete] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [websiteMetrics, setWebsiteMetrics] = useState<
     Record<string, { totalTopics: number; avgVisibility: number }>
   >({});
   const { toast } = useToast();
   const { websites, deleteWebsite, refetchWebsites } = useWorkspace();
   const { workspaceId } = useAuth();
+  const { handleExport } = useExportHandler();
 
   useEffect(() => {
     websites?.forEach(async (website) => {
@@ -249,6 +255,66 @@ export default function Websites() {
     setShowDeleteConfirm(true);
   };
 
+  const handleExportData = async (format: ExportFormat) => {
+    if (!websites || websites.length === 0) {
+      toast({
+        title: "No Data to Export",
+        description: "Please add websites before attempting to export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    
+    try {
+      const { exportService } = await import("@/services/exportService");
+      
+      // Prepare website IDs for export
+      const websiteIds = websites.map(website => website.id);
+      
+      // Export with comprehensive options
+      const blob = await exportService.exportWebsiteData(
+        websiteIds,
+        format,
+        {
+          includeMetrics: true,
+          includeAnalysisHistory: false, // Can be made configurable later
+          dateRange: undefined, // Can add date filtering later
+        }
+      );
+
+      // Use the export handler for consistent file handling
+      await handleExport(
+        () => Promise.resolve(blob),
+        {
+          filename: `website-data-${new Date().toISOString().split('T')[0]}`,
+          format,
+          includeTimestamp: true,
+          metadata: {
+            websiteCount: websites.length,
+            exportType: "website_data",
+            includeMetrics: true,
+          },
+        }
+      );
+
+      toast({
+        title: "Export Successful",
+        description: `Website data exported as ${format.toUpperCase()}`,
+      });
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "Failed to export website data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
 
   return (
     <div className="space-y-6">
@@ -261,6 +327,16 @@ export default function Websites() {
         </div>
 
         <div className="flex items-center space-x-2">
+          {websites && websites.length > 0 && (
+            <ExportDropdown
+              onExport={handleExportData}
+              isLoading={isExporting}
+              disabled={!websites || websites.length === 0}
+              formats={["pdf", "csv", "json"]}
+              data={websites}
+              showEstimatedSize={true}
+            />
+          )}
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button>

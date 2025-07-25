@@ -766,7 +766,7 @@ export class AnalysisService {
 
   async exportAnalysisResults(
     analysisIds: string[],
-    format: "pdf" | "csv" | "json" | "excel" | "word"
+    format: "pdf" | "csv" | "json" | "word"
   ): Promise<Blob> {
     try {
       // Fetch all analysis results for the given IDs

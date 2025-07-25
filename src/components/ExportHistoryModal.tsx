@@ -336,7 +336,6 @@ export function ExportHistoryModal({
             <SelectItem value="pdf">PDF</SelectItem>
             <SelectItem value="csv">CSV</SelectItem>
             <SelectItem value="json">JSON</SelectItem>
-            <SelectItem value="excel">Excel</SelectItem>
             <SelectItem value="word">Word</SelectItem>
           </SelectContent>
         </Select>

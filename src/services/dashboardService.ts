@@ -551,7 +551,7 @@ export class DashboardService {
    */
   async exportDashboardData(
     websiteIds: string[],
-    format: "pdf" | "csv" | "json" | "excel" | "word"
+    format: "pdf" | "csv" | "json" | "word"
   ): Promise<Blob> {
     try {
       const [metrics, timeSeriesData, topicPerformance] = await Promise.all([

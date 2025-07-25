@@ -2,7 +2,6 @@
 
 import { toast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
-import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import html2canvas from "html2canvas";
 
@@ -33,20 +32,11 @@ export interface FieldMapping {
 // Enhanced field mappings with business-friendly names and proper formatting
 export const COMMON_FIELD_MAPPINGS: Record<string, FieldMapping> = {
   website: {
-    id: { displayName: 'Website ID', format: 'text', description: 'Unique identifier' },
-    domain: { displayName: 'Website URL', format: 'url', description: 'Website domain name', width: 200 },
-    display_name: { displayName: 'Website Name', format: 'text', description: 'Website display name', width: 150 },
-    website_type: { displayName: 'Category', format: 'text', description: 'Website category', width: 100 },
-    is_active: { displayName: 'Status', format: 'boolean', description: 'Active status', width: 80 },
-    monitoring_enabled: { displayName: 'Monitoring', format: 'boolean', description: 'Monitoring status', width: 100 },
-    created_at: { displayName: 'Date Added', format: 'date', description: 'Date created', width: 120 },
-    updated_at: { displayName: 'Last Modified', format: 'date', description: 'Date last updated', width: 120 },
-    description: { displayName: 'Description', format: 'text', description: 'Website description', width: 300 },
-    totalAnalyses: { displayName: 'Total Analyses', format: 'number', description: 'Total number of analyses', width: 120 },
-    averageConfidence: { displayName: 'Confidence Score', format: 'percentage', description: 'Average confidence score', width: 120 },
-    averageSentiment: { displayName: 'Sentiment Score', format: 'percentage', description: 'Average sentiment score', width: 120 },
-    mentionRate: { displayName: 'Mention Rate', format: 'percentage', description: 'Percentage of mentions', width: 120 },
-    averageRank: { displayName: 'Average Ranking', format: 'rank', description: 'Average ranking position', width: 100 },
+    category: { displayName: 'Category', format: 'text', description: 'Data category grouping', width: 150 },
+    metric: { displayName: 'Metric Name', format: 'text', description: 'Specific metric or field name', width: 200 },
+    value: { displayName: 'Value', format: 'auto', description: 'Metric value or data', width: 150 },
+    unit: { displayName: 'Unit/Type', format: 'text', description: 'Unit of measurement or data type', width: 120 },
+    websiteId: { displayName: 'Website ID', format: 'text', description: 'Associated website identifier', width: 120 },
   },
   competitor: {
     id: { displayName: 'Competitor ID', format: 'text', description: 'Unique identifier' },
@@ -175,7 +165,6 @@ export const EXPORT_MIME_TYPES: Record<ExportFormat, string> = {
   pdf: "application/pdf",
   csv: "text/csv",
   json: "application/json",
-  excel: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
 
 // File extension mappings
@@ -183,7 +172,6 @@ export const EXPORT_FILE_EXTENSIONS: Record<ExportFormat, string> = {
   pdf: "pdf",
   csv: "csv",
   json: "json",
-  excel: "xlsx",
 };
 
 // Validate export item to ensure it has required fields and no undefined values
@@ -825,6 +813,45 @@ export function formatJsonExport(data: ExportData): Blob {
   return new Blob([jsonContent], { type: EXPORT_MIME_TYPES.json });
 }
 
+// Shared data transformation function for consistent export processing
+export function transformExportData(data: Record<string, unknown>[]): Record<string, unknown>[] {
+  if (!data || data.length === 0) {
+    return data;
+  }
+  
+  // Check if data has the flattened category/metric/value structure
+  const hasCategoryMetricStructure = data.every(item => 
+    item && 
+    typeof item === 'object' &&
+    item.hasOwnProperty('metric') && 
+    item.hasOwnProperty('value')
+  );
+  
+  if (hasCategoryMetricStructure) {
+    // Transform to standardized column structure for consistency
+    const transformedData = data.map(item => {
+      const baseData = {
+        'Metric': String(item.metric || ''),
+        'Value': String(item.value || ''),
+        'Unit/Type': String(item.unit || ''),
+        'Additional Info': item.details ? String(item.details) : ''
+      };
+      
+      // Add Website ID column if present
+      if (item.websiteId) {
+        baseData['Website ID'] = String(item.websiteId);
+      }
+      
+      return baseData;
+    }).filter(row => row.Metric.trim() !== ''); // Remove empty rows
+    
+    return transformedData;
+  }
+  
+  // Return data as-is for non-standardized structures
+  return data;
+}
+
 // Helper function to create hierarchical CSV sections
 function createCsvSection(title: string, data: Record<string, unknown>[], includeHeaders: boolean = true): string {
   let section = `\n"=== ${title.toUpperCase()} ==="\n`;
@@ -834,20 +861,22 @@ function createCsvSection(title: string, data: Record<string, unknown>[], includ
     return section;
   }
   
-  // Check if this is categorized dashboard data
-  const hasCategoryMetricStructure = data.every(item => 
-    item.hasOwnProperty('metric') && item.hasOwnProperty('value')
-  );
+  // Apply shared transformation for consistent formatting
+  const transformedData = transformExportData(data);
   
-  if (hasCategoryMetricStructure) {
-    // Use business-friendly format for dashboard data
-    section += `"Metric","Value","Unit/Type","Additional Info"\n`;
-    data.forEach(item => {
-      const metric = String(item.metric || '').replace(/"/g, '""');
-      const value = String(item.value || '').replace(/"/g, '""');
-      const unit = String(item.unit || '').replace(/"/g, '""');
-      const details = item.details ? String(item.details).replace(/"/g, '""') : '';
-      section += `"${metric}","${value}","${unit}","${details}"\n`;
+  if (transformedData !== data) {
+    // Use standardized column format from transformation
+    const headers = Object.keys(transformedData[0]);
+    if (includeHeaders) {
+      section += headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+    }
+    
+    transformedData.forEach(row => {
+      const values = headers.map(header => {
+        const value = String(row[header] || '').replace(/"/g, '""');
+        return `"${value}"`;
+      });
+      section += values.join(',') + '\n';
     });
   } else {
     // Standard table format for other data
@@ -926,9 +955,10 @@ export function formatCsvExport(data: ExportData, dataType?: string): Blob {
     if (hasCategories) {
       const groupedData = groupDataByCategory(processedData);
       
-      // Define section order for logical flow
+      // Define section order for logical flow (aligned with XLSX sheet order)
       const sectionOrder = [
-        'Summary', 'Performance', 'Websites', 'Top Topics', 'Performance by Topics',
+        'Summary', 'Website Info', 'Performance Metrics', 'Analysis History',
+        'Performance', 'Websites', 'Top Topics', 'Performance by Topics',
         'LLM Performance', 'Time Series', 'Website Performance', 'Metrics'
       ];
       
@@ -1003,7 +1033,7 @@ export function formatCsvExport(data: ExportData, dataType?: string): Blob {
     csvContent += `"Analysis Count","${data.metadata.analysisCount || 'N/A'}"\n`;
   }
   
-  // Add UTF-8 BOM for better Excel compatibility
+  // Add UTF-8 BOM for better CSV compatibility
   const BOM = '\uFEFF';
   return new Blob([BOM + csvContent], { type: EXPORT_MIME_TYPES.csv });
 }
@@ -1435,536 +1465,6 @@ function groupDataByCategory(data: Record<string, unknown>[]): Record<string, Re
   return grouped;
 }
 
-// Helper function to create a professional Excel sheet with styling
-function createFormattedSheet(data: Record<string, unknown>[], sheetName: string, customHeaders?: string[]): any {
-  if (data.length === 0) {
-    return XLSX.utils.aoa_to_sheet([['No data available']]);
-  }
-  
-  // Create sheet from JSON data
-  const sheet = XLSX.utils.json_to_sheet(data);
-  
-  // Get the range of data
-  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1');
-  
-  // Apply header styling
-  for (let col = range.s.c; col <= range.e.c; col++) {
-    const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-    if (!sheet[cellAddress]) continue;
-    
-    sheet[cellAddress].s = {
-      font: { bold: true, color: { rgb: 'FFFFFF' } },
-      fill: { fgColor: { rgb: '1E40AF' } }, // Blue header background
-      alignment: { horizontal: 'center', vertical: 'center' },
-      border: {
-        top: { style: 'thin', color: { rgb: '000000' } },
-        bottom: { style: 'thin', color: { rgb: '000000' } },
-        left: { style: 'thin', color: { rgb: '000000' } },
-        right: { style: 'thin', color: { rgb: '000000' } }
-      }
-    };
-  }
-  
-  // Apply alternating row colors for better readability
-  for (let row = 1; row <= range.e.r; row++) {
-    const isEvenRow = row % 2 === 0;
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-      if (!sheet[cellAddress]) continue;
-      
-      sheet[cellAddress].s = {
-        ...sheet[cellAddress].s,
-        fill: { fgColor: { rgb: isEvenRow ? 'F8FAFC' : 'FFFFFF' } },
-        border: {
-          top: { style: 'thin', color: { rgb: 'E2E8F0' } },
-          bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
-          left: { style: 'thin', color: { rgb: 'E2E8F0' } },
-          right: { style: 'thin', color: { rgb: 'E2E8F0' } }
-        },
-        alignment: { vertical: 'center' }
-      };
-    }
-  }
-  
-  // Auto-size columns based on content
-  const headers = data.length > 0 ? Object.keys(data[0]) : [];
-  const columnWidths = headers.map(header => {
-    const maxContentLength = Math.max(
-      header.length,
-      ...data.map(row => String(row[header] || '').length)
-    );
-    return { wch: Math.min(Math.max(maxContentLength + 2, 12), 50) };
-  });
-  
-  sheet['!cols'] = columnWidths;
-  
-  // Add autofilter
-  sheet['!autofilter'] = { ref: sheet['!ref'] };
-  
-  // Freeze top row
-  sheet['!freeze'] = { xSplit: 0, ySplit: 1 };
-  
-  return sheet;
-}
-
-// Helper function to create executive summary sheet
-function createExecutiveSummary(data: ExportData): any {
-  const summaryData = [
-    ['EXECUTIVE SUMMARY'],
-    [''],
-    ['Report Title', data.title],
-    ['Generated by', 'Beekon AI'],
-    ['Report Date', new Date(data.exportedAt).toLocaleDateString()],
-    ['Report Time', new Date(data.exportedAt).toLocaleTimeString()],
-    ['Total Records', data.totalRecords.toLocaleString()],
-    [''],
-    ['REPORT PERIOD'],
-    ['Start Date', data.dateRange ? new Date(data.dateRange.start).toLocaleDateString() : 'N/A'],
-    ['End Date', data.dateRange ? new Date(data.dateRange.end).toLocaleDateString() : 'N/A'],
-  ];
-
-  // Add period duration calculation (matching CSV)
-  if (data.dateRange) {
-    const durationDays = Math.ceil((new Date(data.dateRange.end).getTime() - new Date(data.dateRange.start).getTime()) / (1000 * 60 * 60 * 24));
-    summaryData.push(['Period Duration', `${durationDays} days`]);
-  }
-
-  summaryData.push(['']);
-  summaryData.push(['FILTERS APPLIED']);
-  
-  // Add filters with enhanced formatting
-  if (data.filters && Object.keys(data.filters).length > 0) {
-    Object.entries(data.filters).forEach(([key, value]) => {
-      const cleanKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const cleanValue = Array.isArray(value) ? value.join(', ') : String(value);
-      summaryData.push([cleanKey, cleanValue]);
-    });
-  } else {
-    summaryData.push(['No filters applied', '']);
-  }
-
-  summaryData.push(['']);
-  summaryData.push(['KEY INSIGHTS']);
-
-  // Add comprehensive key insights (not just limited samples)
-  if (Array.isArray(data.data) && data.data.length > 0) {
-    const grouped = groupDataByCategory(data.data);
-    
-    // Performance metrics - show all, not just first 5
-    if (grouped['Performance']) {
-      summaryData.push(['Performance Highlights', '']);
-      grouped['Performance'].forEach(item => {
-        summaryData.push([String(item.metric), String(item.value)]);
-      });
-      summaryData.push(['']);
-    }
-    
-    // Top topics - show all, not just first 3
-    if (grouped['Top Topics']) {
-      summaryData.push(['Top Performing Topics', '']);
-      grouped['Top Topics'].forEach(item => {
-        summaryData.push([String(item.metric), String(item.value)]);
-      });
-      summaryData.push(['']);
-    }
-
-    // Summary statistics
-    if (grouped['Summary']) {
-      summaryData.push(['Summary Statistics', '']);
-      grouped['Summary'].forEach(item => {
-        summaryData.push([String(item.metric), String(item.value)]);
-      });
-      summaryData.push(['']);
-    }
-  }
-
-  // Add metadata information
-  if (data.metadata) {
-    summaryData.push(['ADDITIONAL INFORMATION']);
-    if (data.metadata.workspaceId) {
-      summaryData.push(['Workspace ID', String(data.metadata.workspaceId)]);
-    }
-    if (data.metadata.analysisCount) {
-      summaryData.push(['Analysis Count', String(data.metadata.analysisCount)]);
-    }
-    if (data.metadata.exportType) {
-      summaryData.push(['Export Type', String(data.metadata.exportType)]);
-    }
-    if (data.metadata.totalWebsites) {
-      summaryData.push(['Total Websites', String(data.metadata.totalWebsites)]);
-    }
-  }
-  
-  const sheet = XLSX.utils.aoa_to_sheet(summaryData);
-  
-  // Style the summary sheet
-  sheet['A1'].s = {
-    font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' } },
-    fill: { fgColor: { rgb: '1E40AF' } },
-    alignment: { horizontal: 'center' }
-  };
-  
-  // Style section headers
-  const sectionHeaders = [6, 10, 14]; // Row indices for section headers
-  sectionHeaders.forEach(rowIndex => {
-    if (summaryData[rowIndex]) {
-      const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: 0 });
-      if (sheet[cellAddress]) {
-        sheet[cellAddress].s = {
-          font: { bold: true, color: { rgb: 'FFFFFF' } },
-          fill: { fgColor: { rgb: '3B82F6' } },
-          alignment: { horizontal: 'left' }
-        };
-      }
-    }
-  });
-  
-  // Auto-size columns
-  sheet['!cols'] = [{ wch: 25 }, { wch: 30 }];
-  
-  return sheet;
-}
-
-// Helper function to create export information sheet (matching CSV footer)
-function createExportInformationSheet(data: ExportData): any {
-  const exportInfoData = [
-    ['EXPORT INFORMATION'],
-    [''],
-    ['Generated by', 'Beekon AI Analytics Platform'],
-    ['Export Format', 'Excel Spreadsheet (XLSX)'],
-    ['File Encoding', 'UTF-8'],
-    ['Export Timestamp', new Date().toISOString()],
-    [''],
-    ['PLATFORM DETAILS'],
-    ['Application', 'Beekon AI Analytics Platform'],
-    ['Export Version', '2.0'],
-    ['Data Processing', 'Enhanced with Multi-Sheet Organization'],
-    ['Compatibility', 'Microsoft Excel 2016+ / Google Sheets / LibreOffice Calc'],
-    [''],
-    ['DATA STATISTICS'],
-    ['Total Records Exported', data.totalRecords.toLocaleString()],
-    ['Export Title', data.title],
-    ['Generation Date', new Date(data.exportedAt).toLocaleDateString()],
-    ['Generation Time', new Date(data.exportedAt).toLocaleTimeString()],
-  ];
-
-  // Add metadata details if available
-  if (data.metadata) {
-    exportInfoData.push(['']);
-    exportInfoData.push(['WORKSPACE INFORMATION']);
-    
-    if (data.metadata.workspaceId) {
-      exportInfoData.push(['Workspace ID', String(data.metadata.workspaceId)]);
-    }
-    if (data.metadata.analysisCount !== undefined) {
-      exportInfoData.push(['Analysis Count', String(data.metadata.analysisCount)]);
-    }
-    if (data.metadata.totalWebsites !== undefined) {
-      exportInfoData.push(['Total Websites', String(data.metadata.totalWebsites)]);
-    }
-    if (data.metadata.averageConfidence !== undefined) {
-      exportInfoData.push(['Average Confidence', `${Number(data.metadata.averageConfidence).toFixed(1)}%`]);
-    }
-    if (data.metadata.averageSentiment !== undefined) {
-      exportInfoData.push(['Average Sentiment', `${Number(data.metadata.averageSentiment).toFixed(1)}%`]);
-    }
-    if (data.metadata.mentionRate !== undefined) {
-      exportInfoData.push(['Mention Rate', `${Number(data.metadata.mentionRate).toFixed(1)}%`]);
-    }
-    if (data.metadata.exportType) {
-      exportInfoData.push(['Export Type', String(data.metadata.exportType)]);
-    }
-    if (data.metadata.generatedBy) {
-      exportInfoData.push(['Generated By', String(data.metadata.generatedBy)]);
-    }
-  }
-
-  // Add date range information
-  if (data.dateRange) {
-    exportInfoData.push(['']);
-    exportInfoData.push(['REPORTING PERIOD']);
-    exportInfoData.push(['Start Date', new Date(data.dateRange.start).toLocaleDateString()]);
-    exportInfoData.push(['End Date', new Date(data.dateRange.end).toLocaleDateString()]);
-    
-    const durationDays = Math.ceil((new Date(data.dateRange.end).getTime() - new Date(data.dateRange.start).getTime()) / (1000 * 60 * 60 * 24));
-    exportInfoData.push(['Duration', `${durationDays} days`]);
-  }
-
-  // Add filter information
-  if (data.filters && Object.keys(data.filters).length > 0) {
-    exportInfoData.push(['']);
-    exportInfoData.push(['APPLIED FILTERS']);
-    Object.entries(data.filters).forEach(([key, value]) => {
-      const cleanKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const cleanValue = Array.isArray(value) ? value.join(', ') : String(value);
-      exportInfoData.push([cleanKey, cleanValue]);
-    });
-  }
-
-  // Add file information
-  exportInfoData.push(['']);
-  exportInfoData.push(['FILE INFORMATION']);
-  exportInfoData.push(['Sheets Included', 'Executive Summary, Categorized Data Sheets, Raw Data, Export Information']);
-  exportInfoData.push(['Features', 'Auto-filters, Styled Headers, Professional Formatting']);
-  exportInfoData.push(['Recommended Use', 'Business Analysis, Reporting, Data Visualization']);
-
-  const sheet = XLSX.utils.aoa_to_sheet(exportInfoData);
-  
-  // Style the export information sheet
-  sheet['A1'].s = {
-    font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' } },
-    fill: { fgColor: { rgb: '1E40AF' } },
-    alignment: { horizontal: 'center' }
-  };
-  
-  // Style section headers
-  const sectionHeaders = [7, 13, 19, 26, 29]; // Row indices for section headers
-  sectionHeaders.forEach(rowIndex => {
-    if (exportInfoData[rowIndex]) {
-      const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: 0 });
-      if (sheet[cellAddress]) {
-        sheet[cellAddress].s = {
-          font: { bold: true, color: { rgb: 'FFFFFF' } },
-          fill: { fgColor: { rgb: '3B82F6' } },
-          alignment: { horizontal: 'left' }
-        };
-      }
-    }
-  });
-  
-  // Auto-size columns
-  sheet['!cols'] = [{ wch: 30 }, { wch: 40 }];
-  
-  return sheet;
-}
-
-// Helper function to create dedicated metadata sheet
-function createMetadataSheet(data: ExportData): any {
-  // Only create this sheet if we have metadata
-  if (!data.metadata || Object.keys(data.metadata).length === 0) {
-    return null;
-  }
-
-  const metadataArray = [
-    ['METADATA INFORMATION'],
-    [''],
-    ['WORKSPACE DETAILS'],
-  ];
-
-  // Add all metadata properties dynamically
-  Object.entries(data.metadata).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      const displayName = key.replace(/([A-Z])/g, ' $1')
-        .replace(/^./, str => str.toUpperCase())
-        .replace(/_/g, ' ');
-      
-      let formattedValue = String(value);
-      
-      // Format specific types
-      if (typeof value === 'number') {
-        if (key.includes('Confidence') || key.includes('Sentiment') || key.includes('Rate')) {
-          formattedValue = `${Number(value).toFixed(1)}%`;
-        } else {
-          formattedValue = Number(value).toLocaleString();
-        }
-      }
-      
-      metadataArray.push([displayName, formattedValue]);
-    }
-  });
-
-  // Add system information
-  metadataArray.push(['']);
-  metadataArray.push(['SYSTEM INFORMATION']);
-  metadataArray.push(['Data Format', 'Structured JSON to Excel Conversion']);
-  metadataArray.push(['Field Mapping Applied', 'Yes']);
-  metadataArray.push(['Data Validation', 'Enabled']);
-  metadataArray.push(['Export Processing Time', new Date().toISOString()]);
-
-  // Add data structure information
-  if (Array.isArray(data.data)) {
-    metadataArray.push(['']);
-    metadataArray.push(['DATA STRUCTURE']);
-    metadataArray.push(['Data Type', 'Array (Tabular Data)']);
-    metadataArray.push(['Record Count', data.data.length.toLocaleString()]);
-    
-    if (data.data.length > 0) {
-      const firstItem = data.data[0];
-      const fieldCount = Object.keys(firstItem).length;
-      metadataArray.push(['Field Count', fieldCount.toString()]);
-      
-      // Show field names
-      const fieldNames = Object.keys(firstItem).slice(0, 10); // Limit to first 10
-      const fieldDisplay = fieldNames.join(', ') + (Object.keys(firstItem).length > 10 ? '...' : '');
-      metadataArray.push(['Fields Preview', fieldDisplay]);
-    }
-  } else if (typeof data.data === 'object') {
-    metadataArray.push(['']);
-    metadataArray.push(['DATA STRUCTURE']);
-    metadataArray.push(['Data Type', 'Object (Key-Value Pairs)']);
-    metadataArray.push(['Property Count', Object.keys(data.data).length.toString()]);
-  }
-
-  const sheet = XLSX.utils.aoa_to_sheet(metadataArray);
-  
-  // Style the metadata sheet
-  sheet['A1'].s = {
-    font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' } },
-    fill: { fgColor: { rgb: '1E40AF' } },
-    alignment: { horizontal: 'center' }
-  };
-  
-  // Style section headers (find them dynamically)
-  metadataArray.forEach((row, index) => {
-    if (row.length === 1 && row[0] && typeof row[0] === 'string' && row[0].toUpperCase() === row[0] && row[0] !== 'METADATA INFORMATION') {
-      const cellAddress = XLSX.utils.encode_cell({ r: index, c: 0 });
-      if (sheet[cellAddress]) {
-        sheet[cellAddress].s = {
-          font: { bold: true, color: { rgb: 'FFFFFF' } },
-          fill: { fgColor: { rgb: '3B82F6' } },
-          alignment: { horizontal: 'left' }
-        };
-      }
-    }
-  });
-  
-  // Auto-size columns
-  sheet['!cols'] = [{ wch: 25 }, { wch: 35 }];
-  
-  return sheet;
-}
-
-// Format data for Excel export using xlsx library for real Excel files with multi-sheet organization
-export function formatExcelExport(data: ExportData, dataType?: string): Blob {
-  const workbook = XLSX.utils.book_new();
-  
-  // Create Executive Summary sheet
-  const summarySheet = createExecutiveSummary(data);
-  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Executive Summary');
-  
-  // Handle array data (like dashboard exports) with category-based sheets
-  if (Array.isArray(data.data) && data.data.length > 0) {
-    const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
-    
-    // Check if data has categories for multi-sheet organization
-    const hasCategories = processedData.some(item => item.hasOwnProperty('category'));
-    
-    if (hasCategories) {
-      const groupedData = groupDataByCategory(processedData);
-      
-      // Define sheet order for better organization
-      const sheetOrder = [
-        'Summary', 'Performance', 'Websites', 'Top Topics', 'Performance by Topics',
-        'LLM Performance', 'Time Series', 'Website Performance', 'Metrics'
-      ];
-      
-      // Create sheets in order
-      sheetOrder.forEach(category => {
-        if (groupedData[category] && groupedData[category].length > 0) {
-          // Transform data for better Excel presentation
-          const sheetData = groupedData[category].map(item => ({
-            'Metric': String(item.metric || ''),
-            'Value': String(item.value || ''),
-            'Unit/Type': String(item.unit || ''),
-            'Details': item.details ? String(item.details) : ''
-          })).filter(row => row.Metric.trim() !== ''); // Remove empty rows
-          
-          if (sheetData.length > 0) {
-            const sheet = createFormattedSheet(sheetData, category);
-            XLSX.utils.book_append_sheet(workbook, sheet, category);
-          }
-        }
-      });
-      
-      // Add remaining categories not in predefined order
-      Object.keys(groupedData).forEach(category => {
-        if (!sheetOrder.includes(category) && groupedData[category].length > 0) {
-          const sheetData = groupedData[category].map(item => ({
-            'Metric': String(item.metric || ''),
-            'Value': String(item.value || ''),
-            'Unit/Type': String(item.unit || ''),
-            'Details': item.details ? String(item.details) : ''
-          })).filter(row => row.Metric.trim() !== '');
-          
-          if (sheetData.length > 0) {
-            const sheet = createFormattedSheet(sheetData, category);
-            XLSX.utils.book_append_sheet(workbook, sheet, category);
-          }
-        }
-      });
-      
-    } else {
-      // Single data sheet for non-categorized data
-      const sheet = createFormattedSheet(processedData, 'Data');
-      XLSX.utils.book_append_sheet(workbook, sheet, 'Data');
-    }
-    
-  } else if (typeof data.data === 'object') {
-    // Handle object data (key-value pairs)
-    const fieldMapping = dataType ? getFieldMapping(dataType) : {};
-    const formattedData = Object.entries(data.data)
-      .filter(([key, value]) => value !== undefined && value !== null)
-      .map(([key, value]) => {
-        const mapping = fieldMapping[key];
-        const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        const formattedValue = mapping ? formatValue(value, mapping) : 
-          (typeof value === 'object' && value !== null ? 
-            (Array.isArray(value) ? value.join(', ') : JSON.stringify(value)) : 
-            String(value ?? ''));
-        
-        return {
-          'Property': displayName,
-          'Value': formattedValue,
-          'Type': mapping?.format || typeof value
-        };
-      });
-    
-    const sheet = createFormattedSheet(formattedData, 'Properties');
-    XLSX.utils.book_append_sheet(workbook, sheet, 'Properties');
-  }
-  
-  // Add raw data sheet for reference
-  if (Array.isArray(data.data) && data.data.length > 0) {
-    const rawDataSheet = XLSX.utils.json_to_sheet(data.data);
-    
-    // Basic styling for raw data
-    const range = XLSX.utils.decode_range(rawDataSheet['!ref'] || 'A1:A1');
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-      if (!rawDataSheet[cellAddress]) continue;
-      
-      rawDataSheet[cellAddress].s = {
-        font: { bold: true },
-        fill: { fgColor: { rgb: 'E5E7EB' } }
-      };
-    }
-    
-    rawDataSheet['!autofilter'] = { ref: rawDataSheet['!ref'] };
-    XLSX.utils.book_append_sheet(workbook, rawDataSheet, 'Raw Data');
-  }
-  
-  // Add Metadata sheet if metadata exists
-  const metadataSheet = createMetadataSheet(data);
-  if (metadataSheet) {
-    XLSX.utils.book_append_sheet(workbook, metadataSheet, 'Metadata');
-  }
-  
-  // Add Export Information sheet (matching CSV footer information)
-  const exportInfoSheet = createExportInformationSheet(data);
-  XLSX.utils.book_append_sheet(workbook, exportInfoSheet, 'Export Information');
-  
-  // Generate Excel file with enhanced options
-  const excelBuffer = XLSX.write(workbook, { 
-    bookType: 'xlsx', 
-    type: 'array',
-    cellStyles: true,
-    cellNF: false,
-    cellHTML: false
-  });
-  
-  return new Blob([excelBuffer], { type: EXPORT_MIME_TYPES.excel });
-}
-
 
 // Helper function to format array data to CSV
 function formatArrayToCsv(data: Record<string, unknown>[], dataType?: string): string {
@@ -2292,7 +1792,6 @@ export function getExportFormatDisplayName(format: ExportFormat): string {
     pdf: "PDF Document",
     csv: "CSV Spreadsheet",
     json: "JSON Data",
-    excel: "Excel Spreadsheet",
   };
   
   return displayNames[format] || format.toUpperCase();
@@ -2307,7 +1806,6 @@ export function estimateExportSize(data: unknown, format: ExportFormat): string 
     json: 1,
     csv: 0.7,
     pdf: 1.5,
-    excel: 2,
   };
   
   const estimatedBytes = dataSize * sizeMultipliers[format];
