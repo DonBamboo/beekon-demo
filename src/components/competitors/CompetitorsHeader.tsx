@@ -1,5 +1,6 @@
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Button } from "@/components/ui/button";
+import { ExportDropdown } from "@/components/ui/export-components";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Plus, RefreshCw, Filter, Globe } from "lucide-react";
 import { Website } from "@/hooks/useWorkspace";
+import { ExportFormat } from "@/types/database";
 
 interface CompetitorsHeaderProps {
   totalCompetitors: number;
@@ -46,6 +48,9 @@ interface CompetitorsHeaderProps {
   setSelectedWebsiteId: (value: string) => void;
   refreshData: () => void;
   handleAddCompetitor: () => void;
+  isExporting: boolean;
+  competitorsData: unknown[];
+  handleExportData: (format: ExportFormat) => void;
 }
 
 export default function CompetitorsHeader({
@@ -70,6 +75,9 @@ export default function CompetitorsHeader({
   setSelectedWebsiteId,
   refreshData,
   handleAddCompetitor,
+  isExporting,
+  competitorsData,
+  handleExportData,
 }: CompetitorsHeaderProps) {
   return (
     <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
@@ -190,6 +198,17 @@ export default function CompetitorsHeader({
           >
             Refresh
           </LoadingButton>
+
+          {hasData && competitorsData && competitorsData.length > 0 && (
+            <ExportDropdown
+              onExport={handleExportData}
+              isLoading={isExporting}
+              disabled={!hasData || !competitorsData || competitorsData.length === 0}
+              formats={["csv", "json", "pdf"]}
+              data={competitorsData}
+              showEstimatedSize={true}
+            />
+          )}
 
         </div>
 

@@ -764,9 +764,100 @@ export class AnalysisService {
     if (error) throw error;
   }
 
+  // Transform analysis results into clean, flattened export format
+  private transformAnalysisForExport(results: UIAnalysisResult[]): Record<string, unknown>[] {
+    return results.flatMap((result) => {
+      const exportRows: Record<string, unknown>[] = [];
+      
+      // Analysis Information Section
+      exportRows.push(
+        { category: "Analysis Info", metric: "Topic", value: result.topic, unit: "text" },
+        { category: "Analysis Info", metric: "Prompt", value: result.prompt, unit: "text" },
+        { category: "Analysis Info", metric: "Status", value: result.status, unit: "status" },
+        { category: "Analysis Info", metric: "Analysis Date", value: new Date(result.created_at).toLocaleDateString(), unit: "date" },
+        { category: "Analysis Info", metric: "Last Updated", value: new Date(result.updated_at).toLocaleDateString(), unit: "date" }
+      );
+      
+      // Add analysis session info if available
+      if (result.analysis_name) {
+        exportRows.push({ category: "Analysis Info", metric: "Analysis Session", value: result.analysis_name, unit: "text" });
+      }
+      
+      // Performance Metrics Section
+      const mentionedCount = result.llm_results.filter(llm => llm.is_mentioned).length;
+      const totalProviders = result.llm_results.length;
+      const averageConfidence = result.llm_results.length > 0 
+        ? (result.llm_results.reduce((sum, llm) => sum + (llm.confidence_score || 0), 0) / result.llm_results.length * 100)
+        : 0;
+      const averageRank = result.llm_results.filter(llm => llm.rank_position !== null).length > 0
+        ? (result.llm_results.filter(llm => llm.rank_position !== null).reduce((sum, llm) => sum + (llm.rank_position || 0), 0) / result.llm_results.filter(llm => llm.rank_position !== null).length)
+        : 0;
+      const averageSentiment = result.llm_results.length > 0
+        ? (result.llm_results.reduce((sum, llm) => sum + (llm.sentiment_score || 0), 0) / result.llm_results.length * 100)
+        : 0;
+      
+      exportRows.push(
+        { category: "Performance", metric: "Overall Confidence", value: `${averageConfidence.toFixed(1)}%`, unit: "percentage" },
+        { category: "Performance", metric: "Mention Rate", value: `${mentionedCount} of ${totalProviders} providers`, unit: "ratio" },
+        { category: "Performance", metric: "Average Ranking", value: averageRank > 0 ? averageRank.toFixed(1) : "N/A", unit: "position" },
+        { category: "Performance", metric: "Average Sentiment", value: `${averageSentiment.toFixed(1)}%`, unit: "percentage" }
+      );
+      
+      // LLM Results Section
+      result.llm_results.forEach((llmResult, index) => {
+        const mentionStatus = llmResult.is_mentioned ? "Mentioned" : "Not Mentioned";
+        const rankText = llmResult.rank_position ? `Rank ${llmResult.rank_position}` : "No ranking";
+        const confidenceText = `${((llmResult.confidence_score || 0) * 100).toFixed(1)}%`;
+        const sentimentText = `${((llmResult.sentiment_score || 0) * 100).toFixed(1)}%`;
+        
+        exportRows.push(
+          { category: "LLM Results", metric: `${llmResult.llm_provider} - Status`, value: mentionStatus, unit: "status" },
+          { category: "LLM Results", metric: `${llmResult.llm_provider} - Ranking`, value: rankText, unit: "position" },
+          { category: "LLM Results", metric: `${llmResult.llm_provider} - Confidence`, value: confidenceText, unit: "percentage" },
+          { category: "LLM Results", metric: `${llmResult.llm_provider} - Sentiment`, value: sentimentText, unit: "percentage" }
+        );
+        
+        // Add summary text if available (truncated for readability)
+        if (llmResult.summary_text) {
+          const truncatedSummary = llmResult.summary_text.length > 100 
+            ? llmResult.summary_text.substring(0, 100) + "..." 
+            : llmResult.summary_text;
+          exportRows.push(
+            { category: "LLM Results", metric: `${llmResult.llm_provider} - Summary`, value: truncatedSummary, unit: "text" }
+          );
+        }
+      });
+      
+      // Insights Section
+      if (result.prompt_strengths && result.prompt_strengths.length > 0) {
+        result.prompt_strengths.forEach((strength, index) => {
+          exportRows.push(
+            { category: "Insights", metric: `Strength #${index + 1}`, value: strength, unit: "text" }
+          );
+        });
+      }
+      
+      if (result.prompt_opportunities && result.prompt_opportunities.length > 0) {
+        result.prompt_opportunities.forEach((opportunity, index) => {
+          exportRows.push(
+            { category: "Insights", metric: `Opportunity #${index + 1}`, value: opportunity, unit: "text" }
+          );
+        });
+      }
+      
+      if (result.recommendation_text) {
+        exportRows.push(
+          { category: "Insights", metric: "Recommendation", value: result.recommendation_text, unit: "text" }
+        );
+      }
+      
+      return exportRows;
+    });
+  }
+
   async exportAnalysisResults(
     analysisIds: string[],
-    format: "pdf" | "csv" | "json" | "excel" | "word"
+    format: "pdf" | "csv" | "json" | "word"
   ): Promise<Blob> {
     try {
       // Fetch all analysis results for the given IDs
@@ -796,18 +887,22 @@ export class AnalysisService {
 
       // Transform data using the shared transformation function
       const results = this.transformAnalysisData(data);
+      
+      // Transform to clean, flattened export format
+      const exportFormattedData = this.transformAnalysisForExport(results);
 
       // Use enhanced export service for all formats
       const { exportService } = await import("./exportService");
       const exportData = {
         title: "Analysis Results Export",
-        data: results,
+        data: exportFormattedData,
         exportedAt: new Date().toISOString(),
         totalRecords: results.length,
         metadata: {
           exportType: "analysis_results",
           generatedBy: "Beekon AI Analysis Service",
-          analysisIds: analysisIds,
+          originalResultCount: results.length,
+          exportRowCount: exportFormattedData.length,
         },
       };
 

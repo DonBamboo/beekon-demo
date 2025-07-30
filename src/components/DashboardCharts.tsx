@@ -1,4 +1,4 @@
-import React from "react";
+import React, { forwardRef } from "react";
 import {
   Card,
   CardContent,
@@ -31,7 +31,7 @@ interface LLMPerformanceChartProps {
   llmData: LLMPerformance[];
 }
 
-export const LLMPerformanceChart = React.memo(({ llmData }: LLMPerformanceChartProps) => {
+export const LLMPerformanceChart = React.memo(forwardRef<HTMLDivElement, LLMPerformanceChartProps>(({ llmData }, ref) => {
   const colors = {
     ChatGPT: "#10B981", // green
     Claude: "#F59E0B", // orange  
@@ -39,7 +39,7 @@ export const LLMPerformanceChart = React.memo(({ llmData }: LLMPerformanceChartP
   };
 
   return (
-    <Card>
+    <Card ref={ref}>
       <CardHeader>
         <CardTitle>LLM Performance Comparison</CardTitle>
         <CardDescription>
@@ -75,17 +75,19 @@ export const LLMPerformanceChart = React.memo(({ llmData }: LLMPerformanceChartP
       </CardContent>
     </Card>
   );
-});
+}));
+
+LLMPerformanceChart.displayName = "LLMPerformanceChart";
 
 interface WebsitePerformanceChartProps {
   websiteData: WebsitePerformance[];
 }
 
-export const WebsitePerformanceChart = React.memo(({ websiteData }: WebsitePerformanceChartProps) => {
+export const WebsitePerformanceChart = React.memo(forwardRef<HTMLDivElement, WebsitePerformanceChartProps>(({ websiteData }, ref) => {
   const topWebsites = websiteData.slice(0, 5); // Show top 5 websites
 
   return (
-    <Card>
+    <Card ref={ref}>
       <CardHeader>
         <CardTitle>Website Performance Breakdown</CardTitle>
         <CardDescription>
@@ -118,17 +120,19 @@ export const WebsitePerformanceChart = React.memo(({ websiteData }: WebsitePerfo
       </CardContent>
     </Card>
   );
-});
+}));
+
+WebsitePerformanceChart.displayName = "WebsitePerformanceChart";
 
 interface SentimentDistributionChartProps {
   sentimentData: { name: string; value: number; color: string }[];
 }
 
-export const SentimentDistributionChart = React.memo(({ sentimentData }: SentimentDistributionChartProps) => {
+export const SentimentDistributionChart = React.memo(forwardRef<HTMLDivElement, SentimentDistributionChartProps>(({ sentimentData }, ref) => {
   const COLORS = ['#10B981', '#F59E0B', '#EF4444']; // green, orange, red
 
   return (
-    <Card>
+    <Card ref={ref}>
       <CardHeader>
         <CardTitle>Sentiment Distribution</CardTitle>
         <CardDescription>
@@ -158,7 +162,9 @@ export const SentimentDistributionChart = React.memo(({ sentimentData }: Sentime
       </CardContent>
     </Card>
   );
-});
+}));
+
+SentimentDistributionChart.displayName = "SentimentDistributionChart";
 
 interface MentionTrendChartProps {
   trendData: Array<{
@@ -168,9 +174,9 @@ interface MentionTrendChartProps {
   }>;
 }
 
-export const MentionTrendChart = React.memo(({ trendData }: MentionTrendChartProps) => {
+export const MentionTrendChart = React.memo(forwardRef<HTMLDivElement, MentionTrendChartProps>(({ trendData }, ref) => {
   return (
-    <Card>
+    <Card ref={ref}>
       <CardHeader>
         <CardTitle>Mention Trends</CardTitle>
         <CardDescription>
@@ -213,7 +219,9 @@ export const MentionTrendChart = React.memo(({ trendData }: MentionTrendChartPro
       </CardContent>
     </Card>
   );
-});
+}));
+
+MentionTrendChart.displayName = "MentionTrendChart";
 
 interface TopicRadarChartProps {
   topicData: Array<{
@@ -224,7 +232,7 @@ interface TopicRadarChartProps {
   }>;
 }
 
-export const TopicRadarChart = React.memo(({ topicData }: TopicRadarChartProps) => {
+export const TopicRadarChart = React.memo(forwardRef<HTMLDivElement, TopicRadarChartProps>(({ topicData }, ref) => {
   // Transform data for radar chart
   const radarData = topicData.slice(0, 6).map(topic => ({
     topic: topic.topic.substring(0, 15) + (topic.topic.length > 15 ? '...' : ''),
@@ -234,7 +242,7 @@ export const TopicRadarChart = React.memo(({ topicData }: TopicRadarChartProps) 
   }));
 
   return (
-    <Card>
+    <Card ref={ref}>
       <CardHeader>
         <CardTitle>Topic Performance Radar</CardTitle>
         <CardDescription>
@@ -273,7 +281,9 @@ export const TopicRadarChart = React.memo(({ topicData }: TopicRadarChartProps) 
       </CardContent>
     </Card>
   );
-});
+}));
+
+TopicRadarChart.displayName = "TopicRadarChart";
 
 interface QuickStatsProps {
   stats: {
@@ -284,7 +294,7 @@ interface QuickStatsProps {
   };
 }
 
-export const QuickStats = React.memo(({ stats }: QuickStatsProps) => {
+export const QuickStats = React.memo(forwardRef<HTMLDivElement, QuickStatsProps>(({ stats }, ref) => {
   const statCards = [
     {
       title: "Websites Tracked",
@@ -309,7 +319,7 @@ export const QuickStats = React.memo(({ stats }: QuickStatsProps) => {
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div ref={ref} className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {statCards.map((stat, index) => (
         <Card key={index}>
           <CardContent className="pt-6">
@@ -321,4 +331,6 @@ export const QuickStats = React.memo(({ stats }: QuickStatsProps) => {
       ))}
     </div>
   );
-});
+}));
+
+QuickStats.displayName = "QuickStats";

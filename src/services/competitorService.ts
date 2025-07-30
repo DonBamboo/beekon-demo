@@ -586,11 +586,92 @@ export class OptimizedCompetitorService extends BaseService {
   }
 
   /**
+   * Transform competitor data into clean, flattened export format
+   */
+  private transformCompetitorDataForExport(
+    competitors: CompetitorPerformance[],
+    analytics: CompetitorAnalytics,
+    dateRange?: { start: string; end: string }
+  ): Record<string, unknown>[] {
+    const exportRows: Record<string, unknown>[] = [];
+
+    // Export metadata section
+    exportRows.push(
+      { category: "Export Info", metric: "Export Date", value: new Date().toLocaleDateString(), unit: "date" },
+      { category: "Export Info", metric: "Total Competitors", value: competitors.length, unit: "count" },
+      { category: "Export Info", metric: "Active Competitors", value: analytics.activeCompetitors, unit: "count" }
+    );
+
+    if (dateRange) {
+      exportRows.push(
+        { category: "Export Info", metric: "Date Range Start", value: new Date(dateRange.start).toLocaleDateString(), unit: "date" },
+        { category: "Export Info", metric: "Date Range End", value: new Date(dateRange.end).toLocaleDateString(), unit: "date" }
+      );
+    }
+
+    // Overall analytics section
+    exportRows.push(
+      { category: "Analytics Overview", metric: "Average Competitor Rank", value: analytics.averageCompetitorRank.toFixed(1), unit: "position" }
+    );
+
+    // Market share data section
+    analytics.marketShareData.forEach((item) => {
+      exportRows.push({
+        category: "Market Share",
+        metric: `${item.name} Share`,
+        value: `${item.value}%`,
+        unit: "percentage"
+      });
+    });
+
+    // Individual competitor performance
+    competitors.forEach((competitor) => {
+      const competitorName = competitor.name || competitor.domain;
+      
+      exportRows.push(
+        { category: "Competitor Performance", metric: `${competitorName} - Domain`, value: competitor.domain, unit: "text" },
+        { category: "Competitor Performance", metric: `${competitorName} - Share of Voice`, value: `${competitor.shareOfVoice}%`, unit: "percentage" },
+        { category: "Competitor Performance", metric: `${competitorName} - Average Rank`, value: competitor.averageRank > 0 ? competitor.averageRank.toFixed(1) : "N/A", unit: "position" },
+        { category: "Competitor Performance", metric: `${competitorName} - Mention Count`, value: competitor.mentionCount, unit: "count" },
+        { category: "Competitor Performance", metric: `${competitorName} - Sentiment Score`, value: `${competitor.sentimentScore}%`, unit: "percentage" },
+        { category: "Competitor Performance", metric: `${competitorName} - Visibility Score`, value: `${competitor.visibilityScore}%`, unit: "percentage" },
+        { category: "Competitor Performance", metric: `${competitorName} - Trend`, value: `${competitor.trend} (${competitor.trendPercentage.toFixed(1)}%)`, unit: "trend" },
+        { category: "Competitor Performance", metric: `${competitorName} - Last Analyzed`, value: new Date(competitor.lastAnalyzed).toLocaleDateString(), unit: "date" },
+        { category: "Competitor Performance", metric: `${competitorName} - Status`, value: competitor.isActive ? "Active" : "Inactive", unit: "status" }
+      );
+    });
+
+    // Competitive gaps analysis
+    analytics.competitiveGaps.forEach((gap) => {
+      exportRows.push(
+        { category: "Competitive Gaps", metric: `${gap.topic} - Your Brand Score`, value: gap.yourBrand, unit: "score" }
+      );
+      
+      gap.competitors.forEach((comp) => {
+        exportRows.push(
+          { category: "Competitive Gaps", metric: `${gap.topic} - ${comp.name} Score`, value: comp.score, unit: "score" }
+        );
+      });
+    });
+
+    // Insights section
+    analytics.insights.forEach((insight, index) => {
+      exportRows.push(
+        { category: "Insights", metric: `Insight #${index + 1} - Type`, value: insight.type, unit: "text" },
+        { category: "Insights", metric: `Insight #${index + 1} - Content`, value: insight.content, unit: "text" },
+        { category: "Insights", metric: `Insight #${index + 1} - Impact Score`, value: insight.impactScore, unit: "score" }
+      );
+    });
+
+    return exportRows;
+  }
+
+  /**
    * Export competitor data (optimized)
    */
   async exportCompetitorData(
     websiteId: string,
-    format: "pdf" | "csv" | "json",
+    format: "csv" | "json" | "pdf",
     dateRange?: { start: string; end: string }
   ): Promise<Blob> {
     try {
@@ -600,6 +681,32 @@ export class OptimizedCompetitorService extends BaseService {
         this.getCompetitiveAnalysis(websiteId, dateRange),
       ]);
 
+      // For PDF export, use the shared export service
+      if (format === "pdf") {
+        const exportFormattedData = this.transformCompetitorDataForExport(competitors, analytics, dateRange);
+        
+        const { exportService } = await import("./exportService");
+        const exportData = {
+          title: "Competitor Analysis Export",
+          data: exportFormattedData,
+          exportedAt: new Date().toISOString(),
+          totalRecords: competitors.length,
+          metadata: {
+            exportType: "competitor_analysis",
+            generatedBy: "Beekon AI Competitor Service",
+            competitorCount: competitors.length,
+            analyticsIncluded: true,
+            dateRange: dateRange || null,
+          },
+        };
+
+        return await exportService.exportData(exportData, format, {
+          exportType: "competitor",
+          customFilename: `competitor_analysis_${competitors.length}_competitors`,
+        });
+      }
+
+      // For CSV and JSON, use existing logic
       const exportData = {
         competitors,
         analytics,
@@ -616,13 +723,8 @@ export class OptimizedCompetitorService extends BaseService {
           return new Blob([this.convertToCSV(exportData)], {
             type: "text/csv",
           });
-        case "pdf":
-          // For PDF, return JSON for now (would need PDF library integration)
-          return new Blob([JSON.stringify(exportData, null, 2)], {
-            type: "application/json",
-          });
         default:
-          throw new Error(`Unsupported format: ${format}`);
+          throw new Error(`Unsupported format: ${format}. Supported formats are: csv, json, pdf`);
       }
     } catch (error) {
       console.error("Failed to export competitor data:", error);

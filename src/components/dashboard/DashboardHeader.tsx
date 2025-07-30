@@ -91,7 +91,7 @@ export function DashboardHeader({
           onExport={handleExportData}
           isLoading={isExporting}
           disabled={!hasData}
-          formats={["pdf", "csv", "json", "excel", "word"]}
+          formats={["pdf", "csv", "json", "word"]}
           data={metrics}
           showEstimatedSize={true}
         />

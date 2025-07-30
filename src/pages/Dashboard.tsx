@@ -28,7 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ExportFormat, useExportHandler } from "@/lib/export-utils";
+import { ExportFormat, useExportHandler, captureMultipleCharts, ChartInfo, ChartCaptureConfig } from "@/lib/export-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useDashboardMetrics } from "@/hooks/useDashboard";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -47,7 +47,7 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CartesianGrid,
@@ -68,6 +68,15 @@ export default function Dashboard() {
   const [dateFilter, setDateFilter] = useState<"7d" | "30d" | "90d">("7d");
   const [showAllCharts, setShowAllCharts] = useState(false);
   const { handleExport } = useExportHandler();
+  
+  // Chart refs for capture
+  const llmChartRef = useRef<HTMLDivElement>(null);
+  const websiteChartRef = useRef<HTMLDivElement>(null);
+  const sentimentChartRef = useRef<HTMLDivElement>(null);
+  const mentionTrendChartRef = useRef<HTMLDivElement>(null);
+  const topicRadarChartRef = useRef<HTMLDivElement>(null);
+  const visibilityChartRef = useRef<HTMLDivElement>(null);
+  
   const filters = useMemo(
     () => ({
       period: dateFilter,
@@ -134,11 +143,13 @@ export default function Dashboard() {
         { category: "Summary", metric: "Total Analyses", value: (metrics?.totalAnalyses || 0).toLocaleString(), unit: "count" },
         { category: "Summary", metric: "Top Performing Topic", value: topicPerformance?.[0]?.topic || "N/A", unit: "text" },
         
-        // Performance Metrics
-        { category: "Performance", metric: "Average Confidence", value: `${(metrics?.averageConfidence || 0).toFixed(1)}%`, unit: "percentage" },
-        { category: "Performance", metric: "Average Sentiment", value: `${(metrics?.averageSentiment || 0).toFixed(1)}%`, unit: "percentage" },
-        { category: "Performance", metric: "Mention Rate", value: `${(metrics?.mentionRate || 0).toFixed(1)}%`, unit: "percentage" },
-        { category: "Performance", metric: "Sentiment Trend", value: getSentimentLabel(metrics?.averageSentiment || 0), unit: "text" },
+        // Performance Metrics - Fixed property mapping to match dashboard service interface
+        { category: "Performance", metric: "Overall Visibility Score", value: `${(metrics?.overallVisibilityScore || 0).toFixed(1)}%`, unit: "percentage" },
+        { category: "Performance", metric: "Average Sentiment", value: `${(metrics?.sentimentScore || 0).toFixed(1)}%`, unit: "percentage" },
+        { category: "Performance", metric: "Average Ranking", value: `${(metrics?.averageRanking || 0).toFixed(1)}`, unit: "position" },
+        { category: "Performance", metric: "Total Mentions", value: (metrics?.totalMentions || 0).toLocaleString(), unit: "count" },
+        { category: "Performance", metric: "Total Analyses", value: (metrics?.totalAnalyses || 0).toLocaleString(), unit: "count" },
+        { category: "Performance", metric: "Sentiment Trend", value: getSentimentLabel(metrics?.sentimentScore || 0), unit: "text" },
         
         // Website Statistics
         ...(websites?.filter(w => 
@@ -150,34 +161,64 @@ export default function Dashboard() {
           unit: `${w.is_active ? 'Active' : 'Inactive'}${w.monitoring_enabled ? ' | Monitored' : ''}`
         })) || []),
         
-        // Topic Performance (top 5)
+        // Topic Performance (top 5) - Fixed property mapping to match TopicPerformance interface
         ...(topicPerformance?.filter(topic => 
-          topic?.topic && typeof topic?.averageConfidence === 'number' // Only include valid topics
+          topic?.topic && typeof topic?.visibility === 'number' // Use correct property names
         ).slice(0, 5).map((topic, index) => ({
           category: "Top Topics",
           metric: `#${index + 1} ${topic.topic}`,
-          value: `${topic.averageConfidence.toFixed(1)}%`,
-          unit: "confidence"
+          value: `${topic.visibility.toFixed(1)}%`,
+          unit: "visibility"
         })) || []),
         
-        // LLM Performance
+        // Performance by Topics - Comprehensive section with detailed metrics
+        ...(topicPerformance?.filter(topic => 
+          topic?.topic && typeof topic?.visibility === 'number'
+        ).slice(0, 10).flatMap((topic, index) => [
+          {
+            category: "Performance by Topics",
+            metric: `${topic.topic} - Visibility`,
+            value: `${topic.visibility.toFixed(1)}%`,
+            unit: "visibility score"
+          },
+          {
+            category: "Performance by Topics", 
+            metric: `${topic.topic} - Sentiment`,
+            value: `${topic.sentiment.toFixed(1)}%`,
+            unit: "sentiment score" 
+          },
+          {
+            category: "Performance by Topics",
+            metric: `${topic.topic} - Mentions`,
+            value: topic.mentions.toString(),
+            unit: "total mentions"
+          },
+          {
+            category: "Performance by Topics",
+            metric: `${topic.topic} - Avg Rank`,
+            value: topic.averageRank.toFixed(1),
+            unit: "ranking position"
+          }
+        ]) || []),
+        
+        // LLM Performance - Fixed property mapping to match LLMPerformance interface
         ...(llmPerformance?.filter(llm => 
-          llm?.name && typeof llm?.averageConfidence === 'number' && typeof llm?.totalResults === 'number'
+          llm?.provider && typeof llm?.mentionRate === 'number' && typeof llm?.totalAnalyses === 'number'
         ).map(llm => ({
           category: "LLM Performance",
-          metric: llm.name,
-          value: `${llm.averageConfidence.toFixed(1)}%`,
-          unit: `${llm.totalResults} results`
+          metric: llm.provider,
+          value: `${llm.mentionRate.toFixed(1)}%`,
+          unit: `${llm.totalAnalyses} analyses`
         })) || []),
         
-        // Website Performance (top performers)
+        // Website Performance (top performers) - Fixed property mapping to match WebsitePerformance interface
         ...(websitePerformance?.filter(site => 
-          site?.displayName && typeof site?.averageConfidence === 'number' && typeof site?.totalResults === 'number'
+          site?.displayName && typeof site?.visibility === 'number' && typeof site?.mentions === 'number'
         ).slice(0, 5).map((site, index) => ({
           category: "Website Performance",
           metric: `#${index + 1} ${site.displayName}`,
-          value: `${site.averageConfidence.toFixed(1)}%`,
-          unit: `${site.totalResults} analyses`
+          value: `${site.visibility.toFixed(1)}%`,
+          unit: `${site.mentions} mentions`
         })) || []),
         
         // Time Series Summary (if available)
@@ -216,9 +257,80 @@ export default function Dashboard() {
         },
       };
 
+      // Capture charts if format is PDF
+      let capturedCharts: ChartInfo[] = [];
+      if (format === "pdf") {
+        try {
+          toast({
+            title: "Capturing charts...",
+            description: "Please wait while we capture the dashboard charts for PDF export.",
+          });
+
+          // Define chart elements to capture with element-specific configurations
+          const chartElements = [
+            { 
+              element: visibilityChartRef.current, 
+              id: "visibility-chart", 
+              title: "Visibility Over Time",
+              config: {
+                // Visibility chart specific config - ensure adequate height for export button
+                height: 480, // Extra height to accommodate export button and proper spacing
+              }
+            },
+            { 
+              element: llmChartRef.current, 
+              id: "llm-performance", 
+              title: "LLM Performance Comparison" 
+            },
+            { 
+              element: websiteChartRef.current, 
+              id: "website-performance", 
+              title: "Website Performance Breakdown" 
+            },
+            { 
+              element: sentimentChartRef.current, 
+              id: "sentiment-distribution", 
+              title: "Sentiment Distribution" 
+            },
+            { 
+              element: mentionTrendChartRef.current, 
+              id: "mention-trends", 
+              title: "Mention Trends" 
+            },
+            { 
+              element: topicRadarChartRef.current, 
+              id: "topic-radar", 
+              title: "Topic Performance Radar" 
+            },
+          ].filter(chart => chart.element !== null) as Array<{ element: HTMLElement; id: string; title: string; config?: ChartCaptureConfig }>;
+
+          if (chartElements.length > 0) {
+            capturedCharts = await captureMultipleCharts(chartElements, {
+              backgroundColor: 'white',
+              scale: 2,
+              useCORS: true
+            });
+
+            toast({
+              title: "Charts captured",
+              description: `Successfully captured ${capturedCharts.length} charts for PDF export.`,
+            });
+          }
+
+        } catch (error) {
+          console.error("Chart capture failed:", error);
+          toast({
+            title: "Chart capture warning",
+            description: "Charts could not be captured, but export will continue with data only.",
+            variant: "destructive",
+          });
+        }
+      }
+
       const blob = await exportService.exportData(exportContent, format, { 
         exportType: "dashboard", 
-        customFilename: `dashboard_analytics_${dateFilter}_${new Date().toISOString().split('T')[0]}` 
+        customFilename: `dashboard_analytics_${dateFilter}_${new Date().toISOString().split('T')[0]}`,
+        charts: capturedCharts.length > 0 ? capturedCharts : undefined
       });
 
       await handleExport(
@@ -444,7 +556,7 @@ export default function Dashboard() {
 
         {/* Visibility Chart */}
         {timeSeriesData.length > 0 && (
-          <Card>
+          <Card ref={visibilityChartRef}>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
@@ -514,17 +626,18 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* LLM Performance Chart */}
             {llmPerformance.length > 0 && (
-              <LLMPerformanceChart llmData={llmPerformance} />
+              <LLMPerformanceChart ref={llmChartRef} llmData={llmPerformance} />
             )}
 
             {/* Website Performance Chart */}
             {websitePerformance.length > 0 && (
-              <WebsitePerformanceChart websiteData={websitePerformance} />
+              <WebsitePerformanceChart ref={websiteChartRef} websiteData={websitePerformance} />
             )}
 
             {/* Sentiment Distribution */}
             {metrics && (
               <SentimentDistributionChart
+                ref={sentimentChartRef}
                 sentimentData={[
                   {
                     name: "Positive",
@@ -543,12 +656,12 @@ export default function Dashboard() {
 
             {/* Mention Trends */}
             {timeSeriesData.length > 0 && (
-              <MentionTrendChart trendData={timeSeriesData} />
+              <MentionTrendChart ref={mentionTrendChartRef} trendData={timeSeriesData} />
             )}
 
             {/* Topic Radar Chart */}
             {topicPerformance.length > 0 && (
-              <TopicRadarChart topicData={topicPerformance} />
+              <TopicRadarChart ref={topicRadarChartRef} topicData={topicPerformance} />
             )}
           </div>
         )}

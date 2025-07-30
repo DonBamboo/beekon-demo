@@ -57,18 +57,6 @@ const EXPORT_FORMAT_OPTIONS: ExportFormatOption[] = [
     icon: Code,
     description: "Raw data in JSON format for developers",
   },
-  {
-    format: "excel",
-    label: "Excel Spreadsheet",
-    icon: FileSpreadsheet,
-    description: "Microsoft Excel compatible spreadsheet",
-  },
-  {
-    format: "word",
-    label: "Word Document",
-    icon: File,
-    description: "Microsoft Word compatible document",
-  },
 ];
 
 // Single export button with default format
