@@ -48,7 +48,9 @@ import { ExportFormat } from "@/types/database";
 
 const analysisConfigSchema = z.object({
   analysisName: z.string().min(1, "Analysis name is required"),
-  topics: z.array(z.string()).min(1, "At least one topic is required"),
+  topics: z
+    .array(z.string())
+    .length(1, "Exactly one topic is required per analysis"),
   customPrompts: z.array(z.string()),
   llmModels: z.array(z.string()).min(1, "At least one LLM model is required"),
   priority: z.enum(["high", "medium", "low"]),
@@ -233,6 +235,14 @@ export function AnalysisConfigModal({
 
       // Subscribe to progress updates
       analysisService.subscribeToProgress(sessionId, async (progress) => {
+        console.log("UI received progress update:", {
+          sessionId: sessionId.slice(0, 8),
+          status: progress.status,
+          progress: progress.progress,
+          currentStep: progress.currentStep,
+          completedSteps: progress.completedSteps,
+          totalSteps: progress.totalSteps
+        });
         setAnalysisProgress(progress);
 
         if (progress.status === "completed") {
@@ -276,6 +286,14 @@ export function AnalysisConfigModal({
     } catch (error) {
       console.error("Failed to start analysis:", error);
 
+      // Clean up any partial state
+      if (currentAnalysisId) {
+        analysisService.unsubscribeFromProgress(currentAnalysisId);
+        setCurrentAnalysisId(null);
+      }
+      setAnalysisProgress(null);
+      setCurrentAnalysisSession(null);
+
       // If we consumed a credit but the operation failed, restore it
       if (creditConsumed) {
         console.log("Restoring credit due to failed analysis start");
@@ -284,7 +302,10 @@ export function AnalysisConfigModal({
 
       toast({
         title: "Error",
-        description: "Failed to start analysis. Please try again.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to start analysis. Please try again.",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -312,35 +333,31 @@ export function AnalysisConfigModal({
 
     const currentTopics = form.watch("topics");
 
-    // Check for duplicates (case-insensitive)
-    const isDuplicate = currentTopics.some(
-      (topic) => topic.toLowerCase() === trimmedTopic.toLowerCase()
-    );
+    // For single topic constraint, replace existing topic instead of adding
+    if (currentTopics.length >= 1) {
+      toast({
+        title: "Single Topic Only",
+        description:
+          "Only one topic is allowed per analysis. This will replace your current topic.",
+        variant: "default",
+      });
+    }
 
     const existsInAvailable = availableTopics.some(
       (topic) => topic.name.toLowerCase() === trimmedTopic.toLowerCase()
     );
 
-    if (isDuplicate) {
-      toast({
-        title: "Duplicate Topic",
-        description: "This topic is already selected.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (existsInAvailable && !currentTopics.includes(trimmedTopic)) {
+    if (existsInAvailable) {
       // If it exists in available topics, use the exact name from database
       const existingTopic = availableTopics.find(
         (topic) => topic.name.toLowerCase() === trimmedTopic.toLowerCase()
       );
       if (existingTopic) {
-        form.setValue("topics", [...currentTopics, existingTopic.name]);
+        form.setValue("topics", [existingTopic.name]);
       }
     } else {
-      // Add as new custom topic
-      form.setValue("topics", [...currentTopics, trimmedTopic]);
+      // Set as the single topic
+      form.setValue("topics", [trimmedTopic]);
     }
 
     setCustomTopic("");
@@ -447,8 +464,8 @@ export function AnalysisConfigModal({
                 <span>Configure New Analysis</span>
               </DialogTitle>
               <DialogDescription>
-                Set up a new analysis to monitor your brand mentions across AI
-                platforms
+                Set up a new analysis with one topic and multiple prompts to
+                monitor your brand mentions across AI platforms
               </DialogDescription>
             </div>
             <AdvancedExportDropdown
@@ -542,7 +559,13 @@ export function AnalysisConfigModal({
           {/* Topics Selection */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label>Topics to Monitor</Label>
+              <div>
+                <Label>Analysis Topic</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Select one topic for this analysis. All prompts will be
+                  associated with this topic.
+                </p>
+              </div>
               {isLoadingTopics && (
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -557,45 +580,64 @@ export function AnalysisConfigModal({
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2 mb-3">
-              {form.watch("topics").map((topic) => (
-                <Badge
-                  key={topic}
-                  variant="default"
-                  className="flex items-center space-x-1"
-                >
-                  <span>{topic}</span>
+            {form.watch("topics").length > 0 && (
+              <div className="mb-3 p-3 border rounded-lg bg-primary/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="secondary" className="text-xs">
+                      Selected Topic
+                    </Badge>
+                    <span className="font-medium">
+                      {form.watch("topics")[0]}
+                    </span>
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-4 w-4 p-0 hover:bg-transparent"
-                    onClick={() => removeTopic(topic)}
+                    className="h-6 w-6 p-0"
+                    onClick={() => removeTopic(form.watch("topics")[0])}
                   >
                     <X className="h-3 w-3" />
                   </Button>
-                </Badge>
-              ))}
-            </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  All prompts in this analysis will be associated with this
+                  topic.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
-              {!isLoadingTopics && (
-                <div className="flex flex-wrap gap-2">
-                  {availableTopics
-                    .filter(
-                      (topic) => !form.watch("topics").includes(topic.name)
-                    )
-                    .map((topic) => (
+              {!isLoadingTopics && form.watch("topics").length === 0 && (
+                <>
+                  <div className="text-sm text-muted-foreground mb-3 p-3 border rounded-lg bg-muted/30">
+                    <p className="font-medium mb-1">
+                      Choose from existing topics or create a new one:
+                    </p>
+                    <p className="text-xs">
+                      You can select one topic from the suggestions below or add
+                      a custom topic.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {availableTopics.map((topic) => (
                       <Badge
                         key={topic.id}
                         variant="outline"
                         className="cursor-pointer hover:bg-accent flex items-center gap-1"
                         onClick={() => {
                           const currentTopics = form.watch("topics");
-                          form.setValue("topics", [
-                            ...currentTopics,
-                            topic.name,
-                          ]);
+                          if (currentTopics.length >= 1) {
+                            toast({
+                              title: "Single Topic Only",
+                              description:
+                                "Only one topic is allowed per analysis. This will replace your current topic.",
+                              variant: "default",
+                            });
+                          }
+                          // Replace existing topic with selected one
+                          form.setValue("topics", [topic.name]);
                         }}
                       >
                         <Plus className="h-3 w-3" />
@@ -607,7 +649,8 @@ export function AnalysisConfigModal({
                         )}
                       </Badge>
                     ))}
-                </div>
+                  </div>
+                </>
               )}
 
               {isLoadingTopics && (
@@ -621,7 +664,11 @@ export function AnalysisConfigModal({
 
               <div className="flex gap-3">
                 <Input
-                  placeholder="Add custom topic..."
+                  placeholder={
+                    form.watch("topics").length > 0
+                      ? "Enter topic to replace current selection..."
+                      : "Add custom topic..."
+                  }
                   value={customTopic}
                   onChange={(e) => setCustomTopic(e.target.value)}
                   onKeyPress={(e) =>
@@ -633,7 +680,7 @@ export function AnalysisConfigModal({
                   variant="outline"
                   onClick={addCustomTopic}
                 >
-                  Add
+                  {form.watch("topics").length > 0 ? "Replace" : "Add"}
                 </Button>
               </div>
             </div>
@@ -647,7 +694,13 @@ export function AnalysisConfigModal({
 
           {/* Custom Prompts */}
           <div className="space-y-3">
-            <Label>Custom Prompts (Optional)</Label>
+            <div>
+              <Label>Custom Prompts (Optional)</Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Add multiple prompts that will all be tested under your selected
+                topic.
+              </p>
+            </div>
             <div className="space-y-2">
               {form.watch("customPrompts").map((prompt, index) => (
                 <div

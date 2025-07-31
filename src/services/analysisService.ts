@@ -50,6 +50,7 @@ export class AnalysisService {
   private static instance: AnalysisService;
   private progressCallbacks: Map<string, (progress: AnalysisProgress) => void> =
     new Map();
+  private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   public static getInstance(): AnalysisService {
     if (!AnalysisService.instance) {
@@ -101,20 +102,37 @@ export class AnalysisService {
       );
 
       // Create prompts for each topic
-      const promptIds = await this.createPrompts(
-        config.customPrompts,
-        topicIds
-      );
+      const prompts = await this.createPrompts(config.customPrompts, topicIds);
+
+      const promptIds = [];
+
+      for (const prompt of prompts) {
+        if (prompt.id) {
+          promptIds.push(prompt.id);
+        }
+      }
 
       // Start the analysis process
       await this.startAnalysis(analysisSession.id, config, promptIds);
 
       // Trigger N8N webhook for actual analysis
-      await this.triggerAnalysisWebhook(analysisSession.id, config);
+      await this.triggerAnalysisWebhook(
+        analysisSession.id,
+        config,
+        prompts,
+        topicIds,
+        workspaceId
+      );
 
       return analysisSession.id;
     } catch (error) {
       console.error("Failed to create analysis:", error);
+
+      // Clean up any polling intervals that might have been started
+      if (analysisSession?.id) {
+        this.unsubscribeFromProgress(analysisSession.id);
+      }
+
       throw error;
     }
   }
@@ -161,13 +179,17 @@ export class AnalysisService {
   private async createPrompts(
     customPrompts: string[],
     topicIds: string[]
-  ): Promise<string[]> {
-    const promptIds: string[] = [];
+  ): Promise<{ id: string; prompt_text: string }[]> {
+    const prompts: { id: string; prompt_text: string }[] = [];
 
-    for (let i = 0; i < customPrompts.length; i++) {
-      const prompt = customPrompts[i];
-      const topicId = topicIds[i % topicIds.length]; // Cycle through topics
+    // Ensure we have exactly one topic (enforced by new constraint)
+    if (topicIds.length !== 1) {
+      throw new Error("Exactly one topic is required per analysis");
+    }
 
+    const topicId = topicIds[0]; // Single topic per analysis
+
+    for (const prompt of customPrompts) {
       const { data: newPrompt, error } = await supabase
         .schema("beekon_data")
         .from("prompts")
@@ -182,10 +204,10 @@ export class AnalysisService {
         .single();
 
       if (error) throw error;
-      promptIds.push(newPrompt.id);
+      prompts.push({ id: newPrompt.id, prompt_text: prompt });
     }
 
-    return promptIds;
+    return prompts;
   }
 
   private async createAnalysisSession(
@@ -217,19 +239,6 @@ export class AnalysisService {
 
     if (error) throw error;
 
-    console.log("config", config);
-    console.log("workspaceId", workspaceId);
-
-    const response = await sendN8nWebhook("webhook/manually-added-analysis", {
-      workspaceId,
-      config,
-      userId,
-    });
-
-    if (!response.success) {
-      console.error("An error occurred" + response.messages);
-    }
-
     return data as unknown as AnalysisSession;
   }
 
@@ -238,6 +247,14 @@ export class AnalysisService {
     config: AnalysisConfig,
     promptIds: string[]
   ): Promise<void> {
+    // Calculate total steps, ensuring minimum of 1 to avoid division by zero
+    const totalSteps = Math.max(
+      1,
+      config.customPrompts.length > 0
+        ? config.customPrompts.length * config.llmModels.length
+        : config.llmModels.length // Default to one step per LLM when no custom prompts
+    );
+
     // Update analysis session status and progress
     await this.updateAnalysisSession(sessionId, {
       status: "pending",
@@ -248,7 +265,7 @@ export class AnalysisService {
         progress: 0,
         currentStep: "Initializing analysis...",
         completedSteps: 0,
-        totalSteps: promptIds.length * config.llmModels.length,
+        totalSteps,
       },
     });
 
@@ -259,31 +276,57 @@ export class AnalysisService {
       progress: 0,
       currentStep: "Initializing analysis...",
       completedSteps: 0,
-      totalSteps: promptIds.length * config.llmModels.length,
+      totalSteps,
     });
   }
 
   private async triggerAnalysisWebhook(
     sessionId: string,
-    config: AnalysisConfig
+    config: AnalysisConfig,
+    prompts: object[],
+    topicId: string[],
+    workspaceId: string
   ) {
     try {
+      // Calculate total steps first, before using in webhook payload
+      const totalSteps = Math.max(
+        1,
+        config.customPrompts.length > 0
+          ? config.customPrompts.length * config.llmModels.length
+          : config.llmModels.length // Default to one step per LLM when no custom prompts
+      );
+
       const webhookPayload = {
-        analysisId: sessionId,
         sessionId,
-        config,
+        config: {
+          websiteId: config.websiteId,
+          workspaceId: workspaceId,
+          topic: {
+            topicId: topicId[0],
+            topic: config.topics[0],
+          },
+          prompts: prompts,
+          autoGeneratePrompts: prompts.length === 0, // Flag to tell N8N to generate prompts
+          expectedSteps: totalSteps, // Help N8N understand expected progress steps
+          priority: config.priority,
+          generateReport: config.generateReport,
+          includeCompetitors: config.includeCompetitors,
+          llmModels: config.llmModels,
+          scheduleAnalysis: config.scheduleAnalysis,
+        },
         timestamp: new Date().toISOString(),
       };
-
-      await sendN8nWebhook("analysis/start", webhookPayload);
 
       const progressData = {
         analysisId: sessionId,
         status: "running" as AnalysisStatus,
         progress: 10,
-        currentStep: "Starting LLM analysis...",
+        currentStep:
+          config.customPrompts.length > 0
+            ? "Starting LLM analysis with custom prompts..."
+            : "Starting LLM analysis with auto-generated prompts...",
         completedSteps: 0,
-        totalSteps: config.llmModels.length * config.customPrompts.length,
+        totalSteps,
       };
 
       await this.updateAnalysisSession(sessionId, {
@@ -292,6 +335,30 @@ export class AnalysisService {
       });
 
       this.updateProgress(sessionId, progressData);
+
+      // Debug logging for progress tracking
+      console.log("Analysis webhook triggered:", {
+        sessionId,
+        hasCustomPrompts: config.customPrompts.length > 0,
+        customPromptsCount: config.customPrompts.length,
+        llmModelsCount: config.llmModels.length,
+        totalSteps,
+        autoGeneratePrompts: prompts.length === 0,
+      });
+
+      const response = await sendN8nWebhook(
+        "webhook/manually-added-analysis",
+        webhookPayload
+      );
+
+      if (!response.success) {
+        console.error("An error occurred" + response.messages);
+      }
+
+      console.log("response", response);
+
+      // Start polling for progress updates from N8N
+      this.startProgressPolling(sessionId);
     } catch (error) {
       const errorProgressData = {
         analysisId: sessionId,
@@ -618,12 +685,157 @@ export class AnalysisService {
 
   unsubscribeFromProgress(analysisId: string) {
     this.progressCallbacks.delete(analysisId);
+    // Clean up polling interval if it exists
+    const interval = this.pollingIntervals.get(analysisId);
+    if (interval) {
+      clearInterval(interval);
+      this.pollingIntervals.delete(analysisId);
+    }
   }
 
   private updateProgress(analysisId: string, progress: AnalysisProgress) {
+    // Validate and sanitize progress data to prevent NaN issues
+    const safeProgress: AnalysisProgress = {
+      ...progress,
+      progress: Math.max(
+        0,
+        Math.min(100, isNaN(progress.progress) ? 0 : progress.progress)
+      ),
+      completedSteps: Math.max(
+        0,
+        isNaN(progress.completedSteps) ? 0 : progress.completedSteps
+      ),
+      totalSteps: Math.max(
+        1,
+        isNaN(progress.totalSteps) ? 1 : progress.totalSteps
+      ),
+    };
+
+    // Recalculate progress percentage if needed
+    if (safeProgress.totalSteps > 0) {
+      const calculatedProgress = Math.round(
+        (safeProgress.completedSteps / safeProgress.totalSteps) * 100
+      );
+      // Use calculated progress if current progress seems invalid
+      if (isNaN(progress.progress) || progress.progress === 0) {
+        safeProgress.progress = Math.min(calculatedProgress, 100);
+      }
+    }
+
     const callback = this.progressCallbacks.get(analysisId);
     if (callback) {
-      callback(progress);
+      callback(safeProgress);
+    }
+  }
+
+  private startProgressPolling(sessionId: string) {
+    // Clear any existing polling interval for this session
+    const existingInterval = this.pollingIntervals.get(sessionId);
+    if (existingInterval) {
+      clearInterval(existingInterval);
+    }
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const session = await this.getAnalysisSession(sessionId);
+        console.log("Progress polling update:", {
+          sessionId: sessionId.slice(0, 8),
+          status: session?.status,
+          progress: session?.progress_data?.progress,
+          currentStep: session?.progress_data?.currentStep,
+          completedSteps: session?.progress_data?.completedSteps,
+          totalSteps: session?.progress_data?.totalSteps,
+        });
+
+        if (session?.progress_data) {
+          this.updateProgress(sessionId, session.progress_data);
+        }
+
+        // Stop polling if analysis is completed or failed
+        if (session?.status === "completed" || session?.status === "failed") {
+          console.log("Progress polling stopped:", {
+            sessionId: sessionId.slice(0, 8),
+            finalStatus: session.status,
+          });
+
+          // Create corrected progress data that matches the actual session status
+          const finalProgressData: AnalysisProgress = {
+            analysisId: sessionId,
+            status: session.status, // Use actual session status, not outdated progress_data.status
+            progress: session.status === "completed" ? 100 : 0,
+            currentStep: session.status === "completed" 
+              ? "Analysis completed successfully!" 
+              : session.error_message || "Analysis failed",
+            completedSteps: session.progress_data?.totalSteps || 1,
+            totalSteps: session.progress_data?.totalSteps || 1,
+            ...(session.status === "failed" && session.error_message && {
+              error: session.error_message
+            })
+          };
+
+          console.log("Sending final progress update to UI:", {
+            sessionId: sessionId.slice(0, 8),
+            finalStatus: session.status,
+            correctedStatus: finalProgressData.status,
+            progress: finalProgressData.progress,
+            currentStep: finalProgressData.currentStep,
+          });
+
+          // Send corrected progress data to UI
+          this.updateProgress(sessionId, finalProgressData);
+
+          clearInterval(pollInterval);
+          this.pollingIntervals.delete(sessionId);
+        }
+      } catch (error) {
+        console.error("Progress polling error:", error);
+      }
+    }, 2000); // Poll every 2 seconds
+
+    // Store interval for cleanup
+    this.pollingIntervals.set(sessionId, pollInterval);
+
+    // 10-minute timeout protection
+    setTimeout(() => {
+      const interval = this.pollingIntervals.get(sessionId);
+      if (interval) {
+        clearInterval(interval);
+        this.pollingIntervals.delete(sessionId);
+        this.handleAnalysisTimeout(sessionId);
+      }
+    }, 1200000); // 20 minutes
+  }
+
+  private async handleAnalysisTimeout(sessionId: string) {
+    try {
+      // Mark analysis as failed due to timeout
+      await this.updateAnalysisSession(sessionId, {
+        status: "failed",
+        error_message: "Analysis timed out after 10 minutes",
+        completed_at: new Date().toISOString(),
+        progress_data: {
+          analysisId: sessionId,
+          status: "failed",
+          progress: 0,
+          currentStep: "Analysis timed out",
+          completedSteps: 0,
+          totalSteps: 1,
+          error: "Analysis timed out after 10 minutes. Please try again.",
+        },
+      });
+
+      // Update progress callback
+      this.updateProgress(sessionId, {
+        analysisId: sessionId,
+        status: "failed",
+        progress: 0,
+        currentStep: "Analysis timed out",
+        completedSteps: 0,
+        totalSteps: 1,
+        error: "Analysis timed out after 10 minutes. Please try again.",
+      });
+    } catch (error) {
+      console.error("Failed to handle analysis timeout:", error);
     }
   }
 
@@ -662,7 +874,7 @@ export class AnalysisService {
       return null;
     }
 
-    return data as AnalysisSession;
+    return data as unknown as AnalysisSession;
   }
 
   async getAnalysisSessionsForWebsite(
@@ -765,92 +977,208 @@ export class AnalysisService {
   }
 
   // Transform analysis results into clean, flattened export format
-  private transformAnalysisForExport(results: UIAnalysisResult[]): Record<string, unknown>[] {
+  private transformAnalysisForExport(
+    results: UIAnalysisResult[]
+  ): Record<string, unknown>[] {
     return results.flatMap((result) => {
       const exportRows: Record<string, unknown>[] = [];
-      
+
       // Analysis Information Section
       exportRows.push(
-        { category: "Analysis Info", metric: "Topic", value: result.topic, unit: "text" },
-        { category: "Analysis Info", metric: "Prompt", value: result.prompt, unit: "text" },
-        { category: "Analysis Info", metric: "Status", value: result.status, unit: "status" },
-        { category: "Analysis Info", metric: "Analysis Date", value: new Date(result.created_at).toLocaleDateString(), unit: "date" },
-        { category: "Analysis Info", metric: "Last Updated", value: new Date(result.updated_at).toLocaleDateString(), unit: "date" }
+        {
+          category: "Analysis Info",
+          metric: "Topic",
+          value: result.topic,
+          unit: "text",
+        },
+        {
+          category: "Analysis Info",
+          metric: "Prompt",
+          value: result.prompt,
+          unit: "text",
+        },
+        {
+          category: "Analysis Info",
+          metric: "Status",
+          value: result.status,
+          unit: "status",
+        },
+        {
+          category: "Analysis Info",
+          metric: "Analysis Date",
+          value: new Date(result.created_at).toLocaleDateString(),
+          unit: "date",
+        },
+        {
+          category: "Analysis Info",
+          metric: "Last Updated",
+          value: new Date(result.updated_at).toLocaleDateString(),
+          unit: "date",
+        }
       );
-      
+
       // Add analysis session info if available
       if (result.analysis_name) {
-        exportRows.push({ category: "Analysis Info", metric: "Analysis Session", value: result.analysis_name, unit: "text" });
+        exportRows.push({
+          category: "Analysis Info",
+          metric: "Analysis Session",
+          value: result.analysis_name,
+          unit: "text",
+        });
       }
-      
+
       // Performance Metrics Section
-      const mentionedCount = result.llm_results.filter(llm => llm.is_mentioned).length;
+      const mentionedCount = result.llm_results.filter(
+        (llm) => llm.is_mentioned
+      ).length;
       const totalProviders = result.llm_results.length;
-      const averageConfidence = result.llm_results.length > 0 
-        ? (result.llm_results.reduce((sum, llm) => sum + (llm.confidence_score || 0), 0) / result.llm_results.length * 100)
-        : 0;
-      const averageRank = result.llm_results.filter(llm => llm.rank_position !== null).length > 0
-        ? (result.llm_results.filter(llm => llm.rank_position !== null).reduce((sum, llm) => sum + (llm.rank_position || 0), 0) / result.llm_results.filter(llm => llm.rank_position !== null).length)
-        : 0;
-      const averageSentiment = result.llm_results.length > 0
-        ? (result.llm_results.reduce((sum, llm) => sum + (llm.sentiment_score || 0), 0) / result.llm_results.length * 100)
-        : 0;
-      
+      const averageConfidence =
+        result.llm_results.length > 0
+          ? (result.llm_results.reduce(
+              (sum, llm) => sum + (llm.confidence_score || 0),
+              0
+            ) /
+              result.llm_results.length) *
+            100
+          : 0;
+      const averageRank =
+        result.llm_results.filter((llm) => llm.rank_position !== null).length >
+        0
+          ? result.llm_results
+              .filter((llm) => llm.rank_position !== null)
+              .reduce((sum, llm) => sum + (llm.rank_position || 0), 0) /
+            result.llm_results.filter((llm) => llm.rank_position !== null)
+              .length
+          : 0;
+      const averageSentiment =
+        result.llm_results.length > 0
+          ? (result.llm_results.reduce(
+              (sum, llm) => sum + (llm.sentiment_score || 0),
+              0
+            ) /
+              result.llm_results.length) *
+            100
+          : 0;
+
       exportRows.push(
-        { category: "Performance", metric: "Overall Confidence", value: `${averageConfidence.toFixed(1)}%`, unit: "percentage" },
-        { category: "Performance", metric: "Mention Rate", value: `${mentionedCount} of ${totalProviders} providers`, unit: "ratio" },
-        { category: "Performance", metric: "Average Ranking", value: averageRank > 0 ? averageRank.toFixed(1) : "N/A", unit: "position" },
-        { category: "Performance", metric: "Average Sentiment", value: `${averageSentiment.toFixed(1)}%`, unit: "percentage" }
+        {
+          category: "Performance",
+          metric: "Overall Confidence",
+          value: `${averageConfidence.toFixed(1)}%`,
+          unit: "percentage",
+        },
+        {
+          category: "Performance",
+          metric: "Mention Rate",
+          value: `${mentionedCount} of ${totalProviders} providers`,
+          unit: "ratio",
+        },
+        {
+          category: "Performance",
+          metric: "Average Ranking",
+          value: averageRank > 0 ? averageRank.toFixed(1) : "N/A",
+          unit: "position",
+        },
+        {
+          category: "Performance",
+          metric: "Average Sentiment",
+          value: `${averageSentiment.toFixed(1)}%`,
+          unit: "percentage",
+        }
       );
-      
+
       // LLM Results Section
       result.llm_results.forEach((llmResult, index) => {
-        const mentionStatus = llmResult.is_mentioned ? "Mentioned" : "Not Mentioned";
-        const rankText = llmResult.rank_position ? `Rank ${llmResult.rank_position}` : "No ranking";
-        const confidenceText = `${((llmResult.confidence_score || 0) * 100).toFixed(1)}%`;
-        const sentimentText = `${((llmResult.sentiment_score || 0) * 100).toFixed(1)}%`;
-        
+        const mentionStatus = llmResult.is_mentioned
+          ? "Mentioned"
+          : "Not Mentioned";
+        const rankText = llmResult.rank_position
+          ? `Rank ${llmResult.rank_position}`
+          : "No ranking";
+        const confidenceText = `${(
+          (llmResult.confidence_score || 0) * 100
+        ).toFixed(1)}%`;
+        const sentimentText = `${(
+          (llmResult.sentiment_score || 0) * 100
+        ).toFixed(1)}%`;
+
         exportRows.push(
-          { category: "LLM Results", metric: `${llmResult.llm_provider} - Status`, value: mentionStatus, unit: "status" },
-          { category: "LLM Results", metric: `${llmResult.llm_provider} - Ranking`, value: rankText, unit: "position" },
-          { category: "LLM Results", metric: `${llmResult.llm_provider} - Confidence`, value: confidenceText, unit: "percentage" },
-          { category: "LLM Results", metric: `${llmResult.llm_provider} - Sentiment`, value: sentimentText, unit: "percentage" }
+          {
+            category: "LLM Results",
+            metric: `${llmResult.llm_provider} - Status`,
+            value: mentionStatus,
+            unit: "status",
+          },
+          {
+            category: "LLM Results",
+            metric: `${llmResult.llm_provider} - Ranking`,
+            value: rankText,
+            unit: "position",
+          },
+          {
+            category: "LLM Results",
+            metric: `${llmResult.llm_provider} - Confidence`,
+            value: confidenceText,
+            unit: "percentage",
+          },
+          {
+            category: "LLM Results",
+            metric: `${llmResult.llm_provider} - Sentiment`,
+            value: sentimentText,
+            unit: "percentage",
+          }
         );
-        
+
         // Add summary text if available (truncated for readability)
         if (llmResult.summary_text) {
-          const truncatedSummary = llmResult.summary_text.length > 100 
-            ? llmResult.summary_text.substring(0, 100) + "..." 
-            : llmResult.summary_text;
-          exportRows.push(
-            { category: "LLM Results", metric: `${llmResult.llm_provider} - Summary`, value: truncatedSummary, unit: "text" }
-          );
+          const truncatedSummary =
+            llmResult.summary_text.length > 100
+              ? llmResult.summary_text.substring(0, 100) + "..."
+              : llmResult.summary_text;
+          exportRows.push({
+            category: "LLM Results",
+            metric: `${llmResult.llm_provider} - Summary`,
+            value: truncatedSummary,
+            unit: "text",
+          });
         }
       });
-      
+
       // Insights Section
       if (result.prompt_strengths && result.prompt_strengths.length > 0) {
         result.prompt_strengths.forEach((strength, index) => {
-          exportRows.push(
-            { category: "Insights", metric: `Strength #${index + 1}`, value: strength, unit: "text" }
-          );
+          exportRows.push({
+            category: "Insights",
+            metric: `Strength #${index + 1}`,
+            value: strength,
+            unit: "text",
+          });
         });
       }
-      
-      if (result.prompt_opportunities && result.prompt_opportunities.length > 0) {
+
+      if (
+        result.prompt_opportunities &&
+        result.prompt_opportunities.length > 0
+      ) {
         result.prompt_opportunities.forEach((opportunity, index) => {
-          exportRows.push(
-            { category: "Insights", metric: `Opportunity #${index + 1}`, value: opportunity, unit: "text" }
-          );
+          exportRows.push({
+            category: "Insights",
+            metric: `Opportunity #${index + 1}`,
+            value: opportunity,
+            unit: "text",
+          });
         });
       }
-      
+
       if (result.recommendation_text) {
-        exportRows.push(
-          { category: "Insights", metric: "Recommendation", value: result.recommendation_text, unit: "text" }
-        );
+        exportRows.push({
+          category: "Insights",
+          metric: "Recommendation",
+          value: result.recommendation_text,
+          unit: "text",
+        });
       }
-      
+
       return exportRows;
     });
   }
@@ -887,7 +1215,7 @@ export class AnalysisService {
 
       // Transform data using the shared transformation function
       const results = this.transformAnalysisData(data);
-      
+
       // Transform to clean, flattened export format
       const exportFormattedData = this.transformAnalysisForExport(results);
 
