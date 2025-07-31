@@ -247,6 +247,14 @@ export class AnalysisService {
     config: AnalysisConfig,
     promptIds: string[]
   ): Promise<void> {
+    // Calculate total steps, ensuring minimum of 1 to avoid division by zero
+    const totalSteps = Math.max(
+      1,
+      config.customPrompts.length > 0
+        ? config.customPrompts.length * config.llmModels.length
+        : config.llmModels.length // Default to one step per LLM when no custom prompts
+    );
+
     // Update analysis session status and progress
     await this.updateAnalysisSession(sessionId, {
       status: "pending",
@@ -257,7 +265,7 @@ export class AnalysisService {
         progress: 0,
         currentStep: "Initializing analysis...",
         completedSteps: 0,
-        totalSteps: promptIds.length * config.llmModels.length,
+        totalSteps,
       },
     });
 
@@ -268,7 +276,7 @@ export class AnalysisService {
       progress: 0,
       currentStep: "Initializing analysis...",
       completedSteps: 0,
-      totalSteps: promptIds.length * config.llmModels.length,
+      totalSteps,
     });
   }
 
@@ -280,6 +288,14 @@ export class AnalysisService {
     workspaceId: string
   ) {
     try {
+      // Calculate total steps first, before using in webhook payload
+      const totalSteps = Math.max(
+        1,
+        config.customPrompts.length > 0
+          ? config.customPrompts.length * config.llmModels.length
+          : config.llmModels.length // Default to one step per LLM when no custom prompts
+      );
+
       const webhookPayload = {
         sessionId,
         config: {
@@ -290,6 +306,8 @@ export class AnalysisService {
             topic: config.topics[0],
           },
           prompts: prompts,
+          autoGeneratePrompts: prompts.length === 0, // Flag to tell N8N to generate prompts
+          expectedSteps: totalSteps, // Help N8N understand expected progress steps
           priority: config.priority,
           generateReport: config.generateReport,
           includeCompetitors: config.includeCompetitors,
@@ -298,6 +316,35 @@ export class AnalysisService {
         },
         timestamp: new Date().toISOString(),
       };
+
+      const progressData = {
+        analysisId: sessionId,
+        status: "running" as AnalysisStatus,
+        progress: 10,
+        currentStep:
+          config.customPrompts.length > 0
+            ? "Starting LLM analysis with custom prompts..."
+            : "Starting LLM analysis with auto-generated prompts...",
+        completedSteps: 0,
+        totalSteps,
+      };
+
+      await this.updateAnalysisSession(sessionId, {
+        status: "running",
+        progress_data: progressData,
+      });
+
+      this.updateProgress(sessionId, progressData);
+
+      // Debug logging for progress tracking
+      console.log("Analysis webhook triggered:", {
+        sessionId,
+        hasCustomPrompts: config.customPrompts.length > 0,
+        customPromptsCount: config.customPrompts.length,
+        llmModelsCount: config.llmModels.length,
+        totalSteps,
+        autoGeneratePrompts: prompts.length === 0,
+      });
 
       const response = await sendN8nWebhook(
         "webhook/manually-added-analysis",
@@ -308,21 +355,7 @@ export class AnalysisService {
         console.error("An error occurred" + response.messages);
       }
 
-      const progressData = {
-        analysisId: sessionId,
-        status: "running" as AnalysisStatus,
-        progress: 10,
-        currentStep: "Starting LLM analysis...",
-        completedSteps: 0,
-        totalSteps: config.llmModels.length * config.customPrompts.length,
-      };
-
-      await this.updateAnalysisSession(sessionId, {
-        status: "running",
-        progress_data: progressData,
-      });
-
-      this.updateProgress(sessionId, progressData);
+      console.log("response", response);
 
       // Start polling for progress updates from N8N
       this.startProgressPolling(sessionId);
@@ -661,9 +694,37 @@ export class AnalysisService {
   }
 
   private updateProgress(analysisId: string, progress: AnalysisProgress) {
+    // Validate and sanitize progress data to prevent NaN issues
+    const safeProgress: AnalysisProgress = {
+      ...progress,
+      progress: Math.max(
+        0,
+        Math.min(100, isNaN(progress.progress) ? 0 : progress.progress)
+      ),
+      completedSteps: Math.max(
+        0,
+        isNaN(progress.completedSteps) ? 0 : progress.completedSteps
+      ),
+      totalSteps: Math.max(
+        1,
+        isNaN(progress.totalSteps) ? 1 : progress.totalSteps
+      ),
+    };
+
+    // Recalculate progress percentage if needed
+    if (safeProgress.totalSteps > 0) {
+      const calculatedProgress = Math.round(
+        (safeProgress.completedSteps / safeProgress.totalSteps) * 100
+      );
+      // Use calculated progress if current progress seems invalid
+      if (isNaN(progress.progress) || progress.progress === 0) {
+        safeProgress.progress = Math.min(calculatedProgress, 100);
+      }
+    }
+
     const callback = this.progressCallbacks.get(analysisId);
     if (callback) {
-      callback(progress);
+      callback(safeProgress);
     }
   }
 
@@ -677,19 +738,59 @@ export class AnalysisService {
     const pollInterval = setInterval(async () => {
       try {
         const session = await this.getAnalysisSession(sessionId);
+        console.log("Progress polling update:", {
+          sessionId: sessionId.slice(0, 8),
+          status: session?.status,
+          progress: session?.progress_data?.progress,
+          currentStep: session?.progress_data?.currentStep,
+          completedSteps: session?.progress_data?.completedSteps,
+          totalSteps: session?.progress_data?.totalSteps,
+        });
+
         if (session?.progress_data) {
           this.updateProgress(sessionId, session.progress_data);
         }
 
         // Stop polling if analysis is completed or failed
         if (session?.status === "completed" || session?.status === "failed") {
+          console.log("Progress polling stopped:", {
+            sessionId: sessionId.slice(0, 8),
+            finalStatus: session.status,
+          });
+
+          // Create corrected progress data that matches the actual session status
+          const finalProgressData: AnalysisProgress = {
+            analysisId: sessionId,
+            status: session.status, // Use actual session status, not outdated progress_data.status
+            progress: session.status === "completed" ? 100 : 0,
+            currentStep: session.status === "completed" 
+              ? "Analysis completed successfully!" 
+              : session.error_message || "Analysis failed",
+            completedSteps: session.progress_data?.totalSteps || 1,
+            totalSteps: session.progress_data?.totalSteps || 1,
+            ...(session.status === "failed" && session.error_message && {
+              error: session.error_message
+            })
+          };
+
+          console.log("Sending final progress update to UI:", {
+            sessionId: sessionId.slice(0, 8),
+            finalStatus: session.status,
+            correctedStatus: finalProgressData.status,
+            progress: finalProgressData.progress,
+            currentStep: finalProgressData.currentStep,
+          });
+
+          // Send corrected progress data to UI
+          this.updateProgress(sessionId, finalProgressData);
+
           clearInterval(pollInterval);
           this.pollingIntervals.delete(sessionId);
         }
       } catch (error) {
         console.error("Progress polling error:", error);
       }
-    }, 8000); // Poll every 2 seconds
+    }, 2000); // Poll every 2 seconds
 
     // Store interval for cleanup
     this.pollingIntervals.set(sessionId, pollInterval);

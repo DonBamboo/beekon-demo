@@ -235,6 +235,14 @@ export function AnalysisConfigModal({
 
       // Subscribe to progress updates
       analysisService.subscribeToProgress(sessionId, async (progress) => {
+        console.log("UI received progress update:", {
+          sessionId: sessionId.slice(0, 8),
+          status: progress.status,
+          progress: progress.progress,
+          currentStep: progress.currentStep,
+          completedSteps: progress.completedSteps,
+          totalSteps: progress.totalSteps
+        });
         setAnalysisProgress(progress);
 
         if (progress.status === "completed") {
