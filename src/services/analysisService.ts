@@ -50,6 +50,7 @@ export class AnalysisService {
   private static instance: AnalysisService;
   private progressCallbacks: Map<string, (progress: AnalysisProgress) => void> =
     new Map();
+  private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   public static getInstance(): AnalysisService {
     if (!AnalysisService.instance) {
@@ -126,6 +127,12 @@ export class AnalysisService {
       return analysisSession.id;
     } catch (error) {
       console.error("Failed to create analysis:", error);
+
+      // Clean up any polling intervals that might have been started
+      if (analysisSession?.id) {
+        this.unsubscribeFromProgress(analysisSession.id);
+      }
+
       throw error;
     }
   }
@@ -316,6 +323,9 @@ export class AnalysisService {
       });
 
       this.updateProgress(sessionId, progressData);
+
+      // Start polling for progress updates from N8N
+      this.startProgressPolling(sessionId);
     } catch (error) {
       const errorProgressData = {
         analysisId: sessionId,
@@ -642,12 +652,89 @@ export class AnalysisService {
 
   unsubscribeFromProgress(analysisId: string) {
     this.progressCallbacks.delete(analysisId);
+    // Clean up polling interval if it exists
+    const interval = this.pollingIntervals.get(analysisId);
+    if (interval) {
+      clearInterval(interval);
+      this.pollingIntervals.delete(analysisId);
+    }
   }
 
   private updateProgress(analysisId: string, progress: AnalysisProgress) {
     const callback = this.progressCallbacks.get(analysisId);
     if (callback) {
       callback(progress);
+    }
+  }
+
+  private startProgressPolling(sessionId: string) {
+    // Clear any existing polling interval for this session
+    const existingInterval = this.pollingIntervals.get(sessionId);
+    if (existingInterval) {
+      clearInterval(existingInterval);
+    }
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const session = await this.getAnalysisSession(sessionId);
+        if (session?.progress_data) {
+          this.updateProgress(sessionId, session.progress_data);
+        }
+
+        // Stop polling if analysis is completed or failed
+        if (session?.status === "completed" || session?.status === "failed") {
+          clearInterval(pollInterval);
+          this.pollingIntervals.delete(sessionId);
+        }
+      } catch (error) {
+        console.error("Progress polling error:", error);
+      }
+    }, 8000); // Poll every 2 seconds
+
+    // Store interval for cleanup
+    this.pollingIntervals.set(sessionId, pollInterval);
+
+    // 10-minute timeout protection
+    setTimeout(() => {
+      const interval = this.pollingIntervals.get(sessionId);
+      if (interval) {
+        clearInterval(interval);
+        this.pollingIntervals.delete(sessionId);
+        this.handleAnalysisTimeout(sessionId);
+      }
+    }, 1200000); // 20 minutes
+  }
+
+  private async handleAnalysisTimeout(sessionId: string) {
+    try {
+      // Mark analysis as failed due to timeout
+      await this.updateAnalysisSession(sessionId, {
+        status: "failed",
+        error_message: "Analysis timed out after 10 minutes",
+        completed_at: new Date().toISOString(),
+        progress_data: {
+          analysisId: sessionId,
+          status: "failed",
+          progress: 0,
+          currentStep: "Analysis timed out",
+          completedSteps: 0,
+          totalSteps: 1,
+          error: "Analysis timed out after 10 minutes. Please try again.",
+        },
+      });
+
+      // Update progress callback
+      this.updateProgress(sessionId, {
+        analysisId: sessionId,
+        status: "failed",
+        progress: 0,
+        currentStep: "Analysis timed out",
+        completedSteps: 0,
+        totalSteps: 1,
+        error: "Analysis timed out after 10 minutes. Please try again.",
+      });
+    } catch (error) {
+      console.error("Failed to handle analysis timeout:", error);
     }
   }
 

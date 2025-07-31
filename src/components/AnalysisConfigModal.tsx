@@ -206,6 +206,7 @@ export function AnalysisConfigModal({
       // Check if user can consume credits
       const canConsume = await consumeCredit();
       if (!canConsume) {
+        setIsLoading(false);
         return;
       }
       creditConsumed = true;
@@ -268,8 +269,6 @@ export function AnalysisConfigModal({
             handleClose();
           }, 2000);
         }
-
-        console.log("testing if this is running");
       });
 
       toast({
@@ -279,6 +278,14 @@ export function AnalysisConfigModal({
     } catch (error) {
       console.error("Failed to start analysis:", error);
 
+      // Clean up any partial state
+      if (currentAnalysisId) {
+        analysisService.unsubscribeFromProgress(currentAnalysisId);
+        setCurrentAnalysisId(null);
+      }
+      setAnalysisProgress(null);
+      setCurrentAnalysisSession(null);
+
       // If we consumed a credit but the operation failed, restore it
       if (creditConsumed) {
         console.log("Restoring credit due to failed analysis start");
@@ -287,7 +294,10 @@ export function AnalysisConfigModal({
 
       toast({
         title: "Error",
-        description: "Failed to start analysis. Please try again.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to start analysis. Please try again.",
         variant: "destructive",
       });
       setIsLoading(false);
