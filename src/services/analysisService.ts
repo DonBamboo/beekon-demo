@@ -101,16 +101,27 @@ export class AnalysisService {
       );
 
       // Create prompts for each topic
-      const promptIds = await this.createPrompts(
-        config.customPrompts,
-        topicIds
-      );
+      const prompts = await this.createPrompts(config.customPrompts, topicIds);
+
+      const promptIds = [];
+
+      for (const prompt of prompts) {
+        if (prompt.id) {
+          promptIds.push(prompt.id);
+        }
+      }
 
       // Start the analysis process
       await this.startAnalysis(analysisSession.id, config, promptIds);
 
       // Trigger N8N webhook for actual analysis
-      await this.triggerAnalysisWebhook(analysisSession.id, config);
+      await this.triggerAnalysisWebhook(
+        analysisSession.id,
+        config,
+        prompts,
+        topicIds,
+        workspaceId
+      );
 
       return analysisSession.id;
     } catch (error) {
@@ -161,13 +172,17 @@ export class AnalysisService {
   private async createPrompts(
     customPrompts: string[],
     topicIds: string[]
-  ): Promise<string[]> {
-    const promptIds: string[] = [];
+  ): Promise<{ id: string; prompt_text: string }[]> {
+    const prompts: { id: string; prompt_text: string }[] = [];
 
-    for (let i = 0; i < customPrompts.length; i++) {
-      const prompt = customPrompts[i];
-      const topicId = topicIds[i % topicIds.length]; // Cycle through topics
+    // Ensure we have exactly one topic (enforced by new constraint)
+    if (topicIds.length !== 1) {
+      throw new Error("Exactly one topic is required per analysis");
+    }
 
+    const topicId = topicIds[0]; // Single topic per analysis
+
+    for (const prompt of customPrompts) {
       const { data: newPrompt, error } = await supabase
         .schema("beekon_data")
         .from("prompts")
@@ -182,10 +197,10 @@ export class AnalysisService {
         .single();
 
       if (error) throw error;
-      promptIds.push(newPrompt.id);
+      prompts.push({ id: newPrompt.id, prompt_text: prompt });
     }
 
-    return promptIds;
+    return prompts;
   }
 
   private async createAnalysisSession(
@@ -216,19 +231,6 @@ export class AnalysisService {
       .single();
 
     if (error) throw error;
-
-    console.log("config", config);
-    console.log("workspaceId", workspaceId);
-
-    const response = await sendN8nWebhook("webhook/manually-added-analysis", {
-      workspaceId,
-      config,
-      userId,
-    });
-
-    if (!response.success) {
-      console.error("An error occurred" + response.messages);
-    }
 
     return data as unknown as AnalysisSession;
   }
@@ -265,17 +267,39 @@ export class AnalysisService {
 
   private async triggerAnalysisWebhook(
     sessionId: string,
-    config: AnalysisConfig
+    config: AnalysisConfig,
+    prompts: object[],
+    topicId: string[],
+    workspaceId: string
   ) {
     try {
       const webhookPayload = {
-        analysisId: sessionId,
         sessionId,
-        config,
+        config: {
+          websiteId: config.websiteId,
+          workspaceId: workspaceId,
+          topic: {
+            topicId: topicId[0],
+            topic: config.topics[0],
+          },
+          prompts: prompts,
+          priority: config.priority,
+          generateReport: config.generateReport,
+          includeCompetitors: config.includeCompetitors,
+          llmModels: config.llmModels,
+          scheduleAnalysis: config.scheduleAnalysis,
+        },
         timestamp: new Date().toISOString(),
       };
 
-      await sendN8nWebhook("analysis/start", webhookPayload);
+      const response = await sendN8nWebhook(
+        "webhook/manually-added-analysis",
+        webhookPayload
+      );
+
+      if (!response.success) {
+        console.error("An error occurred" + response.messages);
+      }
 
       const progressData = {
         analysisId: sessionId,
@@ -662,7 +686,7 @@ export class AnalysisService {
       return null;
     }
 
-    return data as AnalysisSession;
+    return data as unknown as AnalysisSession;
   }
 
   async getAnalysisSessionsForWebsite(
@@ -765,92 +789,208 @@ export class AnalysisService {
   }
 
   // Transform analysis results into clean, flattened export format
-  private transformAnalysisForExport(results: UIAnalysisResult[]): Record<string, unknown>[] {
+  private transformAnalysisForExport(
+    results: UIAnalysisResult[]
+  ): Record<string, unknown>[] {
     return results.flatMap((result) => {
       const exportRows: Record<string, unknown>[] = [];
-      
+
       // Analysis Information Section
       exportRows.push(
-        { category: "Analysis Info", metric: "Topic", value: result.topic, unit: "text" },
-        { category: "Analysis Info", metric: "Prompt", value: result.prompt, unit: "text" },
-        { category: "Analysis Info", metric: "Status", value: result.status, unit: "status" },
-        { category: "Analysis Info", metric: "Analysis Date", value: new Date(result.created_at).toLocaleDateString(), unit: "date" },
-        { category: "Analysis Info", metric: "Last Updated", value: new Date(result.updated_at).toLocaleDateString(), unit: "date" }
+        {
+          category: "Analysis Info",
+          metric: "Topic",
+          value: result.topic,
+          unit: "text",
+        },
+        {
+          category: "Analysis Info",
+          metric: "Prompt",
+          value: result.prompt,
+          unit: "text",
+        },
+        {
+          category: "Analysis Info",
+          metric: "Status",
+          value: result.status,
+          unit: "status",
+        },
+        {
+          category: "Analysis Info",
+          metric: "Analysis Date",
+          value: new Date(result.created_at).toLocaleDateString(),
+          unit: "date",
+        },
+        {
+          category: "Analysis Info",
+          metric: "Last Updated",
+          value: new Date(result.updated_at).toLocaleDateString(),
+          unit: "date",
+        }
       );
-      
+
       // Add analysis session info if available
       if (result.analysis_name) {
-        exportRows.push({ category: "Analysis Info", metric: "Analysis Session", value: result.analysis_name, unit: "text" });
+        exportRows.push({
+          category: "Analysis Info",
+          metric: "Analysis Session",
+          value: result.analysis_name,
+          unit: "text",
+        });
       }
-      
+
       // Performance Metrics Section
-      const mentionedCount = result.llm_results.filter(llm => llm.is_mentioned).length;
+      const mentionedCount = result.llm_results.filter(
+        (llm) => llm.is_mentioned
+      ).length;
       const totalProviders = result.llm_results.length;
-      const averageConfidence = result.llm_results.length > 0 
-        ? (result.llm_results.reduce((sum, llm) => sum + (llm.confidence_score || 0), 0) / result.llm_results.length * 100)
-        : 0;
-      const averageRank = result.llm_results.filter(llm => llm.rank_position !== null).length > 0
-        ? (result.llm_results.filter(llm => llm.rank_position !== null).reduce((sum, llm) => sum + (llm.rank_position || 0), 0) / result.llm_results.filter(llm => llm.rank_position !== null).length)
-        : 0;
-      const averageSentiment = result.llm_results.length > 0
-        ? (result.llm_results.reduce((sum, llm) => sum + (llm.sentiment_score || 0), 0) / result.llm_results.length * 100)
-        : 0;
-      
+      const averageConfidence =
+        result.llm_results.length > 0
+          ? (result.llm_results.reduce(
+              (sum, llm) => sum + (llm.confidence_score || 0),
+              0
+            ) /
+              result.llm_results.length) *
+            100
+          : 0;
+      const averageRank =
+        result.llm_results.filter((llm) => llm.rank_position !== null).length >
+        0
+          ? result.llm_results
+              .filter((llm) => llm.rank_position !== null)
+              .reduce((sum, llm) => sum + (llm.rank_position || 0), 0) /
+            result.llm_results.filter((llm) => llm.rank_position !== null)
+              .length
+          : 0;
+      const averageSentiment =
+        result.llm_results.length > 0
+          ? (result.llm_results.reduce(
+              (sum, llm) => sum + (llm.sentiment_score || 0),
+              0
+            ) /
+              result.llm_results.length) *
+            100
+          : 0;
+
       exportRows.push(
-        { category: "Performance", metric: "Overall Confidence", value: `${averageConfidence.toFixed(1)}%`, unit: "percentage" },
-        { category: "Performance", metric: "Mention Rate", value: `${mentionedCount} of ${totalProviders} providers`, unit: "ratio" },
-        { category: "Performance", metric: "Average Ranking", value: averageRank > 0 ? averageRank.toFixed(1) : "N/A", unit: "position" },
-        { category: "Performance", metric: "Average Sentiment", value: `${averageSentiment.toFixed(1)}%`, unit: "percentage" }
+        {
+          category: "Performance",
+          metric: "Overall Confidence",
+          value: `${averageConfidence.toFixed(1)}%`,
+          unit: "percentage",
+        },
+        {
+          category: "Performance",
+          metric: "Mention Rate",
+          value: `${mentionedCount} of ${totalProviders} providers`,
+          unit: "ratio",
+        },
+        {
+          category: "Performance",
+          metric: "Average Ranking",
+          value: averageRank > 0 ? averageRank.toFixed(1) : "N/A",
+          unit: "position",
+        },
+        {
+          category: "Performance",
+          metric: "Average Sentiment",
+          value: `${averageSentiment.toFixed(1)}%`,
+          unit: "percentage",
+        }
       );
-      
+
       // LLM Results Section
       result.llm_results.forEach((llmResult, index) => {
-        const mentionStatus = llmResult.is_mentioned ? "Mentioned" : "Not Mentioned";
-        const rankText = llmResult.rank_position ? `Rank ${llmResult.rank_position}` : "No ranking";
-        const confidenceText = `${((llmResult.confidence_score || 0) * 100).toFixed(1)}%`;
-        const sentimentText = `${((llmResult.sentiment_score || 0) * 100).toFixed(1)}%`;
-        
+        const mentionStatus = llmResult.is_mentioned
+          ? "Mentioned"
+          : "Not Mentioned";
+        const rankText = llmResult.rank_position
+          ? `Rank ${llmResult.rank_position}`
+          : "No ranking";
+        const confidenceText = `${(
+          (llmResult.confidence_score || 0) * 100
+        ).toFixed(1)}%`;
+        const sentimentText = `${(
+          (llmResult.sentiment_score || 0) * 100
+        ).toFixed(1)}%`;
+
         exportRows.push(
-          { category: "LLM Results", metric: `${llmResult.llm_provider} - Status`, value: mentionStatus, unit: "status" },
-          { category: "LLM Results", metric: `${llmResult.llm_provider} - Ranking`, value: rankText, unit: "position" },
-          { category: "LLM Results", metric: `${llmResult.llm_provider} - Confidence`, value: confidenceText, unit: "percentage" },
-          { category: "LLM Results", metric: `${llmResult.llm_provider} - Sentiment`, value: sentimentText, unit: "percentage" }
+          {
+            category: "LLM Results",
+            metric: `${llmResult.llm_provider} - Status`,
+            value: mentionStatus,
+            unit: "status",
+          },
+          {
+            category: "LLM Results",
+            metric: `${llmResult.llm_provider} - Ranking`,
+            value: rankText,
+            unit: "position",
+          },
+          {
+            category: "LLM Results",
+            metric: `${llmResult.llm_provider} - Confidence`,
+            value: confidenceText,
+            unit: "percentage",
+          },
+          {
+            category: "LLM Results",
+            metric: `${llmResult.llm_provider} - Sentiment`,
+            value: sentimentText,
+            unit: "percentage",
+          }
         );
-        
+
         // Add summary text if available (truncated for readability)
         if (llmResult.summary_text) {
-          const truncatedSummary = llmResult.summary_text.length > 100 
-            ? llmResult.summary_text.substring(0, 100) + "..." 
-            : llmResult.summary_text;
-          exportRows.push(
-            { category: "LLM Results", metric: `${llmResult.llm_provider} - Summary`, value: truncatedSummary, unit: "text" }
-          );
+          const truncatedSummary =
+            llmResult.summary_text.length > 100
+              ? llmResult.summary_text.substring(0, 100) + "..."
+              : llmResult.summary_text;
+          exportRows.push({
+            category: "LLM Results",
+            metric: `${llmResult.llm_provider} - Summary`,
+            value: truncatedSummary,
+            unit: "text",
+          });
         }
       });
-      
+
       // Insights Section
       if (result.prompt_strengths && result.prompt_strengths.length > 0) {
         result.prompt_strengths.forEach((strength, index) => {
-          exportRows.push(
-            { category: "Insights", metric: `Strength #${index + 1}`, value: strength, unit: "text" }
-          );
+          exportRows.push({
+            category: "Insights",
+            metric: `Strength #${index + 1}`,
+            value: strength,
+            unit: "text",
+          });
         });
       }
-      
-      if (result.prompt_opportunities && result.prompt_opportunities.length > 0) {
+
+      if (
+        result.prompt_opportunities &&
+        result.prompt_opportunities.length > 0
+      ) {
         result.prompt_opportunities.forEach((opportunity, index) => {
-          exportRows.push(
-            { category: "Insights", metric: `Opportunity #${index + 1}`, value: opportunity, unit: "text" }
-          );
+          exportRows.push({
+            category: "Insights",
+            metric: `Opportunity #${index + 1}`,
+            value: opportunity,
+            unit: "text",
+          });
         });
       }
-      
+
       if (result.recommendation_text) {
-        exportRows.push(
-          { category: "Insights", metric: "Recommendation", value: result.recommendation_text, unit: "text" }
-        );
+        exportRows.push({
+          category: "Insights",
+          metric: "Recommendation",
+          value: result.recommendation_text,
+          unit: "text",
+        });
       }
-      
+
       return exportRows;
     });
   }
@@ -887,7 +1027,7 @@ export class AnalysisService {
 
       // Transform data using the shared transformation function
       const results = this.transformAnalysisData(data);
-      
+
       // Transform to clean, flattened export format
       const exportFormattedData = this.transformAnalysisForExport(results);
 
