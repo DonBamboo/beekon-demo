@@ -41,14 +41,32 @@ export default function ShareOfVoiceChart({
   data,
   dateFilter,
 }: ShareOfVoiceChartProps) {
-  // Enhanced data processing
+  // Enhanced data processing with validation
   const chartData = useMemo(() => {
-    return data.map((item, index) => ({
-      ...item,
-      fill: item.name === "Your Brand" 
-        ? "hsl(var(--primary))" 
-        : `hsl(var(--chart-${(index % 4) + 2}))`,
-    }));
+    // Validate and sanitize data
+    const validatedData = data.map((item, index) => {
+      // Ensure value is a valid number and not negative
+      const sanitizedValue = Math.max(0, isNaN(item.value) ? 0 : item.value);
+      
+      return {
+        ...item,
+        value: sanitizedValue,
+        fill: item.name === "Your Brand" 
+          ? "hsl(var(--primary))" 
+          : `hsl(var(--chart-${(index % 4) + 2}))`,
+      };
+    });
+
+    // Check for total percentage validation
+    const totalPercentage = validatedData.reduce((sum, item) => sum + item.value, 0);
+    if (totalPercentage > 105) { // Allow 5% tolerance for rounding
+      console.warn('Share of Voice total exceeds 100%:', {
+        total: totalPercentage,
+        breakdown: validatedData.map(item => ({ name: item.name, value: item.value }))
+      });
+    }
+
+    return validatedData;
   }, [data]);
 
   // Calculate insights

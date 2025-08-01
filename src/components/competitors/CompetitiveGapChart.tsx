@@ -8,13 +8,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   BarChart,
   Bar,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   ResponsiveContainer,
   RadarChart,
   PolarGrid,
@@ -26,95 +27,107 @@ import {
   ScatterChart,
   Scatter,
 } from "recharts";
-import { TrendingUp, TrendingDown, Target, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, Target, AlertTriangle, Info } from "lucide-react";
 import { CompetitorAnalytics, type CompetitiveGapAnalysis } from "@/services/competitorService";
 import { useMemo } from "react";
+import { 
+  processGapAnalysis, 
+  generateOpportunityMatrix, 
+  generateGapSummary,
+  GAP_THRESHOLDS
+} from "@/lib/gap-analysis-utils";
 
 interface CompetitiveGapChartProps {
-  data: Array<Record<string, number | string>>;
-  analytics: CompetitorAnalytics | null;
   gapAnalysis: CompetitiveGapAnalysis[];
+  analytics: CompetitorAnalytics | null;
   dateFilter: "7d" | "30d" | "90d";
 }
 
 export default function CompetitiveGapChart({
-  data,
-  analytics,
   gapAnalysis,
+  analytics,
   dateFilter,
 }: CompetitiveGapChartProps) {
-  // Enhanced data processing
+  // Enhanced data processing using service-layer utilities
   const processedData = useMemo(() => {
     if (!gapAnalysis || gapAnalysis.length === 0) return null;
 
-    // Radar chart data
-    const radarData = gapAnalysis.map(gap => ({
-      topic: gap.topicName,
-      yourBrand: gap.yourBrandScore,
-      avgCompetitor: gap.competitorData.length > 0 
-        ? gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) / gap.competitorData.length
-        : 0,
-      topCompetitor: gap.competitorData.length > 0 
-        ? Math.max(...gap.competitorData.map(comp => comp.score))
-        : 0,
+    // Process gap analysis with service-layer utilities
+    const gapClassification = processGapAnalysis(gapAnalysis);
+    const opportunityMatrix = generateOpportunityMatrix(gapAnalysis);
+
+    // Generate chart data for visualization (individual competitors)
+    const validatedGapAnalysis = gapAnalysis.map(gap => ({
+      ...gap,
+      yourBrandScore: Math.max(0, Math.min(100, isNaN(gap.yourBrandScore) ? 0 : gap.yourBrandScore)),
+      competitorData: gap.competitorData.map(comp => ({
+        ...comp,
+        score: Math.max(0, Math.min(100, isNaN(comp.score) ? 0 : comp.score)),
+        totalMentions: Math.max(0, isNaN(comp.totalMentions) ? 0 : comp.totalMentions)
+      }))
     }));
 
-    // Gap analysis with classifications
-    const gapClassification = gapAnalysis.map(gap => {
-      const avgCompetitor = gap.competitorData.length > 0 
-        ? gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) / gap.competitorData.length
-        : 0;
-      const gapSize = gap.yourBrandScore - avgCompetitor;
-      
+    // Generate bar chart data with individual competitors
+    const barChartData = validatedGapAnalysis.map(gap => {
+      const data: Record<string, number | string> = {
+        topic: gap.topicName,
+        yourBrand: gap.yourBrandScore,
+      };
+      gap.competitorData.forEach((comp, index) => {
+        data[`competitor${index + 1}`] = comp.score;
+        data[`competitor${index + 1}_name`] = comp.competitor_name;
+      });
+      return data;
+    });
+
+    // Get all unique competitor keys for dynamic rendering
+    const competitorKeys = new Set<string>();
+    barChartData.forEach(item => {
+      Object.keys(item).forEach(key => {
+        if (key.startsWith('competitor') && key.endsWith('_name')) {
+          const competitorKey = key.replace('_name', '');
+          competitorKeys.add(competitorKey);
+        }
+      });
+    });
+
+    // Create competitor info array for rendering
+    const competitorInfo = Array.from(competitorKeys).map((key, index) => {
+      // Get competitor name from first data point that has this competitor
+      const sampleData = barChartData.find(item => item[`${key}_name`]);
       return {
-        ...gap,
-        avgCompetitor,
-        gapSize,
-        gapType: gapSize > 10 ? 'advantage' : gapSize < -10 ? 'opportunity' : 'competitive',
-        priority: Math.abs(gapSize) > 20 ? 'high' : Math.abs(gapSize) > 10 ? 'medium' : 'low',
+        key,
+        name: sampleData?.[`${key}_name`] as string || `Competitor ${index + 1}`,
+        colorIndex: (index % 4) + 2 // Use chart-2 to chart-5
       };
     });
 
-    // Opportunity matrix data
-    const opportunityMatrix = gapAnalysis.map(gap => ({
-      topic: gap.topicName,
-      x: gap.competitorData.length > 0 
-        ? gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) / gap.competitorData.length
-        : 0, // Market competitiveness
-      y: gap.yourBrandScore, // Your performance
-      size: gap.competitorData.reduce((sum, comp) => sum + comp.totalMentions, 0), // Market size
-    }));
+    // Radar chart data with individual competitors
+    const radarData = validatedGapAnalysis.map(gap => {
+      const data: Record<string, number | string> = {
+        topic: gap.topicName,
+        yourBrand: gap.yourBrandScore,
+      };
+      gap.competitorData.forEach((comp, index) => {
+        data[`competitor${index + 1}`] = comp.score;
+      });
+      return data;
+    });
 
     return {
+      barChartData,
+      competitorInfo,
       radarData,
       gapClassification,
       opportunityMatrix,
     };
   }, [gapAnalysis]);
 
-  // Calculate insights
+  // Calculate insights using service-layer utility
   const insights = useMemo(() => {
     if (!processedData) return null;
-
-    const opportunities = processedData.gapClassification.filter(gap => gap.gapType === 'opportunity');
-    const advantages = processedData.gapClassification.filter(gap => gap.gapType === 'advantage');
-    const highPriorityGaps = processedData.gapClassification.filter(gap => gap.priority === 'high');
-
-    return {
-      totalTopics: gapAnalysis.length,
-      opportunities: opportunities.length,
-      advantages: advantages.length,
-      highPriorityGaps: highPriorityGaps.length,
-      biggestOpportunity: opportunities.reduce((prev, current) => 
-        Math.abs(prev.gapSize) > Math.abs(current.gapSize) ? prev : current, 
-        opportunities[0]
-      ),
-      strongestAdvantage: advantages.reduce((prev, current) => 
-        prev.gapSize > current.gapSize ? prev : current, 
-        advantages[0]
-      ),
-    };
-  }, [processedData, gapAnalysis]);
+    return generateGapSummary(processedData.gapClassification);
+  }, [processedData]);
 
   // Only show chart if there are competitors and meaningful data
   if (!processedData || !analytics || analytics.totalCompetitors === 0) return null;
@@ -122,13 +135,22 @@ export default function CompetitiveGapChart({
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-background border rounded-lg p-3 shadow-md">
-          <p className="font-medium">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color }}>
-              {entry.name}: {entry.value.toFixed(1)}%
-            </p>
-          ))}
+        <div className="bg-background border rounded-lg p-3 shadow-md" role="tooltip">
+          <p className="font-medium mb-2" aria-label={`Topic: ${label}`}>{label}</p>
+          <div className="space-y-1">
+            {payload.map((entry: any, index: number) => (
+              <div key={index} className="flex items-center gap-2">
+                <div 
+                  className="w-3 h-3 rounded-sm" 
+                  style={{ backgroundColor: entry.color }}
+                  aria-hidden="true"
+                />
+                <span className="text-sm" aria-label={`${entry.name}: ${entry.value.toFixed(1)} percent`}>
+                  <span className="font-medium">{entry.name}:</span> {entry.value.toFixed(1)}%
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
@@ -179,63 +201,115 @@ export default function CompetitiveGapChart({
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={processedData.radarData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="topic" angle={-45} textAnchor="end" height={100} />
-                <YAxis domain={[0, 100]} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar
-                  dataKey="yourBrand"
-                  name="Your Brand"
-                  fill="hsl(var(--primary))"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="avgCompetitor"
-                  name="Avg. Competitor"
-                  fill="hsl(var(--chart-2))"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="topCompetitor"
-                  name="Top Competitor"
-                  fill="hsl(var(--chart-3))"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <div role="img" aria-label="Bar chart showing competitive gap analysis across topics">
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart 
+                  data={processedData.barChartData}
+                  accessibilityLayer
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="topic" 
+                    angle={-45} 
+                    textAnchor="end" 
+                    height={100}
+                    aria-label="Topics"
+                  />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    aria-label="Performance score percentage"
+                  />
+                  <RechartsTooltip content={<CustomTooltip />} />
+                  <Bar
+                    dataKey="yourBrand"
+                    name="Your Brand"
+                    fill="hsl(var(--primary))"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  {processedData.competitorInfo.map((competitor, index) => (
+                    <Bar
+                      key={competitor.key}
+                      dataKey={competitor.key}
+                      name={competitor.name}
+                      fill={`hsl(var(--chart-${competitor.colorIndex}))`}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </TabsContent>
 
           <TabsContent value="radar" className="space-y-4">
-            <ResponsiveContainer width="100%" height={400}>
-              <RadarChart data={processedData.radarData}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="topic" />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} />
-                <Radar
-                  name="Your Brand"
-                  dataKey="yourBrand"
-                  stroke="hsl(var(--primary))"
-                  fill="hsl(var(--primary))"
-                  fillOpacity={0.3}
-                />
-                <Radar
-                  name="Avg. Competitor"
-                  dataKey="avgCompetitor"
-                  stroke="hsl(var(--chart-2))"
-                  fill="hsl(var(--chart-2))"
-                  fillOpacity={0.3}
-                />
-                <Legend />
-                <Tooltip />
-              </RadarChart>
-            </ResponsiveContainer>
+            <div role="img" aria-label="Radar chart showing competitive performance across all topics">
+              <ResponsiveContainer width="100%" height={400}>
+                <RadarChart 
+                  data={processedData.radarData}
+                  accessibilityLayer
+                >
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="topic" />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} />
+                  <Radar
+                    name="Your Brand"
+                    dataKey="yourBrand"
+                    stroke="hsl(var(--primary))"
+                    fill="hsl(var(--primary))"
+                    fillOpacity={0.3}
+                  />
+                  {processedData.competitorInfo.map((competitor, index) => (
+                    <Radar
+                      key={competitor.key}
+                      name={competitor.name}
+                      dataKey={competitor.key}
+                      stroke={`hsl(var(--chart-${competitor.colorIndex}))`}
+                      fill={`hsl(var(--chart-${competitor.colorIndex}))`}
+                      fillOpacity={0.2}
+                    />
+                  ))}
+                  <Legend />
+                  <RechartsTooltip />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
           </TabsContent>
 
           <TabsContent value="gaps" className="space-y-4">
-            <div className="space-y-3">
-              {processedData.gapClassification.map((gap, index) => (
+            <TooltipProvider>
+              <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Gap Analysis Methodology</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm">
+                      <div className="text-xs space-y-2">
+                        <p>
+                          Gap scores compare your brand performance against the average of all competitors for each topic.
+                        </p>
+                        <div className="space-y-1">
+                          <p><strong>Classification:</strong></p>
+                          <p>• <span className="text-green-600">Advantage</span>: +15% or higher gap</p>
+                          <p>• <span className="text-orange-600">Opportunity</span>: -15% or lower gap</p>
+                          <p>• <span className="text-blue-600">Competitive</span>: Between -15% and +15%</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p><strong>Priority considers:</strong></p>
+                          <p>• Gap size, your performance level, and market competitiveness</p>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Showing gaps vs. <strong>average competitor performance</strong> across all topics. 
+                  Individual competitor details are shown in the Overview and Radar charts above.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {processedData.gapClassification.map((gap, index) => (
                 <div
                   key={index}
                   className={`p-4 rounded-lg border ${
@@ -273,57 +347,68 @@ export default function CompetitiveGapChart({
                         Gap: {gap.gapSize > 0 ? '+' : ''}{gap.gapSize.toFixed(1)}%
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        You: {gap.yourBrandScore.toFixed(1)}% | Avg: {gap.avgCompetitor.toFixed(1)}%
+                        You: {gap.yourBrandScore.toFixed(1)}% | Avg Competitor: {gap.avgCompetitor.toFixed(1)}%
                       </div>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
+          </TooltipProvider>
           </TabsContent>
 
           <TabsContent value="matrix" className="space-y-4">
             <div className="mb-4 p-3 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">
-                This matrix shows topics plotted by market competitiveness (x-axis) vs. your performance (y-axis). 
-                Bubble size represents total market mentions.
+                This matrix shows topics plotted by <strong>average market competitiveness</strong> (x-axis) vs. your performance (y-axis). 
+                Bubble size represents total market mentions across all competitors.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Market competitiveness is calculated as the average performance of all competitors for each topic.
               </p>
             </div>
-            <ResponsiveContainer width="100%" height={400}>
-              <ScatterChart data={processedData.opportunityMatrix}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  type="number" 
-                  dataKey="x" 
-                  domain={[0, 100]}
-                  name="Market Competitiveness"
-                  label={{ value: 'Market Competitiveness (%)', position: 'insideBottom', offset: -5 }}
-                />
-                <YAxis 
-                  type="number" 
-                  dataKey="y" 
-                  domain={[0, 100]}
-                  name="Your Performance"
-                  label={{ value: 'Your Performance (%)', angle: -90, position: 'insideLeft' }}
-                />
-                <Tooltip 
-                  formatter={(value, name) => [
-                    name === 'size' ? `${value} mentions` : `${value}%`,
-                    name === 'x' ? 'Market Competitiveness' : 
-                    name === 'y' ? 'Your Performance' : 'Market Size'
-                  ]}
-                  labelFormatter={(label, payload) => {
-                    const data = payload?.[0]?.payload;
-                    return data ? `Topic: ${data.topic}` : label;
-                  }}
-                />
-                <Scatter name="Topics" dataKey="y" fill="hsl(var(--primary))">
-                  {processedData.opportunityMatrix.map((entry, index) => (
-                    <Cell key={`cell-${index}`} />
-                  ))}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
+            <div role="img" aria-label="Opportunity matrix scatter chart showing topics by market competitiveness versus your performance">
+              <ResponsiveContainer width="100%" height={400}>
+                <ScatterChart 
+                  data={processedData.opportunityMatrix}
+                  accessibilityLayer
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    type="number" 
+                    dataKey="x" 
+                    domain={[0, 100]}
+                    name="Market Competitiveness"
+                    aria-label="Market Competitiveness percentage"
+                    label={{ value: 'Market Competitiveness (%)', position: 'insideBottom', offset: -5 }}
+                  />
+                  <YAxis 
+                    type="number" 
+                    dataKey="y" 
+                    domain={[0, 100]}
+                    name="Your Performance"
+                    aria-label="Your Performance percentage"
+                    label={{ value: 'Your Performance (%)', angle: -90, position: 'insideLeft' }}
+                  />
+                  <RechartsTooltip 
+                    formatter={(value, name) => [
+                      name === 'size' ? `${value} mentions` : `${value}%`,
+                      name === 'x' ? 'Market Competitiveness' : 
+                      name === 'y' ? 'Your Performance' : 'Market Size'
+                    ]}
+                    labelFormatter={(label, payload) => {
+                      const data = payload?.[0]?.payload;
+                      return data ? `Topic: ${data.topic}` : label;
+                    }}
+                  />
+                  <Scatter name="Topics" dataKey="y" fill="hsl(var(--primary))">
+                    {processedData.opportunityMatrix.map((entry, index) => (
+                      <Cell key={`cell-${index}`} />
+                    ))}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
           </TabsContent>
         </Tabs>
 

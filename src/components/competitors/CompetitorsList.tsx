@@ -6,8 +6,15 @@ import { Globe, MoreHorizontal, Trash2, TrendingUp, TrendingDown, Clock, Loader2
 import { CompetitorPerformance } from '@/services/competitorService';
 import { CompetitorWithStatus } from '@/hooks/useCompetitorsQuery';
 
+interface MarketShareItem {
+  name: string;
+  value: number;
+  competitorId?: string;
+}
+
 interface CompetitorsListProps {
   competitorsWithStatus: CompetitorWithStatus[];
+  marketShareData: MarketShareItem[];
   performance: CompetitorPerformance[];
   sortBy: 'shareOfVoice' | 'averageRank' | 'mentionCount' | 'sentimentScore';
   confirmDelete: (competitorId: string) => void;
@@ -16,11 +23,33 @@ interface CompetitorsListProps {
 
 export default function CompetitorsList({
   competitorsWithStatus,
+  marketShareData,
   performance,
   sortBy,
   confirmDelete,
   isDeleting = false,
 }: CompetitorsListProps) {
+  // Helper function to get market share for a competitor
+  const getCompetitorMarketShare = (competitorId: string, competitorName: string): number => {
+    // First try to find by competitor ID
+    const byId = marketShareData.find(item => item.competitorId === competitorId);
+    if (byId) return byId.value;
+    
+    // Fallback to matching by name (excluding "Your Brand")
+    const byName = marketShareData.find(item => 
+      item.name !== "Your Brand" && 
+      (item.name === competitorName || item.name.includes(competitorName))
+    );
+    if (byName) return byName.value;
+    
+    return 0; // Default if not found
+  };
+
+  // Helper function to get performance data for other metrics
+  const getCompetitorPerformance = (competitorId: string): CompetitorPerformance | undefined => {
+    return performance.find(p => p.competitorId === competitorId);
+  };
+
   const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
     switch (trend) {
       case 'up':
@@ -72,10 +101,17 @@ export default function CompetitorsList({
       <CardContent>
         <div className="space-y-4">
           {competitorsWithStatus.map((competitor) => {
-            const performanceData = competitor.performance;
+            // Get unified data sources
+            const performanceData = getCompetitorPerformance(competitor.id) || competitor.performance;
+            const marketShareValue = getCompetitorMarketShare(competitor.id, competitor.competitor_name || competitor.competitor_domain);
             const TrendIcon = performanceData ? getTrendIcon(performanceData.trend) : () => <div className="w-5 h-5" />;
             const statusBadge = getAnalysisStatusBadge(competitor.analysisStatus);
             const isAnalyzed = competitor.analysisStatus === 'completed';
+            
+            // Debug logging for rank data
+            if (performanceData?.averageRank !== null && performanceData?.averageRank !== undefined) {
+              console.log(`[DEBUG Frontend] Competitor ${competitor.competitor_name || competitor.competitor_domain}: averageRank=${performanceData.averageRank}, isAnalyzed=${isAnalyzed}`);
+            }
             
             return (
               <div key={competitor.id} className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors ${!isAnalyzed ? 'opacity-75' : ''}`}>
@@ -109,14 +145,16 @@ export default function CompetitorsList({
                   <div className="text-center">
                     <div className="text-sm text-muted-foreground">Share of Voice</div>
                     <div className={`font-medium text-lg ${!isAnalyzed ? 'text-muted-foreground' : ''}`}>
-                      {performanceData?.shareOfVoice ?? 0}%
+                      {marketShareValue.toFixed(1)}%
                     </div>
                   </div>
                   
                   <div className="text-center">
                     <div className="text-sm text-muted-foreground">Avg Rank</div>
                     <div className={`font-medium text-lg ${!isAnalyzed ? 'text-muted-foreground' : ''}`}>
-                      {performanceData?.averageRank && performanceData.averageRank > 0 ? performanceData.averageRank.toFixed(1) : 'N/A'}
+                      {performanceData?.averageRank !== null && performanceData?.averageRank !== undefined && performanceData.averageRank > 0 
+                        ? performanceData.averageRank.toFixed(1) 
+                        : 'N/A'}
                     </div>
                   </div>
                   

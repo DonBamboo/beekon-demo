@@ -22,7 +22,7 @@ import {
   Shield,
 } from "lucide-react";
 import { type CompetitorInsight } from "@/services/competitorAnalysisService";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 interface CompetitorInsightsProps {
   insights: CompetitorInsight[];
@@ -35,6 +35,17 @@ export default function CompetitorInsights({
   isLoading = false,
   onRefresh,
 }: CompetitorInsightsProps) {
+  // State for expanding collapsed sections
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+
+  // Helper function to toggle section expansion
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }));
+  };
+
   // Process insights by type and priority
   const processedInsights = useMemo(() => {
     const grouped = {
@@ -303,14 +314,24 @@ export default function CompetitorInsights({
                     </p>
                     {insight.recommendations.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {insight.recommendations.slice(0, 2).map((rec, recIndex) => (
+                        {(expandedSections[`opportunity-${index}`] 
+                          ? insight.recommendations 
+                          : insight.recommendations.slice(0, 2)
+                        ).map((rec, recIndex) => (
                           <Badge key={recIndex} variant="outline" className="text-xs">
                             {rec}
                           </Badge>
                         ))}
                         {insight.recommendations.length > 2 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{insight.recommendations.length - 2} more
+                          <Badge 
+                            variant="outline" 
+                            className="text-xs cursor-pointer hover:bg-muted transition-colors"
+                            onClick={() => toggleSection(`opportunity-${index}`)}
+                          >
+                            {expandedSections[`opportunity-${index}`] 
+                              ? 'Show less' 
+                              : `+${insight.recommendations.length - 2} more`
+                            }
                           </Badge>
                         )}
                       </div>
@@ -345,14 +366,24 @@ export default function CompetitorInsights({
                     </p>
                     {insight.recommendations.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {insight.recommendations.slice(0, 2).map((rec, recIndex) => (
+                        {(expandedSections[`threat-${index}`] 
+                          ? insight.recommendations 
+                          : insight.recommendations.slice(0, 2)
+                        ).map((rec, recIndex) => (
                           <Badge key={recIndex} variant="outline" className="text-xs">
                             {rec}
                           </Badge>
                         ))}
                         {insight.recommendations.length > 2 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{insight.recommendations.length - 2} more
+                          <Badge 
+                            variant="outline" 
+                            className="text-xs cursor-pointer hover:bg-muted transition-colors"
+                            onClick={() => toggleSection(`threat-${index}`)}
+                          >
+                            {expandedSections[`threat-${index}`] 
+                              ? 'Show less' 
+                              : `+${insight.recommendations.length - 2} more`
+                            }
                           </Badge>
                         )}
                       </div>
