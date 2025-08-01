@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   ResponsiveContainer,
   RadarChart,
   PolarGrid,
@@ -219,7 +219,7 @@ export default function CompetitiveGapChart({
                     domain={[0, 100]} 
                     aria-label="Performance score percentage"
                   />
-                  <Tooltip content={<CustomTooltip />} />
+                  <RechartsTooltip content={<CustomTooltip />} />
                   <Bar
                     dataKey="yourBrand"
                     name="Your Brand"
@@ -268,7 +268,7 @@ export default function CompetitiveGapChart({
                     />
                   ))}
                   <Legend />
-                  <Tooltip />
+                  <RechartsTooltip />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
@@ -390,7 +390,7 @@ export default function CompetitiveGapChart({
                     aria-label="Your Performance percentage"
                     label={{ value: 'Your Performance (%)', angle: -90, position: 'insideLeft' }}
                   />
-                  <Tooltip 
+                  <RechartsTooltip 
                     formatter={(value, name) => [
                       name === 'size' ? `${value} mentions` : `${value}%`,
                       name === 'x' ? 'Market Competitiveness' : 
