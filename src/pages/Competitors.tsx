@@ -22,6 +22,7 @@ import NoAnalyticsState from "@/components/competitors/NoAnalyticsState";
 import CompetitorInsights from "@/components/competitors/CompetitorInsights";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { addProtocol } from "@/lib/utils";
+import { getCompetitorColor, getYourBrandColor } from "@/lib/color-utils";
 
 export default function Competitors() {
   const {
@@ -99,15 +100,13 @@ export default function Competitors() {
   // Prepare chart data from analytics (memoized to prevent unnecessary recalculations)
   const shareOfVoiceData = useMemo(() => {
     return (
-      analytics?.marketShareData.map((item) => ({
+      analytics?.marketShareData.map((item, index) => ({
         name: item.name,
         value: item.value,
         fill:
           item.name === "Your Brand"
-            ? "hsl(var(--primary))"
-            : item.competitorId
-            ? `hsl(var(--chart-${(item.competitorId.length % 4) + 2}))`
-            : "hsl(var(--muted))",
+            ? getYourBrandColor()
+            : getCompetitorColor(item.competitorId, item.name, index),
       })) || []
     );
   }, [analytics?.marketShareData]);

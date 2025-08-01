@@ -22,6 +22,8 @@ import {
 } from "recharts";
 import { Info, TrendingUp, Award } from "lucide-react";
 import { useMemo } from "react";
+import { getCompetitorColor, getYourBrandColor, getColorInfo, getCompetitorColorIndex } from "@/lib/color-utils";
+import { ColorLegend } from "@/components/ui/color-indicator";
 
 interface ShareOfVoiceData {
   name: string;
@@ -52,8 +54,8 @@ export default function ShareOfVoiceChart({
         ...item,
         value: sanitizedValue,
         fill: item.name === "Your Brand" 
-          ? "hsl(var(--primary))" 
-          : `hsl(var(--chart-${(index % 4) + 2}))`,
+          ? getYourBrandColor()
+          : getCompetitorColor(undefined, item.name, index),
       };
     });
 
@@ -220,6 +222,26 @@ export default function ShareOfVoiceChart({
               </PieChart>
             </ResponsiveContainer>
           </div>
+        </div>
+
+        {/* Color Legend for Accessibility */}
+        <div className="mt-4 p-3 bg-muted/30 rounded-lg">
+          <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            Color Legend
+          </h4>
+          <ColorLegend 
+            items={chartData.map((item, index) => ({
+              name: item.name,
+              color: item.fill,
+              colorName: item.name === "Your Brand" 
+                ? "Primary" 
+                : (() => {
+                    const colorIndex = getCompetitorColorIndex(undefined, item.name, index);
+                    return getColorInfo(colorIndex).name;
+                  })()
+            }))}
+          />
         </div>
 
         {/* Competitive Insights */}

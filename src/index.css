@@ -38,12 +38,17 @@
     --warning: 38 92% 50%;            /* orange */
     --warning-foreground: 0 0% 98%;
     
-    /* Chart Colors - Monochrome with subtle variations */
+    /* Chart Colors - Accessible, colorblind-friendly palette */
     --chart-1: 222 84% 11%;           /* primary dark */
-    --chart-2: 220 9% 46%;            /* medium gray */
-    --chart-3: 220 9% 26%;            /* darker gray */
-    --chart-4: 220 13% 69%;           /* light gray */
-    --chart-5: 0 0% 0%;               /* black */
+    --chart-2: 210 100% 50%;          /* bright blue */
+    --chart-3: 120 100% 35%;          /* forest green */
+    --chart-4: 30 100% 50%;           /* orange */
+    --chart-5: 300 100% 40%;          /* purple */
+    --chart-6: 0 100% 50%;            /* red */
+    --chart-7: 180 100% 35%;          /* teal */
+    --chart-8: 270 100% 50%;          /* violet */
+    --chart-9: 45 100% 45%;           /* amber */
+    --chart-10: 340 100% 45%;         /* pink */
   }
 
   .dark {
@@ -69,12 +74,17 @@
     --warning: 38 92% 50%;            /* orange */
     --warning-foreground: 0 0% 98%;
     
-    /* Chart Colors - Dark mode variations */
+    /* Chart Colors - Dark mode accessible palette */
     --chart-1: 0 0% 98%;              /* white */
-    --chart-2: 0 0% 65%;              /* light gray */
-    --chart-3: 0 0% 45%;              /* medium gray */
-    --chart-4: 0 0% 25%;              /* dark gray */
-    --chart-5: 222 84% 21%;           /* accent dark */
+    --chart-2: 210 100% 70%;          /* bright blue */
+    --chart-3: 120 100% 60%;          /* bright green */
+    --chart-4: 30 100% 70%;           /* bright orange */ 
+    --chart-5: 300 100% 70%;          /* bright purple */
+    --chart-6: 0 100% 70%;            /* bright red */
+    --chart-7: 180 100% 60%;          /* bright teal */
+    --chart-8: 270 100% 75%;          /* bright violet */
+    --chart-9: 45 100% 70%;           /* bright amber */
+    --chart-10: 340 100% 70%;         /* bright pink */
   }
 }
 
