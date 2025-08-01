@@ -34,7 +34,7 @@ export interface CompetitiveGapAnalysis {
   yourBrandScore: number;
   competitorData: Array<{
     competitorId: string;
-    competitorName: string;
+    competitor_name: string;
     competitorDomain: string;
     score: number;
     avgRankPosition: number | null;
@@ -124,11 +124,11 @@ export class CompetitorAnalysisService extends BaseService {
 
       const result = data[0];
       return {
-        isMentioned: result.is_mentioned,
-        rankPosition: result.rank_position,
-        sentimentScore: result.sentiment_score,
-        confidenceScore: result.confidence_score,
-        summaryText: result.summary_text,
+        isMentioned: result!.is_mentioned,
+        rankPosition: result!.rank_position,
+        sentimentScore: result!.sentiment_score,
+        confidenceScore: result!.confidence_score,
+        summaryText: result!.summary_text,
       };
     } catch (error) {
       console.error("Error analyzing competitor mentions:", error);
@@ -364,7 +364,7 @@ export class CompetitorAnalysisService extends BaseService {
           description: `Your brand scores ${topic.yourBrandScore.toFixed(
             1
           )}% vs ${
-            topCompetitor.competitorName
+            topCompetitor.competitor_name
           }'s ${topCompetitor.score.toFixed(1)}%`,
           impact: topic.yourBrandScore < 20 ? "high" : "medium",
           topicId: topic.topicId,
@@ -574,7 +574,7 @@ export class CompetitorAnalysisService extends BaseService {
   private async getHistoricalTrends(
     websiteId: string,
     dateRange?: { start: string; end: string }
-  ): Promise<any[]> {
+  ): Promise<unknown[]> {
     try {
       // Get historical share of voice data for trend analysis
       const thirtyDaysAgo = new Date(
@@ -606,15 +606,15 @@ export class CompetitorAnalysisService extends BaseService {
    * Calculate position change based on historical data
    */
   private calculatePositionChange(
-    historicalData: any[],
+    historicalData: unknown[],
     currentShare: number
   ): number {
     if (!historicalData || historicalData.length < 2) return 0;
 
-    const [current, previous] = historicalData;
-    const previousYourBrand = previous.find(
-      (comp: any) => comp.competitorName === "Your Brand"
-    );
+    const [_, previous] = historicalData;
+    const previousYourBrand = (
+      previous as Array<{ competitorName: string; shareOfVoice: number }>
+    ).find((comp) => comp.competitorName === "Your Brand");
 
     if (!previousYourBrand) return 0;
 
