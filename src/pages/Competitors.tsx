@@ -98,11 +98,18 @@ export default function Competitors() {
   const clearError = () => {}; // Errors clear automatically in React Query
 
   // Prepare chart data from analytics (memoized to prevent unnecessary recalculations)
-  const shareOfVoiceData = useMemo(() => {
+  // Market Share Data (normalized percentages)
+  const marketShareChartData = useMemo(() => {
     return (
       analytics?.marketShareData.map((item, index) => ({
         name: item.name,
-        value: item.value,
+        value: item.normalizedValue, // Use normalized value for display
+        normalizedValue: item.normalizedValue,
+        rawValue: item.rawValue,
+        mentions: item.mentions,
+        avgRank: item.avgRank,
+        competitorId: item.competitorId,
+        dataType: item.dataType,
         fill:
           item.name === "Your Brand"
             ? getYourBrandColor()
@@ -110,6 +117,26 @@ export default function Competitors() {
       })) || []
     );
   }, [analytics?.marketShareData]);
+
+  // Share of Voice Data (raw percentages)
+  const shareOfVoiceChartData = useMemo(() => {
+    return (
+      analytics?.shareOfVoiceData.map((item, index) => ({
+        name: item.name,
+        value: item.shareOfVoice, // Use raw share of voice percentage
+        shareOfVoice: item.shareOfVoice,
+        totalMentions: item.totalMentions,
+        totalAnalyses: item.totalAnalyses,
+        avgRank: item.avgRank,
+        competitorId: item.competitorId,
+        dataType: item.dataType,
+        fill:
+          item.name === "Your Brand"
+            ? getYourBrandColor()
+            : getCompetitorColor(item.competitorId, item.name, index),
+      })) || []
+    );
+  }, [analytics?.shareOfVoiceData]);
 
   // Use gapAnalysis as the single source of truth for competitive gap data
   const competitiveGapData = useMemo(() => {
@@ -394,8 +421,9 @@ export default function Competitors() {
 
         {/* Share of Voice Chart */}
         <ShareOfVoiceChart
-          data={shareOfVoiceData}
+          data={shareOfVoiceChartData}
           dateFilter={dateFilter}
+          chartType="share_of_voice"
         />
 
         {/* Competitors List */}
@@ -431,7 +459,7 @@ export default function Competitors() {
         )}
 
         {/* Empty Charts State */}
-        {hasData && shareOfVoiceData.length === 0 && (
+        {hasData && shareOfVoiceChartData.length === 0 && (
           <NoAnalyticsState
             refreshData={refreshData}
             isRefreshing={isRefreshing}

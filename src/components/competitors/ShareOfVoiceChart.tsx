@@ -20,7 +20,7 @@ import {
   Pie,
   Legend,
 } from "recharts";
-import { Info, TrendingUp, Award } from "lucide-react";
+import { Info, TrendingUp, Award, AlertTriangle, CheckCircle } from "lucide-react";
 import { useMemo } from "react";
 import { getCompetitorColor, getYourBrandColor, getColorInfo, getCompetitorColorIndex } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
@@ -32,16 +32,29 @@ interface ShareOfVoiceData {
   competitorId?: string;
   mentions?: number;
   avgRank?: number;
+  dataType?: 'market_share' | 'share_of_voice';
+  // For market share data
+  normalizedValue?: number;
+  rawValue?: number;
+  // For share of voice data
+  shareOfVoice?: number;
+  totalMentions?: number;
+  totalAnalyses?: number;
+  // For grouped data
+  isOthersGroup?: boolean;
+  competitors?: ShareOfVoiceData[];
 }
 
 interface ShareOfVoiceChartProps {
   data: ShareOfVoiceData[];
   dateFilter: "7d" | "30d" | "90d";
+  chartType?: 'market_share' | 'share_of_voice'; // New prop to specify chart type
 }
 
 export default function ShareOfVoiceChart({
   data,
   dateFilter,
+  chartType = 'share_of_voice', // Default to share of voice for backward compatibility
 }: ShareOfVoiceChartProps) {
   // Enhanced data processing with validation
   const chartData = useMemo(() => {
@@ -89,6 +102,73 @@ export default function ShareOfVoiceChart({
     };
   }, [data]);
 
+  // Process data for better visualization
+  const processedChartData = useMemo(() => {
+    const sortedData = [...chartData].sort((a, b) => b.value - a.value);
+    const minSegmentSize = 5; // Minimum 5% to show individually
+    
+    const mainCompetitors = sortedData.filter(item => item.value >= minSegmentSize);
+    const smallCompetitors = sortedData.filter(item => item.value < minSegmentSize);
+    
+    let result = [...mainCompetitors];
+    
+    // Group small competitors into "Others" if there are any
+    if (smallCompetitors.length > 0) {
+      const othersTotal = smallCompetitors.reduce((sum, item) => sum + item.value, 0);
+      if (othersTotal > 0) {
+        result.push({
+          name: `Others (${smallCompetitors.length})`,
+          value: othersTotal,
+          fill: '#94a3b8', // Neutral gray color
+          isOthersGroup: true,
+          competitors: smallCompetitors
+        });
+      }
+    }
+    
+    return result;
+  }, [chartData]);
+  
+  // Data validation and quality checks
+  const dataQuality = useMemo(() => {
+    const issues: string[] = [];
+    const warnings: string[] = [];
+    const totalValue = data.reduce((sum, item) => sum + item.value, 0);
+    
+    // Check for data consistency issues
+    if (chartType === 'market_share') {
+      if (totalValue > 105) {
+        issues.push(`Market share total exceeds 100%: ${totalValue.toFixed(1)}%`);
+      } else if (totalValue < 95) {
+        warnings.push(`Market share total below 95%: ${totalValue.toFixed(1)}%`);
+      }
+    } else {
+      // For share of voice, totals can vary more widely
+      if (totalValue > 200) {
+        warnings.push(`Share of voice total unusually high: ${totalValue.toFixed(1)}%`);
+      }
+    }
+    
+    // Check for missing competitor data
+    const hasYourBrand = data.some(item => item.name === "Your Brand");
+    if (!hasYourBrand) {
+      issues.push("Your Brand data is missing");
+    }
+    
+    // Check for zero values that might indicate data issues
+    const zeroValueCompetitors = data.filter(item => item.value === 0).length;
+    if (zeroValueCompetitors > 0) {
+      warnings.push(`${zeroValueCompetitors} competitor(s) have zero values`);
+    }
+    
+    return {
+      issues,
+      warnings,
+      isValid: issues.length === 0,
+      totalValue,
+    };
+  }, [data, chartType]);
+  
   // Only show chart if there are competitors to compare against
   const hasCompetitors = data.length > 1 || (data.length === 1 && data[0].name !== "Your Brand");
   
@@ -97,15 +177,28 @@ export default function ShareOfVoiceChart({
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const isMarketShare = chartType === 'market_share';
+      const displayValue = payload[0].value;
+      
       return (
         <div className="bg-background border rounded-lg p-3 shadow-md">
           <p className="font-medium">{label}</p>
           <p className="text-primary">
-            Share of Voice: <span className="font-bold">{payload[0].value}%</span>
+            {isMarketShare ? 'Market Share' : 'Share of Voice'}: <span className="font-bold">{displayValue}%</span>
           </p>
-          {data.mentions && (
+          {isMarketShare && data.rawValue !== undefined && (
             <p className="text-sm text-muted-foreground">
-              Mentions: {data.mentions}
+              Raw Share: {data.rawValue.toFixed(1)}%
+            </p>
+          )}
+          {(data.mentions || data.totalMentions) && (
+            <p className="text-sm text-muted-foreground">
+              Mentions: {data.mentions || data.totalMentions}
+            </p>
+          )}
+          {data.totalAnalyses && chartType === 'share_of_voice' && (
+            <p className="text-sm text-muted-foreground">
+              Total Analyses: {data.totalAnalyses}
             </p>
           )}
           {data.avgRank && (
@@ -125,7 +218,7 @@ export default function ShareOfVoiceChart({
         <div className="flex justify-between items-center">
           <div>
             <CardTitle className="flex items-center gap-2">
-              Share of Voice Comparison
+              {chartType === 'market_share' ? 'Market Share Analysis' : 'Share of Voice Comparison'}
               {insights.isLeading && (
                 <Badge variant="outline" className="text-success border-success">
                   <Award className="h-3 w-3 mr-1" />
@@ -134,64 +227,308 @@ export default function ShareOfVoiceChart({
               )}
             </CardTitle>
             <CardDescription>
-              How your brand compares to competitors in AI responses (last{" "}
-              {dateFilter})
+              {chartType === 'market_share' 
+                ? `Normalized market share distribution across competitors (last ${dateFilter})`
+                : `Share of total mentions - what percentage of all brand mentions does each competitor represent (last ${dateFilter})`
+              }
+              {!dataQuality.isValid && (
+                <span className="ml-2 text-destructive text-xs">
+                  ⚠ Data quality issues detected
+                </span>
+              )}
             </CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        {/* Insights Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-primary">
-              {insights.yourBrandShare.toFixed(1)}%
-            </div>
-            <div className="text-sm text-muted-foreground">Your Share</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold">
-              {insights.competitorCount}
-            </div>
-            <div className="text-sm text-muted-foreground">Competitors</div>
-          </div>
-          {insights.leader && (
-            <div className="text-center">
-              <div className="text-2xl font-bold">
-                {insights.leader.value.toFixed(1)}%
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {insights.leader.name} (Leader)
-              </div>
-            </div>
-          )}
-          <div className="text-center">
-            <div className="text-2xl font-bold flex items-center justify-center gap-1">
-              {insights.isLeading ? (
-                <TrendingUp className="h-5 w-5 text-success" />
+        {/* Data Quality Indicator */}
+        {(dataQuality.issues.length > 0 || dataQuality.warnings.length > 0) && (
+          <div className="mb-4 p-3 rounded-lg border">
+            <div className="flex items-center gap-2 mb-2">
+              {dataQuality.isValid ? (
+                <CheckCircle className="h-4 w-4 text-orange-500" />
               ) : (
-                <TrendingUp className="h-5 w-5 text-muted-foreground" />
+                <AlertTriangle className="h-4 w-4 text-destructive" />
               )}
-              {insights.isLeading ? "1st" : "Behind"}
+              <span className="text-sm font-medium">
+                {dataQuality.isValid ? 'Data Quality Warning' : 'Data Quality Issue'}
+              </span>
             </div>
-            <div className="text-sm text-muted-foreground">Position</div>
+            {dataQuality.issues.length > 0 && (
+              <div className="space-y-1">
+                {dataQuality.issues.map((issue, index) => (
+                  <p key={index} className="text-sm text-destructive">
+                    • {issue}
+                  </p>
+                ))}
+              </div>
+            )}
+            {dataQuality.warnings.length > 0 && (
+              <div className="space-y-1">
+                {dataQuality.warnings.map((warning, index) => (
+                  <p key={index} className="text-sm text-orange-600">
+                    • {warning}
+                  </p>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-2">
+              Total {chartType === 'market_share' ? 'Market Share' : 'Share of Voice'}: {dataQuality.totalValue.toFixed(1)}%
+            </p>
+          </div>
+        )}
+
+        {/* Consolidated Share of Voice Overview */}
+        <div className="mb-6 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          {/* Header with key metrics */}
+          <div className="p-6 bg-white/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg">
+                  <Award className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {chartType === 'market_share' ? 'Market Share Overview' : 'Share of Voice Overview'}
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    {chartType === 'market_share' 
+                      ? 'Your competitive position in the market'
+                      : 'Your share of total brand mentions'
+                    }
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                  {insights.yourBrandShare.toFixed(1)}%
+                </div>
+                <div className="text-sm text-slate-600 dark:text-slate-400">Your Share</div>
+                <div className={`inline-flex items-center gap-1 mt-1 px-2 py-1 rounded-full text-xs font-medium ${
+                  insights.isLeading 
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
+                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                }`}>
+                  {insights.isLeading ? (
+                    <>
+                      <TrendingUp className="h-3 w-3" />
+                      #1 Leader 🏆
+                    </>
+                  ) : (
+                    <>
+                      <TrendingUp className="h-3 w-3" />
+                      Behind Leader
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Quick stats row */}
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                  {insights.competitorCount}
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Competitors</div>
+              </div>
+              {insights.leader && (
+                <div>
+                  <div className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                    {insights.leader.value.toFixed(1)}%
+                  </div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Top Competitor</div>
+                </div>
+              )}
+              <div>
+                <div className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                  {Math.round(data.reduce((sum, item) => sum + (item.totalMentions || 0), 0))}
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Total Mentions</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Enhanced Stacked Bar Visualization */}
+          <div className="p-6 space-y-4">
+            {/* Main stacked bar */}
+            <div className="relative">
+              <div 
+                className="flex h-16 rounded-xl overflow-hidden shadow-sm border border-slate-300 dark:border-slate-600"
+                role="img"
+                aria-label={`Share of voice distribution: ${processedChartData.map(item => `${item.name} ${item.value.toFixed(1)}%`).join(', ')}`}
+              >
+                {processedChartData.map((item, index) => {
+                  const width = Math.max(item.value, 1); // Minimum 1% for visibility
+                  const isYourBrand = item.name === "Your Brand";
+                  const isOthers = item.isOthersGroup;
+                  
+                  return (
+                    <div
+                      key={index}
+                      className="relative group cursor-pointer transition-all duration-300 hover:brightness-110 hover:scale-y-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      style={{
+                        background: isYourBrand 
+                          ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)'
+                          : isOthers
+                          ? 'linear-gradient(135deg, #94a3b8, #64748b)'
+                          : `linear-gradient(135deg, ${item.fill}, ${item.fill}dd)`,
+                        width: `${width}%`,
+                        minWidth: '20px' // Minimum width for visibility
+                      }}
+                      title={isOthers 
+                        ? `${item.name}: ${item.value.toFixed(1)}% (${item.competitors?.map(c => c.name).join(', ')})`
+                        : `${item.name}: ${item.value.toFixed(1)}%`
+                      }
+                      tabIndex={0}
+                      role="button"
+                      aria-label={isOthers 
+                        ? `${item.name}: ${item.value.toFixed(1)}% of total mentions`
+                        : `${item.name}: ${item.value.toFixed(1)}% of total mentions`
+                      }
+                    >
+                      {/* Label for segments */}
+                      {width > 8 && (
+                        <div className="absolute inset-0 flex items-center justify-center px-2">
+                          <span className="text-xs font-semibold text-white drop-shadow-lg text-center leading-tight" style={{
+                            textShadow: '0 1px 3px rgba(0,0,0,0.8), 0 1px 2px rgba(0,0,0,0.6)'
+                          }}>
+                            {width > 12 ? item.name.split(' ')[0] : ''}
+                            <br />
+                            <span className="text-sm font-bold">
+                              {item.value.toFixed(0)}%
+                            </span>
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Hover overlay */}
+                      <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-200" />
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Progress indicator */}
+              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mt-2">
+                <span>0%</span>
+                <span>50%</span>
+                <span>100%</span>
+              </div>
+            </div>
+            
+            {/* Enhanced legend */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {processedChartData.map((item, index) => {
+                  const isYourBrand = item.name === "Your Brand";
+                  const isOthers = item.isOthersGroup;
+                  const rank = index + 1;
+                  
+                  return (
+                    <div 
+                      key={index} 
+                      className={`flex items-center gap-3 p-3 rounded-lg border transition-all duration-200 hover:shadow-md ${
+                        isYourBrand 
+                          ? 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800'
+                          : rank === 1 && !isYourBrand
+                          ? 'bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800'
+                          : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700'
+                      }`}
+                    >
+                      <div 
+                        className="w-4 h-4 rounded-full border-2 border-white shadow-sm"
+                        style={{ 
+                          background: isYourBrand 
+                            ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)'
+                            : isOthers
+                            ? 'linear-gradient(135deg, #94a3b8, #64748b)'
+                            : `linear-gradient(135deg, ${item.fill}, ${item.fill}dd)`
+                        }}
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-900 dark:text-slate-100">
+                            {item.name}
+                          </span>
+                          {isYourBrand && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs font-medium rounded-full">
+                              You
+                            </span>
+                          )}
+                          {rank === 1 && !isYourBrand && (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-xs font-medium rounded-full">
+                              Leader 🏆
+                            </span>
+                          )}
+                        </div>
+                        {isOthers && item.competitors && (
+                          <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                            {item.competitors.slice(0, 3).map(c => c.name).join(', ')}
+                            {item.competitors.length > 3 && ` +${item.competitors.length - 3} more`}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                          {item.value.toFixed(1)}%
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          #{rank}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Charts Container */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {/* Bar Chart */}
           <div>
-            <h4 className="text-sm font-medium mb-3">Detailed Comparison</h4>
+            <div className="mb-3">
+              <h4 className="text-sm font-medium">
+                {chartType === 'market_share' ? 'Market Share Breakdown' : 'Share of Voice Breakdown'}
+              </h4>
+              <p className="text-xs text-muted-foreground mt-1">
+                {chartType === 'market_share' 
+                  ? 'Normalized distribution with data labels'
+                  : 'Percentage of total brand mentions (hover for details)'
+                }
+              </p>
+            </div>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData} layout="horizontal">
+              <BarChart data={chartData} layout="horizontal" barCategoryGap={20}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" domain={[0, Math.max(100, Math.max(...data.map(d => d.value)) + 10)]} />
+                <XAxis 
+                  type="number" 
+                  domain={[0, Math.max(50, Math.max(...data.map(d => d.value)) * 1.1)]} 
+                  tickFormatter={(value) => `${value}%`}
+                />
                 <YAxis dataKey="name" type="category" width={120} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                <Bar 
+                  dataKey="value" 
+                  radius={[0, 4, 4, 0]}
+                  minPointSize={5}
+                  label={{
+                    position: 'right',
+                    formatter: (value: number) => `${value.toFixed(1)}%`,
+                    fill: '#374151',
+                    fontSize: 12,
+                    fontWeight: 500
+                  }}
+                >
                   {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.fill}
+                      stroke={entry.fill}
+                      strokeWidth={1}
+                    />
                   ))}
                 </Bar>
               </BarChart>
@@ -200,7 +537,17 @@ export default function ShareOfVoiceChart({
 
           {/* Pie Chart */}
           <div>
-            <h4 className="text-sm font-medium mb-3">Market Share Distribution</h4>
+            <div className="mb-3">
+              <h4 className="text-sm font-medium">
+                {chartType === 'market_share' ? 'Market Share Distribution' : 'Voice Share Distribution'}
+              </h4>
+              <p className="text-xs text-muted-foreground mt-1">
+                {chartType === 'market_share' 
+                  ? 'Proportional view of market dominance'
+                  : 'Visual distribution of competitor mentions'
+                }
+              </p>
+            </div>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -208,28 +555,52 @@ export default function ShareOfVoiceChart({
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, value }) => `${name}: ${value.toFixed(1)}%`}
-                  outerRadius={80}
+                  label={({ name, value, index }) => {
+                    // Only show labels for segments > 5% to avoid clutter
+                    if (value < 5) return '';
+                    const shortName = name === 'Your Brand' ? 'You' : name.split(' ')[0];
+                    return `${shortName}: ${value.toFixed(1)}%`;
+                  }}
+                  outerRadius={90}
                   fill="#8884d8"
                   dataKey="value"
+                  stroke="#ffffff"
+                  strokeWidth={2}
                 >
                   {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => [`${value}%`, "Share of Voice"]} />
+                <Tooltip formatter={(value) => [`${value}%`, chartType === 'market_share' ? 'Market Share' : 'Share of Voice']} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Color Legend for Accessibility */}
-        <div className="mt-4 p-3 bg-muted/30 rounded-lg">
-          <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-            <Info className="h-4 w-4" />
-            Color Legend
-          </h4>
+        {/* Explanation and Color Legend */}
+        <div className="mt-4 space-y-3">
+          {chartType === 'share_of_voice' && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-blue-700 dark:text-blue-300">
+                  <p className="font-medium mb-1">Share of Voice Explained</p>
+                  <p>
+                    This shows each competitor's share of total brand mentions across all AI responses. 
+                    If there were 100 total mentions of any brand, and Your Brand was mentioned 60 times, 
+                    your share would be 60%. All shares sum to 100%.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div className="p-3 bg-muted/30 rounded-lg">
+            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Info className="h-4 w-4" />
+              Color Legend
+            </h4>
           <ColorLegend 
             items={chartData.map((item, index) => ({
               name: item.name,
@@ -242,6 +613,7 @@ export default function ShareOfVoiceChart({
                   })()
             }))}
           />
+          </div>
         </div>
 
         {/* Competitive Insights */}
