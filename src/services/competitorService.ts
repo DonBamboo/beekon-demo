@@ -342,27 +342,32 @@ export class OptimizedCompetitorService extends BaseService {
         competitorAnalysisService.getCompetitorInsights(websiteId, dateRange),
       ]);
 
-      // Calculate your brand's metrics efficiently
+      // Calculate your brand's metrics using same methodology as competitors
       const yourBrandMetrics = this.calculateBrandMetrics(yourBrandResults);
 
-      // Generate market share data using real competitor data
+      // Generate normalized market share data
+      const allCompetitorShares = shareOfVoice.map(comp => comp.shareOfVoice);
+      const totalCompetitorShare = allCompetitorShares.reduce((sum, share) => sum + share, 0);
+      const yourBrandShare = yourBrandMetrics.overallVisibilityScore;
+      const totalMarketShare = totalCompetitorShare + yourBrandShare;
+      
+      // Normalize to ensure total doesn't exceed 100%
+      const normalizationFactor = totalMarketShare > 100 ? 100 / totalMarketShare : 1;
+      
       const marketShareData = [
         {
           name: "Your Brand",
-          value: yourBrandMetrics.overallVisibilityScore,
+          value: Number((yourBrandShare * normalizationFactor).toFixed(1)),
         },
         ...shareOfVoice.map((comp) => ({
           name: comp.competitorName,
-          value: comp.shareOfVoice,
+          value: Number((comp.shareOfVoice * normalizationFactor).toFixed(1)),
           competitorId: comp.competitorId,
         })),
       ];
 
-      // Generate competitive gap analysis (legacy format for compatibility)
-      const competitiveGaps = this.calculateCompetitiveGaps(
-        competitors,
-        yourBrandResults
-      );
+      // Use real competitive gap analysis from database instead of placeholder logic
+      const competitiveGaps = this.transformGapAnalysisToLegacyFormat(gapAnalysis);
 
       return {
         totalCompetitors: competitors.length,
@@ -760,20 +765,42 @@ export class OptimizedCompetitorService extends BaseService {
   } {
     if (results.length === 0) return { overallVisibilityScore: 0 };
 
+    // Calculate share of voice using same methodology as competitor database function
+    // Count total analyses and total mentions across all LLM results
     const allLLMResults = results.flatMap((r) => r.llm_results);
-    const mentionedResults = allLLMResults.filter((r) => r.is_mentioned);
+    const totalAnalyses = allLLMResults.length;
+    const totalMentions = allLLMResults.filter((r) => r.is_mentioned).length;
 
-    const overallVisibilityScore = Math.round(
-      (mentionedResults.length / Math.max(allLLMResults.length, 1)) * 100
-    );
+    // Calculate share of voice as percentage of mentions
+    // This matches the database function logic: (total_voice_mentions / total_analyses) * 100
+    const overallVisibilityScore = totalAnalyses > 0 
+      ? Math.round((totalMentions / totalAnalyses) * 100)
+      : 0;
 
     return { overallVisibilityScore };
   }
 
+  private transformGapAnalysisToLegacyFormat(
+    gapAnalysis: CompetitiveGapAnalysis[]
+  ): CompetitorComparison[] {
+    return gapAnalysis.map((gap) => ({
+      topic: gap.topicName,
+      yourBrand: Math.round(gap.yourBrandScore),
+      competitors: gap.competitorData.map((comp) => ({
+        competitorId: comp.competitorId,
+        name: comp.competitor_name,
+        score: Math.round(comp.score),
+      })),
+    }));
+  }
+
+  // Legacy method kept for backward compatibility but now deprecated
   private calculateCompetitiveGaps(
     competitors: CompetitorPerformance[],
     yourBrandResults: AnalysisResult[]
   ): CompetitorComparison[] {
+    console.warn('calculateCompetitiveGaps is deprecated. Use transformGapAnalysisToLegacyFormat instead.');
+    
     // Group your brand's results by topic
     const topicMap = new Map<string, number>();
 
@@ -790,7 +817,7 @@ export class OptimizedCompetitorService extends BaseService {
       topicMap.set(result.topic, topicMap.get(result.topic)! + score);
     });
 
-    // Create competitive gaps for each topic
+    // Create competitive gaps for each topic using real competitor data
     const gaps: CompetitorComparison[] = [];
 
     topicMap.forEach((yourScore, topic) => {
@@ -800,7 +827,8 @@ export class OptimizedCompetitorService extends BaseService {
         competitors: competitors.slice(0, 3).map((comp) => ({
           competitorId: comp.competitorId,
           name: comp.name,
-          score: Math.round(comp.shareOfVoice * 0.8 + Math.random() * 0.4), // Would need real competitor topic analysis
+          // Use actual share of voice as proxy for topic score instead of random data
+          score: Math.round(comp.shareOfVoice),
         })),
       });
     });

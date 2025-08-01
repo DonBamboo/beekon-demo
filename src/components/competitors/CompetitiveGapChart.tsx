@@ -43,12 +43,23 @@ export default function CompetitiveGapChart({
   gapAnalysis,
   dateFilter,
 }: CompetitiveGapChartProps) {
-  // Enhanced data processing
+  // Enhanced data processing with validation
   const processedData = useMemo(() => {
     if (!gapAnalysis || gapAnalysis.length === 0) return null;
 
-    // Radar chart data
-    const radarData = gapAnalysis.map(gap => ({
+    // Validate gap analysis data
+    const validatedGapAnalysis = gapAnalysis.map(gap => ({
+      ...gap,
+      yourBrandScore: Math.max(0, Math.min(100, isNaN(gap.yourBrandScore) ? 0 : gap.yourBrandScore)),
+      competitorData: gap.competitorData.map(comp => ({
+        ...comp,
+        score: Math.max(0, Math.min(100, isNaN(comp.score) ? 0 : comp.score)),
+        totalMentions: Math.max(0, isNaN(comp.totalMentions) ? 0 : comp.totalMentions)
+      }))
+    }));
+
+    // Radar chart data using validated data
+    const radarData = validatedGapAnalysis.map(gap => ({
       topic: gap.topicName,
       yourBrand: gap.yourBrandScore,
       avgCompetitor: gap.competitorData.length > 0 
@@ -59,8 +70,8 @@ export default function CompetitiveGapChart({
         : 0,
     }));
 
-    // Gap analysis with classifications
-    const gapClassification = gapAnalysis.map(gap => {
+    // Gap analysis with classifications using validated data
+    const gapClassification = validatedGapAnalysis.map(gap => {
       const avgCompetitor = gap.competitorData.length > 0 
         ? gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) / gap.competitorData.length
         : 0;
@@ -75,8 +86,8 @@ export default function CompetitiveGapChart({
       };
     });
 
-    // Opportunity matrix data
-    const opportunityMatrix = gapAnalysis.map(gap => ({
+    // Opportunity matrix data using validated data
+    const opportunityMatrix = validatedGapAnalysis.map(gap => ({
       topic: gap.topicName,
       x: gap.competitorData.length > 0 
         ? gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) / gap.competitorData.length
