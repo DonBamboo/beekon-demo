@@ -108,6 +108,11 @@ export default function CompetitorsList({
             const statusBadge = getAnalysisStatusBadge(competitor.analysisStatus);
             const isAnalyzed = competitor.analysisStatus === 'completed';
             
+            // Debug logging for rank data
+            if (performanceData?.averageRank !== null && performanceData?.averageRank !== undefined) {
+              console.log(`[DEBUG Frontend] Competitor ${competitor.competitor_name || competitor.competitor_domain}: averageRank=${performanceData.averageRank}, isAnalyzed=${isAnalyzed}`);
+            }
+            
             return (
               <div key={competitor.id} className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors ${!isAnalyzed ? 'opacity-75' : ''}`}>
                 <div className="flex items-center space-x-4">
@@ -147,7 +152,7 @@ export default function CompetitorsList({
                   <div className="text-center">
                     <div className="text-sm text-muted-foreground">Avg Rank</div>
                     <div className={`font-medium text-lg ${!isAnalyzed ? 'text-muted-foreground' : ''}`}>
-                      {performanceData?.averageRank !== null && performanceData?.averageRank !== undefined && performanceData.averageRank >= 1 
+                      {performanceData?.averageRank !== null && performanceData?.averageRank !== undefined && performanceData.averageRank > 0 
                         ? performanceData.averageRank.toFixed(1) 
                         : 'N/A'}
                     </div>

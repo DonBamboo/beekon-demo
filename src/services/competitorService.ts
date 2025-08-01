@@ -198,6 +198,11 @@ export class OptimizedCompetitorService extends BaseService {
         const avgRank = row.avg_rank_position;
         const mentionTrend = row.mention_trend_7d;
 
+        // Debug logging for average rank processing
+        if (avgRank !== null && avgRank !== undefined) {
+          console.log(`[DEBUG] Competitor ${row.competitor_name || row.competitor_domain}: rawAvgRank=${avgRank}, processedValue=${avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20 ? avgRank : null}`);
+        }
+
         return {
           competitorId: row.competitor_id,
           domain: row.competitor_domain,
@@ -206,7 +211,7 @@ export class OptimizedCompetitorService extends BaseService {
             totalMentions > 0
               ? Math.round((positiveMentions / totalMentions) * 100)
               : 0,
-          averageRank: avgRank && !isNaN(avgRank) && avgRank >= 1 ? avgRank : null,
+          averageRank: avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20 ? avgRank : null,
           mentionCount: totalMentions,
           sentimentScore:
             avgSentiment && !isNaN(avgSentiment)
@@ -285,7 +290,7 @@ export class OptimizedCompetitorService extends BaseService {
             dailyMentions > 0
               ? Math.round((dailyPositiveMentions / dailyMentions) * 100)
               : 0,
-          averageRank: dailyAvgRank && !isNaN(dailyAvgRank) ? dailyAvgRank : 0,
+          averageRank: dailyAvgRank && !isNaN(dailyAvgRank) && dailyAvgRank > 0 && dailyAvgRank <= 20 ? dailyAvgRank : 0,
           mentionCount: dailyMentions,
           sentimentScore:
             dailyAvgSentiment && !isNaN(dailyAvgSentiment)

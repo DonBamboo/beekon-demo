@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   BarChart,
   Bar,
@@ -26,9 +27,15 @@ import {
   ScatterChart,
   Scatter,
 } from "recharts";
-import { TrendingUp, TrendingDown, Target, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, Target, AlertTriangle, Info } from "lucide-react";
 import { CompetitorAnalytics, type CompetitiveGapAnalysis } from "@/services/competitorService";
 import { useMemo } from "react";
+import { 
+  processGapAnalysis, 
+  generateOpportunityMatrix, 
+  generateGapSummary,
+  GAP_THRESHOLDS
+} from "@/lib/gap-analysis-utils";
 
 interface CompetitiveGapChartProps {
   gapAnalysis: CompetitiveGapAnalysis[];
@@ -41,11 +48,15 @@ export default function CompetitiveGapChart({
   analytics,
   dateFilter,
 }: CompetitiveGapChartProps) {
-  // Enhanced data processing with validation
+  // Enhanced data processing using service-layer utilities
   const processedData = useMemo(() => {
     if (!gapAnalysis || gapAnalysis.length === 0) return null;
 
-    // Validate gap analysis data
+    // Process gap analysis with service-layer utilities
+    const gapClassification = processGapAnalysis(gapAnalysis);
+    const opportunityMatrix = generateOpportunityMatrix(gapAnalysis);
+
+    // Generate chart data for visualization (individual competitors)
     const validatedGapAnalysis = gapAnalysis.map(gap => ({
       ...gap,
       yourBrandScore: Math.max(0, Math.min(100, isNaN(gap.yourBrandScore) ? 0 : gap.yourBrandScore)),
@@ -103,32 +114,6 @@ export default function CompetitiveGapChart({
       return data;
     });
 
-    // Gap analysis with classifications using validated data
-    const gapClassification = validatedGapAnalysis.map(gap => {
-      const avgCompetitor = gap.competitorData.length > 0 
-        ? gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) / gap.competitorData.length
-        : 0;
-      const gapSize = gap.yourBrandScore - avgCompetitor;
-      
-      return {
-        ...gap,
-        avgCompetitor,
-        gapSize,
-        gapType: gapSize > 10 ? 'advantage' : gapSize < -10 ? 'opportunity' : 'competitive',
-        priority: Math.abs(gapSize) > 20 ? 'high' : Math.abs(gapSize) > 10 ? 'medium' : 'low',
-      };
-    });
-
-    // Opportunity matrix data using validated data
-    const opportunityMatrix = validatedGapAnalysis.map(gap => ({
-      topic: gap.topicName,
-      x: gap.competitorData.length > 0 
-        ? gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) / gap.competitorData.length
-        : 0, // Market competitiveness
-      y: gap.yourBrandScore, // Your performance
-      size: gap.competitorData.reduce((sum, comp) => sum + comp.totalMentions, 0), // Market size
-    }));
-
     return {
       barChartData,
       competitorInfo,
@@ -138,29 +123,11 @@ export default function CompetitiveGapChart({
     };
   }, [gapAnalysis]);
 
-  // Calculate insights
+  // Calculate insights using service-layer utility
   const insights = useMemo(() => {
     if (!processedData) return null;
-
-    const opportunities = processedData.gapClassification.filter(gap => gap.gapType === 'opportunity');
-    const advantages = processedData.gapClassification.filter(gap => gap.gapType === 'advantage');
-    const highPriorityGaps = processedData.gapClassification.filter(gap => gap.priority === 'high');
-
-    return {
-      totalTopics: gapAnalysis.length,
-      opportunities: opportunities.length,
-      advantages: advantages.length,
-      highPriorityGaps: highPriorityGaps.length,
-      biggestOpportunity: opportunities.reduce((prev, current) => 
-        Math.abs(prev.gapSize) > Math.abs(current.gapSize) ? prev : current, 
-        opportunities[0]
-      ),
-      strongestAdvantage: advantages.reduce((prev, current) => 
-        prev.gapSize > current.gapSize ? prev : current, 
-        advantages[0]
-      ),
-    };
-  }, [processedData, gapAnalysis]);
+    return generateGapSummary(processedData.gapClassification);
+  }, [processedData]);
 
   // Only show chart if there are competitors and meaningful data
   if (!processedData || !analytics || analytics.totalCompetitors === 0) return null;
@@ -308,8 +275,41 @@ export default function CompetitiveGapChart({
           </TabsContent>
 
           <TabsContent value="gaps" className="space-y-4">
-            <div className="space-y-3">
-              {processedData.gapClassification.map((gap, index) => (
+            <TooltipProvider>
+              <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Gap Analysis Methodology</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm">
+                      <div className="text-xs space-y-2">
+                        <p>
+                          Gap scores compare your brand performance against the average of all competitors for each topic.
+                        </p>
+                        <div className="space-y-1">
+                          <p><strong>Classification:</strong></p>
+                          <p>• <span className="text-green-600">Advantage</span>: +15% or higher gap</p>
+                          <p>• <span className="text-orange-600">Opportunity</span>: -15% or lower gap</p>
+                          <p>• <span className="text-blue-600">Competitive</span>: Between -15% and +15%</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p><strong>Priority considers:</strong></p>
+                          <p>• Gap size, your performance level, and market competitiveness</p>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Showing gaps vs. <strong>average competitor performance</strong> across all topics. 
+                  Individual competitor details are shown in the Overview and Radar charts above.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {processedData.gapClassification.map((gap, index) => (
                 <div
                   key={index}
                   className={`p-4 rounded-lg border ${
@@ -347,20 +347,24 @@ export default function CompetitiveGapChart({
                         Gap: {gap.gapSize > 0 ? '+' : ''}{gap.gapSize.toFixed(1)}%
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        You: {gap.yourBrandScore.toFixed(1)}% | Avg: {gap.avgCompetitor.toFixed(1)}%
+                        You: {gap.yourBrandScore.toFixed(1)}% | Avg Competitor: {gap.avgCompetitor.toFixed(1)}%
                       </div>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
+          </TooltipProvider>
           </TabsContent>
 
           <TabsContent value="matrix" className="space-y-4">
             <div className="mb-4 p-3 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">
-                This matrix shows topics plotted by market competitiveness (x-axis) vs. your performance (y-axis). 
-                Bubble size represents total market mentions.
+                This matrix shows topics plotted by <strong>average market competitiveness</strong> (x-axis) vs. your performance (y-axis). 
+                Bubble size represents total market mentions across all competitors.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Market competitiveness is calculated as the average performance of all competitors for each topic.
               </p>
             </div>
             <div role="img" aria-label="Opportunity matrix scatter chart showing topics by market competitiveness versus your performance">
