@@ -400,6 +400,7 @@ export default function Competitors() {
         {/* Competitors List */}
         <CompetitorsList
           competitorsWithStatus={competitorsWithStatus}
+          marketShareData={analytics?.marketShareData || []}
           performance={performance}
           sortBy={sortBy}
           confirmDelete={confirmDelete}

@@ -184,7 +184,7 @@ export class OptimizedCompetitorService extends BaseService {
             totalMentions > 0
               ? Math.round((positiveMentions / totalMentions) * 100)
               : 0,
-          averageRank: avgRank && !isNaN(avgRank) ? avgRank : 0,
+          averageRank: avgRank && !isNaN(avgRank) && avgRank >= 1 ? avgRank : null,
           mentionCount: totalMentions,
           sentimentScore:
             avgSentiment && !isNaN(avgSentiment)
