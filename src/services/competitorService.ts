@@ -65,6 +65,28 @@ export interface CompetitorAnalytics {
   shareOfVoice: CompetitorShareOfVoice[];
   gapAnalysis: CompetitiveGapAnalysis[];
   insights: CompetitorInsight[];
+  _metadata?: {
+    dataValidation: {
+      isValid: boolean;
+      issues: string[];
+      warnings: string[];
+      totalChecks: number;
+      passedChecks: number;
+    };
+    generatedAt: string;
+    dataConsistency: {
+      competitorCount: {
+        marketShare: number;
+        shareOfVoice: number;
+        consistent: boolean;
+      };
+      dataAlignment: {
+        matchingCompetitors: number;
+        missingInMarketShare: number;
+        missingInShareOfVoice: number;
+      };
+    };
+  };
 }
 
 export class OptimizedCompetitorService extends BaseService {
@@ -366,24 +388,20 @@ export class OptimizedCompetitorService extends BaseService {
         })),
       ];
 
-      // Use real competitive gap analysis from database instead of placeholder logic
-      const competitiveGaps = this.transformGapAnalysisToLegacyFormat(gapAnalysis);
+      // Competitive gaps will be generated in unified analytics from gapAnalysis directly
 
-      return {
-        totalCompetitors: competitors.length,
-        activeCompetitors: competitors.filter((c) => c.isActive).length,
-        averageCompetitorRank:
-          competitors.length > 0
-            ? competitors.reduce((sum, c) => sum + (c.averageRank || 0), 0) /
-              competitors.length
-            : 0,
-        marketShareData,
-        competitiveGaps,
-        timeSeriesData,
+      // Create unified competitor analytics with validated data
+      const unifiedAnalytics = this.createUnifiedCompetitorAnalytics({
+        competitors,
+        yourBrandMetrics,
         shareOfVoice,
         gapAnalysis,
         insights,
-      };
+        timeSeriesData,
+        marketShareData,
+      });
+
+      return unifiedAnalytics;
     });
   }
 
@@ -780,9 +798,13 @@ export class OptimizedCompetitorService extends BaseService {
     return { overallVisibilityScore };
   }
 
+  /**
+   * @deprecated Legacy method - no longer used. Gap analysis now handled in unified analytics.
+   */
   private transformGapAnalysisToLegacyFormat(
     gapAnalysis: CompetitiveGapAnalysis[]
   ): CompetitorComparison[] {
+    console.warn('transformGapAnalysisToLegacyFormat is deprecated. Unified analytics now handles gap analysis directly.');
     return gapAnalysis.map((gap) => ({
       topic: gap.topicName,
       yourBrand: Math.round(gap.yourBrandScore),
@@ -1048,6 +1070,320 @@ export class OptimizedCompetitorService extends BaseService {
         dateRange
       );
     });
+  }
+
+  /**
+   * Create unified competitor analytics with validated and consistent data
+   */
+  private createUnifiedCompetitorAnalytics({
+    competitors,
+    yourBrandMetrics,
+    shareOfVoice,
+    gapAnalysis,
+    insights,
+    timeSeriesData,
+    marketShareData,
+  }: {
+    competitors: CompetitorPerformance[];
+    yourBrandMetrics: { overallVisibilityScore: number };
+    shareOfVoice: CompetitorShareOfVoice[];
+    gapAnalysis: CompetitiveGapAnalysis[];
+    insights: CompetitorInsight[];
+    timeSeriesData: CompetitorTimeSeriesData[];
+    marketShareData: Array<{
+      name: string;
+      value: number;
+      competitorId?: string;
+    }>;
+  }): CompetitorAnalytics {
+    // Validate data consistency before creating analytics
+    const validation = this.validateCompetitorData({
+      shareOfVoice,
+      gapAnalysis,
+      marketShareData,
+      insights,
+    });
+
+    // Log validation issues for debugging and monitoring
+    if (validation.issues.length > 0) {
+      console.warn('Competitor data validation issues:', validation.issues);
+      // In production, you might want to send this to a monitoring service
+      this.logValidationIssues(validation);
+    }
+    
+    if (validation.warnings.length > 0) {
+      console.info('Competitor data validation warnings:', validation.warnings);
+    }
+
+    // Create competitive gaps in consistent format (use gapAnalysis as primary source)
+    const competitiveGaps: CompetitorComparison[] = gapAnalysis.map((gap) => ({
+      topic: gap.topicName,
+      yourBrand: Math.round(gap.yourBrandScore),
+      competitors: gap.competitorData.map((comp) => ({
+        competitorId: comp.competitorId,
+        name: comp.competitor_name,
+        score: Math.round(comp.score),
+      })),
+    }));
+
+    // Use validated insights that match the displayed data
+    const validatedInsights = this.validateInsightsAgainstDisplayData(
+      insights,
+      shareOfVoice,
+      gapAnalysis,
+      marketShareData
+    );
+
+    return {
+      totalCompetitors: competitors.length,
+      activeCompetitors: competitors.filter((c) => c.isActive).length,
+      averageCompetitorRank:
+        competitors.length > 0
+          ? competitors.reduce((sum, c) => sum + (c.averageRank || 0), 0) /
+            competitors.length
+          : 0,
+      marketShareData,
+      competitiveGaps, // Use consistent format derived from gapAnalysis
+      timeSeriesData,
+      shareOfVoice,
+      gapAnalysis, // Keep raw database format for advanced components
+      insights: validatedInsights,
+      // Add metadata for debugging and validation
+      _metadata: {
+        dataValidation: validation,
+        generatedAt: new Date().toISOString(),
+        dataConsistency: this.checkDataConsistency(marketShareData, shareOfVoice),
+      },
+    };
+  }
+
+  /**
+   * Validate competitor data for consistency and quality
+   */
+  private validateCompetitorData({
+    shareOfVoice,
+    gapAnalysis,
+    marketShareData,
+    insights,
+  }: {
+    shareOfVoice: CompetitorShareOfVoice[];
+    gapAnalysis: CompetitiveGapAnalysis[];
+    marketShareData: Array<{ name: string; value: number; competitorId?: string }>;
+    insights: CompetitorInsight[];
+  }) {
+    const issues: string[] = [];
+    const warnings: string[] = [];
+
+    // Validate market share data
+    const totalMarketShare = marketShareData.reduce((sum, item) => sum + item.value, 0);
+    if (totalMarketShare > 105) { // Allow 5% tolerance for rounding
+      issues.push(`Market share total exceeds 100%: ${totalMarketShare.toFixed(1)}%`);
+    }
+
+    // Validate share of voice consistency
+    const shareOfVoiceTotal = shareOfVoice.reduce((sum, comp) => sum + comp.shareOfVoice, 0);
+    if (shareOfVoiceTotal > 105) {
+      warnings.push(`Share of voice total exceeds 100%: ${shareOfVoiceTotal.toFixed(1)}%`);
+    }
+
+    // Validate gap analysis data
+    gapAnalysis.forEach((gap) => {
+      if (gap.yourBrandScore < 0 || gap.yourBrandScore > 100) {
+        issues.push(`Invalid brand score for ${gap.topicName}: ${gap.yourBrandScore}%`);
+      }
+      gap.competitorData.forEach((comp) => {
+        if (comp.score < 0 || comp.score > 100) {
+          issues.push(`Invalid competitor score for ${comp.competitor_name}: ${comp.score}%`);
+        }
+      });
+    });
+
+    // Validate insights reference existing competitors
+    insights.forEach((insight) => {
+      if (insight.competitorId) {
+        const competitorExists = shareOfVoice.some(comp => comp.competitorId === insight.competitorId);
+        if (!competitorExists) {
+          warnings.push(`Insight references non-existent competitor: ${insight.competitorId}`);
+        }
+      }
+    });
+
+    return {
+      isValid: issues.length === 0,
+      issues,
+      warnings,
+      totalChecks: 4,
+      passedChecks: 4 - issues.length,
+    };
+  }
+
+  /**
+   * Validate insights against display data to ensure consistency
+   */
+  private validateInsightsAgainstDisplayData(
+    insights: CompetitorInsight[],
+    shareOfVoice: CompetitorShareOfVoice[],
+    gapAnalysis: CompetitiveGapAnalysis[],
+    marketShareData: Array<{ name: string; value: number; competitorId?: string }>
+  ): CompetitorInsight[] {
+    return insights.map((insight) => {
+      // For market leader insights, verify the dominance claim against actual market share data
+      if (insight.title.includes('Market Leader') && insight.competitorId) {
+        const marketShareItem = marketShareData.find(item => item.competitorId === insight.competitorId);
+        const shareOfVoiceItem = shareOfVoice.find(item => item.competitorId === insight.competitorId);
+        
+        if (marketShareItem && shareOfVoiceItem) {
+          // Update description to match actual displayed data
+          const actualShare = marketShareItem.value;
+          const updatedDescription = `${shareOfVoiceItem.competitorName} dominates with ${actualShare.toFixed(1)}% market share`;
+          
+          return {
+            ...insight,
+            description: updatedDescription,
+          };
+        }
+      }
+
+      // For opportunity insights, verify gap data matches
+      if (insight.title.includes('Improvement Opportunity') && insight.topicId) {
+        const gapData = gapAnalysis.find(gap => gap.topicId === insight.topicId);
+        if (gapData && gapData.competitorData.length > 0) {
+          const topCompetitor = gapData.competitorData.reduce((prev, current) =>
+            prev.score > current.score ? prev : current
+          );
+          
+          const updatedDescription = `Your brand scores ${gapData.yourBrandScore.toFixed(1)}% vs ${topCompetitor.competitor_name}'s ${topCompetitor.score.toFixed(1)}%`;
+          
+          return {
+            ...insight,
+            description: updatedDescription,
+          };
+        }
+      }
+
+      return insight;
+    });
+  }
+
+  /**
+   * Check data consistency between different data sources
+   */
+  private checkDataConsistency(
+    marketShareData: Array<{ name: string; value: number; competitorId?: string }>,
+    shareOfVoice: CompetitorShareOfVoice[]
+  ) {
+    const consistency = {
+      competitorCount: {
+        marketShare: marketShareData.filter(item => item.name !== 'Your Brand').length,
+        shareOfVoice: shareOfVoice.length,
+        consistent: false,
+      },
+      dataAlignment: {
+        matchingCompetitors: 0,
+        missingInMarketShare: 0,
+        missingInShareOfVoice: 0,
+      },
+    };
+
+    // Check competitor count consistency
+    consistency.competitorCount.consistent = 
+      consistency.competitorCount.marketShare === consistency.competitorCount.shareOfVoice;
+
+    // Check data alignment
+    shareOfVoice.forEach(sovItem => {
+      const marketShareItem = marketShareData.find(msItem => msItem.competitorId === sovItem.competitorId);
+      if (marketShareItem) {
+        consistency.dataAlignment.matchingCompetitors++;
+      } else {
+        consistency.dataAlignment.missingInMarketShare++;
+      }
+    });
+
+    marketShareData.forEach(msItem => {
+      if (msItem.name !== 'Your Brand' && !shareOfVoice.find(sovItem => sovItem.competitorId === msItem.competitorId)) {
+        consistency.dataAlignment.missingInShareOfVoice++;
+      }
+    });
+
+    return consistency;
+  }
+
+  /**
+   * Log validation issues for monitoring and debugging
+   */
+  private logValidationIssues(validation: {
+    isValid: boolean;
+    issues: string[];
+    warnings: string[];
+    totalChecks: number;
+    passedChecks: number;
+  }) {
+    // In a production environment, you might send this to a monitoring service like:
+    // - Sentry for error tracking
+    // - DataDog for metrics
+    // - Custom analytics endpoint
+    
+    const logData = {
+      timestamp: new Date().toISOString(),
+      service: 'competitorService',
+      validationResults: validation,
+      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'server',
+    };
+
+    // For now, we'll just log to console, but this could be enhanced
+    console.group('🔍 Competitor Data Validation Issues');
+    console.table(validation.issues);
+    if (validation.warnings.length > 0) {
+      console.table(validation.warnings);
+    }
+    console.log('📊 Validation Summary:', {
+      passed: validation.passedChecks,
+      total: validation.totalChecks,
+      successRate: `${((validation.passedChecks / validation.totalChecks) * 100).toFixed(1)}%`
+    });
+    console.groupEnd();
+  }
+
+  /**
+   * Performance monitoring wrapper for async operations
+   */
+  private async withPerformanceMonitoring<T>(
+    operationName: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const startTime = performance.now();
+    
+    try {
+      const result = await operation();
+      const duration = performance.now() - startTime;
+      
+      // Log performance metrics
+      console.log(`⚡ ${operationName} completed in ${duration.toFixed(2)}ms`);
+      
+      // In production, you might want to send metrics to a monitoring service
+      if (duration > 2000) { // Alert if operation takes more than 2 seconds
+        console.warn(`🐌 Slow operation detected: ${operationName} took ${duration.toFixed(2)}ms`);
+      }
+      
+      return result;
+    } catch (error) {
+      const duration = performance.now() - startTime;
+      console.error(`❌ ${operationName} failed after ${duration.toFixed(2)}ms:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Enhanced competitive analysis with performance monitoring
+   */
+  async getOptimizedCompetitiveAnalysis(
+    websiteId: string,
+    dateRange?: { start: string; end: string }
+  ): Promise<CompetitorAnalytics> {
+    return this.withPerformanceMonitoring(
+      'getOptimizedCompetitiveAnalysis',
+      () => this.getCompetitiveAnalysis(websiteId, dateRange)
+    );
   }
 
   /**

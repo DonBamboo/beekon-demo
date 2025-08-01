@@ -112,20 +112,22 @@ export default function Competitors() {
     );
   }, [analytics?.marketShareData]);
 
+  // Use gapAnalysis as the single source of truth for competitive gap data
   const competitiveGapData = useMemo(() => {
     return (
-      analytics?.competitiveGaps.map((gap) => {
+      analytics?.gapAnalysis.map((gap) => {
         const data: Record<string, number | string> = {
-          topic: gap.topic,
-          yourBrand: gap.yourBrand,
+          topic: gap.topicName,
+          yourBrand: gap.yourBrandScore,
         };
-        gap.competitors.forEach((comp, index) => {
+        gap.competitorData.forEach((comp, index) => {
           data[`competitor${index + 1}`] = comp.score;
+          data[`competitor${index + 1}_name`] = comp.competitor_name;
         });
         return data;
       }) || []
     );
-  }, [analytics?.competitiveGaps]);
+  }, [analytics?.gapAnalysis]);
 
   // Competitor insights refresh handler
   const handleInsightsRefresh = () => {
@@ -409,9 +411,8 @@ export default function Competitors() {
 
         {/* Competitive Gap Analysis */}
         <CompetitiveGapChart
-          data={competitiveGapData}
-          analytics={analytics}
           gapAnalysis={analytics?.gapAnalysis || []}
+          analytics={analytics}
           dateFilter={dateFilter}
         />
 

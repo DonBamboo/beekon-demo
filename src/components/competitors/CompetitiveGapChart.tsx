@@ -31,16 +31,14 @@ import { CompetitorAnalytics, type CompetitiveGapAnalysis } from "@/services/com
 import { useMemo } from "react";
 
 interface CompetitiveGapChartProps {
-  data: Array<Record<string, number | string>>;
-  analytics: CompetitorAnalytics | null;
   gapAnalysis: CompetitiveGapAnalysis[];
+  analytics: CompetitorAnalytics | null;
   dateFilter: "7d" | "30d" | "90d";
 }
 
 export default function CompetitiveGapChart({
-  data,
-  analytics,
   gapAnalysis,
+  analytics,
   dateFilter,
 }: CompetitiveGapChartProps) {
   // Enhanced data processing with validation
@@ -58,17 +56,52 @@ export default function CompetitiveGapChart({
       }))
     }));
 
-    // Radar chart data using validated data
-    const radarData = validatedGapAnalysis.map(gap => ({
-      topic: gap.topicName,
-      yourBrand: gap.yourBrandScore,
-      avgCompetitor: gap.competitorData.length > 0 
-        ? gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) / gap.competitorData.length
-        : 0,
-      topCompetitor: gap.competitorData.length > 0 
-        ? Math.max(...gap.competitorData.map(comp => comp.score))
-        : 0,
-    }));
+    // Generate bar chart data with individual competitors
+    const barChartData = validatedGapAnalysis.map(gap => {
+      const data: Record<string, number | string> = {
+        topic: gap.topicName,
+        yourBrand: gap.yourBrandScore,
+      };
+      gap.competitorData.forEach((comp, index) => {
+        data[`competitor${index + 1}`] = comp.score;
+        data[`competitor${index + 1}_name`] = comp.competitor_name;
+      });
+      return data;
+    });
+
+    // Get all unique competitor keys for dynamic rendering
+    const competitorKeys = new Set<string>();
+    barChartData.forEach(item => {
+      Object.keys(item).forEach(key => {
+        if (key.startsWith('competitor') && key.endsWith('_name')) {
+          const competitorKey = key.replace('_name', '');
+          competitorKeys.add(competitorKey);
+        }
+      });
+    });
+
+    // Create competitor info array for rendering
+    const competitorInfo = Array.from(competitorKeys).map((key, index) => {
+      // Get competitor name from first data point that has this competitor
+      const sampleData = barChartData.find(item => item[`${key}_name`]);
+      return {
+        key,
+        name: sampleData?.[`${key}_name`] as string || `Competitor ${index + 1}`,
+        colorIndex: (index % 4) + 2 // Use chart-2 to chart-5
+      };
+    });
+
+    // Radar chart data with individual competitors
+    const radarData = validatedGapAnalysis.map(gap => {
+      const data: Record<string, number | string> = {
+        topic: gap.topicName,
+        yourBrand: gap.yourBrandScore,
+      };
+      gap.competitorData.forEach((comp, index) => {
+        data[`competitor${index + 1}`] = comp.score;
+      });
+      return data;
+    });
 
     // Gap analysis with classifications using validated data
     const gapClassification = validatedGapAnalysis.map(gap => {
@@ -97,6 +130,8 @@ export default function CompetitiveGapChart({
     }));
 
     return {
+      barChartData,
+      competitorInfo,
       radarData,
       gapClassification,
       opportunityMatrix,
@@ -133,13 +168,22 @@ export default function CompetitiveGapChart({
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-background border rounded-lg p-3 shadow-md">
-          <p className="font-medium">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color }}>
-              {entry.name}: {entry.value.toFixed(1)}%
-            </p>
-          ))}
+        <div className="bg-background border rounded-lg p-3 shadow-md" role="tooltip">
+          <p className="font-medium mb-2" aria-label={`Topic: ${label}`}>{label}</p>
+          <div className="space-y-1">
+            {payload.map((entry: any, index: number) => (
+              <div key={index} className="flex items-center gap-2">
+                <div 
+                  className="w-3 h-3 rounded-sm" 
+                  style={{ backgroundColor: entry.color }}
+                  aria-hidden="true"
+                />
+                <span className="text-sm" aria-label={`${entry.name}: ${entry.value.toFixed(1)} percent`}>
+                  <span className="font-medium">{entry.name}:</span> {entry.value.toFixed(1)}%
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
@@ -190,58 +234,77 @@ export default function CompetitiveGapChart({
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={processedData.radarData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="topic" angle={-45} textAnchor="end" height={100} />
-                <YAxis domain={[0, 100]} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar
-                  dataKey="yourBrand"
-                  name="Your Brand"
-                  fill="hsl(var(--primary))"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="avgCompetitor"
-                  name="Avg. Competitor"
-                  fill="hsl(var(--chart-2))"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="topCompetitor"
-                  name="Top Competitor"
-                  fill="hsl(var(--chart-3))"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <div role="img" aria-label="Bar chart showing competitive gap analysis across topics">
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart 
+                  data={processedData.barChartData}
+                  accessibilityLayer
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="topic" 
+                    angle={-45} 
+                    textAnchor="end" 
+                    height={100}
+                    aria-label="Topics"
+                  />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    aria-label="Performance score percentage"
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar
+                    dataKey="yourBrand"
+                    name="Your Brand"
+                    fill="hsl(var(--primary))"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  {processedData.competitorInfo.map((competitor, index) => (
+                    <Bar
+                      key={competitor.key}
+                      dataKey={competitor.key}
+                      name={competitor.name}
+                      fill={`hsl(var(--chart-${competitor.colorIndex}))`}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </TabsContent>
 
           <TabsContent value="radar" className="space-y-4">
-            <ResponsiveContainer width="100%" height={400}>
-              <RadarChart data={processedData.radarData}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="topic" />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} />
-                <Radar
-                  name="Your Brand"
-                  dataKey="yourBrand"
-                  stroke="hsl(var(--primary))"
-                  fill="hsl(var(--primary))"
-                  fillOpacity={0.3}
-                />
-                <Radar
-                  name="Avg. Competitor"
-                  dataKey="avgCompetitor"
-                  stroke="hsl(var(--chart-2))"
-                  fill="hsl(var(--chart-2))"
-                  fillOpacity={0.3}
-                />
-                <Legend />
-                <Tooltip />
-              </RadarChart>
-            </ResponsiveContainer>
+            <div role="img" aria-label="Radar chart showing competitive performance across all topics">
+              <ResponsiveContainer width="100%" height={400}>
+                <RadarChart 
+                  data={processedData.radarData}
+                  accessibilityLayer
+                >
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="topic" />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} />
+                  <Radar
+                    name="Your Brand"
+                    dataKey="yourBrand"
+                    stroke="hsl(var(--primary))"
+                    fill="hsl(var(--primary))"
+                    fillOpacity={0.3}
+                  />
+                  {processedData.competitorInfo.map((competitor, index) => (
+                    <Radar
+                      key={competitor.key}
+                      name={competitor.name}
+                      dataKey={competitor.key}
+                      stroke={`hsl(var(--chart-${competitor.colorIndex}))`}
+                      fill={`hsl(var(--chart-${competitor.colorIndex}))`}
+                      fillOpacity={0.2}
+                    />
+                  ))}
+                  <Legend />
+                  <Tooltip />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
           </TabsContent>
 
           <TabsContent value="gaps" className="space-y-4">
@@ -300,41 +363,48 @@ export default function CompetitiveGapChart({
                 Bubble size represents total market mentions.
               </p>
             </div>
-            <ResponsiveContainer width="100%" height={400}>
-              <ScatterChart data={processedData.opportunityMatrix}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  type="number" 
-                  dataKey="x" 
-                  domain={[0, 100]}
-                  name="Market Competitiveness"
-                  label={{ value: 'Market Competitiveness (%)', position: 'insideBottom', offset: -5 }}
-                />
-                <YAxis 
-                  type="number" 
-                  dataKey="y" 
-                  domain={[0, 100]}
-                  name="Your Performance"
-                  label={{ value: 'Your Performance (%)', angle: -90, position: 'insideLeft' }}
-                />
-                <Tooltip 
-                  formatter={(value, name) => [
-                    name === 'size' ? `${value} mentions` : `${value}%`,
-                    name === 'x' ? 'Market Competitiveness' : 
-                    name === 'y' ? 'Your Performance' : 'Market Size'
-                  ]}
-                  labelFormatter={(label, payload) => {
-                    const data = payload?.[0]?.payload;
-                    return data ? `Topic: ${data.topic}` : label;
-                  }}
-                />
-                <Scatter name="Topics" dataKey="y" fill="hsl(var(--primary))">
-                  {processedData.opportunityMatrix.map((entry, index) => (
-                    <Cell key={`cell-${index}`} />
-                  ))}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
+            <div role="img" aria-label="Opportunity matrix scatter chart showing topics by market competitiveness versus your performance">
+              <ResponsiveContainer width="100%" height={400}>
+                <ScatterChart 
+                  data={processedData.opportunityMatrix}
+                  accessibilityLayer
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    type="number" 
+                    dataKey="x" 
+                    domain={[0, 100]}
+                    name="Market Competitiveness"
+                    aria-label="Market Competitiveness percentage"
+                    label={{ value: 'Market Competitiveness (%)', position: 'insideBottom', offset: -5 }}
+                  />
+                  <YAxis 
+                    type="number" 
+                    dataKey="y" 
+                    domain={[0, 100]}
+                    name="Your Performance"
+                    aria-label="Your Performance percentage"
+                    label={{ value: 'Your Performance (%)', angle: -90, position: 'insideLeft' }}
+                  />
+                  <Tooltip 
+                    formatter={(value, name) => [
+                      name === 'size' ? `${value} mentions` : `${value}%`,
+                      name === 'x' ? 'Market Competitiveness' : 
+                      name === 'y' ? 'Your Performance' : 'Market Size'
+                    ]}
+                    labelFormatter={(label, payload) => {
+                      const data = payload?.[0]?.payload;
+                      return data ? `Topic: ${data.topic}` : label;
+                    }}
+                  />
+                  <Scatter name="Topics" dataKey="y" fill="hsl(var(--primary))">
+                    {processedData.opportunityMatrix.map((entry, index) => (
+                      <Cell key={`cell-${index}`} />
+                    ))}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
           </TabsContent>
         </Tabs>
 
