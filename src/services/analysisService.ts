@@ -505,6 +505,10 @@ export class AnalysisService {
       status?: AnalysisStatus;
       dateRange?: { start: string; end: string };
       searchQuery?: string;
+      mentionStatus?: string;
+      confidenceRange?: [number, number];
+      sentiment?: string;
+      analysisSession?: string;
     }
   ): Promise<UIAnalysisResult[]> {
     const { analysisResultsLoader } = await import("./dataLoaders");
@@ -555,6 +559,57 @@ export class AnalysisService {
             result.llm_results.some((llm) =>
               llm.response_text?.toLowerCase().includes(searchTerm)
             )
+        );
+      }
+
+      // Apply mention status filter
+      if (filters?.mentionStatus && filters.mentionStatus !== "all") {
+        if (filters.mentionStatus === "mentioned") {
+          filteredResults = filteredResults.filter((result) =>
+            result.llm_results.some((llm) => llm.is_mentioned)
+          );
+        } else if (filters.mentionStatus === "not_mentioned") {
+          filteredResults = filteredResults.filter((result) =>
+            !result.llm_results.some((llm) => llm.is_mentioned)
+          );
+        }
+      }
+
+      // Apply confidence range filter
+      if (filters?.confidenceRange) {
+        const [minConfidence, maxConfidence] = filters.confidenceRange;
+        // Convert percentage range to decimal range for comparison
+        const minDecimal = minConfidence / 100;  // Convert 4 → 0.04
+        const maxDecimal = maxConfidence / 100;  // Convert 100 → 1.0
+        
+        filteredResults = filteredResults.filter(
+          (result) =>
+            result.confidence >= minDecimal && result.confidence <= maxDecimal
+        );
+      }
+
+      // Apply sentiment filter
+      if (filters?.sentiment && filters.sentiment !== "all") {
+        filteredResults = filteredResults.filter((result) =>
+          result.llm_results.some((llm) => {
+            if (!llm.sentiment_score) return false;
+            
+            if (filters.sentiment === "positive") {
+              return llm.sentiment_score > 0.1;
+            } else if (filters.sentiment === "negative") {
+              return llm.sentiment_score < -0.1;
+            } else if (filters.sentiment === "neutral") {
+              return llm.sentiment_score >= -0.1 && llm.sentiment_score <= 0.1;
+            }
+            return false;
+          })
+        );
+      }
+
+      // Apply analysis session filter
+      if (filters?.analysisSession && filters.analysisSession !== "all") {
+        filteredResults = filteredResults.filter(
+          (result) => result.analysis_session_id === filters.analysisSession
         );
       }
 
