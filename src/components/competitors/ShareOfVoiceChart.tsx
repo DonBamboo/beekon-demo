@@ -68,7 +68,7 @@ export default function ShareOfVoiceChart({
         value: sanitizedValue,
         fill: item.name === "Your Brand" 
           ? getYourBrandColor()
-          : getCompetitorColor(undefined, item.name, index),
+          : getCompetitorColor(item.competitorId, item.name, index),
       };
     });
 
@@ -387,17 +387,74 @@ export default function ShareOfVoiceChart({
                         : `${item.name}: ${item.value.toFixed(1)}% of total mentions`
                       }
                     >
-                      {/* Label for segments */}
-                      {width > 8 && (
-                        <div className="absolute inset-0 flex items-center justify-center px-2">
-                          <span className="text-xs font-semibold text-white drop-shadow-lg text-center leading-tight" style={{
-                            textShadow: '0 1px 3px rgba(0,0,0,0.8), 0 1px 2px rgba(0,0,0,0.6)'
-                          }}>
-                            {width > 12 ? item.name.split(' ')[0] : ''}
-                            <br />
-                            <span className="text-sm font-bold">
+                      {/* Enhanced label for segments with better contrast */}
+                      {width > 6 && (
+                        <div className="absolute inset-0 flex items-center justify-center px-1">
+                          <span 
+                            className="text-center leading-tight font-semibold"
+                            style={{
+                              // Dynamic text color based on background lightness
+                              color: isYourBrand 
+                                ? '#ffffff'  // White for dark blue Your Brand background
+                                : isOthers
+                                ? '#ffffff'  // White for gray Others background
+                                : '#ffffff', // White with strong shadow for competitor colors
+                              // Enhanced text shadow for better readability on all backgrounds
+                              textShadow: isYourBrand
+                                ? '0 1px 3px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.5)'
+                                : isOthers
+                                ? '0 1px 3px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.5)'
+                                : '0 2px 4px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.6)',
+                              // Responsive font sizing based on segment width
+                              fontSize: width > 15 ? '0.75rem' : width > 10 ? '0.65rem' : '0.6rem',
+                              // Better line height for compact display
+                              lineHeight: width > 15 ? '1.1' : '1.0',
+                            }}
+                          >
+                            {/* Smart name truncation based on available width */}
+                            {width > 15 && (
+                              <div className="font-semibold">
+                                {item.name === "Your Brand" 
+                                  ? "You" 
+                                  : item.name.length > 12 
+                                    ? item.name.substring(0, 10) + '...'
+                                    : item.name
+                                }
+                              </div>
+                            )}
+                            {width > 10 && width <= 15 && (
+                              <div className="font-semibold">
+                                {item.name === "Your Brand" 
+                                  ? "You" 
+                                  : item.name.split(' ')[0].substring(0, 8)
+                                }
+                              </div>
+                            )}
+                            {/* Percentage always shown for segments > 6% */}
+                            <div 
+                              className="font-bold"
+                              style={{ 
+                                fontSize: width > 15 ? '0.8rem' : width > 10 ? '0.7rem' : '0.65rem',
+                                marginTop: width > 15 ? '1px' : '0px'
+                              }}
+                            >
                               {item.value.toFixed(0)}%
-                            </span>
+                            </div>
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Fallback label for very small segments (3-6% width) */}
+                      {width > 3 && width <= 6 && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span 
+                            className="font-bold text-white text-xs"
+                            style={{
+                              textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7)',
+                              fontSize: '0.6rem'
+                            }}
+                          >
+                            {item.value.toFixed(0)}%
                           </span>
                         </div>
                       )}
@@ -608,7 +665,7 @@ export default function ShareOfVoiceChart({
               colorName: item.name === "Your Brand" 
                 ? "Primary" 
                 : (() => {
-                    const colorIndex = getCompetitorColorIndex(undefined, item.name, index);
+                    const colorIndex = getCompetitorColorIndex(item.competitorId, item.name, index);
                     return getColorInfo(colorIndex).name;
                   })()
             }))}

@@ -38,8 +38,10 @@
     --warning: 38 92% 50%;            /* orange */
     --warning-foreground: 0 0% 98%;
     
-    /* Chart Colors - Accessible, colorblind-friendly palette */
-    --chart-1: 222 84% 11%;           /* primary dark */
+    /* Chart Colors - Extended accessible, colorblind-friendly palette */
+    --chart-1: 222 84% 11%;           /* primary dark - Your Brand */
+    
+    /* Primary Colors (2-10) - High contrast, distinct */
     --chart-2: 210 100% 50%;          /* bright blue */
     --chart-3: 120 100% 35%;          /* forest green */
     --chart-4: 30 100% 50%;           /* orange */
@@ -49,6 +51,25 @@
     --chart-8: 270 100% 50%;          /* violet */
     --chart-9: 45 100% 45%;           /* amber */
     --chart-10: 340 100% 45%;         /* pink */
+    
+    /* Extended Colors (11-25) - Additional distinct colors */
+    --chart-11: 195 100% 45%;         /* cyan */
+    --chart-12: 84 100% 45%;          /* lime */
+    --chart-13: 330 100% 55%;         /* rose */
+    --chart-14: 239 100% 65%;         /* indigo */
+    --chart-15: 60 100% 50%;          /* yellow */
+    --chart-16: 152 100% 40%;         /* emerald */
+    --chart-17: 290 100% 55%;         /* fuchsia */
+    --chart-18: 200 100% 55%;         /* sky */
+    --chart-19: 20 100% 55%;          /* orange-red */
+    --chart-20: 260 100% 60%;         /* blue-violet */
+    
+    /* Tertiary Colors (21-25) - Subtle variations */
+    --chart-21: 160 60% 40%;          /* muted teal */
+    --chart-22: 25 85% 50%;           /* burnt orange */
+    --chart-23: 280 70% 50%;          /* medium purple */
+    --chart-24: 110 70% 40%;          /* olive green */
+    --chart-25: 350 80% 55%;          /* coral pink */
   }
 
   .dark {
@@ -74,8 +95,10 @@
     --warning: 38 92% 50%;            /* orange */
     --warning-foreground: 0 0% 98%;
     
-    /* Chart Colors - Dark mode accessible palette */
-    --chart-1: 0 0% 98%;              /* white */
+    /* Chart Colors - Extended dark mode accessible palette */
+    --chart-1: 0 0% 98%;              /* white - Your Brand */
+    
+    /* Primary Colors (2-10) - Bright for dark backgrounds */
     --chart-2: 210 100% 70%;          /* bright blue */
     --chart-3: 120 100% 60%;          /* bright green */
     --chart-4: 30 100% 70%;           /* bright orange */ 
@@ -85,6 +108,25 @@
     --chart-8: 270 100% 75%;          /* bright violet */
     --chart-9: 45 100% 70%;           /* bright amber */
     --chart-10: 340 100% 70%;         /* bright pink */
+    
+    /* Extended Colors (11-25) - Enhanced for dark mode */
+    --chart-11: 195 100% 65%;         /* bright cyan */
+    --chart-12: 84 100% 60%;          /* bright lime */
+    --chart-13: 330 100% 70%;         /* bright rose */
+    --chart-14: 239 100% 75%;         /* bright indigo */
+    --chart-15: 60 100% 65%;          /* bright yellow */
+    --chart-16: 152 100% 55%;         /* bright emerald */
+    --chart-17: 290 100% 70%;         /* bright fuchsia */
+    --chart-18: 200 100% 70%;         /* bright sky */
+    --chart-19: 20 100% 70%;          /* bright orange-red */
+    --chart-20: 260 100% 75%;         /* bright blue-violet */
+    
+    /* Tertiary Colors (21-25) - Visible on dark */
+    --chart-21: 160 70% 55%;          /* bright muted teal */
+    --chart-22: 25 90% 65%;           /* bright burnt orange */
+    --chart-23: 280 80% 65%;          /* bright medium purple */
+    --chart-24: 110 80% 55%;          /* bright olive green */
+    --chart-25: 350 85% 70%;          /* bright coral pink */
   }
 }
 
