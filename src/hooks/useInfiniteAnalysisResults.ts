@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { analysisService, PaginatedAnalysisResults } from '@/services/analysisService';
-import { UIAnalysisResult } from '@/types/database';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { analysisService } from "@/services/analysisService";
+import { UIAnalysisResult } from "@/types/database";
 
 interface FilterOptions {
   topic?: string;
@@ -40,10 +40,7 @@ export function useInfiniteAnalysisResults(
   sortOrder?: string,
   options: InfiniteScrollOptions = {}
 ): UseInfiniteAnalysisResultsReturn {
-  const {
-    initialLimit = 20,
-    loadMoreLimit = 20,
-  } = options;
+  const { initialLimit = 20, loadMoreLimit = 20 } = options;
 
   // State management
   const [loadedResults, setLoadedResults] = useState<UIAnalysisResult[]>([]);
@@ -55,82 +52,107 @@ export function useInfiniteAnalysisResults(
   const [initialized, setInitialized] = useState(false);
 
   // Sorting utility function
-  const sortResults = useCallback((results: UIAnalysisResult[], sortBy: string, sortOrder: string) => {
-    return [...results].sort((a, b) => {
-      let comparison = 0;
-      
-      switch (sortBy) {
-        case "date":
-          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-          break;
-        case "confidence":
-          comparison = a.confidence - b.confidence;
-          break;
-        case "mentions":
-          const aMentions = a.llm_results.filter(llm => llm.is_mentioned).length;
-          const bMentions = b.llm_results.filter(llm => llm.is_mentioned).length;
-          comparison = aMentions - bMentions;
-          break;
-        case "rank":
-          const aAvgRank = a.llm_results
-            .filter(llm => llm.rank_position !== null)
-            .reduce((sum, llm) => sum + (llm.rank_position || 0), 0) / 
-            a.llm_results.filter(llm => llm.rank_position !== null).length || 0;
-          const bAvgRank = b.llm_results
-            .filter(llm => llm.rank_position !== null)
-            .reduce((sum, llm) => sum + (llm.rank_position || 0), 0) / 
-            b.llm_results.filter(llm => llm.rank_position !== null).length || 0;
-          comparison = aAvgRank - bAvgRank;
-          break;
-        default:
-          comparison = 0;
-      }
-      
-      return sortOrder === "asc" ? comparison : -comparison;
-    });
-  }, []);
+  const sortResults = useCallback(
+    (results: UIAnalysisResult[], sortBy: string, sortOrder: string) => {
+      return [...results].sort((a, b) => {
+        let comparison = 0;
+
+        switch (sortBy) {
+          case "date":
+            comparison =
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime();
+            break;
+          case "confidence":
+            comparison = a.confidence - b.confidence;
+            break;
+          case "mentions":
+            const aMentions = a.llm_results.filter(
+              (llm) => llm.is_mentioned
+            ).length;
+            const bMentions = b.llm_results.filter(
+              (llm) => llm.is_mentioned
+            ).length;
+            comparison = aMentions - bMentions;
+            break;
+          case "rank":
+            const aAvgRank =
+              a.llm_results
+                .filter((llm) => llm.rank_position !== null)
+                .reduce((sum, llm) => sum + (llm.rank_position || 0), 0) /
+                a.llm_results.filter((llm) => llm.rank_position !== null)
+                  .length || 0;
+            const bAvgRank =
+              b.llm_results
+                .filter((llm) => llm.rank_position !== null)
+                .reduce((sum, llm) => sum + (llm.rank_position || 0), 0) /
+                b.llm_results.filter((llm) => llm.rank_position !== null)
+                  .length || 0;
+            comparison = aAvgRank - bAvgRank;
+            break;
+
+          default:
+            comparison = 0;
+        }
+
+        return sortOrder === "asc" ? comparison : -comparison;
+      });
+    },
+    []
+  );
 
   // Enhanced search function
-  const performAdvancedSearch = useCallback((
-    results: UIAnalysisResult[], 
-    query: string, 
-    searchInResponses: boolean, 
-    searchInInsights: boolean
-  ) => {
-    if (!query.trim()) return results;
-    
-    const searchTerm = query.toLowerCase().trim();
-    
-    return results.filter(result => {
-      // Basic search in prompt and topic
-      if (result.prompt.toLowerCase().includes(searchTerm) ||
+  const performAdvancedSearch = useCallback(
+    (
+      results: UIAnalysisResult[],
+      query: string,
+      searchInResponses: boolean,
+      searchInInsights: boolean
+    ) => {
+      if (!query.trim()) return results;
+
+      const searchTerm = query.toLowerCase().trim();
+
+      return results.filter((result) => {
+        // Basic search in prompt and topic
+        if (
+          result.prompt.toLowerCase().includes(searchTerm) ||
           result.topic.toLowerCase().includes(searchTerm) ||
-          (result.analysis_name && result.analysis_name.toLowerCase().includes(searchTerm))) {
-        return true;
-      }
-      
-      // Search in LLM responses if enabled
-      if (searchInResponses) {
-        const hasResponseMatch = result.llm_results.some(llm => 
-          llm.response_text?.toLowerCase().includes(searchTerm) ||
-          llm.summary_text?.toLowerCase().includes(searchTerm)
-        );
-        if (hasResponseMatch) return true;
-      }
-      
-      // Search in insights if enabled
-      if (searchInInsights) {
-        const hasInsightMatch = 
-          result.prompt_strengths?.some(strength => strength.toLowerCase().includes(searchTerm)) ||
-          result.prompt_opportunities?.some(opp => opp.toLowerCase().includes(searchTerm)) ||
-          result.recommendation_text?.toLowerCase().includes(searchTerm) ||
-          result.reporting_text?.toLowerCase().includes(searchTerm);
-        if (hasInsightMatch) return true;
-      }
-      
-      return false;
-    });
-  }, []);
+          (result.analysis_name &&
+            result.analysis_name.toLowerCase().includes(searchTerm))
+        ) {
+          return true;
+        }
+
+        // Search in LLM responses if enabled
+        if (searchInResponses) {
+          const hasResponseMatch = result.llm_results.some(
+            (llm) =>
+              llm.response_text?.toLowerCase().includes(searchTerm) ||
+              llm.summary_text?.toLowerCase().includes(searchTerm)
+          );
+          if (hasResponseMatch) return true;
+        }
+
+        // Search in insights if enabled
+        if (searchInInsights) {
+          const hasInsightMatch =
+            result.prompt_strengths?.some((strength) =>
+              strength.toLowerCase().includes(searchTerm)
+            ) ||
+            result.prompt_opportunities?.some((opp) =>
+              opp.toLowerCase().includes(searchTerm)
+            ) ||
+            result.recommendation_text?.toLowerCase().includes(searchTerm) ||
+            result.reporting_text?.toLowerCase().includes(searchTerm);
+          if (hasInsightMatch) return true;
+        }
+
+        return false;
+      });
+    },
+    []
+  );
 
   // Load initial results
   const loadInitialResults = useCallback(async () => {
@@ -140,19 +162,22 @@ export function useInfiniteAnalysisResults(
     setError(null);
 
     try {
-      const response = await analysisService.getAnalysisResultsPaginated(websiteId, {
-        limit: initialLimit,
-        filters,
-      });
+      const response = await analysisService.getAnalysisResultsPaginated(
+        websiteId,
+        {
+          limit: initialLimit,
+          filters,
+        }
+      );
 
       let results = response.results;
 
       // Apply advanced search if enabled
       if (advancedSearchQuery?.trim()) {
         results = performAdvancedSearch(
-          results, 
-          advancedSearchQuery, 
-          searchInResponses || false, 
+          results,
+          advancedSearchQuery,
+          searchInResponses || false,
           searchInInsights || false
         );
       }
@@ -174,16 +199,16 @@ export function useInfiniteAnalysisResults(
       setIsLoading(false);
     }
   }, [
-    websiteId, 
-    filters, 
-    advancedSearchQuery, 
-    searchInResponses, 
-    searchInInsights, 
-    sortBy, 
-    sortOrder, 
+    websiteId,
+    filters,
+    advancedSearchQuery,
+    searchInResponses,
+    searchInInsights,
+    sortBy,
+    sortOrder,
     initialLimit,
     performAdvancedSearch,
-    sortResults
+    sortResults,
   ]);
 
   // Load more results
@@ -194,25 +219,28 @@ export function useInfiniteAnalysisResults(
     setError(null);
 
     try {
-      const response = await analysisService.getAnalysisResultsPaginated(websiteId, {
-        cursor,
-        limit: loadMoreLimit,
-        filters,
-      });
+      const response = await analysisService.getAnalysisResultsPaginated(
+        websiteId,
+        {
+          cursor,
+          limit: loadMoreLimit,
+          filters,
+        }
+      );
 
       let newResults = response.results;
 
       // Apply advanced search if enabled
       if (advancedSearchQuery?.trim()) {
         newResults = performAdvancedSearch(
-          newResults, 
-          advancedSearchQuery, 
-          searchInResponses || false, 
+          newResults,
+          advancedSearchQuery,
+          searchInResponses || false,
           searchInInsights || false
         );
       }
 
-      setLoadedResults(prev => {
+      setLoadedResults((prev) => {
         const combined = [...prev, ...newResults];
         // Apply sorting to the combined results if needed
         if (sortBy && sortOrder) {
@@ -220,7 +248,7 @@ export function useInfiniteAnalysisResults(
         }
         return combined;
       });
-      
+
       setHasMore(response.hasMore);
       setCursor(response.nextCursor);
     } catch (err) {
@@ -241,7 +269,7 @@ export function useInfiniteAnalysisResults(
     sortBy,
     sortOrder,
     performAdvancedSearch,
-    sortResults
+    sortResults,
   ]);
 
   // Refresh (reset and reload)
@@ -271,28 +299,23 @@ export function useInfiniteAnalysisResults(
     searchInResponses,
     searchInInsights,
     sortBy,
-    sortOrder
+    sortOrder,
   ]);
 
   // Memoized return value
-  const returnValue = useMemo(() => ({
-    loadedResults,
-    hasMore,
-    isLoading,
-    isLoadingMore,
-    error,
-    loadMore,
-    refresh,
-    totalLoaded: loadedResults.length,
-  }), [
-    loadedResults,
-    hasMore,
-    isLoading,
-    isLoadingMore,
-    error,
-    loadMore,
-    refresh,
-  ]);
+  const returnValue = useMemo(
+    () => ({
+      loadedResults,
+      hasMore,
+      isLoading,
+      isLoadingMore,
+      error,
+      loadMore,
+      refresh,
+      totalLoaded: loadedResults.length,
+    }),
+    [loadedResults, hasMore, isLoading, isLoadingMore, error, loadMore, refresh]
+  );
 
   return returnValue;
 }

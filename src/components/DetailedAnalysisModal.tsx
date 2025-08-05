@@ -224,63 +224,73 @@ export function DetailedAnalysisModal({
     return "neutral";
   };
 
+  // Helper function to find LLM result with flexible provider matching
+  const findLLMResult = (providers: string[]) => {
+    return analysisResult.llm_results?.find((r) =>
+      providers.some(
+        (provider) =>
+          r.llm_provider?.toLowerCase().includes(provider.toLowerCase()) ||
+          provider.toLowerCase().includes(r.llm_provider?.toLowerCase() || "")
+      )
+    );
+  };
+
   // Convert modern format to UI format for easier display
   const llmResults = [
     {
       name: "ChatGPT",
-      data: {
-        mentioned:
-          analysisResult.llm_results?.find((r) => r.llm_provider === "chatgpt")
-            ?.is_mentioned || false,
-        rank:
-          analysisResult.llm_results?.find((r) => r.llm_provider === "chatgpt")
-            ?.rank_position || null,
-        sentiment: getSentimentFromScore(
-          analysisResult.llm_results?.find((r) => r.llm_provider === "chatgpt")
-            ?.sentiment_score || null
-        ),
-        response:
-          analysisResult.llm_results?.find((r) => r.llm_provider === "chatgpt")
-            ?.response_text || null,
-      },
+      data: (() => {
+        // Try multiple possible provider names for ChatGPT
+        const chatgptResult = findLLMResult([
+          "chatgpt",
+          "gpt-4",
+          "gpt",
+          "openai",
+        ]);
+
+        return {
+          mentioned: chatgptResult?.is_mentioned || false,
+          rank: chatgptResult?.rank_position || null,
+          sentiment: getSentimentFromScore(
+            chatgptResult?.sentiment_score || null
+          ),
+          response: chatgptResult?.response_text || null,
+        };
+      })(),
       color: "bg-green-500",
     },
     {
       name: "Claude",
-      data: {
-        mentioned:
-          analysisResult.llm_results?.find((r) => r.llm_provider === "claude")
-            ?.is_mentioned || false,
-        rank:
-          analysisResult.llm_results?.find((r) => r.llm_provider === "claude")
-            ?.rank_position || null,
-        sentiment: getSentimentFromScore(
-          analysisResult.llm_results?.find((r) => r.llm_provider === "claude")
-            ?.sentiment_score || null
-        ),
-        response:
-          analysisResult.llm_results?.find((r) => r.llm_provider === "claude")
-            ?.response_text || null,
-      },
+      data: (() => {
+        // Try multiple possible provider names for Claude
+        const claudeResult = findLLMResult(["claude", "claude-3", "anthropic"]);
+
+        return {
+          mentioned: claudeResult?.is_mentioned || false,
+          rank: claudeResult?.rank_position || null,
+          sentiment: getSentimentFromScore(
+            claudeResult?.sentiment_score || null
+          ),
+          response: claudeResult?.response_text || null,
+        };
+      })(),
       color: "bg-orange-500",
     },
     {
       name: "Gemini",
-      data: {
-        mentioned:
-          analysisResult.llm_results?.find((r) => r.llm_provider === "gemini")
-            ?.is_mentioned || false,
-        rank:
-          analysisResult.llm_results?.find((r) => r.llm_provider === "gemini")
-            ?.rank_position || null,
-        sentiment: getSentimentFromScore(
-          analysisResult.llm_results?.find((r) => r.llm_provider === "gemini")
-            ?.sentiment_score || null
-        ),
-        response:
-          analysisResult.llm_results?.find((r) => r.llm_provider === "gemini")
-            ?.response_text || null,
-      },
+      data: (() => {
+        // Try multiple possible provider names for Gemini
+        const geminiResult = findLLMResult(["gemini", "google", "bard"]);
+
+        return {
+          mentioned: geminiResult?.is_mentioned || false,
+          rank: geminiResult?.rank_position || null,
+          sentiment: getSentimentFromScore(
+            geminiResult?.sentiment_score || null
+          ),
+          response: geminiResult?.response_text || null,
+        };
+      })(),
       color: "bg-blue-500",
     },
   ];
@@ -434,7 +444,7 @@ export function DetailedAnalysisModal({
                   <CardContent>
                     <div className="space-y-3">
                       <div className="p-4 bg-muted/50 rounded-lg">
-                        {llm.data.response ? (
+                        {llm.data.response && llm.data.response.trim().length > 0 ? (
                           <MarkdownRenderer
                             content={llm.data.response}
                             className="text-sm"

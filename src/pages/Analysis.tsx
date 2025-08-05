@@ -53,7 +53,7 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, memo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useInfiniteAnalysisResults } from "@/hooks/useInfiniteAnalysisResults";
 import { InfiniteScrollContainer } from "@/components/InfiniteScrollContainer";
 
@@ -263,7 +263,7 @@ export default function Analysis() {
   // Calculate date range based on selection
   const dateRange = useMemo(() => {
     if (selectedDateRange === "all") return undefined;
-    
+
     const now = new Date();
     if (selectedDateRange === "custom" && customDateRange) {
       return customDateRange;
@@ -278,37 +278,45 @@ export default function Analysis() {
   }, [selectedDateRange, customDateRange]);
 
   // Helper function to get topic name for filtering
-  const getTopicNameForFilter = useCallback((topicId: string): string | undefined => {
-    if (topicId === "all") return undefined;
+  const getTopicNameForFilter = useCallback(
+    (topicId: string): string | undefined => {
+      if (topicId === "all") return undefined;
 
-    const topic = topics.find((topic) => topic.id === topicId);
-    return topic?.name;
-  }, [topics]);
+      const topic = topics.find((topic) => topic.id === topicId);
+      return topic?.name;
+    },
+    [topics]
+  );
 
   // Prepare filters for infinite scroll hook
-  const filters = useMemo(() => ({
-    topic: getTopicNameForFilter(selectedTopic),
-    llmProvider: selectedLLM !== "all" ? selectedLLM : undefined,
-    searchQuery: debouncedSearchQuery.trim() || undefined,
-    mentionStatus: selectedMentionStatus !== "all" ? selectedMentionStatus : undefined,
-    dateRange,
-    confidenceRange:
-      selectedConfidenceRange[0] > 0 || selectedConfidenceRange[1] < 100
-        ? selectedConfidenceRange
-        : undefined,
-    sentiment: selectedSentiment !== "all" ? selectedSentiment : undefined,
-    analysisSession: selectedAnalysisSession !== "all" ? selectedAnalysisSession : undefined,
-  }), [
-    selectedTopic,
-    selectedLLM,
-    debouncedSearchQuery,
-    selectedMentionStatus,
-    dateRange,
-    selectedConfidenceRange,
-    selectedSentiment,
-    selectedAnalysisSession,
-    getTopicNameForFilter,
-  ]);
+  const filters = useMemo(
+    () => ({
+      topic: getTopicNameForFilter(selectedTopic),
+      llmProvider: selectedLLM !== "all" ? selectedLLM : undefined,
+      searchQuery: debouncedSearchQuery.trim() || undefined,
+      mentionStatus:
+        selectedMentionStatus !== "all" ? selectedMentionStatus : undefined,
+      dateRange,
+      confidenceRange:
+        selectedConfidenceRange[0] > 0 || selectedConfidenceRange[1] < 100
+          ? selectedConfidenceRange
+          : undefined,
+      sentiment: selectedSentiment !== "all" ? selectedSentiment : undefined,
+      analysisSession:
+        selectedAnalysisSession !== "all" ? selectedAnalysisSession : undefined,
+    }),
+    [
+      selectedTopic,
+      selectedLLM,
+      debouncedSearchQuery,
+      selectedMentionStatus,
+      dateRange,
+      selectedConfidenceRange,
+      selectedSentiment,
+      selectedAnalysisSession,
+      getTopicNameForFilter,
+    ]
+  );
 
   // Use infinite scroll hook for data management
   const {
@@ -846,7 +854,6 @@ export default function Analysis() {
       description: "All filters have been reset to default values.",
     });
   }, [toast]);
-
 
   const handleRemoveFilter = (
     filterType:
@@ -1650,24 +1657,14 @@ export default function Analysis() {
                       {showPerformanceStats && (
                         <div className="bg-muted/10 p-3 rounded text-xs space-y-1">
                           <div className="grid grid-cols-2 gap-2">
-                            <span>
-                              Loaded: {totalLoaded}
-                            </span>
-                            <span>
-                              Has More: {hasMore ? "Yes" : "No"}
-                            </span>
-                            <span>
-                              Loading: {isLoadingMore ? "Yes" : "No"}
-                            </span>
+                            <span>Loaded: {totalLoaded}</span>
+                            <span>Has More: {hasMore ? "Yes" : "No"}</span>
+                            <span>Loading: {isLoadingMore ? "Yes" : "No"}</span>
                             <span>
                               Scroll: {infiniteScrollEnabled ? "On" : "Off"}
                             </span>
-                            <span>
-                              Initial: {initialLoadSize}
-                            </span>
-                            <span>
-                              Load More: {loadMoreSize}
-                            </span>
+                            <span>Initial: {initialLoadSize}</span>
+                            <span>Load More: {loadMoreSize}</span>
                           </div>
                           {infiniteScrollError && (
                             <div className="text-red-500 text-xs">
@@ -1963,60 +1960,60 @@ export default function Analysis() {
                 className="space-y-4"
               >
                 {analysisResults.map((result) => (
-                <Card key={result.id}>
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1 flex flex-col gap-3">
-                        <CardTitle>{result.prompt}</CardTitle>
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="outline">{result.topic}</Badge>
-                          {result.analysis_name && (
-                            <Badge variant="secondary" className="text-xs">
-                              {result.analysis_name}
+                  <Card key={result.id}>
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 flex flex-col gap-3">
+                          <CardTitle>{result.prompt}</CardTitle>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="outline">{result.topic}</Badge>
+                            {result.analysis_name && (
+                              <Badge variant="secondary" className="text-xs">
+                                {result.analysis_name}
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="text-xs">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              {new Date(result.created_at).toLocaleDateString()}
                             </Badge>
-                          )}
-                          <Badge variant="outline" className="text-xs">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            {new Date(result.created_at).toLocaleDateString()}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            Confidence:{" "}
-                            {parseFloat(result.confidence.toFixed(2)) * 100}%
-                          </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              Confidence:{" "}
+                              {parseFloat(result.confidence.toFixed(2)) * 100}%
+                            </Badge>
+                          </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewDetails(result)}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleViewDetails(result)}
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
-                      <MentionIndicator
-                        llmResult={result.llm_results.find(
-                          (r) => r.llm_provider === "chatgpt"
-                        )}
-                        llmName="ChatGPT"
-                      />
-                      <MentionIndicator
-                        llmResult={result.llm_results.find(
-                          (r) => r.llm_provider === "claude"
-                        )}
-                        llmName="Claude"
-                      />
-                      <MentionIndicator
-                        llmResult={result.llm_results.find(
-                          (r) => r.llm_provider === "gemini"
-                        )}
-                        llmName="Gemini"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
+                        <MentionIndicator
+                          llmResult={result.llm_results.find(
+                            (r) => r.llm_provider === "chatgpt"
+                          )}
+                          llmName="ChatGPT"
+                        />
+                        <MentionIndicator
+                          llmResult={result.llm_results.find(
+                            (r) => r.llm_provider === "claude"
+                          )}
+                          llmName="Claude"
+                        />
+                        <MentionIndicator
+                          llmResult={result.llm_results.find(
+                            (r) => r.llm_provider === "gemini"
+                          )}
+                          llmName="Gemini"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </InfiniteScrollContainer>
             )}
@@ -2057,20 +2054,29 @@ export default function Analysis() {
                   <div className="flex items-center space-x-1">
                     <TrendingUp className="h-4 w-4 text-success" />
                     <span className="whitespace-nowrap">
-                      {analysisResults.filter(r => r.llm_results.some(llm => llm.is_mentioned)).length} mentions
+                      {
+                        analysisResults.filter((r) =>
+                          r.llm_results.some((llm) => llm.is_mentioned)
+                        ).length
+                      }{" "}
+                      mentions
                     </span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <TrendingDown className="h-4 w-4 text-muted-foreground" />
                     <span className="whitespace-nowrap">
-                      {analysisResults.filter(r => !r.llm_results.some(llm => llm.is_mentioned)).length} no mentions
+                      {
+                        analysisResults.filter(
+                          (r) => !r.llm_results.some((llm) => llm.is_mentioned)
+                        ).length
+                      }{" "}
+                      no mentions
                     </span>
                   </div>
                 </div>
               </div>
             )
           )}
-
         </div>
 
         <AnalysisConfigModal
@@ -2091,7 +2097,6 @@ export default function Analysis() {
           websiteId={selectedWebsite}
           onSelectSession={(sessionId) => {
             // Future: Navigate to session details or filter by session
-            console.log("Selected session:", sessionId);
           }}
         />
       </>

@@ -395,7 +395,7 @@ export class AnalysisService {
   ): UIAnalysisResult[] {
     const resultsMap = new Map<string, UIAnalysisResult>();
 
-    data?.forEach((row) => {
+    data?.forEach((row, index) => {
       const promptId = row.prompt_id as string;
       if (!promptId) {
         // Skip rows with null prompt_id
@@ -529,7 +529,8 @@ export class AnalysisService {
       let query = supabase
         .schema("beekon_data")
         .from("llm_analysis_results")
-        .select(`
+        .select(
+          `
           *,
           prompts!inner (
             id,
@@ -550,7 +551,8 @@ export class AnalysisService {
             analysis_name,
             status
           )
-        `)
+        `
+        )
         .eq("prompts.topics.website_id", websiteId)
         .order("created_at", { ascending: false });
 
@@ -627,8 +629,8 @@ export class AnalysisService {
             result.llm_results.some((llm) => llm.is_mentioned)
           );
         } else if (filters.mentionStatus === "not_mentioned") {
-          filteredResults = filteredResults.filter((result) =>
-            !result.llm_results.some((llm) => llm.is_mentioned)
+          filteredResults = filteredResults.filter(
+            (result) => !result.llm_results.some((llm) => llm.is_mentioned)
           );
         }
       }
@@ -637,9 +639,9 @@ export class AnalysisService {
       if (filters?.confidenceRange) {
         const [minConfidence, maxConfidence] = filters.confidenceRange;
         // Convert percentage range to decimal range for comparison
-        const minDecimal = minConfidence / 100;  // Convert 4 → 0.04
-        const maxDecimal = maxConfidence / 100;  // Convert 100 → 1.0
-        
+        const minDecimal = minConfidence / 100; // Convert 4 → 0.04
+        const maxDecimal = maxConfidence / 100; // Convert 100 → 1.0
+
         filteredResults = filteredResults.filter(
           (result) =>
             result.confidence >= minDecimal && result.confidence <= maxDecimal
@@ -651,7 +653,7 @@ export class AnalysisService {
         filteredResults = filteredResults.filter((result) =>
           result.llm_results.some((llm) => {
             if (!llm.sentiment_score) return false;
-            
+
             if (filters.sentiment === "positive") {
               return llm.sentiment_score > 0.1;
             } else if (filters.sentiment === "negative") {
@@ -672,7 +674,8 @@ export class AnalysisService {
       }
 
       // Get the next cursor from the last item
-      const nextCursor = results.length > 0 ? results[results.length - 1].created_at : null;
+      const nextCursor =
+        results.length > 0 ? results[results.length - 1]?.created_at : null;
 
       return {
         results: filteredResults,
@@ -758,8 +761,8 @@ export class AnalysisService {
             result.llm_results.some((llm) => llm.is_mentioned)
           );
         } else if (filters.mentionStatus === "not_mentioned") {
-          filteredResults = filteredResults.filter((result) =>
-            !result.llm_results.some((llm) => llm.is_mentioned)
+          filteredResults = filteredResults.filter(
+            (result) => !result.llm_results.some((llm) => llm.is_mentioned)
           );
         }
       }
@@ -768,9 +771,9 @@ export class AnalysisService {
       if (filters?.confidenceRange) {
         const [minConfidence, maxConfidence] = filters.confidenceRange;
         // Convert percentage range to decimal range for comparison
-        const minDecimal = minConfidence / 100;  // Convert 4 → 0.04
-        const maxDecimal = maxConfidence / 100;  // Convert 100 → 1.0
-        
+        const minDecimal = minConfidence / 100; // Convert 4 → 0.04
+        const maxDecimal = maxConfidence / 100; // Convert 100 → 1.0
+
         filteredResults = filteredResults.filter(
           (result) =>
             result.confidence >= minDecimal && result.confidence <= maxDecimal
@@ -782,7 +785,7 @@ export class AnalysisService {
         filteredResults = filteredResults.filter((result) =>
           result.llm_results.some((llm) => {
             if (!llm.sentiment_score) return false;
-            
+
             if (filters.sentiment === "positive") {
               return llm.sentiment_score > 0.1;
             } else if (filters.sentiment === "negative") {
@@ -1007,14 +1010,16 @@ export class AnalysisService {
             analysisId: sessionId,
             status: session.status, // Use actual session status, not outdated progress_data.status
             progress: session.status === "completed" ? 100 : 0,
-            currentStep: session.status === "completed" 
-              ? "Analysis completed successfully!" 
-              : session.error_message || "Analysis failed",
+            currentStep:
+              session.status === "completed"
+                ? "Analysis completed successfully!"
+                : session.error_message || "Analysis failed",
             completedSteps: session.progress_data?.totalSteps || 1,
             totalSteps: session.progress_data?.totalSteps || 1,
-            ...(session.status === "failed" && session.error_message && {
-              error: session.error_message
-            })
+            ...(session.status === "failed" &&
+              session.error_message && {
+                error: session.error_message,
+              }),
           };
 
           console.log("Sending final progress update to UI:", {
