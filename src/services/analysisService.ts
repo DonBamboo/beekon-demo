@@ -4,6 +4,13 @@ import { AnalysisResult, LLMResult, UIAnalysisResult } from "@/types/database";
 
 export type AnalysisStatus = "pending" | "running" | "completed" | "failed";
 
+export interface PaginatedAnalysisResults {
+  results: UIAnalysisResult[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  totalCount?: number;
+}
+
 export interface AnalysisConfig {
   analysisName: string;
   websiteId: string;
@@ -388,7 +395,7 @@ export class AnalysisService {
   ): UIAnalysisResult[] {
     const resultsMap = new Map<string, UIAnalysisResult>();
 
-    data?.forEach((row) => {
+    data?.forEach((row, index) => {
       const promptId = row.prompt_id as string;
       if (!promptId) {
         // Skip rows with null prompt_id
@@ -497,6 +504,222 @@ export class AnalysisService {
     return Array.from(resultsMap.values());
   }
 
+  async getAnalysisResultsPaginated(
+    websiteId: string,
+    options: {
+      cursor?: string;
+      limit?: number;
+      filters?: {
+        topic?: string;
+        llmProvider?: string;
+        status?: AnalysisStatus;
+        dateRange?: { start: string; end: string };
+        searchQuery?: string;
+        mentionStatus?: string;
+        confidenceRange?: [number, number];
+        sentiment?: string;
+        analysisSession?: string;
+      };
+    } = {}
+  ): Promise<PaginatedAnalysisResults> {
+    const { cursor, limit = 20, filters } = options;
+
+    try {
+      // Step 1: Get unique prompt IDs with pagination
+      // This ensures we get complete prompt data, not partial LLM responses
+      let promptQuery = supabase
+        .schema("beekon_data")
+        .from("prompts")
+        .select(
+          `
+          id,
+          created_at,
+          topics!inner (
+            website_id
+          )
+        `
+        )
+        .eq("topics.website_id", websiteId)
+        .order("created_at", { ascending: false });
+
+      // Apply cursor-based pagination to prompts
+      if (cursor) {
+        promptQuery = promptQuery.lt("created_at", cursor);
+      }
+
+      // Get one extra prompt to determine if there are more results
+      const { data: promptsData, error: promptsError } = await promptQuery.limit(limit + 1);
+
+      if (promptsError) throw promptsError;
+
+      // Determine if there are more results and get actual prompt IDs
+      const hasMore = promptsData.length > limit;
+      const selectedPrompts = hasMore ? promptsData.slice(0, limit) : promptsData;
+      const promptIds = selectedPrompts.map(p => p.id);
+
+      if (promptIds.length === 0) {
+        return {
+          results: [],
+          hasMore: false,
+          nextCursor: null,
+          totalCount: 0,
+        };
+      }
+
+      // Step 2: Get ALL llm_analysis_results for the selected prompts
+      // This ensures each prompt has complete LLM response data
+      let llmResultsQuery = supabase
+        .schema("beekon_data")
+        .from("llm_analysis_results")
+        .select(
+          `
+          *,
+          prompts!inner (
+            id,
+            prompt_text,
+            reporting_text,
+            recommendation_text,
+            strengths,
+            opportunities,
+            topic_id,
+            topics!inner (
+              id,
+              topic_name,
+              website_id
+            )
+          ),
+          analysis_sessions (
+            id,
+            analysis_name,
+            status
+          )
+        `
+        )
+        .in("prompt_id", promptIds);
+
+      // Apply server-side filters for better performance
+      if (filters?.dateRange) {
+        llmResultsQuery = llmResultsQuery
+          .gte("created_at", filters.dateRange.start)
+          .lte("created_at", filters.dateRange.end);
+      }
+
+      const { data, error } = await llmResultsQuery;
+
+      if (error) throw error;
+
+      // Transform the data using the existing transformation function
+      const transformedResults = this.transformAnalysisData(data, websiteId);
+
+      // Apply client-side filtering for complex filters
+      let filteredResults = transformedResults;
+
+      // Apply topic filter
+      if (filters?.topic && filters.topic !== "all") {
+        filteredResults = filteredResults.filter(
+          (result) => result.topic === filters.topic
+        );
+      }
+
+      // Apply LLM provider filter
+      if (filters?.llmProvider && filters.llmProvider !== "all") {
+        filteredResults = filteredResults
+          .filter((result) =>
+            result.llm_results.some(
+              (llm) => llm.llm_provider === filters.llmProvider
+            )
+          )
+          .map((result) => ({
+            ...result,
+            llm_results: result.llm_results.map((llm) => ({
+              ...llm,
+              isFiltered: llm.llm_provider === filters.llmProvider,
+            })),
+          }));
+      }
+
+      // Apply search query filter
+      if (filters?.searchQuery && filters.searchQuery.trim()) {
+        const searchTerm = filters.searchQuery.toLowerCase().trim();
+        filteredResults = filteredResults.filter(
+          (result) =>
+            result.prompt.toLowerCase().includes(searchTerm) ||
+            result.topic.toLowerCase().includes(searchTerm) ||
+            (result.analysis_name &&
+              result.analysis_name.toLowerCase().includes(searchTerm)) ||
+            result.llm_results.some((llm) =>
+              llm.response_text?.toLowerCase().includes(searchTerm)
+            )
+        );
+      }
+
+      // Apply mention status filter
+      if (filters?.mentionStatus && filters.mentionStatus !== "all") {
+        if (filters.mentionStatus === "mentioned") {
+          filteredResults = filteredResults.filter((result) =>
+            result.llm_results.some((llm) => llm.is_mentioned)
+          );
+        } else if (filters.mentionStatus === "not_mentioned") {
+          filteredResults = filteredResults.filter(
+            (result) => !result.llm_results.some((llm) => llm.is_mentioned)
+          );
+        }
+      }
+
+      // Apply confidence range filter
+      if (filters?.confidenceRange) {
+        const [minConfidence, maxConfidence] = filters.confidenceRange;
+        // Convert percentage range to decimal range for comparison
+        const minDecimal = minConfidence / 100; // Convert 4 → 0.04
+        const maxDecimal = maxConfidence / 100; // Convert 100 → 1.0
+
+        filteredResults = filteredResults.filter(
+          (result) =>
+            result.confidence >= minDecimal && result.confidence <= maxDecimal
+        );
+      }
+
+      // Apply sentiment filter
+      if (filters?.sentiment && filters.sentiment !== "all") {
+        filteredResults = filteredResults.filter((result) =>
+          result.llm_results.some((llm) => {
+            if (!llm.sentiment_score) return false;
+
+            if (filters.sentiment === "positive") {
+              return llm.sentiment_score > 0.1;
+            } else if (filters.sentiment === "negative") {
+              return llm.sentiment_score < -0.1;
+            } else if (filters.sentiment === "neutral") {
+              return llm.sentiment_score >= -0.1 && llm.sentiment_score <= 0.1;
+            }
+            return false;
+          })
+        );
+      }
+
+      // Apply analysis session filter
+      if (filters?.analysisSession && filters.analysisSession !== "all") {
+        filteredResults = filteredResults.filter(
+          (result) => result.analysis_session_id === filters.analysisSession
+        );
+      }
+
+      // Get the next cursor from the last selected prompt
+      const nextCursor =
+        selectedPrompts.length > 0 ? selectedPrompts[selectedPrompts.length - 1]?.created_at : null;
+
+      return {
+        results: filteredResults,
+        hasMore,
+        nextCursor,
+        totalCount: undefined, // We don't calculate total count for performance reasons
+      };
+    } catch (error) {
+      console.error("Failed to get paginated analysis results:", error);
+      throw error;
+    }
+  }
+
   async getAnalysisResults(
     websiteId: string,
     filters?: {
@@ -505,6 +728,10 @@ export class AnalysisService {
       status?: AnalysisStatus;
       dateRange?: { start: string; end: string };
       searchQuery?: string;
+      mentionStatus?: string;
+      confidenceRange?: [number, number];
+      sentiment?: string;
+      analysisSession?: string;
     }
   ): Promise<UIAnalysisResult[]> {
     const { analysisResultsLoader } = await import("./dataLoaders");
@@ -555,6 +782,57 @@ export class AnalysisService {
             result.llm_results.some((llm) =>
               llm.response_text?.toLowerCase().includes(searchTerm)
             )
+        );
+      }
+
+      // Apply mention status filter
+      if (filters?.mentionStatus && filters.mentionStatus !== "all") {
+        if (filters.mentionStatus === "mentioned") {
+          filteredResults = filteredResults.filter((result) =>
+            result.llm_results.some((llm) => llm.is_mentioned)
+          );
+        } else if (filters.mentionStatus === "not_mentioned") {
+          filteredResults = filteredResults.filter(
+            (result) => !result.llm_results.some((llm) => llm.is_mentioned)
+          );
+        }
+      }
+
+      // Apply confidence range filter
+      if (filters?.confidenceRange) {
+        const [minConfidence, maxConfidence] = filters.confidenceRange;
+        // Convert percentage range to decimal range for comparison
+        const minDecimal = minConfidence / 100; // Convert 4 → 0.04
+        const maxDecimal = maxConfidence / 100; // Convert 100 → 1.0
+
+        filteredResults = filteredResults.filter(
+          (result) =>
+            result.confidence >= minDecimal && result.confidence <= maxDecimal
+        );
+      }
+
+      // Apply sentiment filter
+      if (filters?.sentiment && filters.sentiment !== "all") {
+        filteredResults = filteredResults.filter((result) =>
+          result.llm_results.some((llm) => {
+            if (!llm.sentiment_score) return false;
+
+            if (filters.sentiment === "positive") {
+              return llm.sentiment_score > 0.1;
+            } else if (filters.sentiment === "negative") {
+              return llm.sentiment_score < -0.1;
+            } else if (filters.sentiment === "neutral") {
+              return llm.sentiment_score >= -0.1 && llm.sentiment_score <= 0.1;
+            }
+            return false;
+          })
+        );
+      }
+
+      // Apply analysis session filter
+      if (filters?.analysisSession && filters.analysisSession !== "all") {
+        filteredResults = filteredResults.filter(
+          (result) => result.analysis_session_id === filters.analysisSession
         );
       }
 
@@ -763,14 +1041,16 @@ export class AnalysisService {
             analysisId: sessionId,
             status: session.status, // Use actual session status, not outdated progress_data.status
             progress: session.status === "completed" ? 100 : 0,
-            currentStep: session.status === "completed" 
-              ? "Analysis completed successfully!" 
-              : session.error_message || "Analysis failed",
+            currentStep:
+              session.status === "completed"
+                ? "Analysis completed successfully!"
+                : session.error_message || "Analysis failed",
             completedSteps: session.progress_data?.totalSteps || 1,
             totalSteps: session.progress_data?.totalSteps || 1,
-            ...(session.status === "failed" && session.error_message && {
-              error: session.error_message
-            })
+            ...(session.status === "failed" &&
+              session.error_message && {
+                error: session.error_message,
+              }),
           };
 
           console.log("Sending final progress update to UI:", {

@@ -36,6 +36,8 @@ import {
   generateGapSummary,
   GAP_THRESHOLDS
 } from "@/lib/gap-analysis-utils";
+import { getCompetitorColorIndex, getColorInfo, validateAllColorAssignments } from "@/lib/color-utils";
+import { ColorLegend } from "@/components/ui/color-indicator";
 
 interface CompetitiveGapChartProps {
   gapAnalysis: CompetitiveGapAnalysis[];
@@ -76,6 +78,7 @@ export default function CompetitiveGapChart({
       gap.competitorData.forEach((comp, index) => {
         data[`competitor${index + 1}`] = comp.score;
         data[`competitor${index + 1}_name`] = comp.competitor_name;
+        data[`competitor${index + 1}_id`] = comp.competitorId;
       });
       return data;
     });
@@ -91,14 +94,22 @@ export default function CompetitiveGapChart({
       });
     });
 
-    // Create competitor info array for rendering
+    // Create competitor info array for rendering with consistent color assignment
     const competitorInfo = Array.from(competitorKeys).map((key, index) => {
-      // Get competitor name from first data point that has this competitor
+      // Get competitor name and ID from first data point that has this competitor
       const sampleData = barChartData.find(item => item[`${key}_name`]);
+      const competitorName = sampleData?.[`${key}_name`] as string || `Competitor ${index + 1}`;
+      const competitorId = sampleData?.[`${key}_id`] as string;
+      
+      // Use competitorId as primary key for consistent colors across all charts
+      // This ensures the same competitor gets the same color in all visualizations
+      const colorIndex = getCompetitorColorIndex(competitorId, competitorName, 0);
+      
       return {
         key,
-        name: sampleData?.[`${key}_name`] as string || `Competitor ${index + 1}`,
-        colorIndex: (index % 4) + 2 // Use chart-2 to chart-5
+        name: competitorName,
+        competitorId,
+        colorIndex
       };
     });
 
@@ -127,6 +138,26 @@ export default function CompetitiveGapChart({
   const insights = useMemo(() => {
     if (!processedData) return null;
     return generateGapSummary(processedData.gapClassification);
+  }, [processedData]);
+
+  // Validate color consistency in development
+  useMemo(() => {
+    if (process.env.NODE_ENV === 'development' && processedData?.competitorInfo.length > 0) {
+      const validation = validateAllColorAssignments();
+      if (!validation.isValid) {
+        console.warn('CompetitiveGapChart: Color assignment conflicts detected:', validation.conflicts);
+      }
+      
+      // Log color mappings for debugging
+      console.log('CompetitiveGapChart color mappings:', 
+        processedData.competitorInfo.map(comp => ({
+          name: comp.name,
+          competitorId: comp.competitorId,
+          colorIndex: comp.colorIndex,
+          color: `hsl(var(--chart-${comp.colorIndex}))`
+        }))
+      );
+    }
   }, [processedData]);
 
   // Only show chart if there are competitors and meaningful data
@@ -238,6 +269,30 @@ export default function CompetitiveGapChart({
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            {/* Color Legend for Accessibility */}
+            {processedData.competitorInfo.length > 0 && (
+              <div className="mt-4 p-3 bg-muted/30 rounded-lg">
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <Info className="h-4 w-4" />
+                  Color Legend
+                </h4>
+                <ColorLegend 
+                  items={[
+                    {
+                      name: "Your Brand",
+                      color: "hsl(var(--primary))",
+                      colorName: "Primary"
+                    },
+                    ...processedData.competitorInfo.map((competitor) => ({
+                      name: competitor.name,
+                      color: `hsl(var(--chart-${competitor.colorIndex}))`,
+                      colorName: getColorInfo(competitor.colorIndex).name
+                    }))
+                  ]}
+                />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="radar" className="space-y-4">

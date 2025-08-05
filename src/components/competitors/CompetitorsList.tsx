@@ -8,8 +8,12 @@ import { CompetitorWithStatus } from '@/hooks/useCompetitorsQuery';
 
 interface MarketShareItem {
   name: string;
-  value: number;
+  normalizedValue: number;
+  rawValue: number;
   competitorId?: string;
+  mentions?: number;
+  avgRank?: number;
+  dataType: 'market_share';
 }
 
 interface CompetitorsListProps {
@@ -33,14 +37,14 @@ export default function CompetitorsList({
   const getCompetitorMarketShare = (competitorId: string, competitorName: string): number => {
     // First try to find by competitor ID
     const byId = marketShareData.find(item => item.competitorId === competitorId);
-    if (byId) return byId.value;
+    if (byId) return byId.normalizedValue;
     
     // Fallback to matching by name (excluding "Your Brand")
     const byName = marketShareData.find(item => 
       item.name !== "Your Brand" && 
       (item.name === competitorName || item.name.includes(competitorName))
     );
-    if (byName) return byName.value;
+    if (byName) return byName.normalizedValue;
     
     return 0; // Default if not found
   };

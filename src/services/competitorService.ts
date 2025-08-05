@@ -51,15 +51,34 @@ export interface CompetitorTimeSeriesData {
   }>;
 }
 
+// Separate interfaces for different metric types
+export interface MarketShareDataPoint {
+  name: string;
+  normalizedValue: number; // Normalized percentage (0-100, sum = 100)
+  rawValue: number;        // Raw share of voice percentage
+  competitorId?: string;
+  mentions?: number;
+  avgRank?: number;
+  dataType: 'market_share'; // Explicit data type identifier
+}
+
+export interface ShareOfVoiceDataPoint {
+  name: string;
+  shareOfVoice: number;    // Raw percentage of mentions
+  totalMentions: number;
+  totalAnalyses: number;
+  competitorId?: string;
+  avgRank?: number;
+  dataType: 'share_of_voice'; // Explicit data type identifier
+}
+
 export interface CompetitorAnalytics {
   totalCompetitors: number;
   activeCompetitors: number;
   averageCompetitorRank: number;
-  marketShareData: Array<{
-    name: string;
-    value: number;
-    competitorId?: string;
-  }>;
+  // Separate normalized market share from raw share of voice
+  marketShareData: MarketShareDataPoint[];
+  shareOfVoiceData: ShareOfVoiceDataPoint[];
   competitiveGaps: CompetitorComparison[];
   timeSeriesData: CompetitorTimeSeriesData[];
   shareOfVoice: CompetitorShareOfVoice[];
@@ -335,7 +354,21 @@ export class OptimizedCompetitorService extends BaseService {
           marketShareData: [
             {
               name: "Your Brand",
-              value: 0,
+              normalizedValue: 0,
+              rawValue: 0,
+              mentions: 0,
+              avgRank: null,
+              dataType: 'market_share' as const,
+            },
+          ],
+          shareOfVoiceData: [
+            {
+              name: "Your Brand",
+              shareOfVoice: 0,
+              totalMentions: 0,
+              totalAnalyses: 0,
+              avgRank: null,
+              dataType: 'share_of_voice' as const,
             },
           ],
           competitiveGaps: [],
@@ -369,27 +402,75 @@ export class OptimizedCompetitorService extends BaseService {
         competitorAnalysisService.getCompetitorInsights(websiteId, dateRange),
       ]);
 
-      // Calculate your brand's metrics using same methodology as competitors
-      const yourBrandMetrics = this.calculateBrandMetrics(yourBrandResults);
-
-      // Generate normalized market share data
-      const allCompetitorShares = shareOfVoice.map(comp => comp.shareOfVoice);
-      const totalCompetitorShare = allCompetitorShares.reduce((sum, share) => sum + share, 0);
-      const yourBrandShare = yourBrandMetrics.overallVisibilityScore;
-      const totalMarketShare = totalCompetitorShare + yourBrandShare;
+      // Calculate your brand's mention data
+      const yourBrandMentions = yourBrandResults.reduce((sum, r) => sum + r.llm_results.filter(llm => llm.is_mentioned).length, 0);
+      const yourBrandAnalyses = yourBrandResults.reduce((sum, r) => sum + r.llm_results.length, 0);
       
-      // Normalize to ensure total doesn't exceed 100%
-      const normalizationFactor = totalMarketShare > 100 ? 100 / totalMarketShare : 1;
+      // Calculate total mentions across all brands (Your Brand + all competitors)
+      const totalCompetitorMentions = shareOfVoice.reduce((sum, comp) => sum + comp.totalMentions, 0);
+      const totalMentionsAllBrands = yourBrandMentions + totalCompetitorMentions;
       
-      const marketShareData = [
+      // Calculate true Share of Voice (relative to total mentions across all brands)
+      const yourBrandTrueShareOfVoice = totalMentionsAllBrands > 0 
+        ? Number(((yourBrandMentions / totalMentionsAllBrands) * 100).toFixed(1))
+        : 0;
+      
+      // For backward compatibility, also calculate mention rate (old logic)
+      const yourBrandMentionRate = yourBrandAnalyses > 0 
+        ? Number(((yourBrandMentions / yourBrandAnalyses) * 100).toFixed(1))
+        : 0;
+      
+      // Create market share data (using true share of voice as baseline, with normalization if needed)
+      const competitorTrueShares = shareOfVoice.map(comp => ({
+        ...comp,
+        trueShareOfVoice: totalMentionsAllBrands > 0 
+          ? Number(((comp.totalMentions / totalMentionsAllBrands) * 100).toFixed(1))
+          : 0
+      }));
+      
+      // Total should be 100%, but add normalization as safety measure
+      const totalTrueShare = yourBrandTrueShareOfVoice + competitorTrueShares.reduce((sum, comp) => sum + comp.trueShareOfVoice, 0);
+      const normalizationFactor = totalTrueShare > 0 ? 100 / totalTrueShare : 1;
+      
+      // Create normalized market share data
+      const marketShareData: MarketShareDataPoint[] = [
         {
           name: "Your Brand",
-          value: Number((yourBrandShare * normalizationFactor).toFixed(1)),
+          normalizedValue: Number((yourBrandTrueShareOfVoice * normalizationFactor).toFixed(1)),
+          rawValue: yourBrandMentionRate, // Keep old mention rate for reference
+          mentions: yourBrandMentions,
+          avgRank: null, // Your brand doesn't have a rank position
+          dataType: 'market_share'
         },
-        ...shareOfVoice.map((comp) => ({
+        ...competitorTrueShares.map((comp) => ({
           name: comp.competitorName,
-          value: Number((comp.shareOfVoice * normalizationFactor).toFixed(1)),
+          normalizedValue: Number((comp.trueShareOfVoice * normalizationFactor).toFixed(1)),
+          rawValue: comp.shareOfVoice, // Keep old database value for reference
           competitorId: comp.competitorId,
+          mentions: comp.totalMentions,
+          avgRank: comp.avgRankPosition,
+          dataType: 'market_share' as const
+        })),
+      ];
+
+      // Create share of voice data (true relative share of total mentions)
+      const shareOfVoiceData: ShareOfVoiceDataPoint[] = [
+        {
+          name: "Your Brand",
+          shareOfVoice: yourBrandTrueShareOfVoice, // Use true share of voice
+          totalMentions: yourBrandMentions,
+          totalAnalyses: yourBrandAnalyses,
+          avgRank: null,
+          dataType: 'share_of_voice'
+        },
+        ...competitorTrueShares.map((comp) => ({
+          name: comp.competitorName,
+          shareOfVoice: comp.trueShareOfVoice, // Use true share of voice
+          totalMentions: comp.totalMentions,
+          totalAnalyses: comp.totalAnalyses,
+          competitorId: comp.competitorId,
+          avgRank: comp.avgRankPosition,
+          dataType: 'share_of_voice' as const
         })),
       ];
 
@@ -398,12 +479,14 @@ export class OptimizedCompetitorService extends BaseService {
       // Create unified competitor analytics with validated data
       const unifiedAnalytics = this.createUnifiedCompetitorAnalytics({
         competitors,
-        yourBrandMetrics,
         shareOfVoice,
         gapAnalysis,
         insights,
         timeSeriesData,
         marketShareData,
+        shareOfVoiceData,
+        totalMentionsAllBrands,
+        yourBrandMentions,
       });
 
       return unifiedAnalytics;
@@ -1082,24 +1165,24 @@ export class OptimizedCompetitorService extends BaseService {
    */
   private createUnifiedCompetitorAnalytics({
     competitors,
-    yourBrandMetrics,
     shareOfVoice,
     gapAnalysis,
     insights,
     timeSeriesData,
     marketShareData,
+    shareOfVoiceData,
+    totalMentionsAllBrands,
+    yourBrandMentions,
   }: {
     competitors: CompetitorPerformance[];
-    yourBrandMetrics: { overallVisibilityScore: number };
     shareOfVoice: CompetitorShareOfVoice[];
     gapAnalysis: CompetitiveGapAnalysis[];
     insights: CompetitorInsight[];
     timeSeriesData: CompetitorTimeSeriesData[];
-    marketShareData: Array<{
-      name: string;
-      value: number;
-      competitorId?: string;
-    }>;
+    marketShareData: MarketShareDataPoint[];
+    shareOfVoiceData: ShareOfVoiceDataPoint[];
+    totalMentionsAllBrands: number;
+    yourBrandMentions: number;
   }): CompetitorAnalytics {
     // Validate data consistency before creating analytics
     const validation = this.validateCompetitorData({
@@ -1108,6 +1191,18 @@ export class OptimizedCompetitorService extends BaseService {
       marketShareData,
       insights,
     });
+    
+    // Additional validation for share of voice totals
+    const shareOfVoiceTotal = shareOfVoiceData.reduce((sum, item) => sum + item.shareOfVoice, 0);
+    const marketShareTotal = marketShareData.reduce((sum, item) => sum + item.normalizedValue, 0);
+    
+    if (Math.abs(shareOfVoiceTotal - 100) > 5) {
+      validation.warnings.push(`Share of voice total deviates from 100%: ${shareOfVoiceTotal.toFixed(1)}%`);
+    }
+    
+    if (Math.abs(marketShareTotal - 100) > 5) {
+      validation.warnings.push(`Market share total deviates from 100%: ${marketShareTotal.toFixed(1)}%`);
+    }
 
     // Log validation issues for debugging and monitoring
     if (validation.issues.length > 0) {
@@ -1148,6 +1243,7 @@ export class OptimizedCompetitorService extends BaseService {
             competitors.length
           : 0,
       marketShareData,
+      shareOfVoiceData, // Add the new share of voice data
       competitiveGaps, // Use consistent format derived from gapAnalysis
       timeSeriesData,
       shareOfVoice,
@@ -1158,6 +1254,14 @@ export class OptimizedCompetitorService extends BaseService {
         dataValidation: validation,
         generatedAt: new Date().toISOString(),
         dataConsistency: this.checkDataConsistency(marketShareData, shareOfVoice),
+        calculationMethod: {
+          shareOfVoiceCalculation: 'relative_to_total_mentions',
+          totalMentionsAllBrands,
+          yourBrandMentions,
+          shareOfVoiceTotal: shareOfVoiceTotal.toFixed(1),
+          marketShareTotal: marketShareTotal.toFixed(1),
+          description: 'Share of voice calculated as (brand_mentions / total_mentions_all_brands) * 100'
+        },
       },
     };
   }
@@ -1173,14 +1277,14 @@ export class OptimizedCompetitorService extends BaseService {
   }: {
     shareOfVoice: CompetitorShareOfVoice[];
     gapAnalysis: CompetitiveGapAnalysis[];
-    marketShareData: Array<{ name: string; value: number; competitorId?: string }>;
+    marketShareData: MarketShareDataPoint[];
     insights: CompetitorInsight[];
   }) {
     const issues: string[] = [];
     const warnings: string[] = [];
 
-    // Validate market share data
-    const totalMarketShare = marketShareData.reduce((sum, item) => sum + item.value, 0);
+    // Validate market share data (normalized values should sum to ~100%)
+    const totalMarketShare = marketShareData.reduce((sum, item) => sum + item.normalizedValue, 0);
     if (totalMarketShare > 105) { // Allow 5% tolerance for rounding
       issues.push(`Market share total exceeds 100%: ${totalMarketShare.toFixed(1)}%`);
     }
@@ -1229,7 +1333,7 @@ export class OptimizedCompetitorService extends BaseService {
     insights: CompetitorInsight[],
     shareOfVoice: CompetitorShareOfVoice[],
     gapAnalysis: CompetitiveGapAnalysis[],
-    marketShareData: Array<{ name: string; value: number; competitorId?: string }>
+    marketShareData: MarketShareDataPoint[]
   ): CompetitorInsight[] {
     return insights.map((insight) => {
       // For market leader insights, verify the dominance claim against actual market share data
@@ -1238,8 +1342,8 @@ export class OptimizedCompetitorService extends BaseService {
         const shareOfVoiceItem = shareOfVoice.find(item => item.competitorId === insight.competitorId);
         
         if (marketShareItem && shareOfVoiceItem) {
-          // Update description to match actual displayed data
-          const actualShare = marketShareItem.value;
+          // Update description to match actual displayed data (use normalized value for market share)
+          const actualShare = marketShareItem.normalizedValue;
           const updatedDescription = `${shareOfVoiceItem.competitorName} dominates with ${actualShare.toFixed(1)}% market share`;
           
           return {
@@ -1274,7 +1378,7 @@ export class OptimizedCompetitorService extends BaseService {
    * Check data consistency between different data sources
    */
   private checkDataConsistency(
-    marketShareData: Array<{ name: string; value: number; competitorId?: string }>,
+    marketShareData: MarketShareDataPoint[],
     shareOfVoice: CompetitorShareOfVoice[]
   ) {
     const consistency = {
