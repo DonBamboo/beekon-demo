@@ -2,7 +2,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Globe, MoreHorizontal, Trash2, TrendingUp, TrendingDown, Clock, Loader2 } from 'lucide-react';
+import { Globe, MoreHorizontal, Trash2, TrendingUp, TrendingDown, Clock } from 'lucide-react';
+import { Spinner } from '@/components/LoadingStates';
 import { CompetitorPerformance } from '@/services/competitorService';
 import { CompetitorWithStatus } from '@/hooks/useCompetitorsQuery';
 
@@ -81,7 +82,7 @@ export default function CompetitorsList({
       case 'completed':
         return { text: 'Analyzed', variant: 'default' as const, icon: null };
       case 'in_progress':
-        return { text: 'Analyzing', variant: 'secondary' as const, icon: <Loader2 className="h-3 w-3 animate-spin" /> };
+        return { text: 'Analyzing', variant: 'secondary' as const, icon: <Spinner size="sm" /> };
       case 'pending':
         return { text: 'Pending', variant: 'outline' as const, icon: <Clock className="h-3 w-3" /> };
     }

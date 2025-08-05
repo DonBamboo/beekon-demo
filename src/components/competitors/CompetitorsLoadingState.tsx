@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface CompetitorsLoadingStateProps {
   workspaceLoading: boolean;
@@ -24,10 +25,10 @@ export default function CompetitorsLoadingState({
         {[...Array(4)].map((_, i) => (
           <Card key={i}>
             <CardHeader>
-              <div className="h-4 bg-muted rounded animate-pulse" />
+              <Skeleton height={16} />
             </CardHeader>
             <CardContent>
-              <div className="h-64 bg-muted rounded animate-pulse" />
+              <Skeleton height={256} />
             </CardContent>
           </Card>
         ))}

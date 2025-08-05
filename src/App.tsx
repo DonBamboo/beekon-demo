@@ -10,6 +10,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Suspense, lazy, useEffect } from "react";
 import { WorkspaceProvider } from "./hooks/useWorkspace";
 import { registerSW } from "./lib/serviceWorker";
+import { PageLoading, InlineLoading } from "@/components/LoadingStates";
 
 // Lazy load all pages for code splitting
 const Analysis = lazy(() => import("./pages/Analysis"));
@@ -127,7 +128,7 @@ const App = () => {
           <WorkspaceErrorBoundary>
             <WorkspaceProvider>
               <BrowserRouter>
-                <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div></div>}>
+                <Suspense fallback={<PageLoading message="Loading application..." />}>
                   <Routes>
                     <Route path="/" element={<LandingPage />} />
                     <Route path="/auth" element={<Auth />} />
@@ -156,7 +157,7 @@ const App = () => {
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+                            <Suspense fallback={<InlineLoading message="Loading page..." />}>
                               <Analysis />
                             </Suspense>
                           </AppLayout>
@@ -168,7 +169,7 @@ const App = () => {
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+                            <Suspense fallback={<InlineLoading message="Loading page..." />}>
                               <Competitors />
                             </Suspense>
                           </AppLayout>

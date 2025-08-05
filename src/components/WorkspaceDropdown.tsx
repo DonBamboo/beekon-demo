@@ -12,11 +12,11 @@ import { useWorkspace, Workspace } from "@/hooks/useWorkspace";
 import {
   Building,
   ChevronDown,
-  Loader2,
   Plus,
   Settings,
   Trash2,
 } from "lucide-react";
+import { Spinner } from "@/components/LoadingStates";
 import { useState } from "react";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import { WorkspaceModal } from "./WorkspaceModal";
@@ -93,7 +93,7 @@ export function WorkspaceDropdown() {
   if (loading) {
     return (
       <Button variant="ghost" size="sm" disabled>
-        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        <Spinner size="sm" className="mr-2" />
         Loading...
       </Button>
     );

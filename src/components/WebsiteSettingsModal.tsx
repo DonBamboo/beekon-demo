@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Spinner } from "@/components/LoadingStates";
 import {
   Dialog,
   DialogContent,
@@ -309,7 +310,7 @@ export function WebsiteSettingsModal({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <Spinner size="lg" />
             </div>
           ) : (
             <>

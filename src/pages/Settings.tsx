@@ -27,7 +27,6 @@ import {
   Bell,
   Camera,
   Key,
-  Loader2,
   Lock,
   Save,
   Settings as SettingsIcon,
@@ -36,6 +35,7 @@ import {
   FileOutput,
   History,
 } from "lucide-react";
+import { Spinner } from "@/components/LoadingStates";
 import { useEffect, useState } from "react";
 
 export default function Settings() {
@@ -425,7 +425,7 @@ export default function Settings() {
 
         {(isLoading || isLoadingProfile) ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <Spinner size="lg" />
             <p className="text-sm text-muted-foreground">
               Loading your settings...
             </p>

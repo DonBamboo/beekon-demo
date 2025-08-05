@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Spinner, ProgressiveLoading } from "@/components/LoadingStates";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +40,6 @@ import {
   Search,
   X,
   Zap,
-  Loader2,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
@@ -509,7 +509,7 @@ export function AnalysisConfigModal({
                 ) : analysisProgress.status === "failed" ? (
                   <AlertCircle className="h-4 w-4 text-destructive" />
                 ) : (
-                  <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <Spinner size="sm" />
                 )}
                 <span className="font-medium">
                   {analysisProgress.status === "completed"
@@ -568,7 +568,7 @@ export function AnalysisConfigModal({
               </div>
               {isLoadingTopics && (
                 <div className="flex items-center text-sm text-muted-foreground">
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  <Spinner size="sm" className="mr-1" />
                   Loading topics...
                 </div>
               )}
@@ -655,7 +655,7 @@ export function AnalysisConfigModal({
 
               {isLoadingTopics && (
                 <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Spinner size="sm" className="mr-2" />
                   <span className="text-sm text-muted-foreground">
                     Loading available topics...
                   </span>

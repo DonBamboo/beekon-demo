@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Zap } from 'lucide-react';
+import { Zap } from 'lucide-react';
+import { Spinner } from '@/components/LoadingStates';
 import { useEffect } from 'react';
 
 export default function Auth() {
@@ -124,7 +125,7 @@ export default function Auth() {
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
-                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {loading && <Spinner size="sm" className="mr-2" />}
                     Sign In
                   </Button>
                 </form>
@@ -155,7 +156,7 @@ export default function Auth() {
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
-                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {loading && <Spinner size="sm" className="mr-2" />}
                     Create Account
                   </Button>
                 </form>

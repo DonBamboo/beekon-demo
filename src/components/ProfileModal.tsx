@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Spinner, FormSkeleton } from "@/components/LoadingStates";
 import {
   Dialog,
   DialogContent,
@@ -252,14 +253,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         </DialogHeader>
 
         {isLoadingProfile ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-              <p className="text-sm text-muted-foreground">
-                Loading profile...
-              </p>
-            </div>
-          </div>
+          <FormSkeleton fields={5} />
         ) : (
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Avatar Section */}
