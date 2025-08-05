@@ -525,8 +525,50 @@ export class AnalysisService {
     const { cursor, limit = 20, filters } = options;
 
     try {
-      // Build the base query with cursor-based pagination
-      let query = supabase
+      // Step 1: Get unique prompt IDs with pagination
+      // This ensures we get complete prompt data, not partial LLM responses
+      let promptQuery = supabase
+        .schema("beekon_data")
+        .from("prompts")
+        .select(
+          `
+          id,
+          created_at,
+          topics!inner (
+            website_id
+          )
+        `
+        )
+        .eq("topics.website_id", websiteId)
+        .order("created_at", { ascending: false });
+
+      // Apply cursor-based pagination to prompts
+      if (cursor) {
+        promptQuery = promptQuery.lt("created_at", cursor);
+      }
+
+      // Get one extra prompt to determine if there are more results
+      const { data: promptsData, error: promptsError } = await promptQuery.limit(limit + 1);
+
+      if (promptsError) throw promptsError;
+
+      // Determine if there are more results and get actual prompt IDs
+      const hasMore = promptsData.length > limit;
+      const selectedPrompts = hasMore ? promptsData.slice(0, limit) : promptsData;
+      const promptIds = selectedPrompts.map(p => p.id);
+
+      if (promptIds.length === 0) {
+        return {
+          results: [],
+          hasMore: false,
+          nextCursor: null,
+          totalCount: 0,
+        };
+      }
+
+      // Step 2: Get ALL llm_analysis_results for the selected prompts
+      // This ensures each prompt has complete LLM response data
+      let llmResultsQuery = supabase
         .schema("beekon_data")
         .from("llm_analysis_results")
         .select(
@@ -553,32 +595,36 @@ export class AnalysisService {
           )
         `
         )
-        .eq("prompts.topics.website_id", websiteId)
-        .order("created_at", { ascending: false });
-
-      // Apply cursor-based pagination
-      if (cursor) {
-        query = query.lt("created_at", cursor);
-      }
+        .in("prompt_id", promptIds);
 
       // Apply server-side filters for better performance
       if (filters?.dateRange) {
-        query = query
+        llmResultsQuery = llmResultsQuery
           .gte("created_at", filters.dateRange.start)
           .lte("created_at", filters.dateRange.end);
       }
 
-      // Fetch one extra item to determine if there are more results
-      const { data, error } = await query.limit(limit + 1);
+      const { data, error } = await llmResultsQuery;
 
       if (error) throw error;
 
-      // Determine if there are more results
-      const hasMore = data.length > limit;
-      const results = hasMore ? data.slice(0, limit) : data;
-
       // Transform the data using the existing transformation function
-      const transformedResults = this.transformAnalysisData(results, websiteId);
+      const transformedResults = this.transformAnalysisData(data, websiteId);
+      
+      // Log for debugging - ensure each prompt has complete LLM data
+      if (process.env.NODE_ENV === 'development' && transformedResults.length > 0) {
+        console.log('🔍 Prompt-based pagination results:', {
+          promptCount: promptIds.length,
+          llmRecordsCount: data.length,
+          transformedResultsCount: transformedResults.length,
+          firstResult: {
+            id: transformedResults[0]?.id,
+            prompt: transformedResults[0]?.prompt?.substring(0, 50) + '...',
+            llmResultsCount: transformedResults[0]?.llm_results?.length || 0,
+            llmProviders: transformedResults[0]?.llm_results?.map(r => r.llm_provider) || []
+          }
+        });
+      }
 
       // Apply client-side filtering for complex filters
       let filteredResults = transformedResults;
@@ -673,9 +719,9 @@ export class AnalysisService {
         );
       }
 
-      // Get the next cursor from the last item
+      // Get the next cursor from the last selected prompt
       const nextCursor =
-        results.length > 0 ? results[results.length - 1]?.created_at : null;
+        selectedPrompts.length > 0 ? selectedPrompts[selectedPrompts.length - 1]?.created_at : null;
 
       return {
         results: filteredResults,
