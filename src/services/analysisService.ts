@@ -610,21 +610,6 @@ export class AnalysisService {
 
       // Transform the data using the existing transformation function
       const transformedResults = this.transformAnalysisData(data, websiteId);
-      
-      // Log for debugging - ensure each prompt has complete LLM data
-      if (process.env.NODE_ENV === 'development' && transformedResults.length > 0) {
-        console.log('🔍 Prompt-based pagination results:', {
-          promptCount: promptIds.length,
-          llmRecordsCount: data.length,
-          transformedResultsCount: transformedResults.length,
-          firstResult: {
-            id: transformedResults[0]?.id,
-            prompt: transformedResults[0]?.prompt?.substring(0, 50) + '...',
-            llmResultsCount: transformedResults[0]?.llm_results?.length || 0,
-            llmProviders: transformedResults[0]?.llm_results?.map(r => r.llm_provider) || []
-          }
-        });
-      }
 
       // Apply client-side filtering for complex filters
       let filteredResults = transformedResults;

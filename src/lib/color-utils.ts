@@ -376,8 +376,6 @@ export function debugLogColorAssignments(context: string = 'Color Assignment Deb
     console.info('💡 Recommendations:', validation.recommendations);
   }
   
-  console.log('🔍 All assignments:');
-  console.table(stats.assignments);
   
   console.groupEnd();
 }

@@ -126,19 +126,6 @@ export function DetailedAnalysisModal({
 
   if (!analysisResult) return null;
 
-  // Log modal data for debugging in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 DetailedAnalysisModal received data:', {
-      id: analysisResult.id,
-      prompt: analysisResult.prompt?.substring(0, 50) + '...',
-      llmResultsCount: analysisResult.llm_results?.length || 0,
-      llmProviders: analysisResult.llm_results?.map(r => r.llm_provider) || [],
-      hasAllExpectedProviders: ['chatgpt', 'claude', 'gemini'].every(expected =>
-        analysisResult.llm_results?.some(r => r.llm_provider?.toLowerCase().includes(expected))
-      )
-    });
-  }
-
   const handleExport = async (format: "pdf" | "csv" | "json") => {
     if (!analysisResult?.id) return;
 
