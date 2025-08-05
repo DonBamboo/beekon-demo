@@ -4,6 +4,13 @@ import { AnalysisResult, LLMResult, UIAnalysisResult } from "@/types/database";
 
 export type AnalysisStatus = "pending" | "running" | "completed" | "failed";
 
+export interface PaginatedAnalysisResults {
+  results: UIAnalysisResult[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  totalCount?: number;
+}
+
 export interface AnalysisConfig {
   analysisName: string;
   websiteId: string;
@@ -495,6 +502,188 @@ export class AnalysisService {
     });
 
     return Array.from(resultsMap.values());
+  }
+
+  async getAnalysisResultsPaginated(
+    websiteId: string,
+    options: {
+      cursor?: string;
+      limit?: number;
+      filters?: {
+        topic?: string;
+        llmProvider?: string;
+        status?: AnalysisStatus;
+        dateRange?: { start: string; end: string };
+        searchQuery?: string;
+        mentionStatus?: string;
+        confidenceRange?: [number, number];
+        sentiment?: string;
+        analysisSession?: string;
+      };
+    } = {}
+  ): Promise<PaginatedAnalysisResults> {
+    const { cursor, limit = 20, filters } = options;
+
+    try {
+      // Build the base query with cursor-based pagination
+      let query = supabase
+        .schema("beekon_data")
+        .from("llm_analysis_results")
+        .select(`
+          *,
+          prompts!inner (
+            id,
+            prompt_text,
+            reporting_text,
+            recommendation_text,
+            strengths,
+            opportunities,
+            topic_id,
+            topics!inner (
+              id,
+              topic_name,
+              website_id
+            )
+          ),
+          analysis_sessions (
+            id,
+            analysis_name,
+            status
+          )
+        `)
+        .eq("prompts.topics.website_id", websiteId)
+        .order("created_at", { ascending: false });
+
+      // Apply cursor-based pagination
+      if (cursor) {
+        query = query.lt("created_at", cursor);
+      }
+
+      // Apply server-side filters for better performance
+      if (filters?.dateRange) {
+        query = query
+          .gte("created_at", filters.dateRange.start)
+          .lte("created_at", filters.dateRange.end);
+      }
+
+      // Fetch one extra item to determine if there are more results
+      const { data, error } = await query.limit(limit + 1);
+
+      if (error) throw error;
+
+      // Determine if there are more results
+      const hasMore = data.length > limit;
+      const results = hasMore ? data.slice(0, limit) : data;
+
+      // Transform the data using the existing transformation function
+      const transformedResults = this.transformAnalysisData(results, websiteId);
+
+      // Apply client-side filtering for complex filters
+      let filteredResults = transformedResults;
+
+      // Apply topic filter
+      if (filters?.topic && filters.topic !== "all") {
+        filteredResults = filteredResults.filter(
+          (result) => result.topic === filters.topic
+        );
+      }
+
+      // Apply LLM provider filter
+      if (filters?.llmProvider && filters.llmProvider !== "all") {
+        filteredResults = filteredResults
+          .filter((result) =>
+            result.llm_results.some(
+              (llm) => llm.llm_provider === filters.llmProvider
+            )
+          )
+          .map((result) => ({
+            ...result,
+            llm_results: result.llm_results.map((llm) => ({
+              ...llm,
+              isFiltered: llm.llm_provider === filters.llmProvider,
+            })),
+          }));
+      }
+
+      // Apply search query filter
+      if (filters?.searchQuery && filters.searchQuery.trim()) {
+        const searchTerm = filters.searchQuery.toLowerCase().trim();
+        filteredResults = filteredResults.filter(
+          (result) =>
+            result.prompt.toLowerCase().includes(searchTerm) ||
+            result.topic.toLowerCase().includes(searchTerm) ||
+            (result.analysis_name &&
+              result.analysis_name.toLowerCase().includes(searchTerm)) ||
+            result.llm_results.some((llm) =>
+              llm.response_text?.toLowerCase().includes(searchTerm)
+            )
+        );
+      }
+
+      // Apply mention status filter
+      if (filters?.mentionStatus && filters.mentionStatus !== "all") {
+        if (filters.mentionStatus === "mentioned") {
+          filteredResults = filteredResults.filter((result) =>
+            result.llm_results.some((llm) => llm.is_mentioned)
+          );
+        } else if (filters.mentionStatus === "not_mentioned") {
+          filteredResults = filteredResults.filter((result) =>
+            !result.llm_results.some((llm) => llm.is_mentioned)
+          );
+        }
+      }
+
+      // Apply confidence range filter
+      if (filters?.confidenceRange) {
+        const [minConfidence, maxConfidence] = filters.confidenceRange;
+        // Convert percentage range to decimal range for comparison
+        const minDecimal = minConfidence / 100;  // Convert 4 → 0.04
+        const maxDecimal = maxConfidence / 100;  // Convert 100 → 1.0
+        
+        filteredResults = filteredResults.filter(
+          (result) =>
+            result.confidence >= minDecimal && result.confidence <= maxDecimal
+        );
+      }
+
+      // Apply sentiment filter
+      if (filters?.sentiment && filters.sentiment !== "all") {
+        filteredResults = filteredResults.filter((result) =>
+          result.llm_results.some((llm) => {
+            if (!llm.sentiment_score) return false;
+            
+            if (filters.sentiment === "positive") {
+              return llm.sentiment_score > 0.1;
+            } else if (filters.sentiment === "negative") {
+              return llm.sentiment_score < -0.1;
+            } else if (filters.sentiment === "neutral") {
+              return llm.sentiment_score >= -0.1 && llm.sentiment_score <= 0.1;
+            }
+            return false;
+          })
+        );
+      }
+
+      // Apply analysis session filter
+      if (filters?.analysisSession && filters.analysisSession !== "all") {
+        filteredResults = filteredResults.filter(
+          (result) => result.analysis_session_id === filters.analysisSession
+        );
+      }
+
+      // Get the next cursor from the last item
+      const nextCursor = results.length > 0 ? results[results.length - 1].created_at : null;
+
+      return {
+        results: filteredResults,
+        hasMore,
+        nextCursor,
+        totalCount: undefined, // We don't calculate total count for performance reasons
+      };
+    } catch (error) {
+      console.error("Failed to get paginated analysis results:", error);
+      throw error;
+    }
   }
 
   async getAnalysisResults(

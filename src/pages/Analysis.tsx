@@ -54,6 +54,8 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, memo } from "react";
+import { useInfiniteAnalysisResults } from "@/hooks/useInfiniteAnalysisResults";
+import { InfiniteScrollContainer } from "@/components/InfiniteScrollContainer";
 
 // LegacyAnalysisResult interface removed - now using modern AnalysisResult directly
 
@@ -99,10 +101,10 @@ export default function Analysis() {
   const [searchInInsights, setSearchInInsights] = useState(false);
 
   // Performance & UX improvements
-  const [virtualScrollEnabled, setVirtualScrollEnabled] = useState(false);
-  const [resultsPerPage, setResultsPerPage] = useState(20);
-  const [currentPage, setCurrentPage] = useState(1);
   const [showPerformanceStats, setShowPerformanceStats] = useState(false);
+  const [infiniteScrollEnabled, setInfiniteScrollEnabled] = useState(true);
+  const [initialLoadSize, setInitialLoadSize] = useState(20);
+  const [loadMoreSize, setLoadMoreSize] = useState(20);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -112,9 +114,6 @@ export default function Analysis() {
   const [isFiltering, setIsFiltering] = useState(false);
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [analysisResults, setAnalysisResults] = useState<UIAnalysisResult[]>(
-    []
-  );
   const [topics, setTopics] = useState<
     Array<{ id: string; name: string; resultCount: number }>
   >([]);
@@ -124,7 +123,6 @@ export default function Analysis() {
   const [availableAnalysisSessions, setAvailableAnalysisSessions] = useState<
     Array<{ id: string; name: string; resultCount: number }>
   >([]);
-  const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [selectedWebsite, setSelectedWebsite] = useState<string>("");
   const [showVisualization, setShowVisualization] = useState(true);
   const [groupBySession, setGroupBySession] = useState(false);
@@ -226,7 +224,7 @@ export default function Analysis() {
           case "confidence":
             comparison = a.confidence - b.confidence;
             break;
-          case "mentions":
+          case "mentions": {
             const aMentions = a.llm_results.filter(
               (llm) => llm.is_mentioned
             ).length;
@@ -235,7 +233,8 @@ export default function Analysis() {
             ).length;
             comparison = aMentions - bMentions;
             break;
-          case "rank":
+          }
+          case "rank": {
             const aAvgRank =
               a.llm_results
                 .filter((llm) => llm.rank_position !== null)
@@ -250,6 +249,7 @@ export default function Analysis() {
                   .length || 0;
             comparison = aAvgRank - bAvgRank;
             break;
+          }
           default:
             comparison = 0;
         }
@@ -260,104 +260,91 @@ export default function Analysis() {
     []
   );
 
-  // Consolidated filter management
-  const loadAnalysisResults = useCallback(async () => {
-    if (!selectedWebsite) {
-      return;
-    }
-
-    setIsLoadingResults(true);
-    clearError();
-
-    try {
-      // Calculate date range based on selection
-      let dateRange;
-      if (selectedDateRange !== "all") {
-        const now = new Date();
-        if (selectedDateRange === "custom" && customDateRange) {
-          dateRange = customDateRange;
-        } else {
-          const days = parseInt(selectedDateRange.replace("d", ""));
-          const startDate = new Date(
-            now.getTime() - days * 24 * 60 * 60 * 1000
-          );
-          dateRange = {
-            start: startDate.toISOString(),
-            end: now.toISOString(),
-          };
-        }
-      }
-
-      const filters = {
-        topic: getTopicNameForFilter(selectedTopic), // Convert topic ID to name for filtering
-        llmProvider: selectedLLM !== "all" ? selectedLLM : undefined,
-        searchQuery: debouncedSearchQuery.trim() || undefined,
-        mentionStatus:
-          selectedMentionStatus !== "all" ? selectedMentionStatus : undefined,
-        dateRange,
-        confidenceRange:
-          selectedConfidenceRange[0] > 0 || selectedConfidenceRange[1] < 100
-            ? selectedConfidenceRange
-            : undefined,
-        sentiment: selectedSentiment !== "all" ? selectedSentiment : undefined,
-        analysisSession:
-          selectedAnalysisSession !== "all"
-            ? selectedAnalysisSession
-            : undefined,
+  // Calculate date range based on selection
+  const dateRange = useMemo(() => {
+    if (selectedDateRange === "all") return undefined;
+    
+    const now = new Date();
+    if (selectedDateRange === "custom" && customDateRange) {
+      return customDateRange;
+    } else {
+      const days = parseInt(selectedDateRange.replace("d", ""));
+      const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      return {
+        start: startDate.toISOString(),
+        end: now.toISOString(),
       };
+    }
+  }, [selectedDateRange, customDateRange]);
 
-      let results = await analysisService.getAnalysisResults(
-        selectedWebsite,
-        filters
-      );
+  // Helper function to get topic name for filtering
+  const getTopicNameForFilter = useCallback((topicId: string): string | undefined => {
+    if (topicId === "all") return undefined;
 
-      // Apply advanced search if enabled (using debounced query)
-      if (debouncedAdvancedSearchQuery.trim()) {
-        results = performAdvancedSearch(
-          results,
-          debouncedAdvancedSearchQuery,
-          searchInResponses,
-          searchInInsights
-        );
-      }
+    const topic = topics.find((topic) => topic.id === topicId);
+    return topic?.name;
+  }, [topics]);
 
-      // Apply sorting
-      const sortedResults = sortResults(results, sortBy, sortOrder);
-      setAnalysisResults(sortedResults);
-    } catch (error) {
-      console.error("❌ Failed to load analysis results:", error);
-      console.error("❌ Error details:", error);
-      handleError(error);
+  // Prepare filters for infinite scroll hook
+  const filters = useMemo(() => ({
+    topic: getTopicNameForFilter(selectedTopic),
+    llmProvider: selectedLLM !== "all" ? selectedLLM : undefined,
+    searchQuery: debouncedSearchQuery.trim() || undefined,
+    mentionStatus: selectedMentionStatus !== "all" ? selectedMentionStatus : undefined,
+    dateRange,
+    confidenceRange:
+      selectedConfidenceRange[0] > 0 || selectedConfidenceRange[1] < 100
+        ? selectedConfidenceRange
+        : undefined,
+    sentiment: selectedSentiment !== "all" ? selectedSentiment : undefined,
+    analysisSession: selectedAnalysisSession !== "all" ? selectedAnalysisSession : undefined,
+  }), [
+    selectedTopic,
+    selectedLLM,
+    debouncedSearchQuery,
+    selectedMentionStatus,
+    dateRange,
+    selectedConfidenceRange,
+    selectedSentiment,
+    selectedAnalysisSession,
+    getTopicNameForFilter,
+  ]);
+
+  // Use infinite scroll hook for data management
+  const {
+    loadedResults: analysisResults,
+    hasMore,
+    isLoading: isLoadingResults,
+    isLoadingMore,
+    error: infiniteScrollError,
+    loadMore,
+    refresh: refreshResults,
+    totalLoaded,
+  } = useInfiniteAnalysisResults(
+    selectedWebsite || "",
+    filters,
+    debouncedAdvancedSearchQuery,
+    searchInResponses,
+    searchInInsights,
+    sortBy,
+    sortOrder,
+    {
+      initialLimit: initialLoadSize,
+      loadMoreLimit: loadMoreSize,
+    }
+  );
+
+  // Handle infinite scroll errors
+  useEffect(() => {
+    if (infiniteScrollError) {
+      handleError(infiniteScrollError);
       toast({
         title: "Error",
         description: "Failed to load analysis results. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoadingResults(false);
     }
-  }, [
-    selectedWebsite,
-    selectedTopic,
-    selectedLLM,
-    debouncedSearchQuery,
-    selectedMentionStatus,
-    selectedDateRange,
-    customDateRange,
-    selectedConfidenceRange,
-    selectedSentiment,
-    selectedAnalysisSession,
-    sortBy,
-    sortOrder,
-    debouncedAdvancedSearchQuery,
-    searchInResponses,
-    searchInInsights,
-    performAdvancedSearch,
-    sortResults,
-    toast,
-    handleError,
-    clearError,
-  ]);
+  }, [infiniteScrollError, handleError, toast]);
 
   // Load topics for the selected website
   const loadTopics = useCallback(async () => {
@@ -468,10 +455,7 @@ export default function Analysis() {
     loadAvailableAnalysisSessions,
   ]);
 
-  // Load analysis results when filters change
-  useEffect(() => {
-    loadAnalysisResults();
-  }, [loadAnalysisResults]);
+  // No longer needed - infinite scroll hook handles data loading automatically
 
   // Improved filter validation with debouncing to prevent unnecessary resets
   useEffect(() => {
@@ -508,18 +492,18 @@ export default function Analysis() {
   }, [availableLLMs, selectedLLM]);
 
   // No need for legacy format transformation - work directly with modern format
-  const filteredResults = analysisResults;
+  // Use analysisResults directly from infinite scroll hook
 
   // Group results by session if requested
   const groupedResults = useMemo(() => {
     if (!groupBySession) {
-      return { ungrouped: filteredResults };
+      return { ungrouped: analysisResults };
     }
 
     const groups: Record<string, UIAnalysisResult[]> = {};
     const ungrouped: UIAnalysisResult[] = [];
 
-    filteredResults.forEach((result) => {
+    analysisResults.forEach((result) => {
       if (result.analysis_session_id && result.analysis_name) {
         const key = `${result.analysis_session_id}:${result.analysis_name}`;
         if (!groups[key]) {
@@ -532,37 +516,37 @@ export default function Analysis() {
     });
 
     return { groups, ungrouped };
-  }, [filteredResults, groupBySession]);
+  }, [analysisResults, groupBySession]);
 
   // Memoize expensive statistics calculations
   const resultStats = useMemo(() => {
-    const mentionedCount = filteredResults.filter((r) =>
+    const mentionedCount = analysisResults.filter((r) =>
       r.llm_results.some((llm) => llm.is_mentioned)
     ).length;
 
-    const noMentionCount = filteredResults.filter(
+    const noMentionCount = analysisResults.filter(
       (r) => !r.llm_results.some((llm) => llm.is_mentioned)
     ).length;
 
     return {
       mentionedCount,
       noMentionCount,
-      totalCount: filteredResults.length,
+      totalCount: analysisResults.length,
     };
-  }, [filteredResults]);
+  }, [analysisResults]);
 
   // Performance monitoring and optimization
   const performanceStats = useMemo(() => {
     const startTime = performance.now();
 
-    const totalResults = filteredResults.length;
-    const totalLLMResults = filteredResults.reduce(
+    const totalResults = analysisResults.length;
+    const totalLLMResults = analysisResults.reduce(
       (sum, r) => sum + r.llm_results.length,
       0
     );
-    const uniqueTopics = new Set(filteredResults.map((r) => r.topic)).size;
+    const uniqueTopics = new Set(analysisResults.map((r) => r.topic)).size;
     const uniqueSessions = new Set(
-      filteredResults.map((r) => r.analysis_session_id).filter(Boolean)
+      analysisResults.map((r) => r.analysis_session_id).filter(Boolean)
     ).size;
 
     const endTime = performance.now();
@@ -577,34 +561,13 @@ export default function Analysis() {
       averageConfidence:
         resultStats.mentionedCount > 0
           ? (
-              (filteredResults.reduce((sum, r) => sum + r.confidence, 0) /
-                filteredResults.length) *
+              (analysisResults.reduce((sum, r) => sum + r.confidence, 0) /
+                analysisResults.length) *
               100
             ).toFixed(1)
           : "0",
     };
-  }, [filteredResults, resultStats]);
-
-  // Paginated results for better performance
-  const paginatedResults = useMemo(() => {
-    if (virtualScrollEnabled || filteredResults.length <= resultsPerPage) {
-      return filteredResults;
-    }
-
-    const startIndex = (currentPage - 1) * resultsPerPage;
-    const endIndex = startIndex + resultsPerPage;
-    return filteredResults.slice(startIndex, endIndex);
-  }, [filteredResults, currentPage, resultsPerPage, virtualScrollEnabled]);
-
-  const totalPages = Math.ceil(filteredResults.length / resultsPerPage);
-
-  // Auto-enable optimizations for large datasets
-  useEffect(() => {
-    if (filteredResults.length > 100 && !virtualScrollEnabled) {
-      setVirtualScrollEnabled(true);
-      setResultsPerPage(50); // Increase page size for better performance
-    }
-  }, [filteredResults.length, virtualScrollEnabled]);
+  }, [analysisResults, resultStats]);
 
   // Use dynamic LLM filters from server data
   const llmFilters =
@@ -884,13 +847,6 @@ export default function Analysis() {
     });
   }, [toast]);
 
-  // Helper function to get topic name for filtering
-  const getTopicNameForFilter = (topicId: string): string | undefined => {
-    if (topicId === "all") return undefined;
-
-    const topic = topics.find((topic) => topic.id === topicId);
-    return topic?.name;
-  };
 
   const handleRemoveFilter = (
     filterType:
@@ -933,7 +889,7 @@ export default function Analysis() {
   };
 
   const handleExportData = async (format: ExportFormat) => {
-    if (!filteredResults || filteredResults.length === 0) {
+    if (!analysisResults || analysisResults.length === 0) {
       toast({
         title: "No Data to Export",
         description:
@@ -947,7 +903,7 @@ export default function Analysis() {
 
     try {
       // Extract analysis IDs for export
-      const analysisIds = filteredResults.map((result) => result.id);
+      const analysisIds = analysisResults.map((result) => result.id);
 
       // Export with comprehensive options using the analysisService
       const blob = await analysisService.exportAnalysisResults(
@@ -960,7 +916,7 @@ export default function Analysis() {
         format,
         includeTimestamp: true,
         metadata: {
-          resultCount: filteredResults.length,
+          resultCount: analysisResults.length,
           exportType: "analysis_results",
           filters: {
             topic: selectedTopic !== "all" ? getTopicName(selectedTopic) : null,
@@ -1098,13 +1054,13 @@ export default function Analysis() {
                 Detailed analysis of your brand mentions across AI platforms
               </p>
             </div>
-            {filteredResults && filteredResults.length > 0 && (
+            {analysisResults && analysisResults.length > 0 && (
               <ExportDropdown
                 onExport={handleExportData}
                 isLoading={isExporting}
-                disabled={!filteredResults || filteredResults.length === 0}
+                disabled={!analysisResults || analysisResults.length === 0}
                 formats={["pdf", "csv", "json", "word"]}
-                data={filteredResults}
+                data={analysisResults}
                 showEstimatedSize={true}
               />
             )}
@@ -1126,7 +1082,7 @@ export default function Analysis() {
                 </p>
                 <div className="flex gap-3">
                   <LoadingButton
-                    onClick={() => retryOperation(loadAnalysisResults)}
+                    onClick={() => retryOperation(refreshResults)}
                     loading={isRetrying}
                     variant="outline"
                     size="sm"
@@ -1648,37 +1604,46 @@ export default function Analysis() {
                         >
                           {showPerformanceStats ? "Hide" : "Show"} Stats
                         </Button>
-                        {filteredResults.length > 20 && (
-                          <div className="flex items-center gap-2 text-xs">
-                            <span>Per page:</span>
-                            <select
-                              value={resultsPerPage}
-                              onChange={(e) => {
-                                setResultsPerPage(Number(e.target.value));
-                                setCurrentPage(1);
-                              }}
-                              className="border rounded px-2 py-1"
-                            >
-                              <option value={10}>10</option>
-                              <option value={20}>20</option>
-                              <option value={50}>50</option>
-                              <option value={100}>100</option>
-                            </select>
-                          </div>
-                        )}
-                        {filteredResults.length > 100 && (
-                          <label className="flex items-center gap-2 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={virtualScrollEnabled}
-                              onChange={(e) =>
-                                setVirtualScrollEnabled(e.target.checked)
-                              }
-                              className="w-3 h-3"
-                            />
-                            Virtual scrolling
-                          </label>
-                        )}
+                        <div className="flex items-center gap-2 text-xs">
+                          <span>Initial load:</span>
+                          <select
+                            value={initialLoadSize}
+                            onChange={(e) => {
+                              setInitialLoadSize(Number(e.target.value));
+                            }}
+                            className="border rounded px-2 py-1"
+                          >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span>Load more:</span>
+                          <select
+                            value={loadMoreSize}
+                            onChange={(e) => {
+                              setLoadMoreSize(Number(e.target.value));
+                            }}
+                            className="border rounded px-2 py-1"
+                          >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                          </select>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={infiniteScrollEnabled}
+                            onChange={(e) =>
+                              setInfiniteScrollEnabled(e.target.checked)
+                            }
+                            className="w-3 h-3"
+                          />
+                          Infinite scroll
+                        </label>
                       </div>
 
                       {/* Performance Stats */}
@@ -1686,23 +1651,29 @@ export default function Analysis() {
                         <div className="bg-muted/10 p-3 rounded text-xs space-y-1">
                           <div className="grid grid-cols-2 gap-2">
                             <span>
-                              Results: {performanceStats.totalResults}
+                              Loaded: {totalLoaded}
                             </span>
                             <span>
-                              LLM Data: {performanceStats.totalLLMResults}
-                            </span>
-                            <span>Topics: {performanceStats.uniqueTopics}</span>
-                            <span>
-                              Sessions: {performanceStats.uniqueSessions}
+                              Has More: {hasMore ? "Yes" : "No"}
                             </span>
                             <span>
-                              Calc Time: {performanceStats.calculationTime}ms
+                              Loading: {isLoadingMore ? "Yes" : "No"}
                             </span>
                             <span>
-                              Avg Confidence:{" "}
-                              {performanceStats.averageConfidence}%
+                              Scroll: {infiniteScrollEnabled ? "On" : "Off"}
+                            </span>
+                            <span>
+                              Initial: {initialLoadSize}
+                            </span>
+                            <span>
+                              Load More: {loadMoreSize}
                             </span>
                           </div>
+                          {infiniteScrollError && (
+                            <div className="text-red-500 text-xs">
+                              Error: {infiniteScrollError.message}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1796,7 +1767,7 @@ export default function Analysis() {
               }}
               onRemoveFilter={handleRemoveFilter}
               onClearAll={handleClearFilters}
-              resultCount={filteredResults.length}
+              resultCount={analysisResults.length}
             />
           )}
 
@@ -1804,18 +1775,18 @@ export default function Analysis() {
           {!loading &&
             !isLoadingResults &&
             showVisualization &&
-            filteredResults.length > 0 && (
-              <AnalysisVisualization results={filteredResults} />
+            analysisResults.length > 0 && (
+              <AnalysisVisualization results={analysisResults} />
             )}
 
           {/* Additional Charts */}
           {!loading &&
             !isLoadingResults &&
             showVisualization &&
-            filteredResults.length > 0 && (
+            analysisResults.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <SentimentChart results={filteredResults} />
-                <RankingChart results={filteredResults} />
+                <SentimentChart results={analysisResults} />
+                <RankingChart results={analysisResults} />
               </div>
             )}
 
@@ -1983,8 +1954,15 @@ export default function Analysis() {
                   )}
               </div>
             ) : (
-              // Ungrouped view
-              paginatedResults.map((result) => (
+              // Infinite scroll ungrouped view
+              <InfiniteScrollContainer
+                hasMore={hasMore}
+                isLoadingMore={isLoadingMore}
+                onLoadMore={loadMore}
+                enabled={infiniteScrollEnabled}
+                className="space-y-4"
+              >
+                {analysisResults.map((result) => (
                 <Card key={result.id}>
                   <CardHeader>
                     <div className="flex justify-between items-start">
@@ -2039,12 +2017,13 @@ export default function Analysis() {
                     </div>
                   </CardContent>
                 </Card>
-              ))
+                ))}
+              </InfiniteScrollContainer>
             )}
           </div>
 
           {/* Empty State */}
-          {!isLoadingResults && filteredResults.length === 0 && (
+          {!isLoadingResults && analysisResults.length === 0 && (
             <ContextualEmptyState
               hasData={analysisResults.length > 0}
               hasFilters={hasActiveFilters}
@@ -2063,11 +2042,11 @@ export default function Analysis() {
           {isLoadingResults ? (
             <AnalysisStatsSkeleton />
           ) : (
-            filteredResults.length > 0 && (
+            analysisResults.length > 0 && (
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-muted-foreground">
                 <span className="truncate">
-                  Showing {resultStats.totalCount} of {analysisResults.length}{" "}
-                  results
+                  Loaded {totalLoaded} results
+                  {hasMore && " (more available)"}
                   {searchQuery && (
                     <span className="hidden sm:inline">
                       {` for "${searchQuery}"`}
@@ -2078,13 +2057,13 @@ export default function Analysis() {
                   <div className="flex items-center space-x-1">
                     <TrendingUp className="h-4 w-4 text-success" />
                     <span className="whitespace-nowrap">
-                      {resultStats.mentionedCount} mentions
+                      {analysisResults.filter(r => r.llm_results.some(llm => llm.is_mentioned)).length} mentions
                     </span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <TrendingDown className="h-4 w-4 text-muted-foreground" />
                     <span className="whitespace-nowrap">
-                      {resultStats.noMentionCount} no mentions
+                      {analysisResults.filter(r => !r.llm_results.some(llm => llm.is_mentioned)).length} no mentions
                     </span>
                   </div>
                 </div>
@@ -2092,76 +2071,6 @@ export default function Analysis() {
             )
           )}
 
-          {/* Pagination Controls */}
-          {!isLoadingResults &&
-            !virtualScrollEnabled &&
-            filteredResults.length > resultsPerPage && (
-              <div className="flex items-center justify-between mt-6">
-                <div className="text-sm text-muted-foreground">
-                  Showing {(currentPage - 1) * resultsPerPage + 1} to{" "}
-                  {Math.min(
-                    currentPage * resultsPerPage,
-                    filteredResults.length
-                  )}{" "}
-                  of {filteredResults.length} results
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage <= 1}
-                  >
-                    Previous
-                  </Button>
-                  <div className="flex items-center space-x-1">
-                    {(() => {
-                      // Calculate page range to display (max 5 pages)
-                      const maxPagesToShow = Math.min(5, totalPages);
-                      const halfRange = Math.floor(maxPagesToShow / 2);
-                      
-                      let startPage = Math.max(1, currentPage - halfRange);
-                      let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
-                      
-                      // Adjust startPage if we're near the end
-                      if (endPage - startPage + 1 < maxPagesToShow) {
-                        startPage = Math.max(1, endPage - maxPagesToShow + 1);
-                      }
-                      
-                      // Generate unique page numbers
-                      const pages = [];
-                      for (let i = startPage; i <= endPage; i++) {
-                        pages.push(i);
-                      }
-                      
-                      return pages.map((pageNum, index) => (
-                        <Button
-                          key={`page-${pageNum}-${index}`}
-                          variant={
-                            currentPage === pageNum ? "default" : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setCurrentPage(pageNum)}
-                          className="w-8 h-8 p-0"
-                        >
-                          {pageNum}
-                        </Button>
-                      ));
-                    })()}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCurrentPage(Math.min(totalPages, currentPage + 1))
-                    }
-                    disabled={currentPage >= totalPages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
         </div>
 
         <AnalysisConfigModal
