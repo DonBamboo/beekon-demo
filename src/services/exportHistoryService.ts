@@ -43,7 +43,7 @@ export class ExportHistoryService {
   ): Promise<ExportHistoryRecord> {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) {
-      console.error("Authentication error in createExportRecord:", authError);
+      // Authentication error in createExportRecord
       throw new Error(`Authentication failed: ${authError.message}`);
     }
     if (!user) {
@@ -65,7 +65,7 @@ export class ExportHistoryService {
       .single();
 
     if (error) {
-      console.error("Failed to create export record:", error);
+      // Failed to create export record
       throw error;
     }
 
@@ -106,7 +106,7 @@ export class ExportHistoryService {
       .single();
 
     if (error) {
-      console.error("Failed to update export record:", error);
+      // Failed to update export record
       throw error;
     }
 
@@ -126,7 +126,7 @@ export class ExportHistoryService {
   }> {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) {
-      console.error("Authentication error in getUserExportHistory:", authError);
+      // Authentication error in getUserExportHistory
       throw new Error(`Authentication failed: ${authError.message}`);
     }
     if (!user) {
@@ -179,7 +179,7 @@ export class ExportHistoryService {
     const { data, error, count } = await query;
 
     if (error) {
-      console.error("Failed to get export history:", error);
+      // Failed to get export history
       throw error;
     }
 
@@ -196,7 +196,7 @@ export class ExportHistoryService {
   async getExportStatistics(): Promise<ExportStatistics[]> {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) {
-      console.error("Authentication error in getExportStatistics:", authError);
+      // Authentication error in getExportStatistics
       throw new Error(`Authentication failed: ${authError.message}`);
     }
     if (!user) {
@@ -210,7 +210,7 @@ export class ExportHistoryService {
       .eq("user_id", user.id);
 
     if (error) {
-      console.error("Failed to get export statistics:", error);
+      // Failed to get export statistics
       throw error;
     }
 
@@ -223,7 +223,7 @@ export class ExportHistoryService {
   async getUserExportSummary(): Promise<UserExportSummary> {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) {
-      console.error("Authentication error in getUserExportSummary:", authError);
+      // Authentication error in getUserExportSummary
       throw new Error(`Authentication failed: ${authError.message}`);
     }
     if (!user) {
@@ -237,7 +237,7 @@ export class ExportHistoryService {
       .eq("user_id", user.id);
 
     if (error) {
-      console.error("Failed to get export summary:", error);
+      // Failed to get export summary
       throw error;
     }
 
@@ -304,7 +304,7 @@ export class ExportHistoryService {
   async deleteExportRecord(id: string): Promise<void> {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) {
-      console.error("Authentication error in deleteExportRecord:", authError);
+      // Authentication error in deleteExportRecord
       throw new Error(`Authentication failed: ${authError.message}`);
     }
     if (!user) {
@@ -319,7 +319,7 @@ export class ExportHistoryService {
       .eq("user_id", user.id);
 
     if (error) {
-      console.error("Failed to delete export record:", error);
+      // Failed to delete export record
       throw error;
     }
   }
@@ -330,7 +330,7 @@ export class ExportHistoryService {
   async getExportRecord(id: string): Promise<ExportHistoryRecord | null> {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) {
-      console.error("Authentication error in getExportRecord:", authError);
+      // Authentication error in getExportRecord
       throw new Error(`Authentication failed: ${authError.message}`);
     }
     if (!user) {
@@ -349,7 +349,7 @@ export class ExportHistoryService {
       if (error.code === "PGRST116") {
         return null; // Record not found
       }
-      console.error("Failed to get export record:", error);
+      // Failed to get export record
       throw error;
     }
 
@@ -362,7 +362,7 @@ export class ExportHistoryService {
   async cleanupOldRecords(olderThanDays: number = 90): Promise<number> {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) {
-      console.error("Authentication error in cleanupOldRecords:", authError);
+      // Authentication error in cleanupOldRecords
       throw new Error(`Authentication failed: ${authError.message}`);
     }
     if (!user) {
@@ -381,7 +381,7 @@ export class ExportHistoryService {
       .select("id");
 
     if (error) {
-      console.error("Failed to cleanup old export records:", error);
+      // Failed to cleanup old export records
       throw error;
     }
 
@@ -394,7 +394,7 @@ export class ExportHistoryService {
   async getRecentActivity(): Promise<ExportHistoryRecord[]> {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) {
-      console.error("Authentication error in getRecentActivity:", authError);
+      // Authentication error in getRecentActivity
       throw new Error(`Authentication failed: ${authError.message}`);
     }
     if (!user) {
@@ -414,7 +414,7 @@ export class ExportHistoryService {
       .limit(10);
 
     if (error) {
-      console.error("Failed to get recent export activity:", error);
+      // Failed to get recent export activity
       throw error;
     }
 

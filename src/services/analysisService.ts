@@ -2,6 +2,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { AnalysisResult, LLMResult, UIAnalysisResult } from "@/types/database";
 
+// Helper functions for safe type extraction
+function safeString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function safeNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" ? value : fallback;
+}
+
+function safeBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function safeStringArray(
+  value: unknown,
+  fallback: string[] | null = null
+): string[] | null {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? value
+    : fallback;
+}
+
 export type AnalysisStatus = "pending" | "running" | "completed" | "failed";
 
 export interface PaginatedAnalysisResults {
@@ -51,6 +73,22 @@ export interface AnalysisProgress {
   completedSteps: number;
   totalSteps: number;
   error?: string;
+}
+
+// Type guard for AnalysisSession
+function isValidAnalysisSession(data: any): data is AnalysisSession {
+  return (
+    data &&
+    typeof data === "object" &&
+    typeof data.id === "string" &&
+    typeof data.analysis_name === "string" &&
+    typeof data.website_id === "string" &&
+    typeof data.user_id === "string" &&
+    typeof data.workspace_id === "string" &&
+    typeof data.status === "string" &&
+    typeof data.created_at === "string" &&
+    typeof data.updated_at === "string"
+  );
 }
 
 export class AnalysisService {
@@ -133,7 +171,7 @@ export class AnalysisService {
 
       return analysisSession.id;
     } catch (error) {
-      console.error("Failed to create analysis:", error);
+      // Failed to create analysis
 
       // Clean up any polling intervals that might have been started
       if (analysisSession?.id) {
@@ -246,7 +284,11 @@ export class AnalysisService {
 
     if (error) throw error;
 
-    return data as unknown as AnalysisSession;
+    if (!isValidAnalysisSession(data)) {
+      throw new Error("Invalid analysis session data received from database");
+    }
+
+    return data;
   }
 
   private async startAnalysis(
@@ -293,7 +335,7 @@ export class AnalysisService {
     prompts: object[],
     topicId: string[],
     workspaceId: string
-  ) {
+  ): Promise<void> {
     try {
       // Calculate total steps first, before using in webhook payload
       const totalSteps = Math.max(
@@ -343,15 +385,7 @@ export class AnalysisService {
 
       this.updateProgress(sessionId, progressData);
 
-      // Debug logging for progress tracking
-      console.log("Analysis webhook triggered:", {
-        sessionId,
-        hasCustomPrompts: config.customPrompts.length > 0,
-        customPromptsCount: config.customPrompts.length,
-        llmModelsCount: config.llmModels.length,
-        totalSteps,
-        autoGeneratePrompts: prompts.length === 0,
-      });
+      // Analysis webhook triggered with configuration
 
       const response = await sendN8nWebhook(
         "webhook/manually-added-analysis",
@@ -359,10 +393,10 @@ export class AnalysisService {
       );
 
       if (!response.success) {
-        console.error("An error occurred" + response.messages);
+        // Webhook response indicated failure
       }
 
-      console.log("response", response);
+      // Webhook response received
 
       // Start polling for progress updates from N8N
       this.startProgressPolling(sessionId);
@@ -396,7 +430,7 @@ export class AnalysisService {
     const resultsMap = new Map<string, UIAnalysisResult>();
 
     data?.forEach((row, index) => {
-      const promptId = row.prompt_id as string;
+      const promptId = safeString(row.prompt_id);
       if (!promptId) {
         // Skip rows with null prompt_id
         return;
@@ -412,7 +446,7 @@ export class AnalysisService {
       let promptOpportunities: string[] | null = null;
 
       // Extract analysis session information
-      const analysisSessionId = row.analysis_session_id as string | null;
+      const analysisSessionId = safeString(row.analysis_session_id) || null;
       let analysisName: string | null = null;
       let analysisSessionStatus: string | null = null;
 
@@ -449,15 +483,16 @@ export class AnalysisService {
       } else {
         // Data from direct query (export function)
         const prompts = row.prompts as Record<string, unknown>;
-        promptText = (prompts?.prompt_text as string) || "Unknown prompt";
-        reportingText = (prompts?.reporting_text as string) || null;
-        recommendationText = (prompts?.recommendation_text as string) || null;
-        promptStrengths = (prompts?.strengths as string[]) || null;
-        promptOpportunities = (prompts?.opportunities as string[]) || null;
-        topicName =
-          ((prompts?.topics as Record<string, unknown>)
-            ?.topic_name as string) || "Unknown topic";
-        resultWebsiteId = row.website_id as string;
+        promptText = safeString(prompts?.prompt_text, "Unknown prompt");
+        reportingText = safeString(prompts?.reporting_text) || null;
+        recommendationText = safeString(prompts?.recommendation_text) || null;
+        promptStrengths = safeStringArray(prompts?.strengths);
+        promptOpportunities = safeStringArray(prompts?.opportunities);
+        topicName = safeString(
+          (prompts?.topics as Record<string, unknown>)?.topic_name,
+          "Unknown topic"
+        );
+        resultWebsiteId = safeString(row.website_id);
       }
 
       if (!resultsMap.has(promptId)) {
@@ -467,12 +502,12 @@ export class AnalysisService {
           website_id: resultWebsiteId,
           topic: topicName,
           status: "completed" as AnalysisStatus,
-          confidence: (row.confidence_score as number) || 0,
+          confidence: safeNumber(row.confidence_score),
           created_at:
-            (row.analyzed_at as string) ||
-            (row.created_at as string) ||
+            safeString(row.analyzed_at) ||
+            safeString(row.created_at) ||
             new Date().toISOString(),
-          updated_at: (row.created_at as string) || new Date().toISOString(),
+          updated_at: safeString(row.created_at) || new Date().toISOString(),
           reporting_text: reportingText,
           recommendation_text: recommendationText,
           prompt_strengths: promptStrengths,
@@ -487,16 +522,16 @@ export class AnalysisService {
 
       const result = resultsMap.get(promptId)!;
       result.llm_results.push({
-        llm_provider: row.llm_provider as string,
-        is_mentioned: (row.is_mentioned as boolean) || false,
-        rank_position: row.rank_position as number,
-        confidence_score: row.confidence_score as number,
-        sentiment_score: row.sentiment_score as number,
-        summary_text: row.summary_text as string,
-        response_text: row.response_text as string,
+        llm_provider: safeString(row.llm_provider),
+        is_mentioned: safeBoolean(row.is_mentioned),
+        rank_position: safeNumber(row.rank_position),
+        confidence_score: safeNumber(row.confidence_score),
+        sentiment_score: safeNumber(row.sentiment_score),
+        summary_text: safeString(row.summary_text),
+        response_text: safeString(row.response_text),
         analyzed_at:
-          (row.analyzed_at as string) ||
-          (row.created_at as string) ||
+          safeString(row.analyzed_at) ||
+          safeString(row.created_at) ||
           new Date().toISOString(),
       });
     });
@@ -524,200 +559,199 @@ export class AnalysisService {
   ): Promise<PaginatedAnalysisResults> {
     const { cursor, limit = 20, filters } = options;
 
-    try {
-      // Step 1: Get unique prompt IDs with pagination
-      // This ensures we get complete prompt data, not partial LLM responses
-      let promptQuery = supabase
-        .schema("beekon_data")
-        .from("prompts")
-        .select(
-          `
+    // Step 1: Get unique prompt IDs with pagination
+    // This ensures we get complete prompt data, not partial LLM responses
+    let promptQuery = supabase
+      .schema("beekon_data")
+      .from("prompts")
+      .select(
+        `
+        id,
+        created_at,
+        topics!inner (
+          website_id
+        )
+      `
+      )
+      .eq("topics.website_id", websiteId)
+      .order("created_at", { ascending: false });
+
+    // Apply cursor-based pagination to prompts
+    if (cursor) {
+      promptQuery = promptQuery.lt("created_at", cursor);
+    }
+
+    // Get one extra prompt to determine if there are more results
+    const { data: promptsData, error: promptsError } = await promptQuery.limit(
+      limit + 1
+    );
+
+    if (promptsError) throw promptsError;
+
+    // Determine if there are more results and get actual prompt IDs
+    const hasMore = promptsData.length > limit;
+    const selectedPrompts = hasMore ? promptsData.slice(0, limit) : promptsData;
+    const promptIds = selectedPrompts.map((p) => p.id);
+
+    if (promptIds.length === 0) {
+      return {
+        results: [],
+        hasMore: false,
+        nextCursor: null,
+        totalCount: 0,
+      };
+    }
+
+    // Step 2: Get ALL llm_analysis_results for the selected prompts
+    // This ensures each prompt has complete LLM response data
+    let llmResultsQuery = supabase
+      .schema("beekon_data")
+      .from("llm_analysis_results")
+      .select(
+        `
+        *,
+        prompts!inner (
           id,
-          created_at,
+          prompt_text,
+          reporting_text,
+          recommendation_text,
+          strengths,
+          opportunities,
+          topic_id,
           topics!inner (
+            id,
+            topic_name,
             website_id
           )
-        `
+        ),
+        analysis_sessions (
+          id,
+          analysis_name,
+          status
         )
-        .eq("topics.website_id", websiteId)
-        .order("created_at", { ascending: false });
+      `
+      )
+      .in("prompt_id", promptIds);
 
-      // Apply cursor-based pagination to prompts
-      if (cursor) {
-        promptQuery = promptQuery.lt("created_at", cursor);
-      }
-
-      // Get one extra prompt to determine if there are more results
-      const { data: promptsData, error: promptsError } = await promptQuery.limit(limit + 1);
-
-      if (promptsError) throw promptsError;
-
-      // Determine if there are more results and get actual prompt IDs
-      const hasMore = promptsData.length > limit;
-      const selectedPrompts = hasMore ? promptsData.slice(0, limit) : promptsData;
-      const promptIds = selectedPrompts.map(p => p.id);
-
-      if (promptIds.length === 0) {
-        return {
-          results: [],
-          hasMore: false,
-          nextCursor: null,
-          totalCount: 0,
-        };
-      }
-
-      // Step 2: Get ALL llm_analysis_results for the selected prompts
-      // This ensures each prompt has complete LLM response data
-      let llmResultsQuery = supabase
-        .schema("beekon_data")
-        .from("llm_analysis_results")
-        .select(
-          `
-          *,
-          prompts!inner (
-            id,
-            prompt_text,
-            reporting_text,
-            recommendation_text,
-            strengths,
-            opportunities,
-            topic_id,
-            topics!inner (
-              id,
-              topic_name,
-              website_id
-            )
-          ),
-          analysis_sessions (
-            id,
-            analysis_name,
-            status
-          )
-        `
-        )
-        .in("prompt_id", promptIds);
-
-      // Apply server-side filters for better performance
-      if (filters?.dateRange) {
-        llmResultsQuery = llmResultsQuery
-          .gte("created_at", filters.dateRange.start)
-          .lte("created_at", filters.dateRange.end);
-      }
-
-      const { data, error } = await llmResultsQuery;
-
-      if (error) throw error;
-
-      // Transform the data using the existing transformation function
-      const transformedResults = this.transformAnalysisData(data, websiteId);
-
-      // Apply client-side filtering for complex filters
-      let filteredResults = transformedResults;
-
-      // Apply topic filter
-      if (filters?.topic && filters.topic !== "all") {
-        filteredResults = filteredResults.filter(
-          (result) => result.topic === filters.topic
-        );
-      }
-
-      // Apply LLM provider filter
-      if (filters?.llmProvider && filters.llmProvider !== "all") {
-        filteredResults = filteredResults
-          .filter((result) =>
-            result.llm_results.some(
-              (llm) => llm.llm_provider === filters.llmProvider
-            )
-          )
-          .map((result) => ({
-            ...result,
-            llm_results: result.llm_results.map((llm) => ({
-              ...llm,
-              isFiltered: llm.llm_provider === filters.llmProvider,
-            })),
-          }));
-      }
-
-      // Apply search query filter
-      if (filters?.searchQuery && filters.searchQuery.trim()) {
-        const searchTerm = filters.searchQuery.toLowerCase().trim();
-        filteredResults = filteredResults.filter(
-          (result) =>
-            result.prompt.toLowerCase().includes(searchTerm) ||
-            result.topic.toLowerCase().includes(searchTerm) ||
-            (result.analysis_name &&
-              result.analysis_name.toLowerCase().includes(searchTerm)) ||
-            result.llm_results.some((llm) =>
-              llm.response_text?.toLowerCase().includes(searchTerm)
-            )
-        );
-      }
-
-      // Apply mention status filter
-      if (filters?.mentionStatus && filters.mentionStatus !== "all") {
-        if (filters.mentionStatus === "mentioned") {
-          filteredResults = filteredResults.filter((result) =>
-            result.llm_results.some((llm) => llm.is_mentioned)
-          );
-        } else if (filters.mentionStatus === "not_mentioned") {
-          filteredResults = filteredResults.filter(
-            (result) => !result.llm_results.some((llm) => llm.is_mentioned)
-          );
-        }
-      }
-
-      // Apply confidence range filter
-      if (filters?.confidenceRange) {
-        const [minConfidence, maxConfidence] = filters.confidenceRange;
-        // Convert percentage range to decimal range for comparison
-        const minDecimal = minConfidence / 100; // Convert 4 → 0.04
-        const maxDecimal = maxConfidence / 100; // Convert 100 → 1.0
-
-        filteredResults = filteredResults.filter(
-          (result) =>
-            result.confidence >= minDecimal && result.confidence <= maxDecimal
-        );
-      }
-
-      // Apply sentiment filter
-      if (filters?.sentiment && filters.sentiment !== "all") {
-        filteredResults = filteredResults.filter((result) =>
-          result.llm_results.some((llm) => {
-            if (!llm.sentiment_score) return false;
-
-            if (filters.sentiment === "positive") {
-              return llm.sentiment_score > 0.1;
-            } else if (filters.sentiment === "negative") {
-              return llm.sentiment_score < -0.1;
-            } else if (filters.sentiment === "neutral") {
-              return llm.sentiment_score >= -0.1 && llm.sentiment_score <= 0.1;
-            }
-            return false;
-          })
-        );
-      }
-
-      // Apply analysis session filter
-      if (filters?.analysisSession && filters.analysisSession !== "all") {
-        filteredResults = filteredResults.filter(
-          (result) => result.analysis_session_id === filters.analysisSession
-        );
-      }
-
-      // Get the next cursor from the last selected prompt
-      const nextCursor =
-        selectedPrompts.length > 0 ? selectedPrompts[selectedPrompts.length - 1]?.created_at : null;
-
-      return {
-        results: filteredResults,
-        hasMore,
-        nextCursor,
-        totalCount: undefined, // We don't calculate total count for performance reasons
-      };
-    } catch (error) {
-      console.error("Failed to get paginated analysis results:", error);
-      throw error;
+    // Apply server-side filters for better performance
+    if (filters?.dateRange) {
+      llmResultsQuery = llmResultsQuery
+        .gte("created_at", filters.dateRange.start)
+        .lte("created_at", filters.dateRange.end);
     }
+
+    const { data, error } = await llmResultsQuery;
+
+    if (error) throw error;
+
+    // Transform the data using the existing transformation function
+    const transformedResults = this.transformAnalysisData(data, websiteId);
+
+    // Apply client-side filtering for complex filters
+    let filteredResults = transformedResults;
+
+    // Apply topic filter
+    if (filters?.topic && filters.topic !== "all") {
+      filteredResults = filteredResults.filter(
+        (result) => result.topic === filters.topic
+      );
+    }
+
+    // Apply LLM provider filter
+    if (filters?.llmProvider && filters.llmProvider !== "all") {
+      filteredResults = filteredResults
+        .filter((result) =>
+          result.llm_results.some(
+            (llm) => llm.llm_provider === filters.llmProvider
+          )
+        )
+        .map((result) => ({
+          ...result,
+          llm_results: result.llm_results.map((llm) => ({
+            ...llm,
+            isFiltered: llm.llm_provider === filters.llmProvider,
+          })),
+        }));
+    }
+
+    // Apply search query filter
+    if (filters?.searchQuery && filters.searchQuery.trim()) {
+      const searchTerm = filters.searchQuery.toLowerCase().trim();
+      filteredResults = filteredResults.filter(
+        (result) =>
+          result.prompt.toLowerCase().includes(searchTerm) ||
+          result.topic.toLowerCase().includes(searchTerm) ||
+          (result.analysis_name &&
+            result.analysis_name.toLowerCase().includes(searchTerm)) ||
+          result.llm_results.some((llm) =>
+            llm.response_text?.toLowerCase().includes(searchTerm)
+          )
+      );
+    }
+
+    // Apply mention status filter
+    if (filters?.mentionStatus && filters.mentionStatus !== "all") {
+      if (filters.mentionStatus === "mentioned") {
+        filteredResults = filteredResults.filter((result) =>
+          result.llm_results.some((llm) => llm.is_mentioned)
+        );
+      } else if (filters.mentionStatus === "not_mentioned") {
+        filteredResults = filteredResults.filter(
+          (result) => !result.llm_results.some((llm) => llm.is_mentioned)
+        );
+      }
+    }
+
+    // Apply confidence range filter
+    if (filters?.confidenceRange) {
+      const [minConfidence, maxConfidence] = filters.confidenceRange;
+      // Convert percentage range to decimal range for comparison
+      const minDecimal = minConfidence / 100; // Convert 4 → 0.04
+      const maxDecimal = maxConfidence / 100; // Convert 100 → 1.0
+
+      filteredResults = filteredResults.filter(
+        (result) =>
+          result.confidence >= minDecimal && result.confidence <= maxDecimal
+      );
+    }
+
+    // Apply sentiment filter
+    if (filters?.sentiment && filters.sentiment !== "all") {
+      filteredResults = filteredResults.filter((result) =>
+        result.llm_results.some((llm) => {
+          if (!llm.sentiment_score) return false;
+
+          if (filters.sentiment === "positive") {
+            return llm.sentiment_score > 0.1;
+          } else if (filters.sentiment === "negative") {
+            return llm.sentiment_score < -0.1;
+          } else if (filters.sentiment === "neutral") {
+            return llm.sentiment_score >= -0.1 && llm.sentiment_score <= 0.1;
+          }
+          return false;
+        })
+      );
+    }
+
+    // Apply analysis session filter
+    if (filters?.analysisSession && filters.analysisSession !== "all") {
+      filteredResults = filteredResults.filter(
+        (result) => result.analysis_session_id === filters.analysisSession
+      );
+    }
+
+    // Get the next cursor from the last selected prompt
+    const nextCursor =
+      selectedPrompts.length > 0
+        ? selectedPrompts[selectedPrompts.length - 1]?.created_at
+        : null;
+
+    return {
+      results: filteredResults,
+      hasMore,
+      nextCursor,
+      totalCount: undefined, // We don't calculate total count for performance reasons
+    };
   }
 
   async getAnalysisResults(
@@ -736,111 +770,106 @@ export class AnalysisService {
   ): Promise<UIAnalysisResult[]> {
     const { analysisResultsLoader } = await import("./dataLoaders");
 
-    try {
-      // Use data loader for efficient batching and caching
-      const results = await analysisResultsLoader.load({
-        websiteId,
-        dateRange: filters?.dateRange,
-      });
+    // Use data loader for efficient batching and caching
+    const results = await analysisResultsLoader.load({
+      websiteId,
+      dateRange: filters?.dateRange,
+    });
 
-      // Apply client-side filtering for better performance
-      let filteredResults = results;
+    // Apply client-side filtering for better performance
+    let filteredResults = results;
 
-      // Apply topic filter
-      if (filters?.topic && filters.topic !== "all") {
-        filteredResults = filteredResults.filter(
-          (result) => result.topic === filters.topic
-        );
-      }
-
-      // Apply LLM provider filter
-      if (filters?.llmProvider && filters.llmProvider !== "all") {
-        filteredResults = filteredResults
-          .filter((result) =>
-            result.llm_results.some(
-              (llm) => llm.llm_provider === filters.llmProvider
-            )
-          )
-          .map((result) => ({
-            ...result,
-            llm_results: result.llm_results.map((llm) => ({
-              ...llm,
-              isFiltered: llm.llm_provider === filters.llmProvider,
-            })),
-          }));
-      }
-
-      // Apply search query filter
-      if (filters?.searchQuery && filters.searchQuery.trim()) {
-        const searchTerm = filters.searchQuery.toLowerCase().trim();
-        filteredResults = filteredResults.filter(
-          (result) =>
-            result.prompt.toLowerCase().includes(searchTerm) ||
-            result.topic.toLowerCase().includes(searchTerm) ||
-            (result.analysis_name &&
-              result.analysis_name.toLowerCase().includes(searchTerm)) ||
-            result.llm_results.some((llm) =>
-              llm.response_text?.toLowerCase().includes(searchTerm)
-            )
-        );
-      }
-
-      // Apply mention status filter
-      if (filters?.mentionStatus && filters.mentionStatus !== "all") {
-        if (filters.mentionStatus === "mentioned") {
-          filteredResults = filteredResults.filter((result) =>
-            result.llm_results.some((llm) => llm.is_mentioned)
-          );
-        } else if (filters.mentionStatus === "not_mentioned") {
-          filteredResults = filteredResults.filter(
-            (result) => !result.llm_results.some((llm) => llm.is_mentioned)
-          );
-        }
-      }
-
-      // Apply confidence range filter
-      if (filters?.confidenceRange) {
-        const [minConfidence, maxConfidence] = filters.confidenceRange;
-        // Convert percentage range to decimal range for comparison
-        const minDecimal = minConfidence / 100; // Convert 4 → 0.04
-        const maxDecimal = maxConfidence / 100; // Convert 100 → 1.0
-
-        filteredResults = filteredResults.filter(
-          (result) =>
-            result.confidence >= minDecimal && result.confidence <= maxDecimal
-        );
-      }
-
-      // Apply sentiment filter
-      if (filters?.sentiment && filters.sentiment !== "all") {
-        filteredResults = filteredResults.filter((result) =>
-          result.llm_results.some((llm) => {
-            if (!llm.sentiment_score) return false;
-
-            if (filters.sentiment === "positive") {
-              return llm.sentiment_score > 0.1;
-            } else if (filters.sentiment === "negative") {
-              return llm.sentiment_score < -0.1;
-            } else if (filters.sentiment === "neutral") {
-              return llm.sentiment_score >= -0.1 && llm.sentiment_score <= 0.1;
-            }
-            return false;
-          })
-        );
-      }
-
-      // Apply analysis session filter
-      if (filters?.analysisSession && filters.analysisSession !== "all") {
-        filteredResults = filteredResults.filter(
-          (result) => result.analysis_session_id === filters.analysisSession
-        );
-      }
-
-      return filteredResults;
-    } catch (error) {
-      console.error("Failed to get analysis results:", error);
-      throw error;
+    // Apply topic filter
+    if (filters?.topic && filters.topic !== "all") {
+      filteredResults = filteredResults.filter(
+        (result) => result.topic === filters.topic
+      );
     }
+
+    // Apply LLM provider filter
+    if (filters?.llmProvider && filters.llmProvider !== "all") {
+      filteredResults = filteredResults
+        .filter((result) =>
+          result.llm_results.some(
+            (llm) => llm.llm_provider === filters.llmProvider
+          )
+        )
+        .map((result) => ({
+          ...result,
+          llm_results: result.llm_results.map((llm) => ({
+            ...llm,
+            isFiltered: llm.llm_provider === filters.llmProvider,
+          })),
+        }));
+    }
+
+    // Apply search query filter
+    if (filters?.searchQuery && filters.searchQuery.trim()) {
+      const searchTerm = filters.searchQuery.toLowerCase().trim();
+      filteredResults = filteredResults.filter(
+        (result) =>
+          result.prompt.toLowerCase().includes(searchTerm) ||
+          result.topic.toLowerCase().includes(searchTerm) ||
+          (result.analysis_name &&
+            result.analysis_name.toLowerCase().includes(searchTerm)) ||
+          result.llm_results.some((llm) =>
+            llm.response_text?.toLowerCase().includes(searchTerm)
+          )
+      );
+    }
+
+    // Apply mention status filter
+    if (filters?.mentionStatus && filters.mentionStatus !== "all") {
+      if (filters.mentionStatus === "mentioned") {
+        filteredResults = filteredResults.filter((result) =>
+          result.llm_results.some((llm) => llm.is_mentioned)
+        );
+      } else if (filters.mentionStatus === "not_mentioned") {
+        filteredResults = filteredResults.filter(
+          (result) => !result.llm_results.some((llm) => llm.is_mentioned)
+        );
+      }
+    }
+
+    // Apply confidence range filter
+    if (filters?.confidenceRange) {
+      const [minConfidence, maxConfidence] = filters.confidenceRange;
+      // Convert percentage range to decimal range for comparison
+      const minDecimal = minConfidence / 100; // Convert 4 → 0.04
+      const maxDecimal = maxConfidence / 100; // Convert 100 → 1.0
+
+      filteredResults = filteredResults.filter(
+        (result) =>
+          result.confidence >= minDecimal && result.confidence <= maxDecimal
+      );
+    }
+
+    // Apply sentiment filter
+    if (filters?.sentiment && filters.sentiment !== "all") {
+      filteredResults = filteredResults.filter((result) =>
+        result.llm_results.some((llm) => {
+          if (!llm.sentiment_score) return false;
+
+          if (filters.sentiment === "positive") {
+            return llm.sentiment_score > 0.1;
+          } else if (filters.sentiment === "negative") {
+            return llm.sentiment_score < -0.1;
+          } else if (filters.sentiment === "neutral") {
+            return llm.sentiment_score >= -0.1 && llm.sentiment_score <= 0.1;
+          }
+          return false;
+        })
+      );
+    }
+
+    // Apply analysis session filter
+    if (filters?.analysisSession && filters.analysisSession !== "all") {
+      filteredResults = filteredResults.filter(
+        (result) => result.analysis_session_id === filters.analysisSession
+      );
+    }
+
+    return filteredResults;
   }
 
   async getTopicsForWebsite(
@@ -851,7 +880,7 @@ export class AnalysisService {
       const topics = await topicInfoLoader.load(websiteId);
       return topics;
     } catch (error) {
-      console.error("Failed to get topics:", error);
+      // Failed to get topics
       // Fallback to direct database query if data loader fails
       try {
         const { data, error: dbError } = await supabase
@@ -890,7 +919,7 @@ export class AnalysisService {
           }) || []
         );
       } catch (fallbackError) {
-        console.error("Fallback topics query also failed:", fallbackError);
+        // Fallback topics query also failed
         return [];
       }
     }
@@ -904,7 +933,7 @@ export class AnalysisService {
       const providers = await llmProviderLoader.load(websiteId);
       return providers;
     } catch (error) {
-      console.error("Failed to get LLM providers:", error);
+      // Failed to get LLM providers
       // Fallback to direct database query if data loader fails
       try {
         const { data, error: dbError } = await supabase
@@ -945,10 +974,7 @@ export class AnalysisService {
           resultCount: count,
         }));
       } catch (fallbackError) {
-        console.error(
-          "Fallback LLM providers query also failed:",
-          fallbackError
-        );
+        // Fallback LLM providers query also failed
         return [];
       }
     }
@@ -957,11 +983,11 @@ export class AnalysisService {
   subscribeToProgress(
     analysisId: string,
     callback: (progress: AnalysisProgress) => void
-  ) {
+  ): void {
     this.progressCallbacks.set(analysisId, callback);
   }
 
-  unsubscribeFromProgress(analysisId: string) {
+  unsubscribeFromProgress(analysisId: string): void {
     this.progressCallbacks.delete(analysisId);
     // Clean up polling interval if it exists
     const interval = this.pollingIntervals.get(analysisId);
@@ -971,7 +997,7 @@ export class AnalysisService {
     }
   }
 
-  private updateProgress(analysisId: string, progress: AnalysisProgress) {
+  private updateProgress(analysisId: string, progress: AnalysisProgress): void {
     // Validate and sanitize progress data to prevent NaN issues
     const safeProgress: AnalysisProgress = {
       ...progress,
@@ -1006,7 +1032,7 @@ export class AnalysisService {
     }
   }
 
-  private startProgressPolling(sessionId: string) {
+  private startProgressPolling(sessionId: string): void {
     // Clear any existing polling interval for this session
     const existingInterval = this.pollingIntervals.get(sessionId);
     if (existingInterval) {
@@ -1016,14 +1042,7 @@ export class AnalysisService {
     const pollInterval = setInterval(async () => {
       try {
         const session = await this.getAnalysisSession(sessionId);
-        console.log("Progress polling update:", {
-          sessionId: sessionId.slice(0, 8),
-          status: session?.status,
-          progress: session?.progress_data?.progress,
-          currentStep: session?.progress_data?.currentStep,
-          completedSteps: session?.progress_data?.completedSteps,
-          totalSteps: session?.progress_data?.totalSteps,
-        });
+        // Progress polling update received
 
         if (session?.progress_data) {
           this.updateProgress(sessionId, session.progress_data);
@@ -1031,10 +1050,7 @@ export class AnalysisService {
 
         // Stop polling if analysis is completed or failed
         if (session?.status === "completed" || session?.status === "failed") {
-          console.log("Progress polling stopped:", {
-            sessionId: sessionId.slice(0, 8),
-            finalStatus: session.status,
-          });
+          // Progress polling stopped
 
           // Create corrected progress data that matches the actual session status
           const finalProgressData: AnalysisProgress = {
@@ -1053,13 +1069,7 @@ export class AnalysisService {
               }),
           };
 
-          console.log("Sending final progress update to UI:", {
-            sessionId: sessionId.slice(0, 8),
-            finalStatus: session.status,
-            correctedStatus: finalProgressData.status,
-            progress: finalProgressData.progress,
-            currentStep: finalProgressData.currentStep,
-          });
+          // Sending final progress update to UI
 
           // Send corrected progress data to UI
           this.updateProgress(sessionId, finalProgressData);
@@ -1068,7 +1078,7 @@ export class AnalysisService {
           this.pollingIntervals.delete(sessionId);
         }
       } catch (error) {
-        console.error("Progress polling error:", error);
+        // Progress polling error
       }
     }, 2000); // Poll every 2 seconds
 
@@ -1086,7 +1096,7 @@ export class AnalysisService {
     }, 1200000); // 20 minutes
   }
 
-  private async handleAnalysisTimeout(sessionId: string) {
+  private async handleAnalysisTimeout(sessionId: string): Promise<void> {
     try {
       // Mark analysis as failed due to timeout
       await this.updateAnalysisSession(sessionId, {
@@ -1115,7 +1125,7 @@ export class AnalysisService {
         error: "Analysis timed out after 10 minutes. Please try again.",
       });
     } catch (error) {
-      console.error("Failed to handle analysis timeout:", error);
+      // Failed to handle analysis timeout
     }
   }
 
@@ -1136,7 +1146,7 @@ export class AnalysisService {
       .eq("id", sessionId);
 
     if (error) {
-      console.error("Failed to update analysis session:", error);
+      // Failed to update analysis session
       throw error;
     }
   }
@@ -1150,11 +1160,14 @@ export class AnalysisService {
       .single();
 
     if (error) {
-      console.error("Failed to get analysis session:", error);
+      // Failed to get analysis session
       return null;
     }
 
-    return data as unknown as AnalysisSession;
+    if (!isValidAnalysisSession(data)) {
+      throw new Error("Invalid analysis session data received from database");
+    }
+    return data;
   }
 
   async getAnalysisSessionsForWebsite(
@@ -1168,18 +1181,23 @@ export class AnalysisService {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Failed to get analysis sessions:", error);
+      // Failed to get analysis sessions
       return [];
     }
 
-    return data as unknown as AnalysisSession[];
+    if (!Array.isArray(data) || !data.every(isValidAnalysisSession)) {
+      throw new Error(
+        "Invalid analysis session array data received from database"
+      );
+    }
+    return data;
   }
 
   // This method would be called by webhook handlers or polling
   async handleAnalysisUpdate(
     sessionId: string,
     update: Partial<AnalysisProgress>
-  ) {
+  ): Promise<void> {
     // Update the analysis session in the database
     const progressData = {
       ...update,
@@ -1236,7 +1254,7 @@ export class AnalysisService {
     responseText?: string;
     confidenceScore?: number;
     analysisSessionId?: string;
-  }) {
+  }): Promise<void> {
     const { error } = await supabase
       .schema("beekon_data")
       .from("llm_analysis_results")
@@ -1467,61 +1485,56 @@ export class AnalysisService {
     analysisIds: string[],
     format: "pdf" | "csv" | "json" | "word"
   ): Promise<Blob> {
-    try {
-      // Fetch all analysis results for the given IDs
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .from("llm_analysis_results")
-        .select(
-          `
-          *,
-          prompts (
-            id,
-            prompt_text,
-            reporting_text,
-            recommendation_text,
-            strengths,
-            opportunities,
-            topics (
-              topic_name,
-              topic_keywords
-            )
-          )
+    // Fetch all analysis results for the given IDs
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .from("llm_analysis_results")
+      .select(
         `
+        *,
+        prompts (
+          id,
+          prompt_text,
+          reporting_text,
+          recommendation_text,
+          strengths,
+          opportunities,
+          topics (
+            topic_name,
+            topic_keywords
+          )
         )
-        .in("prompt_id", analysisIds);
+      `
+      )
+      .in("prompt_id", analysisIds);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      // Transform data using the shared transformation function
-      const results = this.transformAnalysisData(data);
+    // Transform data using the shared transformation function
+    const results = this.transformAnalysisData(data);
 
-      // Transform to clean, flattened export format
-      const exportFormattedData = this.transformAnalysisForExport(results);
+    // Transform to clean, flattened export format
+    const exportFormattedData = this.transformAnalysisForExport(results);
 
-      // Use enhanced export service for all formats
-      const { exportService } = await import("./exportService");
-      const exportData = {
-        title: "Analysis Results Export",
-        data: exportFormattedData,
-        exportedAt: new Date().toISOString(),
-        totalRecords: results.length,
-        metadata: {
-          exportType: "analysis_results",
-          generatedBy: "Beekon AI Analysis Service",
-          originalResultCount: results.length,
-          exportRowCount: exportFormattedData.length,
-        },
-      };
+    // Use enhanced export service for all formats
+    const { exportService } = await import("./exportService");
+    const exportData = {
+      title: "Analysis Results Export",
+      data: exportFormattedData,
+      exportedAt: new Date().toISOString(),
+      totalRecords: results.length,
+      metadata: {
+        exportType: "analysis_results",
+        generatedBy: "Beekon AI Analysis Service",
+        originalResultCount: results.length,
+        exportRowCount: exportFormattedData.length,
+      },
+    };
 
-      return await exportService.exportData(exportData, format, {
-        exportType: "analysis",
-        customFilename: `analysis_results_${results.length}_items`,
-      });
-    } catch (error) {
-      console.error("Failed to export analysis results:", error);
-      throw error;
-    }
+    return await exportService.exportData(exportData, format, {
+      exportType: "analysis",
+      customFilename: `analysis_results_${results.length}_items`,
+    });
   }
 
   private generateJsonExport(results: UIAnalysisResult[]): Blob {

@@ -92,7 +92,7 @@ export function ApiKeyModal({ isOpen, onClose, onApiKeyChange }: ApiKeyModalProp
         setApiKeys(displayKeys);
         setUsage(usageData);
       } catch (error) {
-        console.error('Failed to load API keys:', error);
+        // Failed to load API keys
         toast({
           title: 'Error',
           description: 'Failed to load API keys.',
@@ -148,7 +148,7 @@ export function ApiKeyModal({ isOpen, onClose, onApiKeyChange }: ApiKeyModalProp
         description: "Your new API key has been created successfully. Make sure to copy it now!",
       });
     } catch (error) {
-      console.error('Failed to generate API key:', error);
+      // Failed to generate API key
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to generate API key. Please try again.",
@@ -184,7 +184,7 @@ export function ApiKeyModal({ isOpen, onClose, onApiKeyChange }: ApiKeyModalProp
         description: "The API key has been successfully revoked.",
       });
     } catch (error) {
-      console.error('Failed to revoke API key:', error);
+      // Failed to revoke API key
       toast({
         title: "Error",
         description: "Failed to revoke API key. Please try again.",

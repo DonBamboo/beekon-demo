@@ -103,7 +103,7 @@ export function DataPagination({
               );
             }
             
-            const pageNumber = page as number;
+            const pageNumber = typeof page === 'number' ? page : 1;
             const isCurrentPage = pageNumber === currentPage;
             
             return (

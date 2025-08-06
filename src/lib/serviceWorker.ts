@@ -47,7 +47,7 @@ export class ServiceWorkerManager {
   // Register service worker
   async register(): Promise<ServiceWorkerRegistration | null> {
     if (!('serviceWorker' in navigator)) {
-      console.log('Service Worker not supported');
+      // Service Worker not supported
       return null;
     }
 
@@ -76,10 +76,10 @@ export class ServiceWorkerManager {
         }
       });
 
-      console.log('Service Worker registered successfully');
+      // Service Worker registered successfully
       return registration;
     } catch (error) {
-      console.error('Service Worker registration failed:', error);
+      // Service Worker registration failed
       this.config.onError?.(error as Error);
       return null;
     }
@@ -90,9 +90,9 @@ export class ServiceWorkerManager {
     if (this.registration) {
       try {
         await this.registration.update();
-        console.log('Service Worker updated');
+        // Service Worker updated successfully
       } catch (error) {
-        console.error('Service Worker update failed:', error);
+        // Service Worker update failed
       }
     }
   }
@@ -102,10 +102,10 @@ export class ServiceWorkerManager {
     if (this.registration) {
       try {
         const result = await this.registration.unregister();
-        console.log('Service Worker unregistered');
+        // Service Worker unregistered successfully
         return result;
       } catch (error) {
-        console.error('Service Worker unregister failed:', error);
+        // Service Worker unregister failed
         return false;
       }
     }

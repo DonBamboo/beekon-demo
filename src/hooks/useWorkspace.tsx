@@ -15,6 +15,11 @@ export type SubscriptionTier =
   | "professional"
   | "enterprise";
 
+// Type guard for SubscriptionTier
+export function isValidSubscriptionTier(value: any): value is SubscriptionTier {
+  return typeof value === 'string' && ['free', 'starter', 'professional', 'enterprise'].includes(value);
+}
+
 export interface WorkspaceSettings {
   theme?: "light" | "dark" | "system";
   timezone?: string;
@@ -109,7 +114,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
       const workspaceData = (data || []).map((w) => ({
         ...w,
-        subscription_tier: w.subscription_tier as SubscriptionTier | null,
+        subscription_tier: isValidSubscriptionTier(w.subscription_tier) ? w.subscription_tier : null,
         settings: (w.settings ?? null) as WorkspaceSettings | null,
       }));
 
@@ -150,7 +155,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         return prevWorkspace;
       });
     } catch (error) {
-      console.error("Error fetching workspaces:", error);
+      // Error fetching workspaces
       setWorkspaces([]);
       setCurrentWorkspace(null);
       toast({
@@ -163,7 +168,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user?.id, toast]);
 
-  const createWorkspace = async (
+  const createWorkspace = useCallback(async (
     name: string,
     subscriptionTier: SubscriptionTier,
     creditLimit?: number
@@ -191,7 +196,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         {
           ...newWorkspace,
           subscription_tier:
-            newWorkspace.subscription_tier as SubscriptionTier | null,
+            isValidSubscriptionTier(newWorkspace.subscription_tier) ? newWorkspace.subscription_tier : null,
           settings: (newWorkspace.settings ?? null) as WorkspaceSettings | null,
         },
       ]);
@@ -201,7 +206,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         setCurrentWorkspace({
           ...newWorkspace,
           subscription_tier:
-            newWorkspace.subscription_tier as SubscriptionTier | null,
+            isValidSubscriptionTier(newWorkspace.subscription_tier) ? newWorkspace.subscription_tier : null,
           settings: (newWorkspace.settings ?? null) as WorkspaceSettings | null,
         });
       }
@@ -211,7 +216,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         description: `Workspace "${name}" created successfully`,
       });
     } catch (error) {
-      console.error("Error creating workspace:", error);
+      // Error creating workspace
       toast({
         title: "Error",
         description: "Failed to create workspace",
@@ -219,9 +224,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       });
       throw error;
     }
-  };
+  }, [user?.id, workspaces.length, toast]);
 
-  const updateWorkspace = async (
+  const updateWorkspace = useCallback(async (
     workspaceId: string,
     updates: Partial<Workspace>
   ) => {
@@ -254,7 +259,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             ? {
                 ...updatedWorkspace,
                 subscription_tier:
-                  updatedWorkspace.subscription_tier as SubscriptionTier | null,
+                  isValidSubscriptionTier(updatedWorkspace.subscription_tier) ? updatedWorkspace.subscription_tier : null,
                 settings: (updatedWorkspace.settings ??
                   null) as WorkspaceSettings | null,
               }
@@ -266,7 +271,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         setCurrentWorkspace({
           ...updatedWorkspace,
           subscription_tier:
-            updatedWorkspace.subscription_tier as SubscriptionTier | null,
+            isValidSubscriptionTier(updatedWorkspace.subscription_tier) ? updatedWorkspace.subscription_tier : null,
           settings: (updatedWorkspace.settings ??
             null) as WorkspaceSettings | null,
         });
@@ -277,7 +282,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         description: "Workspace updated successfully",
       });
     } catch (error) {
-      console.error("Error updating workspace:", error);
+      // Error updating workspace
       toast({
         title: "Error",
         description: "Failed to update workspace",
@@ -285,9 +290,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       });
       throw error;
     }
-  };
+  }, [currentWorkspace?.id, toast]);
 
-  const deleteWorkspace = async (workspaceId: string) => {
+  const deleteWorkspace = useCallback(async (workspaceId: string) => {
     try {
       const { error } = await supabase
         .schema("beekon_data")
@@ -318,7 +323,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         description: "Workspace deleted successfully",
       });
     } catch (error) {
-      console.error("Error deleting workspace:", error);
+      // Error deleting workspace
       toast({
         title: "Error",
         description: "Failed to delete workspace",
@@ -326,9 +331,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       });
       throw error;
     }
-  };
+  }, [currentWorkspace?.id, toast]);
 
-  const switchWorkspace = async (workspaceId: string) => {
+  const switchWorkspace = useCallback(async (workspaceId: string) => {
     const workspace = workspaces.find((w) => w.id === workspaceId);
     if (workspace) {
       setCurrentWorkspace(workspace);
@@ -337,12 +342,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         description: `Switched to workspace "${workspace.name}"`,
       });
     }
-  };
+  }, [workspaces, toast]);
 
-  const refetchWorkspaces = async () => {
+  const refetchWorkspaces = useCallback(async () => {
     setLoading(true);
     await fetchWorkspaces();
-  };
+  }, [fetchWorkspaces]);
 
   const fetchWebsites = useCallback(async () => {
     if (!user?.id || !currentWorkspace?.id) {
@@ -388,7 +393,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         return hasChanges ? websiteData : prev;
       });
     } catch (error) {
-      console.error("Error fetching websites", error);
+      // Error fetching websites
       setWebsites([]);
       toast({
         title: "Error",
@@ -400,7 +405,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user?.id, currentWorkspace?.id, toast]);
 
-  const deleteWebsite = async (websiteId: string) => {
+  const deleteWebsite = useCallback(async (websiteId: string) => {
     if (!user?.id || !currentWorkspace?.id) {
       setLoading(false);
       return;
@@ -420,7 +425,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       // Website deletion failed, but we can ignore the error
       // The UI will refresh and show the actual state
     }
-  };
+  }, [user?.id, currentWorkspace?.id]);
 
   useEffect(() => {
     if (user?.id) {
@@ -442,10 +447,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user?.id, currentWorkspace?.id, fetchWebsites]);
 
-  const refetchWebsites = async () => {
+  const refetchWebsites = useCallback(async () => {
     setLoading(true);
     await fetchWebsites();
-  };
+  }, [fetchWebsites]);
 
   const value = {
     currentWorkspace,

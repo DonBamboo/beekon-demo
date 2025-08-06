@@ -27,6 +27,7 @@ import {
   SubscriptionTier,
   useWorkspace,
   Workspace,
+  isValidSubscriptionTier,
 } from "@/hooks/useWorkspace";
 import { Building, Plus, Save } from "lucide-react";
 
@@ -49,28 +50,28 @@ interface WorkspaceModalProps {
 
 const subscriptionTiers = [
   {
-    value: "free" as SubscriptionTier,
+    value: "free",
     label: "Free",
     description: "5 website analyses per month",
     credits: 5,
     color: "bg-gray-500",
   },
   {
-    value: "starter" as SubscriptionTier,
+    value: "starter",
     label: "Starter",
     description: "50 website analyses per month",
     credits: 50,
     color: "bg-blue-500",
   },
   {
-    value: "professional" as SubscriptionTier,
+    value: "professional",
     label: "Professional",
     description: "1000 website analyses per month",
     credits: 1000,
     color: "bg-purple-500",
   },
   {
-    value: "enterprise" as SubscriptionTier,
+    value: "enterprise",
     label: "Enterprise",
     description: "10000 website analyses per month",
     credits: 10000,
@@ -99,7 +100,7 @@ export function WorkspaceModal({
     defaultValues: {
       name: workspace?.name || "",
       subscriptionTier:
-        (workspace?.subscription_tier as SubscriptionTier) || "free",
+        isValidSubscriptionTier(workspace?.subscription_tier) ? workspace.subscription_tier : "free",
       creditLimit: workspace?.credits_remaining || undefined,
     },
   });

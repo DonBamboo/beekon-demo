@@ -56,7 +56,7 @@ export function AnalysisHistoryModal({
       setSessions(analysisSessions);
       setFilteredSessions(analysisSessions);
     } catch (error) {
-      console.error("Failed to load analysis sessions:", error);
+      // Failed to load analysis sessions
       toast({
         title: "Error",
         description: "Failed to load analysis history. Please try again.",

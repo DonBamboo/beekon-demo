@@ -66,7 +66,7 @@ export function WorkspaceDropdown() {
 
   const handleEditWorkspace = (workspace: Workspace) => {
     if (!workspace) {
-      console.error("Cannot edit null workspace");
+      // Cannot edit null workspace
       return;
     }
     setEditingWorkspace(workspace);
@@ -75,7 +75,7 @@ export function WorkspaceDropdown() {
 
   const handleDeleteWorkspace = (workspace: Workspace) => {
     if (!workspace) {
-      console.error("Cannot delete null workspace");
+      // Cannot delete null workspace
       return;
     }
     setWorkspaceToDelete(workspace);

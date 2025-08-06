@@ -115,7 +115,7 @@ export default function CompetitorsList({
             
             // Debug logging for rank data
             if (performanceData?.averageRank !== null && performanceData?.averageRank !== undefined) {
-              console.log(`[DEBUG Frontend] Competitor ${competitor.competitor_name || competitor.competitor_domain}: averageRank=${performanceData.averageRank}, isAnalyzed=${isAnalyzed}`);
+              // Debug: competitor rank data available
             }
             
             return (

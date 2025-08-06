@@ -80,7 +80,7 @@ export class PerformanceMonitor {
         resourceObserver.observe({ entryTypes: ["resource"] });
         this.observers.set("resource", resourceObserver);
       } catch (error) {
-        console.warn("Resource observer not supported:", error);
+        // Resource observer not supported
       }
 
       // Navigation observer
@@ -109,7 +109,7 @@ export class PerformanceMonitor {
         navigationObserver.observe({ entryTypes: ["navigation"] });
         this.observers.set("navigation", navigationObserver);
       } catch (error) {
-        console.warn("Navigation observer not supported:", error);
+        // Navigation observer not supported
       }
 
       // Measure observer
@@ -129,7 +129,7 @@ export class PerformanceMonitor {
         measureObserver.observe({ entryTypes: ["measure"] });
         this.observers.set("measure", measureObserver);
       } catch (error) {
-        console.warn("Measure observer not supported:", error);
+        // Measure observer not supported
       }
     }
   }
@@ -150,7 +150,7 @@ export class PerformanceMonitor {
     try {
       fcpObserver.observe({ entryTypes: ["paint"] });
     } catch (error) {
-      console.warn("Paint observer not supported:", error);
+      // Paint observer not supported
     }
 
     // Largest Contentful Paint
@@ -165,7 +165,7 @@ export class PerformanceMonitor {
     try {
       lcpObserver.observe({ entryTypes: ["largest-contentful-paint"] });
     } catch (error) {
-      console.warn("LCP observer not supported:", error);
+      // LCP observer not supported
     }
 
     // First Input Delay
@@ -178,7 +178,7 @@ export class PerformanceMonitor {
     try {
       fidObserver.observe({ entryTypes: ["first-input"] });
     } catch (error) {
-      console.warn("FID observer not supported:", error);
+      // FID observer not supported
     }
 
     // Cumulative Layout Shift
@@ -195,7 +195,7 @@ export class PerformanceMonitor {
     try {
       clsObserver.observe({ entryTypes: ["layout-shift"] });
     } catch (error) {
-      console.warn("CLS observer not supported:", error);
+      // CLS observer not supported
     }
 
     // Time to First Byte
@@ -351,7 +351,7 @@ export class PerformanceMonitor {
         body: JSON.stringify(data),
       });
     } catch (error) {
-      console.error("Failed to send metrics:", error);
+      // Failed to send metrics
     }
   }
 }

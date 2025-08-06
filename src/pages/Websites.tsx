@@ -304,7 +304,7 @@ export default function Websites() {
         description: `Website data exported as ${format.toUpperCase()}`,
       });
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export Failed",
         description: error instanceof Error ? error.message : "Failed to export website data",

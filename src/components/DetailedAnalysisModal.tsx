@@ -107,7 +107,7 @@ export function DetailedAnalysisModal({
       // Pass UIAnalysisResult directly to InsightService (now supports prompt-specific data)
       return InsightService.generateInsights([analysisResult]);
     } catch (error) {
-      console.error("Error generating insights:", error);
+      // Error generating insights
       return {
         strengths: [],
         opportunities: [],
@@ -151,7 +151,7 @@ export function DetailedAnalysisModal({
         description: `Analysis data exported as ${format.toUpperCase()}`,
       });
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export failed",
         description: "Failed to export analysis data. Please try again.",

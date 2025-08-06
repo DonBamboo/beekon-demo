@@ -17,7 +17,7 @@ const WebsiteSettingsModal = React.lazy(() => import("./WebsiteSettingsModal"));
 const ProfileModal = React.lazy(() => import("./ProfileModal"));
 
 // Skeleton components for loading states
-const ChartSkeleton = () => (
+const ChartSkeleton = (): React.JSX.Element => (
   <div className="space-y-4 p-4">
     <Skeleton className="h-8 w-48" />
     <Skeleton className="h-64 w-full" />
@@ -29,7 +29,7 @@ const ChartSkeleton = () => (
   </div>
 );
 
-const ModalSkeleton = () => (
+const ModalSkeleton = (): React.JSX.Element => (
   <div className="space-y-4 p-6">
     <Skeleton className="h-8 w-64" />
     <div className="space-y-2">

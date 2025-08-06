@@ -141,7 +141,7 @@ export class ExportService {
             processing_started: new Date().toISOString(),
           });
         } catch (historyError) {
-          console.warn("Export history tracking failed, continuing with export:", historyError);
+          // Export history tracking failed, continuing with export
           historyTrackingFailed = true;
           // Continue with export despite history tracking failure
         }
@@ -177,7 +177,7 @@ export class ExportService {
             }
           );
         } catch (historyError) {
-          console.warn("Failed to update export history as completed:", historyError);
+          // Failed to update export history as completed
           // Don't fail the export if history update fails
         }
       }
@@ -196,7 +196,7 @@ export class ExportService {
             }
           );
         } catch (historyError) {
-          console.warn("Failed to update export history as failed:", historyError);
+          // Failed to update export history as failed
           // Don't mask the original error
         }
       }

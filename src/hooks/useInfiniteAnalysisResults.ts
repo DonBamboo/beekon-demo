@@ -293,7 +293,6 @@ export function useInfiniteAnalysisResults(
   useEffect(() => {
     refresh();
   }, [
-    refresh,
     websiteId,
     filters.topic,
     filters.llmProvider,
@@ -309,6 +308,7 @@ export function useInfiniteAnalysisResults(
     searchInInsights,
     sortBy,
     sortOrder,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   ]);
 
   // Memoized return value

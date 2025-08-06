@@ -109,31 +109,26 @@ export class CompetitorAnalysisService extends BaseService {
     llmProvider: string,
     responseText: string
   ): Promise<CompetitorMentionAnalysis> {
-    try {
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("analyze_competitor_mentions", {
-          p_website_id: websiteId,
-          p_competitor_id: competitorId,
-          p_prompt_id: promptId,
-          p_llm_provider: llmProvider,
-          p_response_text: responseText,
-        });
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .rpc("analyze_competitor_mentions", {
+        p_website_id: websiteId,
+        p_competitor_id: competitorId,
+        p_prompt_id: promptId,
+        p_llm_provider: llmProvider,
+        p_response_text: responseText,
+      });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      const result = data[0];
-      return {
-        isMentioned: result!.is_mentioned,
-        rankPosition: result!.rank_position,
-        sentimentScore: result!.sentiment_score,
-        confidenceScore: result!.confidence_score,
-        summaryText: result!.summary_text,
-      };
-    } catch (error) {
-      console.error("Error analyzing competitor mentions:", error);
-      throw error;
-    }
+    const result = data[0];
+    return {
+      isMentioned: result!.is_mentioned,
+      rankPosition: result!.rank_position,
+      sentimentScore: result!.sentiment_score,
+      confidenceScore: result!.confidence_score,
+      summaryText: result!.summary_text,
+    };
   }
 
   /**
@@ -146,34 +141,29 @@ export class CompetitorAnalysisService extends BaseService {
     analysisResult: CompetitorMentionAnalysis,
     responseText: string
   ): Promise<CompetitorAnalysisResult> {
-    try {
-      const analysisData: CompetitorAnalysisInsert = {
-        competitor_id: competitorId,
-        prompt_id: promptId,
-        llm_provider: llmProvider,
-        is_mentioned: analysisResult.isMentioned,
-        rank_position: analysisResult.rankPosition,
-        sentiment_score: analysisResult.sentimentScore,
-        confidence_score: analysisResult.confidenceScore,
-        response_text: responseText,
-        summary_text: analysisResult.summaryText,
-      };
+    const analysisData: CompetitorAnalysisInsert = {
+      competitor_id: competitorId,
+      prompt_id: promptId,
+      llm_provider: llmProvider,
+      is_mentioned: analysisResult.isMentioned,
+      rank_position: analysisResult.rankPosition,
+      sentiment_score: analysisResult.sentimentScore,
+      confidence_score: analysisResult.confidenceScore,
+      response_text: responseText,
+      summary_text: analysisResult.summaryText,
+    };
 
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .from("competitor_analysis_results")
-        .upsert(analysisData, {
-          onConflict: "competitor_id,prompt_id,llm_provider",
-        })
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .from("competitor_analysis_results")
+      .upsert(analysisData, {
+        onConflict: "competitor_id,prompt_id,llm_provider",
+      })
+      .select()
+      .single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error("Error storing competitor analysis:", error);
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   }
 
   /**
@@ -183,40 +173,35 @@ export class CompetitorAnalysisService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitorShareOfVoice[]> {
-    try {
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_competitor_share_of_voice", {
-          p_website_id: websiteId,
-          p_date_start:
-            dateRange?.start ||
-            new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          p_date_end: dateRange?.end || new Date().toISOString(),
-        });
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .rpc("get_competitor_share_of_voice", {
+        p_website_id: websiteId,
+        p_date_start:
+          dateRange?.start ||
+          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        p_date_end: dateRange?.end || new Date().toISOString(),
+      });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      return (data || []).map((row) => ({
-        competitorId: row.competitor_id,
-        competitorName: row.competitor_name || row.competitor_domain,
-        competitorDomain: row.competitor_domain,
-        totalAnalyses: row.total_analyses,
-        totalMentions: row.total_voice_mentions,
-        shareOfVoice: Number(row.share_of_voice || 0),
-        avgRankPosition: row.avg_rank_position
-          ? Number(row.avg_rank_position)
-          : null,
-        avgSentimentScore: row.avg_sentiment_score
-          ? Number(row.avg_sentiment_score)
-          : null,
-        avgConfidenceScore: row.avg_confidence_score
-          ? Number(row.avg_confidence_score)
-          : null,
-      }));
-    } catch (error) {
-      console.error("Error getting competitor share of voice:", error);
-      throw error;
-    }
+    return (data || []).map((row) => ({
+      competitorId: row.competitor_id,
+      competitorName: row.competitor_name || row.competitor_domain,
+      competitorDomain: row.competitor_domain,
+      totalAnalyses: row.total_analyses,
+      totalMentions: row.total_voice_mentions,
+      shareOfVoice: Number(row.share_of_voice || 0),
+      avgRankPosition: row.avg_rank_position
+        ? Number(row.avg_rank_position)
+        : null,
+      avgSentimentScore: row.avg_sentiment_score
+        ? Number(row.avg_sentiment_score)
+        : null,
+      avgConfidenceScore: row.avg_confidence_score
+        ? Number(row.avg_confidence_score)
+        : null,
+    }));
   }
 
   /**
@@ -226,31 +211,26 @@ export class CompetitorAnalysisService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitiveGapAnalysis[]> {
-    try {
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_competitive_gap_analysis", {
-          p_website_id: websiteId,
-          p_date_start:
-            dateRange?.start ||
-            new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          p_date_end: dateRange?.end || new Date().toISOString(),
-        });
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .rpc("get_competitive_gap_analysis", {
+        p_website_id: websiteId,
+        p_date_start:
+          dateRange?.start ||
+          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        p_date_end: dateRange?.end || new Date().toISOString(),
+      });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      return (data || []).map((row) => ({
-        topicId: row.topic_id,
-        topicName: row.topic_name,
-        yourBrandScore: Number(row.your_brand_score || 0),
-        competitorData: Array.isArray(row.competitor_data)
-          ? row.competitor_data
-          : [],
-      }));
-    } catch (error) {
-      console.error("Error getting competitive gap analysis:", error);
-      throw error;
-    }
+    return (data || []).map((row) => ({
+      topicId: row.topic_id,
+      topicName: row.topic_name,
+      yourBrandScore: Number(row.your_brand_score || 0),
+      competitorData: Array.isArray(row.competitor_data)
+        ? row.competitor_data
+        : [],
+    }));
   }
 
   /**
@@ -263,41 +243,36 @@ export class CompetitorAnalysisService extends BaseService {
     llmProvider: string,
     responseTextMap: Map<string, string> // Map of promptId -> responseText
   ): Promise<CompetitorAnalysisResult[]> {
-    try {
-      const results: CompetitorAnalysisResult[] = [];
+    const results: CompetitorAnalysisResult[] = [];
 
-      for (const competitorId of competitorIds) {
-        for (const promptId of promptIds) {
-          const responseText = responseTextMap.get(promptId);
-          if (!responseText) continue;
+    for (const competitorId of competitorIds) {
+      for (const promptId of promptIds) {
+        const responseText = responseTextMap.get(promptId);
+        if (!responseText) continue;
 
-          // Analyze competitor mentions
-          const analysis = await this.analyzeCompetitorMentions(
-            websiteId,
-            competitorId,
-            promptId,
-            llmProvider,
-            responseText
-          );
+        // Analyze competitor mentions
+        const analysis = await this.analyzeCompetitorMentions(
+          websiteId,
+          competitorId,
+          promptId,
+          llmProvider,
+          responseText
+        );
 
-          // Store the analysis result
-          const result = await this.storeCompetitorAnalysis(
-            competitorId,
-            promptId,
-            llmProvider,
-            analysis,
-            responseText
-          );
+        // Store the analysis result
+        const result = await this.storeCompetitorAnalysis(
+          competitorId,
+          promptId,
+          llmProvider,
+          analysis,
+          responseText
+        );
 
-          results.push(result);
-        }
+        results.push(result);
       }
-
-      return results;
-    } catch (error) {
-      console.error("Error in batch competitor analysis:", error);
-      throw error;
     }
+
+    return results;
   }
 
   /**
@@ -307,111 +282,104 @@ export class CompetitorAnalysisService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitorInsight[]> {
-    try {
-      const [shareOfVoice, gapAnalysis] = await Promise.all([
-        this.getCompetitorShareOfVoice(websiteId, dateRange),
-        this.getCompetitiveGapAnalysis(websiteId, dateRange),
-      ]);
+    const [shareOfVoice, gapAnalysis] = await Promise.all([
+      this.getCompetitorShareOfVoice(websiteId, dateRange),
+      this.getCompetitiveGapAnalysis(websiteId, dateRange),
+    ]);
 
-      const insights: CompetitorInsight[] = [];
+    const insights: CompetitorInsight[] = [];
 
-      // Analyze share of voice for threats and opportunities
-      const totalMarketVoice = shareOfVoice.reduce(
-        (sum, comp) => sum + comp.shareOfVoice,
-        0
-      );
-      const dominantCompetitor = shareOfVoice.find(
-        (comp) => comp.shareOfVoice > 40
-      );
+    // Analyze share of voice for threats and opportunities
+    const totalMarketVoice = shareOfVoice.reduce(
+      (sum, comp) => sum + comp.shareOfVoice,
+      0
+    );
+    const dominantCompetitor = shareOfVoice.find(
+      (comp) => comp.shareOfVoice > 40
+    );
 
-      if (dominantCompetitor) {
-        insights.push({
-          type: "threat",
-          title: "Market Leader Identified",
-          description: `${
-            dominantCompetitor.competitorName
-          } dominates with ${dominantCompetitor.shareOfVoice.toFixed(
-            1
-          )}% share of voice`,
-          impact: "high",
-          competitorId: dominantCompetitor.competitorId,
-          recommendations: [
-            "Analyze their content strategy and positioning",
-            "Identify gaps in their coverage",
-            "Focus on topics where they have lower rankings",
-          ],
-        });
-      }
-
-      // Analyze competitive gaps for opportunities
-      const opportunityTopics = gapAnalysis.filter((gap) => {
-        const avgCompetitorScore =
-          gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) /
-          gap.competitorData.length;
-        return (
-          gap.yourBrandScore < avgCompetitorScore && avgCompetitorScore > 0
-        );
+    if (dominantCompetitor) {
+      insights.push({
+        type: "threat",
+        title: "Market Leader Identified",
+        description: `${
+          dominantCompetitor.competitorName
+        } dominates with ${dominantCompetitor.shareOfVoice.toFixed(
+          1
+        )}% share of voice`,
+        impact: "high",
+        competitorId: dominantCompetitor.competitorId,
+        recommendations: [
+          "Analyze their content strategy and positioning",
+          "Identify gaps in their coverage",
+          "Focus on topics where they have lower rankings",
+        ],
       });
-
-      opportunityTopics.forEach((topic) => {
-        const topCompetitor = topic.competitorData.reduce((prev, current) =>
-          prev.score > current.score ? prev : current
-        );
-
-        insights.push({
-          type: "opportunity",
-          title: `Improvement Opportunity: ${topic.topicName}`,
-          description: `Your brand scores ${topic.yourBrandScore.toFixed(
-            1
-          )}% vs ${
-            topCompetitor.competitor_name
-          }'s ${topCompetitor.score.toFixed(1)}%`,
-          impact: topic.yourBrandScore < 20 ? "high" : "medium",
-          topicId: topic.topicId,
-          competitorId: topCompetitor.competitorId,
-          recommendations: [
-            "Create more comprehensive content on this topic",
-            "Optimize for better ranking positions",
-            "Study competitor approaches and improve upon them",
-          ],
-        });
-      });
-
-      // Analyze ranking performance
-      const poorRankingCompetitors = shareOfVoice.filter(
-        (comp) =>
-          comp.avgRankPosition &&
-          comp.avgRankPosition > 3 &&
-          comp.totalMentions > 0
-      );
-
-      poorRankingCompetitors.forEach((competitor) => {
-        insights.push({
-          type: "opportunity",
-          title: `Ranking Opportunity vs ${competitor.competitorName}`,
-          description: `${
-            competitor.competitorName
-          } averages position ${competitor.avgRankPosition?.toFixed(
-            1
-          )} - opportunity to outrank`,
-          impact: "medium",
-          competitorId: competitor.competitorId,
-          recommendations: [
-            "Focus on topics where they rank lower",
-            "Improve content quality and relevance",
-            "Optimize for better search positioning",
-          ],
-        });
-      });
-
-      return insights.sort((a, b) => {
-        const impactOrder = { high: 3, medium: 2, low: 1 };
-        return impactOrder[b.impact] - impactOrder[a.impact];
-      });
-    } catch (error) {
-      console.error("Error getting competitor insights:", error);
-      throw error;
     }
+
+    // Analyze competitive gaps for opportunities
+    const opportunityTopics = gapAnalysis.filter((gap) => {
+      const avgCompetitorScore =
+        gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) /
+        gap.competitorData.length;
+      return gap.yourBrandScore < avgCompetitorScore && avgCompetitorScore > 0;
+    });
+
+    opportunityTopics.forEach((topic) => {
+      const topCompetitor = topic.competitorData.reduce((prev, current) =>
+        prev.score > current.score ? prev : current
+      );
+
+      insights.push({
+        type: "opportunity",
+        title: `Improvement Opportunity: ${topic.topicName}`,
+        description: `Your brand scores ${topic.yourBrandScore.toFixed(
+          1
+        )}% vs ${topCompetitor.competitor_name}'s ${topCompetitor.score.toFixed(
+          1
+        )}%`,
+        impact: topic.yourBrandScore < 20 ? "high" : "medium",
+        topicId: topic.topicId,
+        competitorId: topCompetitor.competitorId,
+        recommendations: [
+          "Create more comprehensive content on this topic",
+          "Optimize for better ranking positions",
+          "Study competitor approaches and improve upon them",
+        ],
+      });
+    });
+
+    // Analyze ranking performance
+    const poorRankingCompetitors = shareOfVoice.filter(
+      (comp) =>
+        comp.avgRankPosition &&
+        comp.avgRankPosition > 3 &&
+        comp.totalMentions > 0
+    );
+
+    poorRankingCompetitors.forEach((competitor) => {
+      insights.push({
+        type: "opportunity",
+        title: `Ranking Opportunity vs ${competitor.competitorName}`,
+        description: `${
+          competitor.competitorName
+        } averages position ${competitor.avgRankPosition?.toFixed(
+          1
+        )} - opportunity to outrank`,
+        impact: "medium",
+        competitorId: competitor.competitorId,
+        recommendations: [
+          "Focus on topics where they rank lower",
+          "Improve content quality and relevance",
+          "Optimize for better search positioning",
+        ],
+      });
+    });
+
+    return insights.sort((a, b) => {
+      const impactOrder = { high: 3, medium: 2, low: 1 };
+      return impactOrder[b.impact] - impactOrder[a.impact];
+    });
   }
 
   /**
@@ -422,67 +390,57 @@ export class CompetitorAnalysisService extends BaseService {
     competitorId?: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitorAnalysisResult[]> {
-    try {
-      let query = supabase
-        .schema("beekon_data")
-        .from("competitor_analysis_results")
-        .select(
-          `
-          *,
-          competitors!inner(
-            id,
-            competitor_name,
-            competitor_domain,
-            website_id
-          ),
-          prompts!inner(
-            id,
-            prompt_text,
-            topic_id,
-            topics!inner(
-              id,
-              topic_name
-            )
-          )
+    let query = supabase
+      .schema("beekon_data")
+      .from("competitor_analysis_results")
+      .select(
         `
+        *,
+        competitors!inner(
+          id,
+          competitor_name,
+          competitor_domain,
+          website_id
+        ),
+        prompts!inner(
+          id,
+          prompt_text,
+          topic_id,
+          topics!inner(
+            id,
+            topic_name
+          )
         )
-        .eq("competitors.website_id", websiteId)
-        .order("analyzed_at", { ascending: false });
+      `
+      )
+      .eq("competitors.website_id", websiteId)
+      .order("analyzed_at", { ascending: false });
 
-      if (competitorId) {
-        query = query.eq("competitor_id", competitorId);
-      }
-
-      if (dateRange) {
-        query = query
-          .gte("analyzed_at", dateRange.start)
-          .lte("analyzed_at", dateRange.end);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error getting competitor analysis results:", error);
-      throw error;
+    if (competitorId) {
+      query = query.eq("competitor_id", competitorId);
     }
+
+    if (dateRange) {
+      query = query
+        .gte("analyzed_at", dateRange.start)
+        .lte("analyzed_at", dateRange.end);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    return data || [];
   }
 
   /**
    * Refresh competitor analysis materialized views
    */
   async refreshCompetitorAnalysisViews(): Promise<void> {
-    try {
-      const { error } = await supabase
-        .schema("beekon_data")
-        .rpc("refresh_competitor_analysis_views");
+    const { error } = await supabase
+      .schema("beekon_data")
+      .rpc("refresh_competitor_analysis_views");
 
-      if (error) throw error;
-    } catch (error) {
-      console.error("Error refreshing competitor analysis views:", error);
-      throw error;
-    }
+    if (error) throw error;
   }
 
   /**
@@ -492,80 +450,72 @@ export class CompetitorAnalysisService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitiveIntelligence> {
-    try {
-      const [shareOfVoice, gapAnalysis, historicalData] = await Promise.all([
-        this.getCompetitorShareOfVoice(websiteId, dateRange),
-        this.getCompetitiveGapAnalysis(websiteId, dateRange),
-        this.getHistoricalTrends(websiteId, dateRange),
-      ]);
+    const [shareOfVoice, gapAnalysis, historicalData] = await Promise.all([
+      this.getCompetitorShareOfVoice(websiteId, dateRange),
+      this.getCompetitiveGapAnalysis(websiteId, dateRange),
+      this.getHistoricalTrends(websiteId, dateRange),
+    ]);
 
-      // Calculate market position
-      const totalShareOfVoice = shareOfVoice.reduce(
-        (sum, comp) => sum + comp.shareOfVoice,
-        0
-      );
-      const yourBrandShare =
-        shareOfVoice.find((comp) => comp.competitorName === "Your Brand")
-          ?.shareOfVoice || 0;
-      const competitorsByShare = shareOfVoice
-        .filter((comp) => comp.competitorName !== "Your Brand")
-        .sort((a, b) => b.shareOfVoice - a.shareOfVoice);
+    // Calculate market position
+    const totalShareOfVoice = shareOfVoice.reduce(
+      (sum, comp) => sum + comp.shareOfVoice,
+      0
+    );
+    const yourBrandShare =
+      shareOfVoice.find((comp) => comp.competitorName === "Your Brand")
+        ?.shareOfVoice || 0;
+    const competitorsByShare = shareOfVoice
+      .filter((comp) => comp.competitorName !== "Your Brand")
+      .sort((a, b) => b.shareOfVoice - a.shareOfVoice);
 
-      const yourRank =
-        competitorsByShare.findIndex(
-          (comp) => comp.shareOfVoice < yourBrandShare
-        ) + 1;
-      const marketPosition = {
-        yourRank: yourRank || competitorsByShare.length + 1,
-        totalCompetitors: competitorsByShare.length,
-        marketSharePercent: yourBrandShare,
-        positionChange: this.calculatePositionChange(
-          historicalData,
-          yourBrandShare
-        ),
-      };
+    const yourRank =
+      competitorsByShare.findIndex(
+        (comp) => comp.shareOfVoice < yourBrandShare
+      ) + 1;
+    const marketPosition = {
+      yourRank: yourRank || competitorsByShare.length + 1,
+      totalCompetitors: competitorsByShare.length,
+      marketSharePercent: yourBrandShare,
+      positionChange: this.calculatePositionChange(
+        historicalData,
+        yourBrandShare
+      ),
+    };
 
-      // Generate competitive trends
-      const keyTrends = this.analyzeCompetitiveTrends(
-        shareOfVoice,
-        historicalData
-      );
+    // Generate competitive trends
+    const keyTrends = this.analyzeCompetitiveTrends(
+      shareOfVoice,
+      historicalData
+    );
 
-      // Generate strategic insights
-      const allInsights = await this.getCompetitorInsights(
-        websiteId,
-        dateRange
-      );
-      const emergingThreats = allInsights
-        .filter(
-          (insight) => insight.type === "threat" && insight.impact === "high"
-        )
-        .slice(0, 3);
+    // Generate strategic insights
+    const allInsights = await this.getCompetitorInsights(websiteId, dateRange);
+    const emergingThreats = allInsights
+      .filter(
+        (insight) => insight.type === "threat" && insight.impact === "high"
+      )
+      .slice(0, 3);
 
-      const strategicOpportunities = allInsights
-        .filter((insight) => insight.type === "opportunity")
-        .slice(0, 5);
+    const strategicOpportunities = allInsights
+      .filter((insight) => insight.type === "opportunity")
+      .slice(0, 5);
 
-      // Generate action priorities
-      const actionPriorities = this.generateActionPriorities(
-        marketPosition,
-        keyTrends,
-        emergingThreats,
-        strategicOpportunities,
-        gapAnalysis
-      );
+    // Generate action priorities
+    const actionPriorities = this.generateActionPriorities(
+      marketPosition,
+      keyTrends,
+      emergingThreats,
+      strategicOpportunities,
+      gapAnalysis
+    );
 
-      return {
-        marketPosition,
-        keyTrends,
-        emergingThreats,
-        strategicOpportunities,
-        actionPriorities,
-      };
-    } catch (error) {
-      console.error("Error generating competitive intelligence:", error);
-      throw error;
-    }
+    return {
+      marketPosition,
+      keyTrends,
+      emergingThreats,
+      strategicOpportunities,
+      actionPriorities,
+    };
   }
 
   /**
@@ -597,7 +547,7 @@ export class CompetitorAnalysisService extends BaseService {
 
       return [currentPeriod, previousPeriod];
     } catch (error) {
-      console.error("Error getting historical trends:", error);
+      // Error getting historical trends
       return [];
     }
   }
@@ -636,7 +586,8 @@ export class CompetitorAnalysisService extends BaseService {
 
     currentData.forEach((competitor) => {
       const previousData = previous.find(
-        (comp: CompetitorShareOfVoice) => comp.competitorId === competitor.competitorId
+        (comp: CompetitorShareOfVoice) =>
+          comp.competitorId === competitor.competitorId
       );
 
       if (previousData) {
@@ -831,28 +782,23 @@ export class CompetitorAnalysisService extends BaseService {
     intelligence: CompetitiveIntelligence;
     recommendedActions: string[];
   }> {
-    try {
-      const intelligence = await this.generateCompetitiveIntelligence(
-        websiteId,
-        dateRange
-      );
+    const intelligence = await this.generateCompetitiveIntelligence(
+      websiteId,
+      dateRange
+    );
 
-      const executiveSummary = this.generateExecutiveSummary(intelligence);
-      const keyFindings = this.extractKeyFindings(intelligence);
-      const recommendedActions = intelligence.actionPriorities
-        .slice(0, 5)
-        .map((action) => action.action);
+    const executiveSummary = this.generateExecutiveSummary(intelligence);
+    const keyFindings = this.extractKeyFindings(intelligence);
+    const recommendedActions = intelligence.actionPriorities
+      .slice(0, 5)
+      .map((action) => action.action);
 
-      return {
-        executiveSummary,
-        keyFindings,
-        intelligence,
-        recommendedActions,
-      };
-    } catch (error) {
-      console.error("Error generating competitive report:", error);
-      throw error;
-    }
+    return {
+      executiveSummary,
+      keyFindings,
+      intelligence,
+      recommendedActions,
+    };
   }
 
   /**

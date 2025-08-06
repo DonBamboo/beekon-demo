@@ -55,12 +55,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .single();
 
           if (error && error.code !== "PGRST116") {
-            console.error("Error fetching workspace:", error);
+            // Error fetching workspace
           }
 
           setWorkspaceId(data?.id || null);
         } catch (error) {
-          console.error("Error fetching workspace:", error);
+          // Error fetching workspace
           setWorkspaceId(null);
         }
       } else {

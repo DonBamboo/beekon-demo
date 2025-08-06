@@ -9,14 +9,14 @@ const generateRandomBytes = (length: number): Uint8Array => {
 
 const arrayBufferToHex = (buffer: ArrayBuffer): string => {
   return Array.from(new Uint8Array(buffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 };
 
 const sha256 = async (data: string): Promise<string> => {
   const encoder = new TextEncoder();
   const dataBuffer = encoder.encode(data);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", dataBuffer);
   return arrayBufferToHex(hashBuffer);
 };
 
@@ -35,7 +35,7 @@ export interface ApiKeyUsage {
 
 export class ApiKeyService extends BaseService {
   private static instance: ApiKeyService;
-  protected serviceName = 'api-key' as const;
+  protected serviceName = "api-key" as const;
 
   public static getInstance(): ApiKeyService {
     if (!ApiKeyService.instance) {
@@ -47,12 +47,15 @@ export class ApiKeyService extends BaseService {
   /**
    * Generate a new API key
    */
-  async generateApiKey(userId: string, name: string): Promise<ApiKeyWithSecret> {
-    return this.executeOperation('generateApiKey', async () => {
-      this.validateUUID(userId, 'userId');
-      this.validateRequired({ name }, ['name']);
-      this.validateStringLength(name, 'name', 1, 100);
-      this.logOperation('generateApiKey', { userId, name });
+  async generateApiKey(
+    userId: string,
+    name: string
+  ): Promise<ApiKeyWithSecret> {
+    return this.executeOperation("generateApiKey", async () => {
+      this.validateUUID(userId, "userId");
+      this.validateRequired({ name }, ["name"]);
+      this.validateStringLength(name, "name", 1, 100);
+      this.logOperation("generateApiKey", { userId, name });
 
       // Generate a secure random key
       const keyBytes = generateRandomBytes(32);
@@ -101,59 +104,44 @@ export class ApiKeyService extends BaseService {
    * Get all API keys for a user
    */
   async getApiKeys(userId: string): Promise<ApiKey[]> {
-    try {
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .from("api_keys")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .from("api_keys")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      return data || [];
-    } catch (error) {
-      console.error("Failed to get API keys:", error);
-      throw error;
-    }
+    return data || [];
   }
 
   /**
    * Revoke an API key
    */
   async revokeApiKey(userId: string, keyId: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .schema("beekon_data")
-        .from("api_keys")
-        .update({ is_active: false })
-        .eq("id", keyId)
-        .eq("user_id", userId);
+    const { error } = await supabase
+      .schema("beekon_data")
+      .from("api_keys")
+      .update({ is_active: false })
+      .eq("id", keyId)
+      .eq("user_id", userId);
 
-      if (error) throw error;
-    } catch (error) {
-      console.error("Failed to revoke API key:", error);
-      throw error;
-    }
+    if (error) throw error;
   }
 
   /**
    * Delete an API key permanently
    */
   async deleteApiKey(userId: string, keyId: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .schema("beekon_data")
-        .from("api_keys")
-        .delete()
-        .eq("id", keyId)
-        .eq("user_id", userId);
+    const { error } = await supabase
+      .schema("beekon_data")
+      .from("api_keys")
+      .delete()
+      .eq("id", keyId)
+      .eq("user_id", userId);
 
-      if (error) throw error;
-    } catch (error) {
-      console.error("Failed to delete API key:", error);
-      throw error;
-    }
+    if (error) throw error;
   }
 
   /**
@@ -185,7 +173,7 @@ export class ApiKeyService extends BaseService {
 
       return data;
     } catch (error) {
-      console.error("Failed to verify API key:", error);
+      // Failed to verify API key
       return null;
     }
   }
@@ -204,19 +192,22 @@ export class ApiKeyService extends BaseService {
       if (error) throw error;
 
       const keys = data || [];
-      const activeKeys = keys.filter(key => key.is_active);
+      const activeKeys = keys.filter((key) => key.is_active);
       const totalRequests = keys.reduce((sum, key) => sum + key.usage_count, 0);
-      
+
       // Calculate success rate (simplified - would need actual error tracking)
       const successRate = totalRequests > 0 ? 99.2 : 0;
-      
+
       // Calculate last 30 days requests (simplified)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const recentKeys = keys.filter(key => 
-        key.last_used_at && new Date(key.last_used_at) > thirtyDaysAgo
+      const recentKeys = keys.filter(
+        (key) => key.last_used_at && new Date(key.last_used_at) > thirtyDaysAgo
       );
-      const last30DaysRequests = recentKeys.reduce((sum, key) => sum + key.usage_count, 0);
+      const last30DaysRequests = recentKeys.reduce(
+        (sum, key) => sum + key.usage_count,
+        0
+      );
 
       return {
         total_requests: totalRequests,
@@ -225,7 +216,7 @@ export class ApiKeyService extends BaseService {
         last_30_days: last30DaysRequests,
       };
     } catch (error) {
-      console.error("Failed to get API key usage:", error);
+      // Failed to get API key usage
       return {
         total_requests: 0,
         success_rate: 0,
@@ -238,34 +229,33 @@ export class ApiKeyService extends BaseService {
   /**
    * Update API key name
    */
-  async updateApiKeyName(userId: string, keyId: string, newName: string): Promise<void> {
-    try {
-      // Check if name already exists for this user
-      const { data: existingKey } = await supabase
-        .schema("beekon_data")
-        .from("api_keys")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("name", newName)
-        .neq("id", keyId)
-        .single();
+  async updateApiKeyName(
+    userId: string,
+    keyId: string,
+    newName: string
+  ): Promise<void> {
+    // Check if name already exists for this user
+    const { data: existingKey } = await supabase
+      .schema("beekon_data")
+      .from("api_keys")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("name", newName)
+      .neq("id", keyId)
+      .single();
 
-      if (existingKey) {
-        throw new Error("API key with this name already exists");
-      }
-
-      const { error } = await supabase
-        .schema("beekon_data")
-        .from("api_keys")
-        .update({ name: newName })
-        .eq("id", keyId)
-        .eq("user_id", userId);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error("Failed to update API key name:", error);
-      throw error;
+    if (existingKey) {
+      throw new Error("API key with this name already exists");
     }
+
+    const { error } = await supabase
+      .schema("beekon_data")
+      .from("api_keys")
+      .update({ name: newName })
+      .eq("id", keyId)
+      .eq("user_id", userId);
+
+    if (error) throw error;
   }
 }
 

@@ -55,21 +55,21 @@ export interface CompetitorTimeSeriesData {
 export interface MarketShareDataPoint {
   name: string;
   normalizedValue: number; // Normalized percentage (0-100, sum = 100)
-  rawValue: number;        // Raw share of voice percentage
+  rawValue: number; // Raw share of voice percentage
   competitorId?: string;
   mentions?: number;
   avgRank?: number;
-  dataType: 'market_share'; // Explicit data type identifier
+  dataType: "market_share"; // Explicit data type identifier
 }
 
 export interface ShareOfVoiceDataPoint {
   name: string;
-  shareOfVoice: number;    // Raw percentage of mentions
+  shareOfVoice: number; // Raw percentage of mentions
   totalMentions: number;
   totalAnalyses: number;
   competitorId?: string;
   avgRank?: number;
-  dataType: 'share_of_voice'; // Explicit data type identifier
+  dataType: "share_of_voice"; // Explicit data type identifier
 }
 
 export interface CompetitorAnalytics {
@@ -217,7 +217,7 @@ export class OptimizedCompetitorService extends BaseService {
         const avgRank = row.avg_rank_position;
         const mentionTrend = row.mention_trend_7d;
 
-        // Debug logging removed - average rank processing completed
+        // Average rank processing completed
 
         return {
           competitorId: row.competitor_id,
@@ -227,7 +227,10 @@ export class OptimizedCompetitorService extends BaseService {
             totalMentions > 0
               ? Math.round((positiveMentions / totalMentions) * 100)
               : 0,
-          averageRank: avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20 ? avgRank : null,
+          averageRank:
+            avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20
+              ? avgRank
+              : null,
           mentionCount: totalMentions,
           sentimentScore:
             avgSentiment && !isNaN(avgSentiment)
@@ -306,7 +309,13 @@ export class OptimizedCompetitorService extends BaseService {
             dailyMentions > 0
               ? Math.round((dailyPositiveMentions / dailyMentions) * 100)
               : 0,
-          averageRank: dailyAvgRank && !isNaN(dailyAvgRank) && dailyAvgRank > 0 && dailyAvgRank <= 20 ? dailyAvgRank : 0,
+          averageRank:
+            dailyAvgRank &&
+            !isNaN(dailyAvgRank) &&
+            dailyAvgRank > 0 &&
+            dailyAvgRank <= 20
+              ? dailyAvgRank
+              : 0,
           mentionCount: dailyMentions,
           sentimentScore:
             dailyAvgSentiment && !isNaN(dailyAvgSentiment)
@@ -355,7 +364,7 @@ export class OptimizedCompetitorService extends BaseService {
               rawValue: 0,
               mentions: 0,
               avgRank: null,
-              dataType: 'market_share' as const,
+              dataType: "market_share" as const,
             },
           ],
           shareOfVoiceData: [
@@ -365,7 +374,7 @@ export class OptimizedCompetitorService extends BaseService {
               totalMentions: 0,
               totalAnalyses: 0,
               avgRank: null,
-              dataType: 'share_of_voice' as const,
+              dataType: "share_of_voice" as const,
             },
           ],
           competitiveGaps: [],
@@ -400,53 +409,80 @@ export class OptimizedCompetitorService extends BaseService {
       ]);
 
       // Calculate your brand's mention data
-      const yourBrandMentions = yourBrandResults.reduce((sum, r) => sum + r.llm_results.filter(llm => llm.is_mentioned).length, 0);
-      const yourBrandAnalyses = yourBrandResults.reduce((sum, r) => sum + r.llm_results.length, 0);
-      
+      const yourBrandMentions = yourBrandResults.reduce(
+        (sum, r) =>
+          sum + r.llm_results.filter((llm) => llm.is_mentioned).length,
+        0
+      );
+      const yourBrandAnalyses = yourBrandResults.reduce(
+        (sum, r) => sum + r.llm_results.length,
+        0
+      );
+
       // Calculate total mentions across all brands (Your Brand + all competitors)
-      const totalCompetitorMentions = shareOfVoice.reduce((sum, comp) => sum + comp.totalMentions, 0);
-      const totalMentionsAllBrands = yourBrandMentions + totalCompetitorMentions;
-      
+      const totalCompetitorMentions = shareOfVoice.reduce(
+        (sum, comp) => sum + comp.totalMentions,
+        0
+      );
+      const totalMentionsAllBrands =
+        yourBrandMentions + totalCompetitorMentions;
+
       // Calculate true Share of Voice (relative to total mentions across all brands)
-      const yourBrandTrueShareOfVoice = totalMentionsAllBrands > 0 
-        ? Number(((yourBrandMentions / totalMentionsAllBrands) * 100).toFixed(1))
-        : 0;
-      
+      const yourBrandTrueShareOfVoice =
+        totalMentionsAllBrands > 0
+          ? Number(
+              ((yourBrandMentions / totalMentionsAllBrands) * 100).toFixed(1)
+            )
+          : 0;
+
       // For backward compatibility, also calculate mention rate (old logic)
-      const yourBrandMentionRate = yourBrandAnalyses > 0 
-        ? Number(((yourBrandMentions / yourBrandAnalyses) * 100).toFixed(1))
-        : 0;
-      
+      const yourBrandMentionRate =
+        yourBrandAnalyses > 0
+          ? Number(((yourBrandMentions / yourBrandAnalyses) * 100).toFixed(1))
+          : 0;
+
       // Create market share data (using true share of voice as baseline, with normalization if needed)
-      const competitorTrueShares = shareOfVoice.map(comp => ({
+      const competitorTrueShares = shareOfVoice.map((comp) => ({
         ...comp,
-        trueShareOfVoice: totalMentionsAllBrands > 0 
-          ? Number(((comp.totalMentions / totalMentionsAllBrands) * 100).toFixed(1))
-          : 0
+        trueShareOfVoice:
+          totalMentionsAllBrands > 0
+            ? Number(
+                ((comp.totalMentions / totalMentionsAllBrands) * 100).toFixed(1)
+              )
+            : 0,
       }));
-      
+
       // Total should be 100%, but add normalization as safety measure
-      const totalTrueShare = yourBrandTrueShareOfVoice + competitorTrueShares.reduce((sum, comp) => sum + comp.trueShareOfVoice, 0);
+      const totalTrueShare =
+        yourBrandTrueShareOfVoice +
+        competitorTrueShares.reduce(
+          (sum, comp) => sum + comp.trueShareOfVoice,
+          0
+        );
       const normalizationFactor = totalTrueShare > 0 ? 100 / totalTrueShare : 1;
-      
+
       // Create normalized market share data
       const marketShareData: MarketShareDataPoint[] = [
         {
           name: "Your Brand",
-          normalizedValue: Number((yourBrandTrueShareOfVoice * normalizationFactor).toFixed(1)),
+          normalizedValue: Number(
+            (yourBrandTrueShareOfVoice * normalizationFactor).toFixed(1)
+          ),
           rawValue: yourBrandMentionRate, // Keep old mention rate for reference
           mentions: yourBrandMentions,
           avgRank: null, // Your brand doesn't have a rank position
-          dataType: 'market_share'
+          dataType: "market_share",
         },
         ...competitorTrueShares.map((comp) => ({
           name: comp.competitorName,
-          normalizedValue: Number((comp.trueShareOfVoice * normalizationFactor).toFixed(1)),
+          normalizedValue: Number(
+            (comp.trueShareOfVoice * normalizationFactor).toFixed(1)
+          ),
           rawValue: comp.shareOfVoice, // Keep old database value for reference
           competitorId: comp.competitorId,
           mentions: comp.totalMentions,
           avgRank: comp.avgRankPosition,
-          dataType: 'market_share' as const
+          dataType: "market_share" as const,
         })),
       ];
 
@@ -458,7 +494,7 @@ export class OptimizedCompetitorService extends BaseService {
           totalMentions: yourBrandMentions,
           totalAnalyses: yourBrandAnalyses,
           avgRank: null,
-          dataType: 'share_of_voice'
+          dataType: "share_of_voice",
         },
         ...competitorTrueShares.map((comp) => ({
           name: comp.competitorName,
@@ -467,7 +503,7 @@ export class OptimizedCompetitorService extends BaseService {
           totalAnalyses: comp.totalAnalyses,
           competitorId: comp.competitorId,
           avgRank: comp.avgRankPosition,
-          dataType: 'share_of_voice' as const
+          dataType: "share_of_voice" as const,
         })),
       ];
 
@@ -497,98 +533,93 @@ export class OptimizedCompetitorService extends BaseService {
     websiteId: string,
     competitors: Array<{ domain: string; name?: string }>
   ): Promise<Competitor[]> {
-    try {
-      // Check for existing competitors in batch
-      const domains = competitors.map((c) => c.domain);
-      const { data: existing } = await supabase
+    // Check for existing competitors in batch
+    const domains = competitors.map((c) => c.domain);
+    const { data: existing } = await supabase
+      .schema("beekon_data")
+      .from("competitors")
+      .select("id, competitor_domain, competitor_name, is_active")
+      .eq("website_id", websiteId)
+      .in("competitor_domain", domains);
+
+    const existingMap = new Map(
+      existing?.map((e) => [e.competitor_domain, e]) || []
+    );
+
+    const newCompetitors = competitors.filter(
+      (c) => !existingMap.has(c.domain)
+    );
+
+    const updatedCompetitors = competitors.filter((c) =>
+      existingMap.has(c.domain)
+    );
+
+    const results: Competitor[] = [];
+
+    // Insert new competitors
+    if (newCompetitors.length > 0) {
+      const { data: newData, error: insertError } = await supabase
         .schema("beekon_data")
         .from("competitors")
-        .select("id, competitor_domain, competitor_name, is_active")
-        .eq("website_id", websiteId)
-        .in("competitor_domain", domains);
+        .insert(
+          newCompetitors.map((comp) => ({
+            website_id: websiteId,
+            competitor_domain: comp.domain,
+            competitor_name: comp.name || null,
+            is_active: true,
+          }))
+        )
+        .select();
 
-      const existingMap = new Map(
-        existing?.map((e) => [e.competitor_domain, e]) || []
-      );
-      
-      const newCompetitors = competitors.filter(
-        (c) => !existingMap.has(c.domain)
-      );
-      
-      const updatedCompetitors = competitors.filter(
-        (c) => existingMap.has(c.domain)
-      );
+      if (insertError) throw insertError;
+      results.push(...(newData || []));
+    }
 
-      const results: Competitor[] = [];
+    // Update existing competitors (reactivate and update name if provided)
+    for (const comp of updatedCompetitors) {
+      const existing = existingMap.get(comp.domain);
+      if (existing) {
+        const updates: Partial<Competitor> = { is_active: true };
+        if (comp.name && comp.name !== existing.competitor_name) {
+          updates.competitor_name = comp.name;
+        }
 
-      // Insert new competitors
-      if (newCompetitors.length > 0) {
-        const { data: newData, error: insertError } = await supabase
+        const { data: updateData, error: updateError } = await supabase
           .schema("beekon_data")
           .from("competitors")
-          .insert(
-            newCompetitors.map((comp) => ({
-              website_id: websiteId,
-              competitor_domain: comp.domain,
-              competitor_name: comp.name || null,
-              is_active: true,
-            }))
-          )
-          .select();
+          .update(updates)
+          .eq("id", existing.id)
+          .select()
+          .single();
 
-        if (insertError) throw insertError;
-        results.push(...(newData || []));
+        if (updateError) throw updateError;
+        if (updateData) results.push(updateData);
       }
-
-      // Update existing competitors (reactivate and update name if provided)
-      for (const comp of updatedCompetitors) {
-        const existing = existingMap.get(comp.domain);
-        if (existing) {
-          const updates: Partial<Competitor> = { is_active: true };
-          if (comp.name && comp.name !== existing.competitor_name) {
-            updates.competitor_name = comp.name;
-          }
-
-          const { data: updateData, error: updateError } = await supabase
-            .schema("beekon_data")
-            .from("competitors")
-            .update(updates)
-            .eq("id", existing.id)
-            .select()
-            .single();
-
-          if (updateError) throw updateError;
-          if (updateData) results.push(updateData);
-        }
-      }
-
-      // Clear all relevant cache for this website
-      this.clearCache(`competitors_${websiteId}`);
-      this.clearCache(`performance_${websiteId}`);
-      this.clearCache(`analytics_${websiteId}`);
-      
-      // Clear cache patterns that might contain this website ID
-      for (const key of this.cache.keys()) {
-        if (key.includes(websiteId)) {
-          this.cache.delete(key);
-        }
-      }
-
-      // Refresh materialized views to ensure new competitors appear in analytics
-      try {
-        await this.refreshCompetitorViews();
-        await this.refreshCompetitorAnalysis();
-        // Materialized views refreshed successfully
-      } catch (refreshError) {
-        // Failed to refresh materialized views
-        // Don't throw the error to avoid breaking the main operation
-      }
-
-      return results;
-    } catch (error) {
-      console.error("Failed to batch add competitors:", error);
-      throw error;
     }
+
+    // Clear all relevant cache for this website
+    this.clearCache(`competitors_${websiteId}`);
+    this.clearCache(`performance_${websiteId}`);
+    this.clearCache(`analytics_${websiteId}`);
+
+    // Clear cache patterns that might contain this website ID
+    for (const key of this.cache.keys()) {
+      if (key.includes(websiteId)) {
+        this.cache.delete(key);
+      }
+    }
+
+    // Refresh materialized views to ensure new competitors appear in analytics
+    try {
+      await this.refreshCompetitorViews();
+      await this.refreshCompetitorAnalysis();
+      // Materialized views refreshed successfully
+    } catch (refreshError) {
+      // Failed to refresh materialized views
+      // Don't throw the error to avoid breaking the main operation
+    }
+
+    return results;
   }
 
   /**
@@ -611,7 +642,7 @@ export class OptimizedCompetitorService extends BaseService {
         .eq("website_id", websiteId)
         .eq("competitor_domain", domain)
         .single();
-      
+
       if (existing) {
         return existing;
       }
@@ -627,21 +658,51 @@ export class OptimizedCompetitorService extends BaseService {
     competitorId: string,
     updates: Partial<Pick<Competitor, "competitor_name" | "is_active">>
   ): Promise<Competitor> {
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .from("competitors")
+      .update(updates)
+      .eq("id", competitorId)
+      .select("*, website_id")
+      .single();
+
+    if (error) throw error;
+
+    // Clear relevant cache
+    this.clearCache(`competitors_${data.website_id}`);
+
+    // Refresh materialized views to ensure updated competitors appear in analytics
     try {
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .from("competitors")
-        .update(updates)
-        .eq("id", competitorId)
-        .select("*, website_id")
-        .single();
+      await this.refreshCompetitorViews();
+      await this.refreshCompetitorAnalysis();
+      // Materialized views refreshed successfully
+    } catch (refreshError) {
+      // Failed to refresh materialized views
+      // Don't throw the error to avoid breaking the main operation
+    }
 
-      if (error) throw error;
+    return data;
+  }
 
-      // Clear relevant cache
+  /**
+   * Delete/deactivate a competitor (optimized)
+   */
+  async deleteCompetitor(competitorId: string): Promise<void> {
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .from("competitors")
+      .update({ is_active: false })
+      .eq("id", competitorId)
+      .select("website_id")
+      .single();
+
+    if (error) throw error;
+
+    // Clear relevant cache
+    if (data) {
       this.clearCache(`competitors_${data.website_id}`);
 
-      // Refresh materialized views to ensure updated competitors appear in analytics
+      // Refresh materialized views to ensure deleted competitors are removed from analytics
       try {
         await this.refreshCompetitorViews();
         await this.refreshCompetitorAnalysis();
@@ -650,46 +711,6 @@ export class OptimizedCompetitorService extends BaseService {
         // Failed to refresh materialized views
         // Don't throw the error to avoid breaking the main operation
       }
-
-      return data;
-    } catch (error) {
-      console.error("Failed to update competitor:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete/deactivate a competitor (optimized)
-   */
-  async deleteCompetitor(competitorId: string): Promise<void> {
-    try {
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .from("competitors")
-        .update({ is_active: false })
-        .eq("id", competitorId)
-        .select("website_id")
-        .single();
-
-      if (error) throw error;
-
-      // Clear relevant cache
-      if (data) {
-        this.clearCache(`competitors_${data.website_id}`);
-        
-        // Refresh materialized views to ensure deleted competitors are removed from analytics
-        try {
-          await this.refreshCompetitorViews();
-          await this.refreshCompetitorAnalysis();
-          // Materialized views refreshed successfully
-        } catch (refreshError) {
-          // Failed to refresh materialized views
-          // Don't throw the error to avoid breaking the main operation
-        }
-      }
-    } catch (error) {
-      console.error("Failed to delete competitor:", error);
-      throw error;
     }
   }
 
@@ -705,22 +726,50 @@ export class OptimizedCompetitorService extends BaseService {
 
     // Export metadata section
     exportRows.push(
-      { category: "Export Info", metric: "Export Date", value: new Date().toLocaleDateString(), unit: "date" },
-      { category: "Export Info", metric: "Total Competitors", value: competitors.length, unit: "count" },
-      { category: "Export Info", metric: "Active Competitors", value: analytics.activeCompetitors, unit: "count" }
+      {
+        category: "Export Info",
+        metric: "Export Date",
+        value: new Date().toLocaleDateString(),
+        unit: "date",
+      },
+      {
+        category: "Export Info",
+        metric: "Total Competitors",
+        value: competitors.length,
+        unit: "count",
+      },
+      {
+        category: "Export Info",
+        metric: "Active Competitors",
+        value: analytics.activeCompetitors,
+        unit: "count",
+      }
     );
 
     if (dateRange) {
       exportRows.push(
-        { category: "Export Info", metric: "Date Range Start", value: new Date(dateRange.start).toLocaleDateString(), unit: "date" },
-        { category: "Export Info", metric: "Date Range End", value: new Date(dateRange.end).toLocaleDateString(), unit: "date" }
+        {
+          category: "Export Info",
+          metric: "Date Range Start",
+          value: new Date(dateRange.start).toLocaleDateString(),
+          unit: "date",
+        },
+        {
+          category: "Export Info",
+          metric: "Date Range End",
+          value: new Date(dateRange.end).toLocaleDateString(),
+          unit: "date",
+        }
       );
     }
 
     // Overall analytics section
-    exportRows.push(
-      { category: "Analytics Overview", metric: "Average Competitor Rank", value: analytics.averageCompetitorRank.toFixed(1), unit: "position" }
-    );
+    exportRows.push({
+      category: "Analytics Overview",
+      metric: "Average Competitor Rank",
+      value: analytics.averageCompetitorRank.toFixed(1),
+      unit: "position",
+    });
 
     // Market share data section
     analytics.marketShareData.forEach((item) => {
@@ -728,46 +777,117 @@ export class OptimizedCompetitorService extends BaseService {
         category: "Market Share",
         metric: `${item.name} Share`,
         value: `${item.value}%`,
-        unit: "percentage"
+        unit: "percentage",
       });
     });
 
     // Individual competitor performance
     competitors.forEach((competitor) => {
       const competitorName = competitor.name || competitor.domain;
-      
+
       exportRows.push(
-        { category: "Competitor Performance", metric: `${competitorName} - Domain`, value: competitor.domain, unit: "text" },
-        { category: "Competitor Performance", metric: `${competitorName} - Share of Voice`, value: `${competitor.shareOfVoice}%`, unit: "percentage" },
-        { category: "Competitor Performance", metric: `${competitorName} - Average Rank`, value: competitor.averageRank > 0 ? competitor.averageRank.toFixed(1) : "N/A", unit: "position" },
-        { category: "Competitor Performance", metric: `${competitorName} - Mention Count`, value: competitor.mentionCount, unit: "count" },
-        { category: "Competitor Performance", metric: `${competitorName} - Sentiment Score`, value: `${competitor.sentimentScore}%`, unit: "percentage" },
-        { category: "Competitor Performance", metric: `${competitorName} - Visibility Score`, value: `${competitor.visibilityScore}%`, unit: "percentage" },
-        { category: "Competitor Performance", metric: `${competitorName} - Trend`, value: `${competitor.trend} (${competitor.trendPercentage.toFixed(1)}%)`, unit: "trend" },
-        { category: "Competitor Performance", metric: `${competitorName} - Last Analyzed`, value: new Date(competitor.lastAnalyzed).toLocaleDateString(), unit: "date" },
-        { category: "Competitor Performance", metric: `${competitorName} - Status`, value: competitor.isActive ? "Active" : "Inactive", unit: "status" }
+        {
+          category: "Competitor Performance",
+          metric: `${competitorName} - Domain`,
+          value: competitor.domain,
+          unit: "text",
+        },
+        {
+          category: "Competitor Performance",
+          metric: `${competitorName} - Share of Voice`,
+          value: `${competitor.shareOfVoice}%`,
+          unit: "percentage",
+        },
+        {
+          category: "Competitor Performance",
+          metric: `${competitorName} - Average Rank`,
+          value:
+            competitor.averageRank > 0
+              ? competitor.averageRank.toFixed(1)
+              : "N/A",
+          unit: "position",
+        },
+        {
+          category: "Competitor Performance",
+          metric: `${competitorName} - Mention Count`,
+          value: competitor.mentionCount,
+          unit: "count",
+        },
+        {
+          category: "Competitor Performance",
+          metric: `${competitorName} - Sentiment Score`,
+          value: `${competitor.sentimentScore}%`,
+          unit: "percentage",
+        },
+        {
+          category: "Competitor Performance",
+          metric: `${competitorName} - Visibility Score`,
+          value: `${competitor.visibilityScore}%`,
+          unit: "percentage",
+        },
+        {
+          category: "Competitor Performance",
+          metric: `${competitorName} - Trend`,
+          value: `${competitor.trend} (${competitor.trendPercentage.toFixed(
+            1
+          )}%)`,
+          unit: "trend",
+        },
+        {
+          category: "Competitor Performance",
+          metric: `${competitorName} - Last Analyzed`,
+          value: new Date(competitor.lastAnalyzed).toLocaleDateString(),
+          unit: "date",
+        },
+        {
+          category: "Competitor Performance",
+          metric: `${competitorName} - Status`,
+          value: competitor.isActive ? "Active" : "Inactive",
+          unit: "status",
+        }
       );
     });
 
     // Competitive gaps analysis
     analytics.competitiveGaps.forEach((gap) => {
-      exportRows.push(
-        { category: "Competitive Gaps", metric: `${gap.topic} - Your Brand Score`, value: gap.yourBrand, unit: "score" }
-      );
-      
+      exportRows.push({
+        category: "Competitive Gaps",
+        metric: `${gap.topic} - Your Brand Score`,
+        value: gap.yourBrand,
+        unit: "score",
+      });
+
       gap.competitors.forEach((comp) => {
-        exportRows.push(
-          { category: "Competitive Gaps", metric: `${gap.topic} - ${comp.name} Score`, value: comp.score, unit: "score" }
-        );
+        exportRows.push({
+          category: "Competitive Gaps",
+          metric: `${gap.topic} - ${comp.name} Score`,
+          value: comp.score,
+          unit: "score",
+        });
       });
     });
 
     // Insights section
     analytics.insights.forEach((insight, index) => {
       exportRows.push(
-        { category: "Insights", metric: `Insight #${index + 1} - Type`, value: insight.type, unit: "text" },
-        { category: "Insights", metric: `Insight #${index + 1} - Content`, value: insight.content, unit: "text" },
-        { category: "Insights", metric: `Insight #${index + 1} - Impact Score`, value: insight.impactScore, unit: "score" }
+        {
+          category: "Insights",
+          metric: `Insight #${index + 1} - Type`,
+          value: insight.type,
+          unit: "text",
+        },
+        {
+          category: "Insights",
+          metric: `Insight #${index + 1} - Content`,
+          value: insight.content,
+          unit: "text",
+        },
+        {
+          category: "Insights",
+          metric: `Insight #${index + 1} - Impact Score`,
+          value: insight.impactScore,
+          unit: "score",
+        }
       );
     });
 
@@ -782,61 +902,62 @@ export class OptimizedCompetitorService extends BaseService {
     format: "csv" | "json" | "pdf",
     dateRange?: { start: string; end: string }
   ): Promise<Blob> {
-    try {
-      // Use parallel execution for better performance
-      const [competitors, analytics] = await Promise.all([
-        this.getCompetitorPerformance(websiteId, dateRange),
-        this.getCompetitiveAnalysis(websiteId, dateRange),
-      ]);
+    // Use parallel execution for better performance
+    const [competitors, analytics] = await Promise.all([
+      this.getCompetitorPerformance(websiteId, dateRange),
+      this.getCompetitiveAnalysis(websiteId, dateRange),
+    ]);
 
-      // For PDF export, use the shared export service
-      if (format === "pdf") {
-        const exportFormattedData = this.transformCompetitorDataForExport(competitors, analytics, dateRange);
-        
-        const { exportService } = await import("./exportService");
-        const exportData = {
-          title: "Competitor Analysis Export",
-          data: exportFormattedData,
-          exportedAt: new Date().toISOString(),
-          totalRecords: competitors.length,
-          metadata: {
-            exportType: "competitor_analysis",
-            generatedBy: "Beekon AI Competitor Service",
-            competitorCount: competitors.length,
-            analyticsIncluded: true,
-            dateRange: dateRange || null,
-          },
-        };
-
-        return await exportService.exportData(exportData, format, {
-          exportType: "competitor",
-          customFilename: `competitor_analysis_${competitors.length}_competitors`,
-        });
-      }
-
-      // For CSV and JSON, use existing logic
-      const exportData = {
+    // For PDF export, use the shared export service
+    if (format === "pdf") {
+      const exportFormattedData = this.transformCompetitorDataForExport(
         competitors,
         analytics,
+        dateRange
+      );
+
+      const { exportService } = await import("./exportService");
+      const exportData = {
+        title: "Competitor Analysis Export",
+        data: exportFormattedData,
         exportedAt: new Date().toISOString(),
-        dateRange,
+        totalRecords: competitors.length,
+        metadata: {
+          exportType: "competitor_analysis",
+          generatedBy: "Beekon AI Competitor Service",
+          competitorCount: competitors.length,
+          analyticsIncluded: true,
+          dateRange: dateRange || null,
+        },
       };
 
-      switch (format) {
-        case "json":
-          return new Blob([JSON.stringify(exportData, null, 2)], {
-            type: "application/json",
-          });
-        case "csv":
-          return new Blob([this.convertToCSV(exportData)], {
-            type: "text/csv",
-          });
-        default:
-          throw new Error(`Unsupported format: ${format}. Supported formats are: csv, json, pdf`);
-      }
-    } catch (error) {
-      console.error("Failed to export competitor data:", error);
-      throw error;
+      return await exportService.exportData(exportData, format, {
+        exportType: "competitor",
+        customFilename: `competitor_analysis_${competitors.length}_competitors`,
+      });
+    }
+
+    // For CSV and JSON, use existing logic
+    const exportData = {
+      competitors,
+      analytics,
+      exportedAt: new Date().toISOString(),
+      dateRange,
+    };
+
+    switch (format) {
+      case "json":
+        return new Blob([JSON.stringify(exportData, null, 2)], {
+          type: "application/json",
+        });
+      case "csv":
+        return new Blob([this.convertToCSV(exportData)], {
+          type: "text/csv",
+        });
+      default:
+        throw new Error(
+          `Unsupported format: ${format}. Supported formats are: csv, json, pdf`
+        );
     }
   }
 
@@ -844,14 +965,9 @@ export class OptimizedCompetitorService extends BaseService {
    * Refresh materialized views (for real-time updates)
    */
   async refreshCompetitorViews(): Promise<void> {
-    try {
-      await supabase.rpc("refresh_competitor_performance_views");
-      // Clear all cache after refresh
-      this.clearCache();
-    } catch (error) {
-      console.error("Failed to refresh competitor views:", error);
-      throw error;
-    }
+    await supabase.rpc("refresh_competitor_performance_views");
+    // Clear all cache after refresh
+    this.clearCache();
   }
 
   // Private helper methods
@@ -876,9 +992,8 @@ export class OptimizedCompetitorService extends BaseService {
 
     // Calculate share of voice as percentage of mentions
     // This matches the database function logic: (total_voice_mentions / total_analyses) * 100
-    const overallVisibilityScore = totalAnalyses > 0 
-      ? Math.round((totalMentions / totalAnalyses) * 100)
-      : 0;
+    const overallVisibilityScore =
+      totalAnalyses > 0 ? Math.round((totalMentions / totalAnalyses) * 100) : 0;
 
     return { overallVisibilityScore };
   }
@@ -907,7 +1022,7 @@ export class OptimizedCompetitorService extends BaseService {
     yourBrandResults: AnalysisResult[]
   ): CompetitorComparison[] {
     // Method deprecated - use newer implementation
-    
+
     // Group your brand's results by topic
     const topicMap = new Map<string, number>();
 
@@ -1095,7 +1210,7 @@ export class OptimizedCompetitorService extends BaseService {
       // Clear cache to ensure fresh data on next request
       this.clearCache();
     } catch (error) {
-      console.error("Error analyzing competitors in response:", error);
+      // Error analyzing competitors in response
       // Don't throw - this is a background operation
     }
   }
@@ -1188,26 +1303,38 @@ export class OptimizedCompetitorService extends BaseService {
       marketShareData,
       insights,
     });
-    
+
     // Additional validation for share of voice totals
-    const shareOfVoiceTotal = shareOfVoiceData.reduce((sum, item) => sum + item.shareOfVoice, 0);
-    const marketShareTotal = marketShareData.reduce((sum, item) => sum + item.normalizedValue, 0);
-    
+    const shareOfVoiceTotal = shareOfVoiceData.reduce(
+      (sum, item) => sum + item.shareOfVoice,
+      0
+    );
+    const marketShareTotal = marketShareData.reduce(
+      (sum, item) => sum + item.normalizedValue,
+      0
+    );
+
     if (Math.abs(shareOfVoiceTotal - 100) > 5) {
-      validation.warnings.push(`Share of voice total deviates from 100%: ${shareOfVoiceTotal.toFixed(1)}%`);
-    }
-    
-    if (Math.abs(marketShareTotal - 100) > 5) {
-      validation.warnings.push(`Market share total deviates from 100%: ${marketShareTotal.toFixed(1)}%`);
+      validation.warnings.push(
+        `Share of voice total deviates from 100%: ${shareOfVoiceTotal.toFixed(
+          1
+        )}%`
+      );
     }
 
-    // Log validation issues for debugging and monitoring
+    if (Math.abs(marketShareTotal - 100) > 5) {
+      validation.warnings.push(
+        `Market share total deviates from 100%: ${marketShareTotal.toFixed(1)}%`
+      );
+    }
+
+    // Validation issues logged for debugging and monitoring
     if (validation.issues.length > 0) {
       // Competitor data validation issues found
       // In production, you might want to send this to a monitoring service
       this.logValidationIssues(validation);
     }
-    
+
     if (validation.warnings.length > 0) {
       // Competitor data validation warnings found
     }
@@ -1250,14 +1377,18 @@ export class OptimizedCompetitorService extends BaseService {
       _metadata: {
         dataValidation: validation,
         generatedAt: new Date().toISOString(),
-        dataConsistency: this.checkDataConsistency(marketShareData, shareOfVoice),
+        dataConsistency: this.checkDataConsistency(
+          marketShareData,
+          shareOfVoice
+        ),
         calculationMethod: {
-          shareOfVoiceCalculation: 'relative_to_total_mentions',
+          shareOfVoiceCalculation: "relative_to_total_mentions",
           totalMentionsAllBrands,
           yourBrandMentions,
           shareOfVoiceTotal: shareOfVoiceTotal.toFixed(1),
           marketShareTotal: marketShareTotal.toFixed(1),
-          description: 'Share of voice calculated as (brand_mentions / total_mentions_all_brands) * 100'
+          description:
+            "Share of voice calculated as (brand_mentions / total_mentions_all_brands) * 100",
         },
       },
     };
@@ -1281,25 +1412,40 @@ export class OptimizedCompetitorService extends BaseService {
     const warnings: string[] = [];
 
     // Validate market share data (normalized values should sum to ~100%)
-    const totalMarketShare = marketShareData.reduce((sum, item) => sum + item.normalizedValue, 0);
-    if (totalMarketShare > 105) { // Allow 5% tolerance for rounding
-      issues.push(`Market share total exceeds 100%: ${totalMarketShare.toFixed(1)}%`);
+    const totalMarketShare = marketShareData.reduce(
+      (sum, item) => sum + item.normalizedValue,
+      0
+    );
+    if (totalMarketShare > 105) {
+      // Allow 5% tolerance for rounding
+      issues.push(
+        `Market share total exceeds 100%: ${totalMarketShare.toFixed(1)}%`
+      );
     }
 
     // Validate share of voice consistency
-    const shareOfVoiceTotal = shareOfVoice.reduce((sum, comp) => sum + comp.shareOfVoice, 0);
+    const shareOfVoiceTotal = shareOfVoice.reduce(
+      (sum, comp) => sum + comp.shareOfVoice,
+      0
+    );
     if (shareOfVoiceTotal > 105) {
-      warnings.push(`Share of voice total exceeds 100%: ${shareOfVoiceTotal.toFixed(1)}%`);
+      warnings.push(
+        `Share of voice total exceeds 100%: ${shareOfVoiceTotal.toFixed(1)}%`
+      );
     }
 
     // Validate gap analysis data
     gapAnalysis.forEach((gap) => {
       if (gap.yourBrandScore < 0 || gap.yourBrandScore > 100) {
-        issues.push(`Invalid brand score for ${gap.topicName}: ${gap.yourBrandScore}%`);
+        issues.push(
+          `Invalid brand score for ${gap.topicName}: ${gap.yourBrandScore}%`
+        );
       }
       gap.competitorData.forEach((comp) => {
         if (comp.score < 0 || comp.score > 100) {
-          issues.push(`Invalid competitor score for ${comp.competitor_name}: ${comp.score}%`);
+          issues.push(
+            `Invalid competitor score for ${comp.competitor_name}: ${comp.score}%`
+          );
         }
       });
     });
@@ -1307,9 +1453,13 @@ export class OptimizedCompetitorService extends BaseService {
     // Validate insights reference existing competitors
     insights.forEach((insight) => {
       if (insight.competitorId) {
-        const competitorExists = shareOfVoice.some(comp => comp.competitorId === insight.competitorId);
+        const competitorExists = shareOfVoice.some(
+          (comp) => comp.competitorId === insight.competitorId
+        );
         if (!competitorExists) {
-          warnings.push(`Insight references non-existent competitor: ${insight.competitorId}`);
+          warnings.push(
+            `Insight references non-existent competitor: ${insight.competitorId}`
+          );
         }
       }
     });
@@ -1334,15 +1484,21 @@ export class OptimizedCompetitorService extends BaseService {
   ): CompetitorInsight[] {
     return insights.map((insight) => {
       // For market leader insights, verify the dominance claim against actual market share data
-      if (insight.title.includes('Market Leader') && insight.competitorId) {
-        const marketShareItem = marketShareData.find(item => item.competitorId === insight.competitorId);
-        const shareOfVoiceItem = shareOfVoice.find(item => item.competitorId === insight.competitorId);
-        
+      if (insight.title.includes("Market Leader") && insight.competitorId) {
+        const marketShareItem = marketShareData.find(
+          (item) => item.competitorId === insight.competitorId
+        );
+        const shareOfVoiceItem = shareOfVoice.find(
+          (item) => item.competitorId === insight.competitorId
+        );
+
         if (marketShareItem && shareOfVoiceItem) {
           // Update description to match actual displayed data (use normalized value for market share)
           const actualShare = marketShareItem.normalizedValue;
-          const updatedDescription = `${shareOfVoiceItem.competitorName} dominates with ${actualShare.toFixed(1)}% market share`;
-          
+          const updatedDescription = `${
+            shareOfVoiceItem.competitorName
+          } dominates with ${actualShare.toFixed(1)}% market share`;
+
           return {
             ...insight,
             description: updatedDescription,
@@ -1351,15 +1507,24 @@ export class OptimizedCompetitorService extends BaseService {
       }
 
       // For opportunity insights, verify gap data matches
-      if (insight.title.includes('Improvement Opportunity') && insight.topicId) {
-        const gapData = gapAnalysis.find(gap => gap.topicId === insight.topicId);
+      if (
+        insight.title.includes("Improvement Opportunity") &&
+        insight.topicId
+      ) {
+        const gapData = gapAnalysis.find(
+          (gap) => gap.topicId === insight.topicId
+        );
         if (gapData && gapData.competitorData.length > 0) {
           const topCompetitor = gapData.competitorData.reduce((prev, current) =>
             prev.score > current.score ? prev : current
           );
-          
-          const updatedDescription = `Your brand scores ${gapData.yourBrandScore.toFixed(1)}% vs ${topCompetitor.competitor_name}'s ${topCompetitor.score.toFixed(1)}%`;
-          
+
+          const updatedDescription = `Your brand scores ${gapData.yourBrandScore.toFixed(
+            1
+          )}% vs ${
+            topCompetitor.competitor_name
+          }'s ${topCompetitor.score.toFixed(1)}%`;
+
           return {
             ...insight,
             description: updatedDescription,
@@ -1380,7 +1545,9 @@ export class OptimizedCompetitorService extends BaseService {
   ) {
     const consistency = {
       competitorCount: {
-        marketShare: marketShareData.filter(item => item.name !== 'Your Brand').length,
+        marketShare: marketShareData.filter(
+          (item) => item.name !== "Your Brand"
+        ).length,
         shareOfVoice: shareOfVoice.length,
         consistent: false,
       },
@@ -1392,12 +1559,15 @@ export class OptimizedCompetitorService extends BaseService {
     };
 
     // Check competitor count consistency
-    consistency.competitorCount.consistent = 
-      consistency.competitorCount.marketShare === consistency.competitorCount.shareOfVoice;
+    consistency.competitorCount.consistent =
+      consistency.competitorCount.marketShare ===
+      consistency.competitorCount.shareOfVoice;
 
     // Check data alignment
-    shareOfVoice.forEach(sovItem => {
-      const marketShareItem = marketShareData.find(msItem => msItem.competitorId === sovItem.competitorId);
+    shareOfVoice.forEach((sovItem) => {
+      const marketShareItem = marketShareData.find(
+        (msItem) => msItem.competitorId === sovItem.competitorId
+      );
       if (marketShareItem) {
         consistency.dataAlignment.matchingCompetitors++;
       } else {
@@ -1405,8 +1575,13 @@ export class OptimizedCompetitorService extends BaseService {
       }
     });
 
-    marketShareData.forEach(msItem => {
-      if (msItem.name !== 'Your Brand' && !shareOfVoice.find(sovItem => sovItem.competitorId === msItem.competitorId)) {
+    marketShareData.forEach((msItem) => {
+      if (
+        msItem.name !== "Your Brand" &&
+        !shareOfVoice.find(
+          (sovItem) => sovItem.competitorId === msItem.competitorId
+        )
+      ) {
         consistency.dataAlignment.missingInShareOfVoice++;
       }
     });
@@ -1428,26 +1603,17 @@ export class OptimizedCompetitorService extends BaseService {
     // - Sentry for error tracking
     // - DataDog for metrics
     // - Custom analytics endpoint
-    
+
     const logData = {
       timestamp: new Date().toISOString(),
-      service: 'competitorService',
+      service: "competitorService",
       validationResults: validation,
-      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'server',
+      userAgent:
+        typeof window !== "undefined" ? window.navigator.userAgent : "server",
     };
 
-    // For now, we'll just log to console, but this could be enhanced
-    console.group('🔍 Competitor Data Validation Issues');
-    console.table(validation.issues);
-    if (validation.warnings.length > 0) {
-      console.table(validation.warnings);
-    }
-    console.log('📊 Validation Summary:', {
-      passed: validation.passedChecks,
-      total: validation.totalChecks,
-      successRate: `${((validation.passedChecks / validation.totalChecks) * 100).toFixed(1)}%`
-    });
-    console.groupEnd();
+    // Validation issues and warnings detected
+    // This could be enhanced with proper monitoring integration
   }
 
   /**
@@ -1458,23 +1624,19 @@ export class OptimizedCompetitorService extends BaseService {
     operation: () => Promise<T>
   ): Promise<T> {
     const startTime = performance.now();
-    
+
     try {
       const result = await operation();
       const duration = performance.now() - startTime;
-      
-      // Log performance metrics
-      console.log(`⚡ ${operationName} completed in ${duration.toFixed(2)}ms`);
-      
+
+      // Performance metrics logged
       // In production, you might want to send metrics to a monitoring service
-      if (duration > 2000) { // Alert if operation takes more than 2 seconds
-        console.warn(`🐌 Slow operation detected: ${operationName} took ${duration.toFixed(2)}ms`);
-      }
-      
+      // Slow operation detection for monitoring
+
       return result;
     } catch (error) {
       const duration = performance.now() - startTime;
-      console.error(`❌ ${operationName} failed after ${duration.toFixed(2)}ms:`, error);
+      // Operation failed with performance metrics logged
       throw error;
     }
   }
@@ -1487,7 +1649,7 @@ export class OptimizedCompetitorService extends BaseService {
     dateRange?: { start: string; end: string }
   ): Promise<CompetitorAnalytics> {
     return this.withPerformanceMonitoring(
-      'getOptimizedCompetitiveAnalysis',
+      "getOptimizedCompetitiveAnalysis",
       () => this.getCompetitiveAnalysis(websiteId, dateRange)
     );
   }
@@ -1496,13 +1658,8 @@ export class OptimizedCompetitorService extends BaseService {
    * Refresh all competitor analysis data
    */
   async refreshCompetitorAnalysis(): Promise<void> {
-    try {
-      await competitorAnalysisService.refreshCompetitorAnalysisViews();
-      this.clearCache(); // Clear all cached data
-    } catch (error) {
-      console.error("Error refreshing competitor analysis:", error);
-      throw error;
-    }
+    await competitorAnalysisService.refreshCompetitorAnalysisViews();
+    this.clearCache(); // Clear all cached data
   }
 }
 

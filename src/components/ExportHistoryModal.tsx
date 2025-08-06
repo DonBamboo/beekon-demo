@@ -113,7 +113,7 @@ export function ExportHistoryModal({
       setExportStats(stats);
       setCurrentPage(page);
     } catch (error) {
-      console.error("Failed to fetch export history:", error);
+      // Failed to fetch export history
       toast({
         title: "Error",
         description: "Failed to load export history",
@@ -134,7 +134,7 @@ export function ExportHistoryModal({
       });
       fetchExportHistory(currentPage);
     } catch (error) {
-      console.error("Failed to retry export:", error);
+      // Failed to retry export
       toast({
         title: "Error",
         description: "Failed to retry export",
@@ -155,7 +155,7 @@ export function ExportHistoryModal({
       });
       fetchExportHistory(currentPage);
     } catch (error) {
-      console.error("Failed to delete export:", error);
+      // Failed to delete export
       toast({
         title: "Error",
         description: "Failed to delete export record",
@@ -175,7 +175,7 @@ export function ExportHistoryModal({
       });
       fetchExportHistory(currentPage);
     } catch (error) {
-      console.error("Failed to cleanup old records:", error);
+      // Failed to cleanup old records
       toast({
         title: "Error",
         description: "Failed to cleanup old records",

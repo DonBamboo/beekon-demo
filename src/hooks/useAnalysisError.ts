@@ -1,6 +1,12 @@
 import { useCallback, useState } from "react";
 
-export function useAnalysisErrorHandler() {
+export function useAnalysisErrorHandler(): {
+  error: Error | null;
+  isRetrying: boolean;
+  handleError: (error: Error | string | unknown) => void;
+  retryOperation: (operation: () => Promise<void>) => Promise<void>;
+  clearError: () => void;
+} {
   const [error, setError] = useState<Error | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
 

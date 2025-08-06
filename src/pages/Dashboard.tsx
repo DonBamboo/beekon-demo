@@ -318,7 +318,7 @@ export default function Dashboard() {
           }
 
         } catch (error) {
-          console.error("Chart capture failed:", error);
+          // Chart capture failed
           toast({
             title: "Chart capture warning",
             description: "Charts could not be captured, but export will continue with data only.",
@@ -354,7 +354,7 @@ export default function Dashboard() {
         description: `Dashboard analytics exported as ${format.toUpperCase()}`,
       });
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export failed",
         description: error instanceof Error ? error.message : "Failed to export dashboard data",

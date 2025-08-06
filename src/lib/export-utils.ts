@@ -292,8 +292,9 @@ export async function captureChartAsImage(
     await new Promise(resolve => setTimeout(resolve, 200));
     
     // Ensure element is visible and properly laid out
+    // Element dimensions check for fallback sizing
     if (elementRect.width === 0 || elementRect.height === 0) {
-      console.warn('Element has zero dimensions, using fallback sizing');
+      // Use fallback sizing when element dimensions are zero
     }
 
     // Capture the element as canvas with dynamic sizing
@@ -345,7 +346,7 @@ export async function captureChartAsImage(
     };
 
   } catch (error) {
-    console.error('Chart capture failed:', error);
+    // Chart capture failed
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown capture error',
@@ -382,7 +383,7 @@ export async function captureMultipleCharts(
       };
     }
     
-    console.warn(`Failed to capture chart: ${title}`, result.error);
+    // Failed to capture chart
     return null;
   });
 
@@ -726,12 +727,7 @@ export function downloadBlob(
         return;
       }
 
-      // Log blob details for debugging
-      console.log(`Downloading ${format} file:`, {
-        filename,
-        size: blob.size,
-        type: blob.type
-      });
+      // Prepare blob for download
 
       // Use the file-saver library for better compatibility
       try {
@@ -744,7 +740,7 @@ export function downloadBlob(
         });
         return;
       } catch (saveAsError) {
-        console.warn("file-saver failed, falling back to manual download:", saveAsError);
+        // file-saver failed, falling back to manual download
       }
 
       // Fallback to manual download method
@@ -784,7 +780,7 @@ export function downloadBlob(
             }
             window.URL.revokeObjectURL(url);
           } catch (cleanupError) {
-            console.warn("Cleanup error:", cleanupError);
+            // Cleanup error occurred
           }
           
           resolve({
@@ -797,7 +793,7 @@ export function downloadBlob(
       });
       
     } catch (error) {
-      console.error("Download failed:", error);
+      // Download failed
       resolve({
         success: false,
         filename,
@@ -1417,7 +1413,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
         yPosition += imageHeight + 15; // Move position after image + spacing
         
       } catch (error) {
-        console.error(`Failed to add chart "${chart.title}" to PDF:`, error);
+        // Failed to add chart to PDF
         
         // Add error message instead of chart
         doc.setFontSize(10);

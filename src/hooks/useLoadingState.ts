@@ -1,7 +1,14 @@
 import React from "react";
 
 // Hook for managing loading states
-export function useLoadingState(initialState = false) {
+export function useLoadingState(initialState = false): {
+  isLoading: boolean;
+  error: Error | null;
+  startLoading: () => void;
+  stopLoading: () => void;
+  setError: (error: Error | string) => void;
+  reset: () => void;
+} {
   const [isLoading, setIsLoading] = React.useState(initialState);
   const [error, setError] = React.useState<Error | null>(null);
 

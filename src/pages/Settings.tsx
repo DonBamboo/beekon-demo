@@ -111,7 +111,7 @@ export default function Settings() {
           setPrimaryApiKey(userApiKeys[0]?.key_prefix + "...");
         }
       } catch (error) {
-        console.error("Failed to load API keys:", error);
+        // Failed to load API keys
         const errorMessage =
           error instanceof Error
             ? error.message
@@ -147,7 +147,7 @@ export default function Settings() {
           setPrimaryApiKey(userApiKeys[0]?.key_prefix + "...");
         }
       } catch (error) {
-        console.error("Failed to load profile:", error);
+        // Failed to load profile
         const errorMessage =
           error instanceof Error
             ? error.message
@@ -185,7 +185,7 @@ export default function Settings() {
         description: "Your profile has been updated successfully.",
       });
     } catch (error) {
-      console.error("Failed to update profile:", error);
+      // Failed to update profile
       const errorMessage =
         error instanceof Error
           ? error.message
@@ -244,7 +244,7 @@ export default function Settings() {
         setUploadSuccess(false);
       }, 2000);
     } catch (error) {
-      console.error("Failed to upload avatar:", error);
+      // Failed to upload avatar
       const errorMessage = error instanceof Error ? error.message : "Failed to upload avatar. Please try again.";
       setUploadError(errorMessage);
       
@@ -271,7 +271,7 @@ export default function Settings() {
         description: "Your profile picture has been removed.",
       });
     } catch (error) {
-      console.error("Failed to delete avatar:", error);
+      // Failed to delete avatar
       toast({
         title: "Error",
         description: "Failed to remove avatar. Please try again.",
@@ -355,7 +355,7 @@ export default function Settings() {
       setNewPassword("");
       setConfirmPassword("");
     } catch (error) {
-      console.error("Failed to update password:", error);
+      // Failed to update password
       const errorMessage =
         error instanceof Error
           ? error.message
@@ -404,7 +404,7 @@ export default function Settings() {
           break;
       }
     } catch (error) {
-      console.error("Failed to update notification settings:", error);
+      // Failed to update notification settings
       toast({
         title: "Error",
         description: "Failed to update notification settings.",

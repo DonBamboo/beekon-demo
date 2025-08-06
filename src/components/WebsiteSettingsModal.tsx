@@ -141,7 +141,7 @@ export function WebsiteSettingsModal({
           });
         }
       } catch (error) {
-        console.error("Failed to load website settings:", error);
+        // Failed to load website settings
         toast({
           title: "Error",
           description: "Failed to load website settings.",
@@ -196,7 +196,7 @@ export function WebsiteSettingsModal({
       await refetchWebsites();
       onClose();
     } catch (error) {
-      console.error("Failed to save website settings:", error);
+      // Failed to save website settings
       toast({
         title: "Error",
         description: "Failed to save website settings. Please try again.",
@@ -263,7 +263,7 @@ export function WebsiteSettingsModal({
         }
       );
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export failed",
         description: "Failed to export website settings. Please try again.",

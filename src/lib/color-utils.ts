@@ -121,7 +121,11 @@ export function getYourBrandColor(): string {
  * @param colorIndex - Chart color index
  * @returns Color metadata object
  */
-export function getColorInfo(colorIndex: number) {
+export function getColorInfo(colorIndex: number): {
+  name: string;
+  hex: string;
+  accessible: boolean;
+} {
   return CHART_COLOR_INFO[colorIndex as keyof typeof CHART_COLOR_INFO] || {
     name: `Color ${colorIndex}`,
     hex: '#666666',
@@ -368,7 +372,7 @@ export function debugLogColorAssignments(context: string = 'Color Assignment Deb
   }
   
   
-  console.groupEnd();
+  // End color validation logging group
 }
 
 /**
@@ -396,7 +400,7 @@ export function autoFixColorConflicts(options: {
   
   if (conflictsFound === 0) {
     if (logResults) {
-      console.log('✅ No color conflicts detected');
+      // No color conflicts detected
     }
     return {
       conflictsFound: 0,
@@ -418,7 +422,7 @@ export function autoFixColorConflicts(options: {
   
   if (logResults) {
     debugLogColorAssignments('After Auto-Fix');
-    console.log(`🔧 Fixed ${conflictsFixed}/${conflictsFound} conflicts`);
+    // Fixed color conflicts
   }
   
   return {

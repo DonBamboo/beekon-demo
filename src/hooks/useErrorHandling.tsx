@@ -21,7 +21,10 @@ export function withErrorBoundary<T extends React.ComponentType<Record<string, u
 }
 
 // Hook for handling errors in functional components
-export function useErrorHandler() {
+export function useErrorHandler(): {
+  handleError: (error: Error | string) => void;
+  resetError: () => void;
+} {
   const [error, setError] = React.useState<Error | null>(null);
 
   const resetError = React.useCallback(() => {
@@ -42,7 +45,7 @@ export function useErrorHandler() {
 }
 
 // Async error boundary for handling async operations
-export function useAsyncError() {
+export function useAsyncError(): (error: Error) => void {
   const [, setError] = React.useState();
   
   return React.useCallback(

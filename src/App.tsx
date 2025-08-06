@@ -30,7 +30,7 @@ const queryClient = new QueryClient({
       retry: (failureCount, error) => {
         // Don't retry on 4xx errors
         if (error && typeof error === 'object' && 'status' in error) {
-          const status = error.status as number;
+          const status = typeof error.status === 'number' ? error.status : 0;
           if (status >= 400 && status < 500) return false;
         }
         return failureCount < 3;
@@ -51,7 +51,7 @@ const App = () => {
     try {
       registerSW();
     } catch (error) {
-      console.warn('Service worker registration failed:', error);
+      // Service worker registration failed - silently continue
     }
     
     // Initialize performance monitoring with error handling
@@ -65,11 +65,11 @@ const App = () => {
           try {
             performanceMonitor.endTiming('app-initialization');
           } catch (error) {
-            console.warn('Performance monitoring cleanup failed:', error);
+            // Performance monitoring cleanup failed - continue
           }
         };
       } catch (error) {
-        console.warn('Main performance monitoring failed, using fallback:', error);
+        // Main performance monitoring failed, using fallback
         try {
           // Use fallback performance monitor
           const { fallbackPerformanceMonitor } = await import('./lib/performance-fallback');
@@ -79,11 +79,11 @@ const App = () => {
             try {
               fallbackPerformanceMonitor.endTiming('app-initialization');
             } catch (fallbackError) {
-              console.warn('Fallback performance monitoring cleanup failed:', fallbackError);
+              // Fallback performance monitoring cleanup failed
             }
           };
         } catch (fallbackError) {
-          console.warn('Fallback performance monitoring also failed:', fallbackError);
+          // Fallback performance monitoring also failed
           return () => {}; // Return empty cleanup function
         }
       }

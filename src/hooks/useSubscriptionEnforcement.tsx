@@ -1,5 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
-import { SubscriptionTier, useWorkspace } from "./useWorkspace";
+import { SubscriptionTier, useWorkspace, isValidSubscriptionTier } from "./useWorkspace";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface SubscriptionLimits {
@@ -47,7 +47,9 @@ export function useSubscriptionEnforcement() {
 
   const getCurrentLimits = (): SubscriptionLimits => {
     const tier =
-      (currentWorkspace?.subscription_tier as SubscriptionTier) || "free";
+      isValidSubscriptionTier(currentWorkspace?.subscription_tier) 
+        ? currentWorkspace.subscription_tier 
+        : "free";
     return subscriptionLimits[tier] || subscriptionLimits.free;
   };
 
@@ -76,7 +78,9 @@ export function useSubscriptionEnforcement() {
   ): boolean => {
     if (!canPerformAction(action)) {
       const tier =
-        (currentWorkspace?.subscription_tier as SubscriptionTier) || "free";
+        isValidSubscriptionTier(currentWorkspace?.subscription_tier) 
+        ? currentWorkspace.subscription_tier 
+        : "free";
 
       let message = "";
       let upgradeAction = "";
@@ -175,7 +179,7 @@ export function useSubscriptionEnforcement() {
         .single();
 
       if (error) {
-        console.error("Failed to consume credit:", error);
+        // Failed to consume credit
         toast({
           title: "Credit Deduction Failed",
           description: "Failed to deduct credit. Please try again.",
@@ -190,7 +194,7 @@ export function useSubscriptionEnforcement() {
       
       return true;
     } catch (error) {
-      console.error("Error consuming credit:", error);
+      // Error consuming credit
       toast({
         title: "Credit Deduction Error",
         description: "An error occurred while deducting your credit. Please try again.",
@@ -234,7 +238,7 @@ export function useSubscriptionEnforcement() {
 
   const restoreCredit = async (): Promise<boolean> => {
     if (!currentWorkspace) {
-      console.error("Cannot restore credit: No workspace available");
+      // Cannot restore credit: No workspace available
       return false;
     }
 
@@ -254,14 +258,14 @@ export function useSubscriptionEnforcement() {
         .single();
 
       if (error) {
-        console.error("Failed to restore credit:", error);
+        // Failed to restore credit
         return false;
       }
 
       // Credit restored successfully
       return true;
     } catch (error) {
-      console.error("Error restoring credit:", error);
+      // Error restoring credit
       return false;
     }
   };
@@ -271,7 +275,9 @@ export function useSubscriptionEnforcement() {
   };
 
   const getSubscriptionTier = (): SubscriptionTier => {
-    return (currentWorkspace?.subscription_tier as SubscriptionTier) || "free";
+    return isValidSubscriptionTier(currentWorkspace?.subscription_tier) 
+      ? currentWorkspace.subscription_tier 
+      : "free";
   };
 
   const isFeatureAvailable = (feature: keyof SubscriptionLimits): boolean => {

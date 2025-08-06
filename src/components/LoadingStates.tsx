@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from './ui/card';
 import { Loader2 } from 'lucide-react';
 
 // Generic loading skeleton for cards
-export const CardSkeleton = ({ count = 1 }: { count?: number }) => (
+export const CardSkeleton = ({ count = 1 }: { count?: number }): React.JSX.Element => (
   <>
     {Array.from({ length: count }).map((_, i) => (
       <Card key={i}>
@@ -29,7 +29,7 @@ export const TableSkeleton = ({
 }: { 
   rows?: number; 
   columns?: number; 
-}) => (
+}): React.JSX.Element => (
   <div className="space-y-2">
     {/* Header */}
     <div className="flex space-x-2">

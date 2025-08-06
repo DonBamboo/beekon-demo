@@ -261,7 +261,7 @@ export default function Competitors() {
       setCompetitorDomain("");
       setIsAddDialogOpen(false);
     } catch (error) {
-      console.error("Failed to add competitor:", error);
+      // Failed to add competitor
       toast({
         title: "Error",
         description:
@@ -346,7 +346,7 @@ export default function Competitors() {
         }
       );
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export Failed",
         description: error instanceof Error ? error.message : "An unexpected error occurred during export.",

@@ -374,7 +374,7 @@ export default function Analysis() {
         ...websiteTopics,
       ]);
     } catch (error) {
-      console.error("Failed to load topics:", error);
+      // Failed to load topics
       handleError(error);
     }
   }, [selectedWebsite, handleError]);
@@ -399,7 +399,7 @@ export default function Analysis() {
         ...llmProviders,
       ]);
     } catch (error) {
-      console.error("Failed to load LLM providers:", error);
+      // Failed to load LLM providers
       handleError(error);
     }
   }, [selectedWebsite, handleError]);
@@ -441,7 +441,7 @@ export default function Analysis() {
 
       setAvailableAnalysisSessions(sessions);
     } catch (error) {
-      console.error("Failed to load available analysis sessions:", error);
+      // Failed to load available analysis sessions
       // Don't handle error here as it's not critical
       setAvailableAnalysisSessions([]);
     }
@@ -473,9 +473,7 @@ export default function Analysis() {
       if (!topicExists) {
         // Add a small delay to prevent unnecessary state updates during rapid data changes
         const timeoutId = setTimeout(() => {
-          console.log(
-            `Topic "${selectedTopic}" no longer exists, resetting to "all"`
-          );
+          // Topic no longer exists, resetting to "all"
           setSelectedTopic("all");
         }, 100);
         return () => clearTimeout(timeoutId);
@@ -489,9 +487,7 @@ export default function Analysis() {
       if (!llmExists) {
         // Add a small delay to prevent unnecessary state updates during rapid data changes
         const timeoutId = setTimeout(() => {
-          console.log(
-            `LLM "${selectedLLM}" no longer exists, resetting to "all"`
-          );
+          // LLM no longer exists, resetting to "all"
           setSelectedLLM("all");
         }, 100);
         return () => clearTimeout(timeoutId);
@@ -933,7 +929,7 @@ export default function Analysis() {
         },
       });
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export Failed",
         description:

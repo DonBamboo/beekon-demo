@@ -144,7 +144,7 @@ export function AnalysisConfigModal({
         );
       }
     } catch (error) {
-      console.error("Failed to load website topics:", error);
+      // Failed to load website topics
       setTopicError("Failed to load topics. Using default suggestions.");
 
       // Fallback to default topics on error
@@ -235,14 +235,7 @@ export function AnalysisConfigModal({
 
       // Subscribe to progress updates
       analysisService.subscribeToProgress(sessionId, async (progress) => {
-        console.log("UI received progress update:", {
-          sessionId: sessionId.slice(0, 8),
-          status: progress.status,
-          progress: progress.progress,
-          currentStep: progress.currentStep,
-          completedSteps: progress.completedSteps,
-          totalSteps: progress.totalSteps
-        });
+        // UI received progress update
         setAnalysisProgress(progress);
 
         if (progress.status === "completed") {
@@ -270,7 +263,7 @@ export function AnalysisConfigModal({
           });
 
           // Restore credit if analysis failed after starting
-          console.log("Restoring credit due to failed analysis");
+          // Restore credit due to failed analysis
           await restoreCredit();
 
           setTimeout(() => {
@@ -284,7 +277,7 @@ export function AnalysisConfigModal({
         description: `${data.analysisName} analysis has been queued and will begin shortly.`,
       });
     } catch (error) {
-      console.error("Failed to start analysis:", error);
+      // Failed to start analysis
 
       // Clean up any partial state
       if (currentAnalysisId) {
@@ -296,7 +289,7 @@ export function AnalysisConfigModal({
 
       // If we consumed a credit but the operation failed, restore it
       if (creditConsumed) {
-        console.log("Restoring credit due to failed analysis start");
+        // Restore credit due to failed analysis start
         await restoreCredit();
       }
 
@@ -442,7 +435,7 @@ export function AnalysisConfigModal({
         },
       });
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export failed",
         description: "Failed to export configuration. Please try again.",
