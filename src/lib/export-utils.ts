@@ -611,7 +611,7 @@ export function formatValue(value: unknown, fieldMapping?: FieldMapping[string])
       }
     }
     
-    default:
+    default: {
       // Enhanced object/array handling
       if (typeof value === 'object' && value !== null) {
         if (Array.isArray(value)) {
@@ -636,6 +636,7 @@ export function formatValue(value: unknown, fieldMapping?: FieldMapping[string])
         .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase to spaced
         .replace(/_/g, ' ') // underscores to spaces
         .replace(/\b\w/g, l => l.toUpperCase()); // capitalize words
+    }
   }
 }
 
@@ -823,8 +824,8 @@ export function transformExportData(data: Record<string, unknown>[]): Record<str
   const hasCategoryMetricStructure = data.every(item => 
     item && 
     typeof item === 'object' &&
-    item.hasOwnProperty('metric') && 
-    item.hasOwnProperty('value')
+    'metric' in item && 
+    'value' in item
   );
   
   if (hasCategoryMetricStructure) {
@@ -950,7 +951,7 @@ export function formatCsvExport(data: ExportData, dataType?: string): Blob {
     const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
     
     // Check if data has categories for organized sections
-    const hasCategories = processedData.some(item => item.hasOwnProperty('category'));
+    const hasCategories = processedData.some(item => 'category' in item);
     
     if (hasCategories) {
       const groupedData = groupDataByCategory(processedData);
@@ -1134,11 +1135,11 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
     
     if (processedData.length > 0) {
       // Check if data has category field for organized display
-      const hasCategoryField = processedData.some(item => item.hasOwnProperty('category') || item.hasOwnProperty('Category'));
+      const hasCategoryField = processedData.some(item => 'category' in item || 'Category' in item);
       
       if (hasCategoryField) {
         // Group data by category for organized sections
-        const categoryKey = processedData[0].hasOwnProperty('category') ? 'category' : 'Category';
+        const categoryKey = 'category' in processedData[0] ? 'category' : 'Category';
         const groupedData = processedData.reduce((groups, item) => {
           const category = String(item[categoryKey] || 'Uncategorized');
           if (!groups[category]) {

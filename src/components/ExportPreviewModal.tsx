@@ -42,7 +42,7 @@ import { useState } from "react";
 interface ExportPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  data: any;
+  data: Record<string, unknown>[] | Record<string, unknown>;
   title: string;
   exportType: string;
   defaultFormat?: ExportFormat;

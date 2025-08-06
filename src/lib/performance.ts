@@ -1,13 +1,33 @@
 // Performance monitoring utilities
 import React from "react";
 
+// Extended performance interface for memory usage
+interface PerformanceExtended extends Performance {
+  memory?: {
+    usedJSHeapSize: number;
+    totalJSHeapSize: number;
+    jsHeapSizeLimit: number;
+  };
+}
+
+// Layout Shift entry type
+interface LayoutShift extends PerformanceEntry {
+  hadRecentInput: boolean;
+  value: number;
+}
+
+// Event timing entry type  
+interface PerformanceEventTiming extends PerformanceEntry {
+  processingStart: number;
+}
+
 export interface PerformanceMetrics {
   name: string;
   duration: number;
   startTime: number;
   endTime: number;
   type: "navigation" | "resource" | "measure" | "custom";
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface VitalMetrics {
@@ -151,7 +171,7 @@ export class PerformanceMonitor {
     // First Input Delay
     const fidObserver = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        this.vitals.FID = (entry as any).processingStart - entry.startTime;
+        this.vitals.FID = (entry as PerformanceEventTiming).processingStart - entry.startTime;
       }
     });
 
@@ -165,8 +185,8 @@ export class PerformanceMonitor {
     const clsObserver = new PerformanceObserver((list) => {
       let clsValue = 0;
       for (const entry of list.getEntries()) {
-        if (!(entry as any).hadRecentInput) {
-          clsValue += (entry as any).value;
+        if (!(entry as LayoutShift).hadRecentInput) {
+          clsValue += (entry as LayoutShift).value;
         }
       }
       this.vitals.CLS = clsValue;
@@ -400,7 +420,7 @@ export function withPerformanceMonitoring<P extends object>(
     componentName || Component.displayName || Component.name || "Component";
 
   return React.memo(
-    React.forwardRef<any, P>((props, ref) => {
+    React.forwardRef<HTMLElement, P>((props, ref) => {
       const renderStart = React.useRef<number>(0);
 
       // Measure render time
@@ -437,7 +457,7 @@ export function getMemoryUsage(): {
   total: number;
   percentage: number;
 } | null {
-  const memory = (performance as any).memory;
+  const memory = (performance as PerformanceExtended).memory;
   if (!memory) return null;
 
   return {

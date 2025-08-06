@@ -6,14 +6,14 @@ interface BatchedRequest<T> {
   key: string;
   promise: Promise<T>;
   resolve: (value: T) => void;
-  reject: (error: any) => void;
+  reject: (error: Error) => void;
   timestamp: number;
 }
 
 interface BatchConfig {
   maxBatchSize: number;
   maxWaitTime: number;
-  keyGenerator: (...args: any[]) => string;
+  keyGenerator: (...args: unknown[]) => string;
 }
 
 export class RequestBatcher<T> {
@@ -28,7 +28,7 @@ export class RequestBatcher<T> {
     this.config = {
       maxBatchSize: 10,
       maxWaitTime: 50, // 50ms
-      keyGenerator: (...args: any[]) => JSON.stringify(args),
+      keyGenerator: (...args: unknown[]) => JSON.stringify(args),
       ...config,
     };
   }
@@ -52,7 +52,7 @@ export class RequestBatcher<T> {
 
   private createBatchedRequest(key: string): BatchedRequest<T> {
     let resolve: (value: T) => void;
-    let reject: (error: any) => void;
+    let reject: (error: Error) => void;
 
     const promise = new Promise<T>((res, rej) => {
       resolve = res;

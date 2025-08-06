@@ -163,13 +163,13 @@ export default function CompetitiveGapChart({
   // Only show chart if there are competitors and meaningful data
   if (!processedData || !analytics || analytics.totalCompetitors === 0) return null;
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number }>; label?: string }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-background border rounded-lg p-3 shadow-md" role="tooltip">
           <p className="font-medium mb-2" aria-label={`Topic: ${label}`}>{label}</p>
           <div className="space-y-1">
-            {payload.map((entry: any, index: number) => (
+            {payload.map((entry, index: number) => (
               <div key={index} className="flex items-center gap-2">
                 <div 
                   className="w-3 h-3 rounded-sm" 

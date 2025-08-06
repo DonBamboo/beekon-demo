@@ -110,7 +110,7 @@ export default function ShareOfVoiceChart({
     const mainCompetitors = sortedData.filter(item => item.value >= minSegmentSize);
     const smallCompetitors = sortedData.filter(item => item.value < minSegmentSize);
     
-    let result = [...mainCompetitors];
+    const result = [...mainCompetitors];
     
     // Group small competitors into "Others" if there are any
     if (smallCompetitors.length > 0) {
@@ -174,7 +174,7 @@ export default function ShareOfVoiceChart({
   
   if (!hasCompetitors) return null;
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown>; value: number }>; label?: string }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const isMarketShare = chartType === 'market_share';

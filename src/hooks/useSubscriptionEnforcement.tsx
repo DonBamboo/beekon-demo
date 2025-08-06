@@ -186,7 +186,7 @@ export function useSubscriptionEnforcement() {
 
       // Update local workspace state with new credit count
       // This will trigger a re-render with updated credits
-      console.log(`Credit consumed successfully. Remaining credits: ${data.credits_remaining}`);
+      // Credit consumed successfully
       
       return true;
     } catch (error) {
@@ -258,7 +258,7 @@ export function useSubscriptionEnforcement() {
         return false;
       }
 
-      console.log(`Credit restored successfully. New credit count: ${data.credits_remaining}`);
+      // Credit restored successfully
       return true;
     } catch (error) {
       console.error("Error restoring credit:", error);

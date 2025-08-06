@@ -139,7 +139,7 @@ export function AnalysisHistoryModal({
     return `${hours}h ${minutes}m`;
   };
 
-  const getConfigurationSummary = (config: any) => {
+  const getConfigurationSummary = (config: { topics?: string[]; llmModels?: string[]; customPrompts?: string[]; } | null) => {
     if (!config) return "No configuration data";
     
     const topics = config.topics?.length || 0;

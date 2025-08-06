@@ -626,7 +626,7 @@ export class CompetitorAnalysisService extends BaseService {
    */
   private analyzeCompetitiveTrends(
     currentData: CompetitorShareOfVoice[],
-    historicalData: any[]
+    historicalData: CompetitorShareOfVoice[][]
   ): CompetitiveTrend[] {
     const trends: CompetitiveTrend[] = [];
 
@@ -636,7 +636,7 @@ export class CompetitorAnalysisService extends BaseService {
 
     currentData.forEach((competitor) => {
       const previousData = previous.find(
-        (comp: any) => comp.competitorId === competitor.competitorId
+        (comp: CompetitorShareOfVoice) => comp.competitorId === competitor.competitorId
       );
 
       if (previousData) {
@@ -720,7 +720,7 @@ export class CompetitorAnalysisService extends BaseService {
    * Generate prioritized action recommendations
    */
   private generateActionPriorities(
-    marketPosition: any,
+    marketPosition: { yourRank: number },
     trends: CompetitiveTrend[],
     threats: CompetitorInsight[],
     opportunities: CompetitorInsight[],
@@ -732,7 +732,13 @@ export class CompetitorAnalysisService extends BaseService {
     expectedImpact: "high" | "medium" | "low";
     timeToImplement: "short" | "medium" | "long";
   }> {
-    const actions: any[] = [];
+    const actions: Array<{
+      priority: number;
+      action: string;
+      category: "content" | "seo" | "competitive" | "strategic";
+      expectedImpact: "high" | "medium" | "low";
+      timeToImplement: "short" | "medium" | "long";
+    }> = [];
     let priority = 1;
 
     // High-priority actions based on market position

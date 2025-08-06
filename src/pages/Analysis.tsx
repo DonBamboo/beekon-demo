@@ -92,7 +92,7 @@ export default function Analysis() {
     Array<{
       id: string;
       name: string;
-      filters: Record<string, any>;
+      filters: Record<string, unknown>;
     }>
   >([]);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
@@ -729,7 +729,7 @@ export default function Analysis() {
   );
 
   const loadFilterPreset = useCallback(
-    (preset: any) => {
+    (preset: { filters: Record<string, unknown> }) => {
       setSelectedTopic(preset.filters.selectedTopic || "all");
       setSelectedLLM(preset.filters.selectedLLM || "all");
       setSelectedMentionStatus(preset.filters.selectedMentionStatus || "all");
@@ -1517,7 +1517,7 @@ export default function Analysis() {
                       <div className="flex gap-2">
                         <Select
                           value={sortBy}
-                          onValueChange={(value: any) => setSortBy(value)}
+                          onValueChange={(value: string) => setSortBy(value)}
                         >
                           <SelectTrigger className="flex-1">
                             <SelectValue />
@@ -1533,7 +1533,7 @@ export default function Analysis() {
                         </Select>
                         <Select
                           value={sortOrder}
-                          onValueChange={(value: any) => setSortOrder(value)}
+                          onValueChange={(value: 'asc' | 'desc') => setSortOrder(value)}
                         >
                           <SelectTrigger className="w-24">
                             <SelectValue />

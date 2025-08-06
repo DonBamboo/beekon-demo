@@ -248,7 +248,7 @@ export const llmProviderLoader = new DataLoader<
 
 // Shared data transformation function
 function transformAnalysisData(
-  data: Record<string, any>[],
+  data: Record<string, unknown>[],
   websiteId?: string
 ): UIAnalysisResult[] {
   const resultsMap = new Map<string, UIAnalysisResult>();

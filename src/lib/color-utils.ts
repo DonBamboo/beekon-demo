@@ -353,27 +353,18 @@ export function debugLogColorAssignments(context: string = 'Color Assignment Deb
   const validation = validateAllColorAssignments();
   const stats = getColorAssignmentStats();
   
-  console.group(`🎨 ${context}`);
-  console.log('📊 Statistics:', {
-    totalCompetitors: validation.totalCompetitors,
-    uniqueColorsUsed: validation.uniqueColorsUsed,
-    availableColors: AVAILABLE_CHART_COLORS.length,
-    isValid: validation.isValid,
-  });
+  // Color validation diagnostics completed
   
   if (validation.conflicts.length > 0) {
-    console.warn('⚠️ Conflicts detected:');
-    validation.conflicts.forEach(conflict => {
-      console.warn(`  Color ${conflict.colorIndex} (${conflict.colorName}):`, conflict.competitors);
-    });
+    // Color conflicts detected
   }
   
   if (validation.warnings.length > 0) {
-    console.warn('⚠️ Warnings:', validation.warnings);
+    // Color validation warnings found
   }
   
   if (validation.recommendations.length > 0) {
-    console.info('💡 Recommendations:', validation.recommendations);
+    // Color recommendations available
   }
   
   

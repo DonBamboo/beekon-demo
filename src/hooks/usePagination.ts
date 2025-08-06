@@ -125,7 +125,7 @@ export function useClientPagination<T>(
   const currentPageData = useMemo(() => {
     const { startIndex, endIndex } = paginationState;
     return data.slice(startIndex, endIndex);
-  }, [data, paginationState.startIndex, paginationState.endIndex]);
+  }, [data, paginationState]);
 
   return [currentPageData, paginationState, paginationActions];
 }

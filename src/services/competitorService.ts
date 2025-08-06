@@ -217,10 +217,7 @@ export class OptimizedCompetitorService extends BaseService {
         const avgRank = row.avg_rank_position;
         const mentionTrend = row.mention_trend_7d;
 
-        // Debug logging for average rank processing
-        if (avgRank !== null && avgRank !== undefined) {
-          console.log(`[DEBUG] Competitor ${row.competitor_name || row.competitor_domain}: rawAvgRank=${avgRank}, processedValue=${avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20 ? avgRank : null}`);
-        }
+        // Debug logging removed - average rank processing completed
 
         return {
           competitorId: row.competitor_id,
@@ -581,9 +578,9 @@ export class OptimizedCompetitorService extends BaseService {
       try {
         await this.refreshCompetitorViews();
         await this.refreshCompetitorAnalysis();
-        console.log(`Materialized views refreshed after adding ${results.length} competitors`);
+        // Materialized views refreshed successfully
       } catch (refreshError) {
-        console.warn("Failed to refresh materialized views after adding competitors:", refreshError);
+        // Failed to refresh materialized views
         // Don't throw the error to avoid breaking the main operation
       }
 
@@ -648,9 +645,9 @@ export class OptimizedCompetitorService extends BaseService {
       try {
         await this.refreshCompetitorViews();
         await this.refreshCompetitorAnalysis();
-        console.log(`Materialized views refreshed after updating competitor ${competitorId}`);
+        // Materialized views refreshed successfully
       } catch (refreshError) {
-        console.warn("Failed to refresh materialized views after updating competitor:", refreshError);
+        // Failed to refresh materialized views
         // Don't throw the error to avoid breaking the main operation
       }
 
@@ -684,9 +681,9 @@ export class OptimizedCompetitorService extends BaseService {
         try {
           await this.refreshCompetitorViews();
           await this.refreshCompetitorAnalysis();
-          console.log(`Materialized views refreshed after deleting competitor ${competitorId}`);
+          // Materialized views refreshed successfully
         } catch (refreshError) {
-          console.warn("Failed to refresh materialized views after deleting competitor:", refreshError);
+          // Failed to refresh materialized views
           // Don't throw the error to avoid breaking the main operation
         }
       }
@@ -892,7 +889,7 @@ export class OptimizedCompetitorService extends BaseService {
   private transformGapAnalysisToLegacyFormat(
     gapAnalysis: CompetitiveGapAnalysis[]
   ): CompetitorComparison[] {
-    console.warn('transformGapAnalysisToLegacyFormat is deprecated. Unified analytics now handles gap analysis directly.');
+    // Legacy format transformation deprecated
     return gapAnalysis.map((gap) => ({
       topic: gap.topicName,
       yourBrand: Math.round(gap.yourBrandScore),
@@ -909,7 +906,7 @@ export class OptimizedCompetitorService extends BaseService {
     competitors: CompetitorPerformance[],
     yourBrandResults: AnalysisResult[]
   ): CompetitorComparison[] {
-    console.warn('calculateCompetitiveGaps is deprecated. Use transformGapAnalysisToLegacyFormat instead.');
+    // Method deprecated - use newer implementation
     
     // Group your brand's results by topic
     const topicMap = new Map<string, number>();
@@ -1206,13 +1203,13 @@ export class OptimizedCompetitorService extends BaseService {
 
     // Log validation issues for debugging and monitoring
     if (validation.issues.length > 0) {
-      console.warn('Competitor data validation issues:', validation.issues);
+      // Competitor data validation issues found
       // In production, you might want to send this to a monitoring service
       this.logValidationIssues(validation);
     }
     
     if (validation.warnings.length > 0) {
-      console.info('Competitor data validation warnings:', validation.warnings);
+      // Competitor data validation warnings found
     }
 
     // Create competitive gaps in consistent format (use gapAnalysis as primary source)

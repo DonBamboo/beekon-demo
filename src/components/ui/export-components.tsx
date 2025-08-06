@@ -24,7 +24,7 @@ export interface ExportButtonProps {
   disabled?: boolean;
   formats?: ExportFormat[];
   defaultFormat?: ExportFormat;
-  data?: any;
+  data?: Record<string, unknown>[] | Record<string, unknown>;
   className?: string;
   showEstimatedSize?: boolean;
 }
@@ -314,7 +314,7 @@ export interface ExportSummaryProps {
   dateRange?: { start: string; end: string };
   onExport: (format: ExportFormat) => Promise<void>;
   isLoading?: boolean;
-  data?: any;
+  data?: Record<string, unknown>[] | Record<string, unknown>;
 }
 
 export function ExportSummary({
