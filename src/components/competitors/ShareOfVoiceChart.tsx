@@ -198,7 +198,7 @@ export default function ShareOfVoiceChart({
 
   // Only show chart if there are competitors to compare against
   const hasCompetitors =
-    data.length > 1 || (data.length === 1 && data[0].name !== "Your Brand");
+    data.length > 1 || (data.length === 1 && data[0]!.name !== "Your Brand");
 
   if (!hasCompetitors) return null;
 
@@ -225,7 +225,7 @@ export default function ShareOfVoiceChart({
           </p>
           {isMarketShare && data.rawValue !== undefined && (
             <p className="text-sm text-muted-foreground">
-              Raw Share: {data.rawValue.toFixed(1)}%
+              Raw Share: {data.rawValue?.toFixed(1)}%
             </p>
           )}
           {(data.mentions || data.totalMentions) && (

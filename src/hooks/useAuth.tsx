@@ -71,6 +71,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetchWorkspace();
   }, [user?.id]);
 
+  // Add a function that can be called by WorkspaceProvider to sync workspace changes
+  useEffect(() => {
+    const handleWorkspaceSync = (event: CustomEvent<{ workspaceId: string | null }>) => {
+      setWorkspaceId(event.detail.workspaceId);
+    };
+
+    window.addEventListener('workspaceChange', handleWorkspaceSync as EventListener);
+    
+    return () => {
+      window.removeEventListener('workspaceChange', handleWorkspaceSync as EventListener);
+    };
+  }, []);
+
   const signUp = async (email: string, password: string) => {
     const redirectUrl = `${window.location.origin}/`;
 

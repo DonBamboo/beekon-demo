@@ -99,8 +99,9 @@ export function WorkspaceModal({
     resolver: zodResolver(workspaceSchema),
     defaultValues: {
       name: workspace?.name || "",
-      subscriptionTier:
-        isValidSubscriptionTier(workspace?.subscription_tier) ? workspace.subscription_tier : "free",
+      subscriptionTier: isValidSubscriptionTier(workspace?.subscription_tier)
+        ? workspace.subscription_tier
+        : "free",
       creditLimit: workspace?.credits_remaining || undefined,
     },
   });
@@ -125,6 +126,9 @@ export function WorkspaceModal({
           data.subscriptionTier,
           data.creditLimit
         );
+
+        // Add small delay to ensure state propagation completes
+        await new Promise((resolve) => setTimeout(resolve, 200));
       }
       handleClose();
     } catch (error) {
