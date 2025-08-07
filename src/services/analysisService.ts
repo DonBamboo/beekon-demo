@@ -951,7 +951,6 @@ export class AnalysisService {
           chatgpt: "ChatGPT",
           claude: "Claude",
           gemini: "Gemini",
-          perplexity: "Perplexity",
         };
 
         return Array.from(providerCounts.entries()).map(([id, count]) => ({

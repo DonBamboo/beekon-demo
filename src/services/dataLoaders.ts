@@ -235,7 +235,6 @@ export const llmProviderLoader = new DataLoader<
       chatgpt: "ChatGPT",
       claude: "Claude",
       gemini: "Gemini",
-      perplexity: "Perplexity",
     };
 
     // Convert to result format

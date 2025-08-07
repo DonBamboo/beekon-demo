@@ -113,7 +113,6 @@ export function AnalysisConfigModal({
     },
     { id: "claude", name: "Claude", description: "Anthropic's AI assistant" },
     { id: "gemini", name: "Gemini", description: "Google's AI model" },
-    { id: "perplexity", name: "Perplexity", description: "AI-powered search" },
   ];
 
   // Load topics for the selected website
