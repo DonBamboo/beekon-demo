@@ -6,6 +6,7 @@ import {
   AnalysisListSkeleton,
   AnalysisStatsSkeleton,
 } from "@/components/AnalysisLoadingSkeleton";
+import { AnalysisSkeleton } from "@/components/skeletons";
 import {
   AnalysisVisualization,
   RankingChart,
@@ -987,27 +988,7 @@ export default function Analysis() {
 
   // Show loading state
   if (loading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Analysis Results</h1>
-          <p className="text-muted-foreground">Loading workspace...</p>
-        </div>
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <div className="h-4 bg-muted rounded animate-pulse mb-2" />
-                <div className="h-3 bg-muted rounded animate-pulse w-1/3" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-20 bg-muted rounded animate-pulse" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
+    return <AnalysisSkeleton />;
   }
 
   // Show workspace creation prompt when no workspace exists

@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Spinner } from "@/components/LoadingStates";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import { WorkspaceModal } from "./WorkspaceModal";
@@ -91,12 +92,7 @@ export function WorkspaceDropdown() {
   };
 
   if (loading) {
-    return (
-      <Button variant="ghost" size="sm" disabled>
-        <Spinner size="sm" className="mr-2" />
-        Loading...
-      </Button>
-    );
+    return <Skeleton variant="button" size="md" width="120px" />;
   }
 
   if (!currentWorkspace) {

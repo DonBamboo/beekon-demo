@@ -1,6 +1,7 @@
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useAuth } from "@/hooks/useAuth";
 import { Spinner } from "./LoadingStates";
+import { Skeleton } from "./ui/skeleton";
 import { WorkspaceDropdown } from "./WorkspaceDropdown";
 
 interface WorkspaceGuardProps {
@@ -30,9 +31,9 @@ export function WorkspaceGuard({
   // Show loading while authentication or workspace data is loading
   if (authLoading || workspaceLoading) {
     return fallback || (
-      <div className="flex items-center justify-center py-8">
-        <Spinner size="lg" />
-        <span className="ml-2">Loading workspace...</span>
+      <div className="flex flex-col items-center justify-center py-8 space-y-4">
+        <Skeleton variant="circular" size="lg" />
+        <Skeleton variant="text" width="150px" height="1rem" />
       </div>
     );
   }
@@ -46,10 +47,8 @@ export function WorkspaceGuard({
   if (requireWorkspace && !isWorkspaceStateValid()) {
     return fallback || (
       <div className="flex flex-col items-center justify-center py-8 space-y-4">
-        <p className="text-muted-foreground">
-          Workspace state is being synchronized...
-        </p>
-        <Spinner size="md" />
+        <Skeleton variant="text" width="250px" height="1rem" />
+        <Skeleton variant="circular" size="md" />
       </div>
     );
   }

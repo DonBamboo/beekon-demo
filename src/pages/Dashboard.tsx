@@ -9,6 +9,7 @@ import {
 import { DashboardErrorState } from "@/components/dashboard/DashboardErrorState";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { DashboardLoadingState } from "@/components/dashboard/DashboardLoadingState";
+import { DashboardSkeleton } from "@/components/skeletons";
 import { DashboardMetricsCards } from "@/components/dashboard/DashboardMetricsCards";
 import { VisibilityChart } from "@/components/dashboard/VisibilityChart";
 import { WorkspaceCreationPrompt } from "@/components/dashboard/WorkspaceCreationPrompt";
@@ -398,7 +399,7 @@ export default function Dashboard() {
 
   // Show loading state
   if (loading || isDashboardLoading) {
-    return <DashboardLoadingState />;
+    return <DashboardSkeleton />;
   }
 
   // Show workspace creation prompt when no workspace exists

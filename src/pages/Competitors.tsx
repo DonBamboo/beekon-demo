@@ -11,6 +11,7 @@ import {
 import { useWorkspace } from "@/hooks/useWorkspace";
 import CompetitorsHeader from "@/components/competitors/CompetitorsHeader";
 import CompetitorsLoadingState from "@/components/competitors/CompetitorsLoadingState";
+import { CompetitorsSkeleton } from "@/components/skeletons";
 import WorkspaceRequiredState from "@/components/competitors/WorkspaceRequiredState";
 import CompetitorsErrorState from "@/components/competitors/CompetitorsErrorState";
 import ShareOfVoiceChart from "@/components/competitors/ShareOfVoiceChart";
@@ -360,12 +361,7 @@ export default function Competitors() {
 
   // Show loading state
   if (workspaceLoading || isLoading) {
-    return (
-      <CompetitorsLoadingState
-        workspaceLoading={workspaceLoading}
-        isLoading={isLoading}
-      />
-    );
+    return <CompetitorsSkeleton />;
   }
 
   const workspaceRequiredState = (
