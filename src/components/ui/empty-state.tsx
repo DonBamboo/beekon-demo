@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
+import { Spinner } from "@/components/LoadingStates";
 
 export interface EmptyStateAction {
   label: string;
@@ -120,7 +121,7 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
                   >
                     {action.loading ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
+                        <Spinner size="sm" className="mr-2" />
                         {action.loadingText || "Loading..."}
                       </>
                     ) : (

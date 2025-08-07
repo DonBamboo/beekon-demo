@@ -66,7 +66,7 @@ export function useInfiniteAnalysisResults(
           case "confidence":
             comparison = a.confidence - b.confidence;
             break;
-          case "mentions":
+          case "mentions": {
             const aMentions = a.llm_results.filter(
               (llm) => llm.is_mentioned
             ).length;
@@ -75,7 +75,8 @@ export function useInfiniteAnalysisResults(
             ).length;
             comparison = aMentions - bMentions;
             break;
-          case "rank":
+          }
+          case "rank": {
             const aAvgRank =
               a.llm_results
                 .filter((llm) => llm.rank_position !== null)
@@ -90,6 +91,7 @@ export function useInfiniteAnalysisResults(
                   .length || 0;
             comparison = aAvgRank - bAvgRank;
             break;
+          }
 
           default:
             comparison = 0;
@@ -281,6 +283,12 @@ export function useInfiniteAnalysisResults(
     await loadInitialResults();
   }, [loadInitialResults]);
 
+  // Extract complex expressions to variables for dependency array
+  const dateRangeStart = filters.dateRange?.start;
+  const dateRangeEnd = filters.dateRange?.end;
+  const confidenceMin = filters.confidenceRange?.[0];
+  const confidenceMax = filters.confidenceRange?.[1];
+
   // Reset when dependencies change
   useEffect(() => {
     refresh();
@@ -288,11 +296,11 @@ export function useInfiniteAnalysisResults(
     websiteId,
     filters.topic,
     filters.llmProvider,
-    filters.dateRange?.start,
-    filters.dateRange?.end,
+    dateRangeStart,
+    dateRangeEnd,
     filters.mentionStatus,
-    filters.confidenceRange?.[0],
-    filters.confidenceRange?.[1],
+    confidenceMin,
+    confidenceMax,
     filters.sentiment,
     filters.analysisSession,
     advancedSearchQuery,
@@ -300,6 +308,7 @@ export function useInfiniteAnalysisResults(
     searchInInsights,
     sortBy,
     sortOrder,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   ]);
 
   // Memoized return value

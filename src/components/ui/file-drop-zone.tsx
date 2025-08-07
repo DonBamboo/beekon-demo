@@ -78,7 +78,7 @@ export function FileDropZone({
     const validationError = validateFile(file);
     
     if (validationError) {
-      console.error('File validation error:', validationError);
+      // File validation error
       return;
     }
 
@@ -88,7 +88,12 @@ export function FileDropZone({
     // Create preview for images
     if (showPreview && file.type.startsWith('image/')) {
       const reader = new FileReader();
-      reader.onload = (e) => setPreview(e.target?.result as string);
+      reader.onload = (e) => {
+        const result = e.target?.result;
+        if (typeof result === 'string') {
+          setPreview(result);
+        }
+      };
       reader.readAsDataURL(file);
     }
   }, [onFileSelect, showPreview, validateFile]);  

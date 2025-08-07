@@ -1,6 +1,35 @@
 // Service Worker registration and management utilities
 import React from 'react';
 
+// Extended Navigator interface for browser features
+interface NavigatorExtended extends Navigator {
+  standalone?: boolean;
+  connection?: {
+    effectiveType: string;
+    downlink: number;
+    rtt: number;
+    saveData: boolean;
+  };
+  mozConnection?: {
+    effectiveType: string;
+    downlink: number;
+    rtt: number;
+    saveData: boolean;
+  };
+  webkitConnection?: {
+    effectiveType: string;
+    downlink: number;
+    rtt: number;
+    saveData: boolean;
+  };
+}
+
+// BeforeInstallPrompt event interface
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 interface ServiceWorkerConfig {
   onUpdate?: (registration: ServiceWorkerRegistration) => void;
   onSuccess?: (registration: ServiceWorkerRegistration) => void;
@@ -18,7 +47,7 @@ export class ServiceWorkerManager {
   // Register service worker
   async register(): Promise<ServiceWorkerRegistration | null> {
     if (!('serviceWorker' in navigator)) {
-      console.log('Service Worker not supported');
+      // Service Worker not supported
       return null;
     }
 
@@ -47,10 +76,10 @@ export class ServiceWorkerManager {
         }
       });
 
-      console.log('Service Worker registered successfully');
+      // Service Worker registered successfully
       return registration;
     } catch (error) {
-      console.error('Service Worker registration failed:', error);
+      // Service Worker registration failed
       this.config.onError?.(error as Error);
       return null;
     }
@@ -61,9 +90,9 @@ export class ServiceWorkerManager {
     if (this.registration) {
       try {
         await this.registration.update();
-        console.log('Service Worker updated');
+        // Service Worker updated successfully
       } catch (error) {
-        console.error('Service Worker update failed:', error);
+        // Service Worker update failed
       }
     }
   }
@@ -73,10 +102,10 @@ export class ServiceWorkerManager {
     if (this.registration) {
       try {
         const result = await this.registration.unregister();
-        console.log('Service Worker unregistered');
+        // Service Worker unregistered successfully
         return result;
       } catch (error) {
-        console.error('Service Worker unregister failed:', error);
+        // Service Worker unregister failed
         return false;
       }
     }
@@ -115,7 +144,7 @@ export class ServiceWorkerManager {
   // Check if app is running in standalone mode (PWA)
   static isStandalone(): boolean {
     return window.matchMedia('(display-mode: standalone)').matches ||
-           (window.navigator as any).standalone === true;
+           (window.navigator as NavigatorExtended).standalone === true;
   }
 
   // Get service worker registration
@@ -153,7 +182,7 @@ export function useServiceWorker(config: ServiceWorkerConfig = {}) {
         },
       });
     }
-  }, []);
+  }, [config]);
 
   const register = React.useCallback(async () => {
     if (!managerRef.current) return null;
@@ -253,9 +282,9 @@ export function useNetworkStatus() {
 
   React.useEffect(() => {
     const updateNetworkStatus = () => {
-      const connection = (navigator as any).connection || 
-                       (navigator as any).mozConnection || 
-                       (navigator as any).webkitConnection;
+      const connection = (navigator as NavigatorExtended).connection || 
+                       (navigator as NavigatorExtended).mozConnection || 
+                       (navigator as NavigatorExtended).webkitConnection;
 
       setNetworkStatus({
         isOnline: navigator.onLine,
@@ -271,7 +300,7 @@ export function useNetworkStatus() {
     window.addEventListener('offline', handleOffline);
 
     // Listen for connection changes
-    const connection = (navigator as any).connection;
+    const connection = (navigator as NavigatorExtended).connection;
     if (connection) {
       connection.addEventListener('change', updateNetworkStatus);
     }
@@ -293,11 +322,11 @@ export function useNetworkStatus() {
 
 // PWA install prompt hook
 export function usePWAInstallPrompt() {
-  const [installPrompt, setInstallPrompt] = React.useState<any>(null);
+  const [installPrompt, setInstallPrompt] = React.useState<BeforeInstallPromptEvent | null>(null);
   const [canInstall, setCanInstall] = React.useState(false);
 
   React.useEffect(() => {
-    const handleBeforeInstallPrompt = (e: any) => {
+    const handleBeforeInstallPrompt = (e: BeforeInstallPromptEvent) => {
       e.preventDefault();
       setInstallPrompt(e);
       setCanInstall(true);

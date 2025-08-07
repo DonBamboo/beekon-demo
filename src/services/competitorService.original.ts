@@ -1,5 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
-import { Competitor, CompetitorInsert, CompetitorUpdate, AnalysisResult, LLMResult } from "@/types/database";
+import {
+  Competitor,
+  CompetitorInsert,
+  CompetitorUpdate,
+  AnalysisResult,
+  LLMResult,
+} from "@/types/database";
 import BaseService from "./baseService";
 
 export interface CompetitorPerformance {
@@ -54,7 +60,7 @@ export interface CompetitorAnalytics {
 
 export class CompetitorService extends BaseService {
   private static instance: CompetitorService;
-  protected serviceName = 'website' as const;
+  protected serviceName = "website" as const;
 
   public static getInstance(): CompetitorService {
     if (!CompetitorService.instance) {
@@ -67,22 +73,17 @@ export class CompetitorService extends BaseService {
    * Get all competitors for a website
    */
   async getCompetitors(websiteId: string): Promise<Competitor[]> {
-    try {
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .from("competitors")
-        .select("*")
-        .eq("website_id", websiteId)
-        .eq("is_active", true)
-        .order("created_at", { ascending: true });
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .from("competitors")
+      .select("*")
+      .eq("website_id", websiteId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      return data || [];
-    } catch (error) {
-      console.error("Failed to fetch competitors:", error);
-      throw error;
-    }
+    return data || [];
   }
 
   /**
@@ -93,39 +94,34 @@ export class CompetitorService extends BaseService {
     domain: string,
     name?: string
   ): Promise<Competitor> {
-    try {
-      // Check if competitor already exists
-      const { data: existing } = await supabase
-        .schema("beekon_data")
-        .from("competitors")
-        .select("id")
-        .eq("website_id", websiteId)
-        .eq("competitor_domain", domain)
-        .single();
+    // Check if competitor already exists
+    const { data: existing } = await supabase
+      .schema("beekon_data")
+      .from("competitors")
+      .select("id")
+      .eq("website_id", websiteId)
+      .eq("competitor_domain", domain)
+      .single();
 
-      if (existing) {
-        throw new Error("Competitor already exists");
-      }
-
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .from("competitors")
-        .insert({
-          website_id: websiteId,
-          competitor_domain: domain,
-          competitor_name: name || null,
-          is_active: true,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      return data;
-    } catch (error) {
-      console.error("Failed to add competitor:", error);
-      throw error;
+    if (existing) {
+      throw new Error("Competitor already exists");
     }
+
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .from("competitors")
+      .insert({
+        website_id: websiteId,
+        competitor_domain: domain,
+        competitor_name: name || null,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return data;
   }
 
   /**
@@ -135,40 +131,30 @@ export class CompetitorService extends BaseService {
     competitorId: string,
     updates: Partial<Pick<Competitor, "competitor_name" | "is_active">>
   ): Promise<Competitor> {
-    try {
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .from("competitors")
-        .update(updates)
-        .eq("id", competitorId)
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .from("competitors")
+      .update(updates)
+      .eq("id", competitorId)
+      .select()
+      .single();
 
-      if (error) throw error;
+    if (error) throw error;
 
-      return data;
-    } catch (error) {
-      console.error("Failed to update competitor:", error);
-      throw error;
-    }
+    return data;
   }
 
   /**
    * Delete/deactivate a competitor
    */
   async deleteCompetitor(competitorId: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .schema("beekon_data")
-        .from("competitors")
-        .update({ is_active: false })
-        .eq("id", competitorId);
+    const { error } = await supabase
+      .schema("beekon_data")
+      .from("competitors")
+      .update({ is_active: false })
+      .eq("id", competitorId);
 
-      if (error) throw error;
-    } catch (error) {
-      console.error("Failed to delete competitor:", error);
-      throw error;
-    }
+    if (error) throw error;
   }
 
   /**
@@ -178,31 +164,26 @@ export class CompetitorService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitorPerformance[]> {
-    try {
-      const competitors = await this.getCompetitors(websiteId);
-      const performanceData: CompetitorPerformance[] = [];
+    const competitors = await this.getCompetitors(websiteId);
+    const performanceData: CompetitorPerformance[] = [];
 
-      for (const competitor of competitors) {
-        // Get analysis results for this competitor domain
-        const competitorResults = await this.getCompetitorAnalysisResults(
-          competitor.competitor_domain,
-          dateRange
-        );
+    for (const competitor of competitors) {
+      // Get analysis results for this competitor domain
+      const competitorResults = await this.getCompetitorAnalysisResults(
+        competitor.competitor_domain,
+        dateRange
+      );
 
-        // Calculate performance metrics
-        const performance = await this.calculateCompetitorMetrics(
-          competitor,
-          competitorResults
-        );
+      // Calculate performance metrics
+      const performance = await this.calculateCompetitorMetrics(
+        competitor,
+        competitorResults
+      );
 
-        performanceData.push(performance);
-      }
-
-      return performanceData.sort((a, b) => b.shareOfVoice - a.shareOfVoice);
-    } catch (error) {
-      console.error("Failed to get competitor performance:", error);
-      throw error;
+      performanceData.push(performance);
     }
+
+    return performanceData.sort((a, b) => b.shareOfVoice - a.shareOfVoice);
   }
 
   /**
@@ -212,59 +193,54 @@ export class CompetitorService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitorAnalytics> {
-    try {
-      const [competitors, yourBrandResults] = await Promise.all([
-        this.getCompetitorPerformance(websiteId, dateRange),
-        this.getAnalysisResultsForWebsite(websiteId, dateRange),
-      ]);
+    const [competitors, yourBrandResults] = await Promise.all([
+      this.getCompetitorPerformance(websiteId, dateRange),
+      this.getAnalysisResultsForWebsite(websiteId, dateRange),
+    ]);
 
-      // Calculate your brand's metrics
-      const yourBrandMetrics = await this.getDashboardMetricsForWebsite(
-        websiteId,
-        dateRange
-      );
+    // Calculate your brand's metrics
+    const yourBrandMetrics = await this.getDashboardMetricsForWebsite(
+      websiteId,
+      dateRange
+    );
 
-      // Generate market share data
-      const marketShareData = [
-        {
-          name: "Your Brand",
-          value: yourBrandMetrics.overallVisibilityScore,
-        },
-        ...competitors.map((comp) => ({
-          name: comp.name,
-          value: comp.shareOfVoice,
-          competitorId: comp.competitorId,
-        })),
-      ];
+    // Generate market share data
+    const marketShareData = [
+      {
+        name: "Your Brand",
+        value: yourBrandMetrics.overallVisibilityScore,
+      },
+      ...competitors.map((comp) => ({
+        name: comp.name,
+        value: comp.shareOfVoice,
+        competitorId: comp.competitorId,
+      })),
+    ];
 
-      // Generate competitive gap analysis
-      const competitiveGaps = await this.calculateCompetitiveGaps(
-        websiteId,
-        competitors,
-        yourBrandResults
-      );
+    // Generate competitive gap analysis
+    const competitiveGaps = await this.calculateCompetitiveGaps(
+      websiteId,
+      competitors,
+      yourBrandResults
+    );
 
-      // Generate time series data
-      const timeSeriesData = await this.getCompetitorTimeSeriesData(
-        websiteId,
-        competitors,
-        dateRange
-      );
+    // Generate time series data
+    const timeSeriesData = await this.getCompetitorTimeSeriesData(
+      websiteId,
+      competitors,
+      dateRange
+    );
 
-      return {
-        totalCompetitors: competitors.length,
-        activeCompetitors: competitors.filter((c) => c.isActive).length,
-        averageCompetitorRank:
-          competitors.reduce((sum, c) => sum + c.averageRank, 0) /
-          competitors.length,
-        marketShareData,
-        competitiveGaps,
-        timeSeriesData,
-      };
-    } catch (error) {
-      console.error("Failed to get competitive analysis:", error);
-      throw error;
-    }
+    return {
+      totalCompetitors: competitors.length,
+      activeCompetitors: competitors.filter((c) => c.isActive).length,
+      averageCompetitorRank:
+        competitors.reduce((sum, c) => sum + c.averageRank, 0) /
+        competitors.length,
+      marketShareData,
+      competitiveGaps,
+      timeSeriesData,
+    };
   }
 
   /**
@@ -275,38 +251,33 @@ export class CompetitorService extends BaseService {
     format: "pdf" | "csv" | "json",
     dateRange?: { start: string; end: string }
   ): Promise<Blob> {
-    try {
-      const [competitors, analytics] = await Promise.all([
-        this.getCompetitorPerformance(websiteId, dateRange),
-        this.getCompetitiveAnalysis(websiteId, dateRange),
-      ]);
+    const [competitors, analytics] = await Promise.all([
+      this.getCompetitorPerformance(websiteId, dateRange),
+      this.getCompetitiveAnalysis(websiteId, dateRange),
+    ]);
 
-      const exportData = {
-        competitors,
-        analytics,
-        exportedAt: new Date().toISOString(),
-        dateRange,
-      };
+    const exportData = {
+      competitors,
+      analytics,
+      exportedAt: new Date().toISOString(),
+      dateRange,
+    };
 
-      if (format === "json") {
-        return new Blob([JSON.stringify(exportData, null, 2)], {
-          type: "application/json",
-        });
-      }
-
-      if (format === "csv") {
-        const csvContent = this.convertToCSV(exportData);
-        return new Blob([csvContent], { type: "text/csv" });
-      }
-
-      // For PDF, return JSON for now (would need PDF library integration)
+    if (format === "json") {
       return new Blob([JSON.stringify(exportData, null, 2)], {
         type: "application/json",
       });
-    } catch (error) {
-      console.error("Failed to export competitor data:", error);
-      throw error;
     }
+
+    if (format === "csv") {
+      const csvContent = this.convertToCSV(exportData);
+      return new Blob([csvContent], { type: "text/csv" });
+    }
+
+    // For PDF, return JSON for now (would need PDF library integration)
+    return new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
   }
 
   private async getCompetitorAnalysisResults(
@@ -382,7 +353,7 @@ export class CompetitorService extends BaseService {
 
       return Array.from(resultsMap.values());
     } catch (error) {
-      console.error("Failed to get competitor analysis results:", error);
+      // Return empty array on error
       return [];
     }
   }
@@ -417,11 +388,11 @@ export class CompetitorService extends BaseService {
     const sentimentScore =
       sentimentResults.length > 0
         ? Math.round(
-            ((sentimentResults.reduce(
+            (sentimentResults.reduce(
               (sum, r) => sum + (r.sentiment_score || 0),
               0
             ) /
-              sentimentResults.length) +
+              sentimentResults.length +
               1) *
               50
           )
@@ -454,12 +425,14 @@ export class CompetitorService extends BaseService {
   ): Promise<CompetitorComparison[]> {
     // Group your brand's results by topic
     const topicMap = new Map<string, number>();
-    
+
     yourBrandResults.forEach((result) => {
-      const mentionedCount = result.llm_results.filter(r => r.is_mentioned).length;
+      const mentionedCount = result.llm_results.filter(
+        (r) => r.is_mentioned
+      ).length;
       const totalCount = result.llm_results.length;
       const score = totalCount > 0 ? (mentionedCount / totalCount) * 100 : 0;
-      
+
       if (!topicMap.has(result.topic)) {
         topicMap.set(result.topic, 0);
       }
@@ -468,7 +441,7 @@ export class CompetitorService extends BaseService {
 
     // Create competitive gaps for each topic
     const gaps: CompetitorComparison[] = [];
-    
+
     topicMap.forEach((yourScore, topic) => {
       gaps.push({
         topic,
@@ -503,13 +476,16 @@ export class CompetitorService extends BaseService {
       currentDate.setDate(startDate.getDate() + i);
 
       timeSeriesData.push({
-        date: currentDate.toISOString().split('T')[0]!,
+        date: currentDate.toISOString().split("T")[0]!,
         competitors: competitors.map((comp) => ({
           competitorId: comp.competitorId,
           name: comp.name,
           shareOfVoice: comp.shareOfVoice + Math.random() * 10 - 5, // Simulated variation
           averageRank: comp.averageRank + Math.random() * 0.5 - 0.25,
-          mentionCount: Math.max(0, comp.mentionCount + Math.floor(Math.random() * 6) - 3),
+          mentionCount: Math.max(
+            0,
+            comp.mentionCount + Math.floor(Math.random() * 6) - 3
+          ),
           sentimentScore: comp.sentimentScore + Math.random() * 20 - 10,
         })),
       });
@@ -528,7 +504,8 @@ export class CompetitorService extends BaseService {
 
     // Competitors section
     csv += "Competitors\n";
-    csv += "Name,Domain,Share of Voice,Average Rank,Mentions,Sentiment Score,Trend\n";
+    csv +=
+      "Name,Domain,Share of Voice,Average Rank,Mentions,Sentiment Score,Trend\n";
     competitors.forEach((comp) => {
       csv += `${comp.name},${comp.domain},${comp.shareOfVoice}%,${comp.averageRank},${comp.mentionCount},${comp.sentimentScore}%,${comp.trend}\n`;
     });
@@ -551,7 +528,7 @@ export class CompetitorService extends BaseService {
       });
     }
     csv += "\n";
-    
+
     analytics.competitiveGaps.forEach((gap) => {
       csv += `${gap.topic},${gap.yourBrand}`;
       gap.competitors.forEach((comp) => {
@@ -570,14 +547,16 @@ export class CompetitorService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<AnalysisResult[]> {
-    return this.executeOperation('getAnalysisResultsForWebsite', async () => {
+    return this.executeOperation("getAnalysisResultsForWebsite", async () => {
       let query = supabase
         .schema("beekon_data")
         .from("llm_analysis_results")
-        .select(`
+        .select(
+          `
           *,
           prompts (*)
-        `)
+        `
+        )
         .eq("website_id", websiteId);
 
       if (dateRange) {
@@ -591,11 +570,11 @@ export class CompetitorService extends BaseService {
 
       // Transform the data to match AnalysisResult format
       const resultsMap = new Map<string, AnalysisResult>();
-      
+
       data?.forEach((result) => {
-        const topicName = result.prompts?.topic_name || 'Unknown Topic';
+        const topicName = result.prompts?.topic_name || "Unknown Topic";
         const topicKeywords = result.prompts?.topic_keywords || [];
-        
+
         if (!resultsMap.has(topicName)) {
           resultsMap.set(topicName, {
             topic_name: topicName,
@@ -632,11 +611,13 @@ export class CompetitorService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<{ overallVisibilityScore: number }> {
-    return this.executeOperation('getDashboardMetricsForWebsite', async () => {
+    return this.executeOperation("getDashboardMetricsForWebsite", async () => {
       let query = supabase
         .schema("beekon_data")
         .from("llm_analysis_results")
-        .select("is_mentioned, rank_position, confidence_score, sentiment_score")
+        .select(
+          "is_mentioned, rank_position, confidence_score, sentiment_score"
+        )
         .eq("website_id", websiteId);
 
       if (dateRange) {
@@ -652,7 +633,7 @@ export class CompetitorService extends BaseService {
         return { overallVisibilityScore: 0 };
       }
 
-      const mentionedResults = data.filter(result => result.is_mentioned);
+      const mentionedResults = data.filter((result) => result.is_mentioned);
       const overallVisibilityScore = Math.round(
         (mentionedResults.length / data.length) * 100
       );

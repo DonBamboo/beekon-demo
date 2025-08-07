@@ -121,7 +121,11 @@ export function getYourBrandColor(): string {
  * @param colorIndex - Chart color index
  * @returns Color metadata object
  */
-export function getColorInfo(colorIndex: number) {
+export function getColorInfo(colorIndex: number): {
+  name: string;
+  hex: string;
+  accessible: boolean;
+} {
   return CHART_COLOR_INFO[colorIndex as keyof typeof CHART_COLOR_INFO] || {
     name: `Color ${colorIndex}`,
     hex: '#666666',
@@ -353,31 +357,22 @@ export function debugLogColorAssignments(context: string = 'Color Assignment Deb
   const validation = validateAllColorAssignments();
   const stats = getColorAssignmentStats();
   
-  console.group(`🎨 ${context}`);
-  console.log('📊 Statistics:', {
-    totalCompetitors: validation.totalCompetitors,
-    uniqueColorsUsed: validation.uniqueColorsUsed,
-    availableColors: AVAILABLE_CHART_COLORS.length,
-    isValid: validation.isValid,
-  });
+  // Color validation diagnostics completed
   
   if (validation.conflicts.length > 0) {
-    console.warn('⚠️ Conflicts detected:');
-    validation.conflicts.forEach(conflict => {
-      console.warn(`  Color ${conflict.colorIndex} (${conflict.colorName}):`, conflict.competitors);
-    });
+    // Color conflicts detected
   }
   
   if (validation.warnings.length > 0) {
-    console.warn('⚠️ Warnings:', validation.warnings);
+    // Color validation warnings found
   }
   
   if (validation.recommendations.length > 0) {
-    console.info('💡 Recommendations:', validation.recommendations);
+    // Color recommendations available
   }
   
   
-  console.groupEnd();
+  // End color validation logging group
 }
 
 /**
@@ -405,7 +400,7 @@ export function autoFixColorConflicts(options: {
   
   if (conflictsFound === 0) {
     if (logResults) {
-      console.log('✅ No color conflicts detected');
+      // No color conflicts detected
     }
     return {
       conflictsFound: 0,
@@ -427,7 +422,7 @@ export function autoFixColorConflicts(options: {
   
   if (logResults) {
     debugLogColorAssignments('After Auto-Fix');
-    console.log(`🔧 Fixed ${conflictsFixed}/${conflictsFound} conflicts`);
+    // Fixed color conflicts
   }
   
   return {

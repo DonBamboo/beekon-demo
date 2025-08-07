@@ -29,8 +29,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { WebsiteSettingsModal } from "@/components/WebsiteSettingsModal";
+import { WorkspaceGuard } from "@/components/WorkspaceGuard";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace, Website } from "@/hooks/useWorkspace";
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
@@ -66,8 +66,7 @@ export default function Websites() {
     Record<string, { totalTopics: number; avgVisibility: number }>
   >({});
   const { toast } = useToast();
-  const { websites, deleteWebsite, refetchWebsites } = useWorkspace();
-  const { workspaceId } = useAuth();
+  const { websites, deleteWebsite, refetchWebsites, currentWorkspace, loading: workspaceLoading } = useWorkspace();
   const { handleExport } = useExportHandler();
 
   useEffect(() => {
@@ -154,10 +153,21 @@ export default function Websites() {
       return;
     }
 
+    // Ensure we have a valid workspace before proceeding
+    if (!currentWorkspace?.id) {
+      toast({
+        title: "Error",
+        description: "No workspace selected. Please create or select a workspace first.",
+        variant: "destructive",
+      });
+      setProcessing(false);
+      return;
+    }
+
     const response = await sendN8nWebhook("webhook/website-onboarding", {
       website: addProtocol(domain),
       display_name: displayName,
-      workspace_id: workspaceId,
+      workspace_id: currentWorkspace.id,
     });
 
     if (!response.success) {
@@ -304,7 +314,7 @@ export default function Websites() {
         description: `Website data exported as ${format.toUpperCase()}`,
       });
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export Failed",
         description: error instanceof Error ? error.message : "Failed to export website data",
@@ -317,7 +327,8 @@ export default function Websites() {
 
 
   return (
-    <div className="space-y-6">
+    <WorkspaceGuard requireWorkspace={true}>
+      <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Websites</h1>
@@ -339,9 +350,9 @@ export default function Websites() {
           )}
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button disabled={!currentWorkspace?.id || workspaceLoading}>
                 <Plus className="h-4 w-4 mr-2" />
-                Add Website
+                {workspaceLoading ? "Loading..." : "Add Website"}
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -382,6 +393,7 @@ export default function Websites() {
                 onClick={handleAddWebsite}
                 loading={processing}
                 loadingText="Starting..."
+                disabled={!currentWorkspace?.id}
                 icon={<Play className="h-4 w-4" />}
               >
                 Start Analysis
@@ -601,6 +613,7 @@ export default function Websites() {
         confirmText="Delete Website"
         variant="destructive"
       />
-    </div>
+      </div>
+    </WorkspaceGuard>
   );
 }

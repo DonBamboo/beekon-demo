@@ -11,14 +11,14 @@ export type HttpResponse<T = unknown> = {
   data: T;
 };
 
-export function noTrailingSlash(website: string) {
+export function noTrailingSlash(website: string): string {
   return website.replace(/\/+$/, "");
 }
 
 export async function sendN8nWebhook(
   endpoint: string,
   body: object | undefined = undefined
-) {
+): Promise<HttpResponse> {
   const base64Creds = btoa(`${n8nAuthUser}:${n8nAuthPass}`);
   return await httpRequest(
     "POST",
@@ -60,7 +60,7 @@ export async function httpRequest(
       throw new Error(`HTTP error! status: ${response.status}`);
     }
   } catch (error) {
-    console.error("error", error);
+    // HTTP request error occurred
 
     return {
       success: false,

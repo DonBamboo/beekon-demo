@@ -6,7 +6,7 @@ export interface PerformanceMetrics {
   startTime: number;
   endTime: number;
   type: 'navigation' | 'resource' | 'measure' | 'custom';
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface VitalMetrics {

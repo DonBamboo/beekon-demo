@@ -10,6 +10,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Suspense, lazy, useEffect } from "react";
 import { WorkspaceProvider } from "./hooks/useWorkspace";
 import { registerSW } from "./lib/serviceWorker";
+import { PageLoading, InlineLoading } from "@/components/LoadingStates";
 
 // Lazy load all pages for code splitting
 const Analysis = lazy(() => import("./pages/Analysis"));
@@ -29,7 +30,7 @@ const queryClient = new QueryClient({
       retry: (failureCount, error) => {
         // Don't retry on 4xx errors
         if (error && typeof error === 'object' && 'status' in error) {
-          const status = error.status as number;
+          const status = typeof error.status === 'number' ? error.status : 0;
           if (status >= 400 && status < 500) return false;
         }
         return failureCount < 3;
@@ -50,7 +51,7 @@ const App = () => {
     try {
       registerSW();
     } catch (error) {
-      console.warn('Service worker registration failed:', error);
+      // Service worker registration failed - silently continue
     }
     
     // Initialize performance monitoring with error handling
@@ -64,11 +65,11 @@ const App = () => {
           try {
             performanceMonitor.endTiming('app-initialization');
           } catch (error) {
-            console.warn('Performance monitoring cleanup failed:', error);
+            // Performance monitoring cleanup failed - continue
           }
         };
       } catch (error) {
-        console.warn('Main performance monitoring failed, using fallback:', error);
+        // Main performance monitoring failed, using fallback
         try {
           // Use fallback performance monitor
           const { fallbackPerformanceMonitor } = await import('./lib/performance-fallback');
@@ -78,11 +79,11 @@ const App = () => {
             try {
               fallbackPerformanceMonitor.endTiming('app-initialization');
             } catch (fallbackError) {
-              console.warn('Fallback performance monitoring cleanup failed:', fallbackError);
+              // Fallback performance monitoring cleanup failed
             }
           };
         } catch (fallbackError) {
-          console.warn('Fallback performance monitoring also failed:', fallbackError);
+          // Fallback performance monitoring also failed
           return () => {}; // Return empty cleanup function
         }
       }
@@ -127,7 +128,7 @@ const App = () => {
           <WorkspaceErrorBoundary>
             <WorkspaceProvider>
               <BrowserRouter>
-                <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div></div>}>
+                <Suspense fallback={<PageLoading message="Loading application..." />}>
                   <Routes>
                     <Route path="/" element={<LandingPage />} />
                     <Route path="/auth" element={<Auth />} />
@@ -156,7 +157,7 @@ const App = () => {
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+                            <Suspense fallback={<InlineLoading message="Loading page..." />}>
                               <Analysis />
                             </Suspense>
                           </AppLayout>
@@ -168,7 +169,7 @@ const App = () => {
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+                            <Suspense fallback={<InlineLoading message="Loading page..." />}>
                               <Competitors />
                             </Suspense>
                           </AppLayout>

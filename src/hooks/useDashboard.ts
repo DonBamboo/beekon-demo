@@ -101,7 +101,7 @@ export function useDashboardMetrics(
           });
         }
       } catch (error) {
-        console.error("Failed to load dashboard data:", error);
+        // Failed to load dashboard data
 
         const dashboardError: DashboardError = {
           message:
@@ -170,7 +170,7 @@ export function useDashboardCharts(period: "7d" | "30d" | "90d" = "7d") {
       const data = await dashboardService.getTimeSeriesData(websiteIds, period);
       setTimeSeriesData(data);
     } catch (error) {
-      console.error("Failed to load chart data:", error);
+      // Failed to load chart data
       setError(
         error instanceof Error ? error.message : "Failed to load chart data"
       );
@@ -217,7 +217,7 @@ export function useDashboardTopics(limit: number = 10) {
       );
       setTopicPerformance(data);
     } catch (error) {
-      console.error("Failed to load topic data:", error);
+      // Failed to load topic data
       setError(
         error instanceof Error ? error.message : "Failed to load topic data"
       );
@@ -261,7 +261,7 @@ export function useDashboardWebsites() {
       const data = await dashboardService.getWebsitePerformance(websiteIds);
       setWebsitePerformance(data);
     } catch (error) {
-      console.error("Failed to load website data:", error);
+      // Failed to load website data
       setError(
         error instanceof Error ? error.message : "Failed to load website data"
       );

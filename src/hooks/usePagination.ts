@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 
 export interface PaginationState {
   currentPage: number;
@@ -117,15 +117,15 @@ export function useClientPagination<T>(
   });
 
   // Update total items when data changes
-  useMemo(() => {
+  useEffect(() => {
     paginationActions.setTotalItems(data.length);
-  }, [data.length, paginationActions]);
+  }, [data.length, paginationActions.setTotalItems]);
 
   // Get current page data
   const currentPageData = useMemo(() => {
     const { startIndex, endIndex } = paginationState;
     return data.slice(startIndex, endIndex);
-  }, [data, paginationState.startIndex, paginationState.endIndex]);
+  }, [data, paginationState]);
 
   return [currentPageData, paginationState, paginationActions];
 }
@@ -160,7 +160,7 @@ export function useServerPagination<T>(
   }, [fetchData, paginationState.currentPage, paginationState.pageSize, paginationActions]);
 
   // Fetch data when page or page size changes
-  useMemo(() => {
+  useEffect(() => {
     fetchCurrentPage();
   }, [fetchCurrentPage]);
 

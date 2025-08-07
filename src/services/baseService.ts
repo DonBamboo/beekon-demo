@@ -20,7 +20,7 @@ export abstract class BaseService {
    * Handle and transform errors into consistent AppError format
    */
   protected handleError(error: unknown, operation?: string): AppError {
-    console.error(`${this.serviceName}Service ${operation ? `(${operation})` : ''} error:`, error);
+    // Service error handled
 
     // Handle PostgreSQL/Supabase errors
     if (this.isPostgrestError(error)) {
@@ -286,7 +286,7 @@ export abstract class BaseService {
    */
   protected logOperation(operation: string, data?: unknown): void {
     if (process.env.NODE_ENV === 'development') {
-      console.log(`${this.serviceName}Service.${operation}`, data);
+      // Service operation logged
     }
   }
 }

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useIntersectionObserver } from '@/hooks/useIntersectionObserver';
-import { LoadingSpinner } from './LoadingSpinner';
+import { Spinner } from './LoadingStates';
 import { Button } from './ui/button';
 import { RefreshCw } from 'lucide-react';
 
@@ -44,7 +44,7 @@ export function InfiniteScrollContainer({
 
   const defaultLoadingComponent = (
     <div className="flex items-center justify-center py-8">
-      <LoadingSpinner size="md" />
+      <Spinner size="default" />
       <span className="ml-3 text-muted-foreground">Loading more results...</span>
     </div>
   );

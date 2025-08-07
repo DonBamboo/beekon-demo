@@ -116,7 +116,7 @@ export function useCompetitors(
           });
         }
       } catch (error) {
-        console.error("Failed to load competitor data:", error);
+        // Failed to load competitor data
 
         const competitorError: CompetitorError = {
           message:
@@ -176,11 +176,11 @@ export function useCompetitors(
         // Refresh performance data
         await loadCompetitorData(true);
       } catch (error) {
-        console.error("Failed to add competitor:", error);
+        // Failed to add competitor
 
         // If we consumed a credit but the operation failed, restore it
         if (creditConsumed) {
-          console.log("Restoring credit due to failed competitor addition");
+          // Restore credit due to failed competitor addition
           await restoreCredit();
         }
 
@@ -233,7 +233,7 @@ export function useCompetitors(
         // Refresh performance data
         await loadCompetitorData(true);
       } catch (error) {
-        console.error("Failed to update competitor:", error);
+        // Failed to update competitor
 
         const competitorError: CompetitorError = {
           message:
@@ -281,7 +281,7 @@ export function useCompetitors(
         // Refresh analytics data
         await loadCompetitorData(true);
       } catch (error) {
-        console.error("Failed to delete competitor:", error);
+        // Failed to delete competitor
 
         const competitorError: CompetitorError = {
           message:
@@ -334,7 +334,7 @@ export function useCompetitors(
           description: `Competitor data exported as ${format.toUpperCase()}`,
         });
       } catch (error) {
-        console.error("Failed to export competitor data:", error);
+        // Failed to export competitor data
 
         toast({
           title: "Export failed",
@@ -440,7 +440,7 @@ export function useCompetitorAnalytics(
       );
       setAnalytics(analyticsData);
     } catch (error) {
-      console.error("Failed to load competitor analytics:", error);
+      // Failed to load competitor analytics
       setError(
         error instanceof Error
           ? error.message

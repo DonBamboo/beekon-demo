@@ -292,8 +292,9 @@ export async function captureChartAsImage(
     await new Promise(resolve => setTimeout(resolve, 200));
     
     // Ensure element is visible and properly laid out
+    // Element dimensions check for fallback sizing
     if (elementRect.width === 0 || elementRect.height === 0) {
-      console.warn('Element has zero dimensions, using fallback sizing');
+      // Use fallback sizing when element dimensions are zero
     }
 
     // Capture the element as canvas with dynamic sizing
@@ -345,7 +346,7 @@ export async function captureChartAsImage(
     };
 
   } catch (error) {
-    console.error('Chart capture failed:', error);
+    // Chart capture failed
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown capture error',
@@ -382,7 +383,7 @@ export async function captureMultipleCharts(
       };
     }
     
-    console.warn(`Failed to capture chart: ${title}`, result.error);
+    // Failed to capture chart
     return null;
   });
 
@@ -611,7 +612,7 @@ export function formatValue(value: unknown, fieldMapping?: FieldMapping[string])
       }
     }
     
-    default:
+    default: {
       // Enhanced object/array handling
       if (typeof value === 'object' && value !== null) {
         if (Array.isArray(value)) {
@@ -636,6 +637,7 @@ export function formatValue(value: unknown, fieldMapping?: FieldMapping[string])
         .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase to spaced
         .replace(/_/g, ' ') // underscores to spaces
         .replace(/\b\w/g, l => l.toUpperCase()); // capitalize words
+    }
   }
 }
 
@@ -725,12 +727,7 @@ export function downloadBlob(
         return;
       }
 
-      // Log blob details for debugging
-      console.log(`Downloading ${format} file:`, {
-        filename,
-        size: blob.size,
-        type: blob.type
-      });
+      // Prepare blob for download
 
       // Use the file-saver library for better compatibility
       try {
@@ -743,7 +740,7 @@ export function downloadBlob(
         });
         return;
       } catch (saveAsError) {
-        console.warn("file-saver failed, falling back to manual download:", saveAsError);
+        // file-saver failed, falling back to manual download
       }
 
       // Fallback to manual download method
@@ -783,7 +780,7 @@ export function downloadBlob(
             }
             window.URL.revokeObjectURL(url);
           } catch (cleanupError) {
-            console.warn("Cleanup error:", cleanupError);
+            // Cleanup error occurred
           }
           
           resolve({
@@ -796,7 +793,7 @@ export function downloadBlob(
       });
       
     } catch (error) {
-      console.error("Download failed:", error);
+      // Download failed
       resolve({
         success: false,
         filename,
@@ -823,8 +820,8 @@ export function transformExportData(data: Record<string, unknown>[]): Record<str
   const hasCategoryMetricStructure = data.every(item => 
     item && 
     typeof item === 'object' &&
-    item.hasOwnProperty('metric') && 
-    item.hasOwnProperty('value')
+    'metric' in item && 
+    'value' in item
   );
   
   if (hasCategoryMetricStructure) {
@@ -950,7 +947,7 @@ export function formatCsvExport(data: ExportData, dataType?: string): Blob {
     const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
     
     // Check if data has categories for organized sections
-    const hasCategories = processedData.some(item => item.hasOwnProperty('category'));
+    const hasCategories = processedData.some(item => 'category' in item);
     
     if (hasCategories) {
       const groupedData = groupDataByCategory(processedData);
@@ -1134,11 +1131,11 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
     
     if (processedData.length > 0) {
       // Check if data has category field for organized display
-      const hasCategoryField = processedData.some(item => item.hasOwnProperty('category') || item.hasOwnProperty('Category'));
+      const hasCategoryField = processedData.some(item => 'category' in item || 'Category' in item);
       
       if (hasCategoryField) {
         // Group data by category for organized sections
-        const categoryKey = processedData[0].hasOwnProperty('category') ? 'category' : 'Category';
+        const categoryKey = 'category' in processedData[0] ? 'category' : 'Category';
         const groupedData = processedData.reduce((groups, item) => {
           const category = String(item[categoryKey] || 'Uncategorized');
           if (!groups[category]) {
@@ -1416,7 +1413,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
         yPosition += imageHeight + 15; // Move position after image + spacing
         
       } catch (error) {
-        console.error(`Failed to add chart "${chart.title}" to PDF:`, error);
+        // Failed to add chart to PDF
         
         // Add error message instead of chart
         doc.setFontSize(10);

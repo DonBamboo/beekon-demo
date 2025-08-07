@@ -39,6 +39,11 @@ import {
 import { getCompetitorColorIndex, getColorInfo, validateAllColorAssignments } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
 
+// Helper function for safe string extraction
+function safeString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
 interface CompetitiveGapChartProps {
   gapAnalysis: CompetitiveGapAnalysis[];
   analytics: CompetitorAnalytics | null;
@@ -98,8 +103,8 @@ export default function CompetitiveGapChart({
     const competitorInfo = Array.from(competitorKeys).map((key, index) => {
       // Get competitor name and ID from first data point that has this competitor
       const sampleData = barChartData.find(item => item[`${key}_name`]);
-      const competitorName = sampleData?.[`${key}_name`] as string || `Competitor ${index + 1}`;
-      const competitorId = sampleData?.[`${key}_id`] as string;
+      const competitorName = safeString(sampleData?.[`${key}_name`], `Competitor ${index + 1}`);
+      const competitorId = safeString(sampleData?.[`${key}_id`]);
       
       // Use competitorId as primary key for consistent colors across all charts
       // This ensures the same competitor gets the same color in all visualizations
@@ -145,31 +150,23 @@ export default function CompetitiveGapChart({
     if (process.env.NODE_ENV === 'development' && processedData?.competitorInfo.length > 0) {
       const validation = validateAllColorAssignments();
       if (!validation.isValid) {
-        console.warn('CompetitiveGapChart: Color assignment conflicts detected:', validation.conflicts);
+        // Color assignment conflicts detected
       }
       
-      // Log color mappings for debugging
-      console.log('CompetitiveGapChart color mappings:', 
-        processedData.competitorInfo.map(comp => ({
-          name: comp.name,
-          competitorId: comp.competitorId,
-          colorIndex: comp.colorIndex,
-          color: `hsl(var(--chart-${comp.colorIndex}))`
-        }))
-      );
+      // Color mappings available for debugging
     }
   }, [processedData]);
 
   // Only show chart if there are competitors and meaningful data
   if (!processedData || !analytics || analytics.totalCompetitors === 0) return null;
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number }>; label?: string }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-background border rounded-lg p-3 shadow-md" role="tooltip">
           <p className="font-medium mb-2" aria-label={`Topic: ${label}`}>{label}</p>
           <div className="space-y-1">
-            {payload.map((entry: any, index: number) => (
+            {payload.map((entry, index: number) => (
               <div key={index} className="flex items-center gap-2">
                 <div 
                   className="w-3 h-3 rounded-sm" 

@@ -42,7 +42,7 @@ import { useState } from "react";
 interface ExportPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  data: any;
+  data: Record<string, unknown>[] | Record<string, unknown>;
   title: string;
   exportType: string;
   defaultFormat?: ExportFormat;
@@ -115,7 +115,7 @@ export function ExportPreviewModal({
       const previewContent = await generatePreviewContent(data, exportOptions);
       setPreviewData(previewContent);
     } catch (error) {
-      console.error("Failed to generate preview:", error);
+      // Failed to generate preview
       toast({
         title: "Preview Failed",
         description: "Failed to generate export preview. Please try again.",
@@ -182,7 +182,7 @@ export function ExportPreviewModal({
 
       onClose();
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export Failed",
         description: "Failed to export data. Please try again.",

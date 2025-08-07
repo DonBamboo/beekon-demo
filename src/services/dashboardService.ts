@@ -76,7 +76,7 @@ export class DashboardService {
       // Execute all data fetching in parallel for better performance
       const [allResults, previousPeriodMetrics] = await Promise.all([
         this.getAllAnalysisResults(websiteIds, dateRange),
-        this.getPreviousPeriodMetrics(websiteIds, dateRange)
+        this.getPreviousPeriodMetrics(websiteIds, dateRange),
       ]);
 
       if (allResults.length === 0) {
@@ -94,7 +94,7 @@ export class DashboardService {
 
       return metrics;
     } catch (error) {
-      console.error("Failed to get dashboard metrics:", error);
+      // Failed to get dashboard metrics
       return this.getEmptyMetrics();
     }
   }
@@ -126,7 +126,7 @@ export class DashboardService {
 
       return this.aggregateByDate(allResults, startDate, endDate);
     } catch (error) {
-      console.error("Failed to get time series data:", error);
+      // Failed to get time series data
       return [];
     }
   }
@@ -144,7 +144,7 @@ export class DashboardService {
       const allResults = await this.getAllAnalysisResults(websiteIds);
       return this.calculateTopicPerformance(allResults, limit);
     } catch (error) {
-      console.error("Failed to get topic performance:", error);
+      // Failed to get topic performance
       return [];
     }
   }
@@ -159,7 +159,7 @@ export class DashboardService {
       const allResults = await this.getAllAnalysisResults(websiteIds);
       return this.calculateLLMPerformance(allResults);
     } catch (error) {
-      console.error("Failed to get LLM performance:", error);
+      // Failed to get LLM performance
       return [];
     }
   }
@@ -182,7 +182,7 @@ export class DashboardService {
             .from("websites")
             .select("domain, display_name")
             .eq("id", websiteId)
-            .single()
+            .single(),
         ]);
 
         const metrics = this.calculateMetricsForResults(results);
@@ -201,7 +201,7 @@ export class DashboardService {
       const websitePerformance = await Promise.all(websitePromises);
       return websitePerformance.sort((a, b) => b.visibility - a.visibility);
     } catch (error) {
-      console.error("Failed to get website performance:", error);
+      // Failed to get website performance
       return [];
     }
   }
@@ -216,16 +216,16 @@ export class DashboardService {
 
     try {
       // Execute all website analysis fetching in parallel
-      const allResultsPromises = websiteIds.map(websiteId => 
+      const allResultsPromises = websiteIds.map((websiteId) =>
         analysisService.getAnalysisResults(websiteId, { dateRange })
       );
 
       const allResultsArrays = await Promise.all(allResultsPromises);
-      
+
       // Flatten all results into a single array
       return allResultsArrays.flat();
     } catch (error) {
-      console.error("Failed to get analysis results:", error);
+      // Failed to get analysis results
       return [];
     }
   }
@@ -553,53 +553,50 @@ export class DashboardService {
     websiteIds: string[],
     format: "pdf" | "csv" | "json" | "word"
   ): Promise<Blob> {
-    try {
-      const [metrics, timeSeriesData, topicPerformance] = await Promise.all([
-        this.getDashboardMetrics(websiteIds),
-        this.getTimeSeriesData(websiteIds),
-        this.getTopicPerformance(websiteIds),
-      ]);
+    const [metrics, timeSeriesData, topicPerformance] = await Promise.all([
+      this.getDashboardMetrics(websiteIds),
+      this.getTimeSeriesData(websiteIds),
+      this.getTopicPerformance(websiteIds),
+    ]);
 
-      const exportData = {
-        title: "Dashboard Analytics Report",
-        data: {
-          metrics,
-          timeSeriesData,
-          topicPerformance,
-          summary: {
-            websiteCount: websiteIds.length,
-            totalTopics: topicPerformance.length,
-            analysisPoints: timeSeriesData.length,
-            avgVisibilityScore: metrics.visibilityScore,
-            avgSentimentScore: metrics.sentimentScore,
-          },
+    const exportData = {
+      title: "Dashboard Analytics Report",
+      data: {
+        metrics,
+        timeSeriesData,
+        topicPerformance,
+        summary: {
+          websiteCount: websiteIds.length,
+          totalTopics: topicPerformance.length,
+          analysisPoints: timeSeriesData.length,
+          avgVisibilityScore: metrics.visibilityScore,
+          avgSentimentScore: metrics.sentimentScore,
         },
-        exportedAt: new Date().toISOString(),
-        totalRecords: timeSeriesData.length + topicPerformance.length,
-        metadata: {
-          exportType: "dashboard_analytics",
-          generatedBy: "Beekon AI Dashboard",
-          websiteIds,
-          dateRange: {
-            start: timeSeriesData[0]?.date || new Date().toISOString(),
-            end: timeSeriesData[timeSeriesData.length - 1]?.date || new Date().toISOString(),
-          },
+      },
+      exportedAt: new Date().toISOString(),
+      totalRecords: timeSeriesData.length + topicPerformance.length,
+      metadata: {
+        exportType: "dashboard_analytics",
+        generatedBy: "Beekon AI Dashboard",
+        websiteIds,
+        dateRange: {
+          start: timeSeriesData[0]?.date || new Date().toISOString(),
+          end:
+            timeSeriesData[timeSeriesData.length - 1]?.date ||
+            new Date().toISOString(),
         },
-      };
+      },
+    };
 
-      // Use enhanced export service for all formats
-      const { exportService } = await import("./exportService");
-      return await exportService.exportData(exportData, format, { 
-        exportType: "dashboard", 
-        customFilename: generateExportFilename("dashboard_analytics", format, { 
-          includeTimestamp: true, 
-          dateRange: exportData.metadata.dateRange 
-        }) 
-      });
-    } catch (error) {
-      console.error("Failed to export dashboard data:", error);
-      throw error;
-    }
+    // Use enhanced export service for all formats
+    const { exportService } = await import("./exportService");
+    return await exportService.exportData(exportData, format, {
+      exportType: "dashboard",
+      customFilename: generateExportFilename("dashboard_analytics", format, {
+        includeTimestamp: true,
+        dateRange: exportData.metadata.dateRange,
+      }),
+    });
   }
 
   private convertToCSV(data: {

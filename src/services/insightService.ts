@@ -1,5 +1,22 @@
 import { AnalysisResult, UIAnalysisResult } from "@/types/database";
 
+// Type guards for proper validation
+function isUIAnalysisResult(result: any): result is UIAnalysisResult {
+  return result && 
+    typeof result === 'object' && 
+    typeof result.id === 'string' &&
+    typeof result.prompt === 'string' &&
+    Array.isArray(result.llm_results);
+}
+
+function isAnalysisResult(result: any): result is AnalysisResult {
+  return result && 
+    typeof result === 'object' && 
+    typeof result.id === 'string' &&
+    typeof result.topic_name === 'string' &&
+    Array.isArray(result.llm_results);
+}
+
 export interface AnalysisInsights {
   strengths: string[];
   opportunities: string[];
@@ -66,11 +83,14 @@ export class InsightService {
     );
 
     if (hasPromptData) {
-      return this.generatePromptBasedInsights(results as UIAnalysisResult[]);
+      // Validate and filter to only UIAnalysisResult items
+      const uiResults = results.filter(isUIAnalysisResult);
+      return this.generatePromptBasedInsights(uiResults);
     }
 
     // Fall back to calculated insights for legacy AnalysisResult data
-    return this.generateCalculatedInsights(results as AnalysisResult[]);
+    const analysisResults = results.filter(isAnalysisResult);
+    return this.generateCalculatedInsights(analysisResults);
   }
 
   /**

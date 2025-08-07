@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Spinner, ProgressiveLoading } from "@/components/LoadingStates";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +40,6 @@ import {
   Search,
   X,
   Zap,
-  Loader2,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
@@ -144,7 +144,7 @@ export function AnalysisConfigModal({
         );
       }
     } catch (error) {
-      console.error("Failed to load website topics:", error);
+      // Failed to load website topics
       setTopicError("Failed to load topics. Using default suggestions.");
 
       // Fallback to default topics on error
@@ -235,14 +235,7 @@ export function AnalysisConfigModal({
 
       // Subscribe to progress updates
       analysisService.subscribeToProgress(sessionId, async (progress) => {
-        console.log("UI received progress update:", {
-          sessionId: sessionId.slice(0, 8),
-          status: progress.status,
-          progress: progress.progress,
-          currentStep: progress.currentStep,
-          completedSteps: progress.completedSteps,
-          totalSteps: progress.totalSteps
-        });
+        // UI received progress update
         setAnalysisProgress(progress);
 
         if (progress.status === "completed") {
@@ -270,7 +263,7 @@ export function AnalysisConfigModal({
           });
 
           // Restore credit if analysis failed after starting
-          console.log("Restoring credit due to failed analysis");
+          // Restore credit due to failed analysis
           await restoreCredit();
 
           setTimeout(() => {
@@ -284,7 +277,7 @@ export function AnalysisConfigModal({
         description: `${data.analysisName} analysis has been queued and will begin shortly.`,
       });
     } catch (error) {
-      console.error("Failed to start analysis:", error);
+      // Failed to start analysis
 
       // Clean up any partial state
       if (currentAnalysisId) {
@@ -296,7 +289,7 @@ export function AnalysisConfigModal({
 
       // If we consumed a credit but the operation failed, restore it
       if (creditConsumed) {
-        console.log("Restoring credit due to failed analysis start");
+        // Restore credit due to failed analysis start
         await restoreCredit();
       }
 
@@ -442,7 +435,7 @@ export function AnalysisConfigModal({
         },
       });
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export failed",
         description: "Failed to export configuration. Please try again.",
@@ -509,7 +502,7 @@ export function AnalysisConfigModal({
                 ) : analysisProgress.status === "failed" ? (
                   <AlertCircle className="h-4 w-4 text-destructive" />
                 ) : (
-                  <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <Spinner size="sm" />
                 )}
                 <span className="font-medium">
                   {analysisProgress.status === "completed"
@@ -568,7 +561,7 @@ export function AnalysisConfigModal({
               </div>
               {isLoadingTopics && (
                 <div className="flex items-center text-sm text-muted-foreground">
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  <Spinner size="sm" className="mr-1" />
                   Loading topics...
                 </div>
               )}
@@ -655,7 +648,7 @@ export function AnalysisConfigModal({
 
               {isLoadingTopics && (
                 <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Spinner size="sm" className="mr-2" />
                   <span className="text-sm text-muted-foreground">
                     Loading available topics...
                   </span>

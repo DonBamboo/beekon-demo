@@ -6,6 +6,7 @@ import {
   AnalysisListSkeleton,
   AnalysisStatsSkeleton,
 } from "@/components/AnalysisLoadingSkeleton";
+import { AnalysisSkeleton } from "@/components/skeletons";
 import {
   AnalysisVisualization,
   RankingChart,
@@ -92,7 +93,7 @@ export default function Analysis() {
     Array<{
       id: string;
       name: string;
-      filters: Record<string, any>;
+      filters: Record<string, unknown>;
     }>
   >([]);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
@@ -374,7 +375,7 @@ export default function Analysis() {
         ...websiteTopics,
       ]);
     } catch (error) {
-      console.error("Failed to load topics:", error);
+      // Failed to load topics
       handleError(error);
     }
   }, [selectedWebsite, handleError]);
@@ -399,7 +400,7 @@ export default function Analysis() {
         ...llmProviders,
       ]);
     } catch (error) {
-      console.error("Failed to load LLM providers:", error);
+      // Failed to load LLM providers
       handleError(error);
     }
   }, [selectedWebsite, handleError]);
@@ -441,7 +442,7 @@ export default function Analysis() {
 
       setAvailableAnalysisSessions(sessions);
     } catch (error) {
-      console.error("Failed to load available analysis sessions:", error);
+      // Failed to load available analysis sessions
       // Don't handle error here as it's not critical
       setAvailableAnalysisSessions([]);
     }
@@ -473,9 +474,7 @@ export default function Analysis() {
       if (!topicExists) {
         // Add a small delay to prevent unnecessary state updates during rapid data changes
         const timeoutId = setTimeout(() => {
-          console.log(
-            `Topic "${selectedTopic}" no longer exists, resetting to "all"`
-          );
+          // Topic no longer exists, resetting to "all"
           setSelectedTopic("all");
         }, 100);
         return () => clearTimeout(timeoutId);
@@ -489,9 +488,7 @@ export default function Analysis() {
       if (!llmExists) {
         // Add a small delay to prevent unnecessary state updates during rapid data changes
         const timeoutId = setTimeout(() => {
-          console.log(
-            `LLM "${selectedLLM}" no longer exists, resetting to "all"`
-          );
+          // LLM no longer exists, resetting to "all"
           setSelectedLLM("all");
         }, 100);
         return () => clearTimeout(timeoutId);
@@ -729,7 +726,7 @@ export default function Analysis() {
   );
 
   const loadFilterPreset = useCallback(
-    (preset: any) => {
+    (preset: { filters: Record<string, unknown> }) => {
       setSelectedTopic(preset.filters.selectedTopic || "all");
       setSelectedLLM(preset.filters.selectedLLM || "all");
       setSelectedMentionStatus(preset.filters.selectedMentionStatus || "all");
@@ -933,7 +930,7 @@ export default function Analysis() {
         },
       });
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export Failed",
         description:
@@ -991,27 +988,7 @@ export default function Analysis() {
 
   // Show loading state
   if (loading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Analysis Results</h1>
-          <p className="text-muted-foreground">Loading workspace...</p>
-        </div>
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <div className="h-4 bg-muted rounded animate-pulse mb-2" />
-                <div className="h-3 bg-muted rounded animate-pulse w-1/3" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-20 bg-muted rounded animate-pulse" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
+    return <AnalysisSkeleton />;
   }
 
   // Show workspace creation prompt when no workspace exists
@@ -1517,7 +1494,7 @@ export default function Analysis() {
                       <div className="flex gap-2">
                         <Select
                           value={sortBy}
-                          onValueChange={(value: any) => setSortBy(value)}
+                          onValueChange={(value: string) => setSortBy(value)}
                         >
                           <SelectTrigger className="flex-1">
                             <SelectValue />
@@ -1533,7 +1510,7 @@ export default function Analysis() {
                         </Select>
                         <Select
                           value={sortOrder}
-                          onValueChange={(value: any) => setSortOrder(value)}
+                          onValueChange={(value: 'asc' | 'desc') => setSortOrder(value)}
                         >
                           <SelectTrigger className="w-24">
                             <SelectValue />

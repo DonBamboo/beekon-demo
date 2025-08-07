@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Spinner, FormSkeleton } from "@/components/LoadingStates";
 import {
   Dialog,
   DialogContent,
@@ -121,7 +122,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
       onClose();
     } catch (error) {
-      console.error("Failed to update profile:", error);
+      // Failed to update profile
       toast({
         title: "Error",
         description: "Failed to update profile. Please try again.",
@@ -139,7 +140,12 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
     // Create preview
     const reader = new FileReader();
-    reader.onload = (e) => setAvatarPreview(e.target?.result as string);
+    reader.onload = (e) => {
+      const result = e.target?.result;
+      if (typeof result === 'string') {
+        setAvatarPreview(result);
+      }
+    };
     reader.readAsDataURL(file);
   };
 
@@ -186,7 +192,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         setUploadSuccess(false);
       }, 2000);
     } catch (error) {
-      console.error("Failed to upload avatar:", error);
+      // Failed to upload avatar
       const errorMessage =
         error instanceof Error
           ? error.message
@@ -221,7 +227,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         description: "Your profile picture has been removed.",
       });
     } catch (error) {
-      console.error("Failed to delete avatar:", error);
+      // Failed to delete avatar
       toast({
         title: "Error",
         description: "Failed to remove avatar. Please try again.",
@@ -252,14 +258,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         </DialogHeader>
 
         {isLoadingProfile ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-              <p className="text-sm text-muted-foreground">
-                Loading profile...
-              </p>
-            </div>
-          </div>
+          <FormSkeleton fields={5} />
         ) : (
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Avatar Section */}

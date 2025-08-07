@@ -2,6 +2,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { DataLoader } from "@/lib/request-batching";
 import { AnalysisResult, UIAnalysisResult, LLMResult } from "@/types/database";
 
+// Helper functions for safe type extraction
+function safeString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function safeNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" ? value : fallback;
+}
+
+function safeBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 // Data loader for analysis results
 export const analysisResultsLoader = new DataLoader<
   { websiteId: string; dateRange?: { start: string; end: string } },
@@ -248,13 +261,13 @@ export const llmProviderLoader = new DataLoader<
 
 // Shared data transformation function
 function transformAnalysisData(
-  data: Record<string, any>[],
+  data: Record<string, unknown>[],
   websiteId?: string
 ): UIAnalysisResult[] {
   const resultsMap = new Map<string, UIAnalysisResult>();
 
   data?.forEach((row) => {
-    const promptId = row.prompt_id as string;
+    const promptId = safeString(row.prompt_id);
     if (!promptId) return;
 
     let promptText: string;
@@ -266,7 +279,7 @@ function transformAnalysisData(
     let promptOpportunities: string[] | null = null;
     
     // Extract analysis session information
-    const analysisSessionId = row.analysis_session_id as string | null;
+    const analysisSessionId = safeString(row.analysis_session_id) || null;
     let analysisName: string | null = null;
     let analysisSessionStatus: string | null = null;
     
@@ -313,9 +326,9 @@ function transformAnalysisData(
         website_id: resultWebsiteId,
         topic: topicName,
         status: "completed",
-        confidence: (row.confidence_score as number) || 0,
-        created_at: (row.analyzed_at as string) || (row.created_at as string) || new Date().toISOString(),
-        updated_at: (row.created_at as string) || new Date().toISOString(),
+        confidence: safeNumber(row.confidence_score),
+        created_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
+        updated_at: safeString(row.created_at) || new Date().toISOString(),
         reporting_text: reportingText,
         recommendation_text: recommendationText,
         prompt_strengths: promptStrengths,
@@ -330,14 +343,14 @@ function transformAnalysisData(
 
     const result = resultsMap.get(promptId)!;
     result.llm_results.push({
-      llm_provider: row.llm_provider as string,
-      is_mentioned: (row.is_mentioned as boolean) || false,
-      rank_position: row.rank_position as number,
-      confidence_score: row.confidence_score as number,
-      sentiment_score: row.sentiment_score as number,
-      summary_text: row.summary_text as string,
-      response_text: row.response_text as string,
-      analyzed_at: (row.analyzed_at as string) || (row.created_at as string) || new Date().toISOString(),
+      llm_provider: safeString(row.llm_provider),
+      is_mentioned: safeBoolean(row.is_mentioned),
+      rank_position: safeNumber(row.rank_position),
+      confidence_score: safeNumber(row.confidence_score),
+      sentiment_score: safeNumber(row.sentiment_score),
+      summary_text: safeString(row.summary_text),
+      response_text: safeString(row.response_text),
+      analyzed_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
     });
   });
 

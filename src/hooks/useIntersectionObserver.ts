@@ -40,7 +40,7 @@ export function useIntersectionObserver({
 
     // Check if IntersectionObserver is supported
     if (!window.IntersectionObserver) {
-      console.warn('IntersectionObserver is not supported');
+      // IntersectionObserver is not supported
       return;
     }
 

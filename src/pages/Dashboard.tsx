@@ -9,6 +9,7 @@ import {
 import { DashboardErrorState } from "@/components/dashboard/DashboardErrorState";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { DashboardLoadingState } from "@/components/dashboard/DashboardLoadingState";
+import { DashboardSkeleton } from "@/components/skeletons";
 import { DashboardMetricsCards } from "@/components/dashboard/DashboardMetricsCards";
 import { VisibilityChart } from "@/components/dashboard/VisibilityChart";
 import { WorkspaceCreationPrompt } from "@/components/dashboard/WorkspaceCreationPrompt";
@@ -318,7 +319,7 @@ export default function Dashboard() {
           }
 
         } catch (error) {
-          console.error("Chart capture failed:", error);
+          // Chart capture failed
           toast({
             title: "Chart capture warning",
             description: "Charts could not be captured, but export will continue with data only.",
@@ -354,7 +355,7 @@ export default function Dashboard() {
         description: `Dashboard analytics exported as ${format.toUpperCase()}`,
       });
     } catch (error) {
-      console.error("Export failed:", error);
+      // Export failed
       toast({
         title: "Export failed",
         description: error instanceof Error ? error.message : "Failed to export dashboard data",
@@ -398,7 +399,7 @@ export default function Dashboard() {
 
   // Show loading state
   if (loading || isDashboardLoading) {
-    return <DashboardLoadingState />;
+    return <DashboardSkeleton />;
   }
 
   // Show workspace creation prompt when no workspace exists

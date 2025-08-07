@@ -31,8 +31,8 @@ import {
   Archive,
   TrendingUp,
   FileOutput,
-  Loader2,
 } from "lucide-react";
+import { Spinner } from "@/components/LoadingStates";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -113,7 +113,7 @@ export function ExportHistoryModal({
       setExportStats(stats);
       setCurrentPage(page);
     } catch (error) {
-      console.error("Failed to fetch export history:", error);
+      // Failed to fetch export history
       toast({
         title: "Error",
         description: "Failed to load export history",
@@ -134,7 +134,7 @@ export function ExportHistoryModal({
       });
       fetchExportHistory(currentPage);
     } catch (error) {
-      console.error("Failed to retry export:", error);
+      // Failed to retry export
       toast({
         title: "Error",
         description: "Failed to retry export",
@@ -155,7 +155,7 @@ export function ExportHistoryModal({
       });
       fetchExportHistory(currentPage);
     } catch (error) {
-      console.error("Failed to delete export:", error);
+      // Failed to delete export
       toast({
         title: "Error",
         description: "Failed to delete export record",
@@ -175,7 +175,7 @@ export function ExportHistoryModal({
       });
       fetchExportHistory(currentPage);
     } catch (error) {
-      console.error("Failed to cleanup old records:", error);
+      // Failed to cleanup old records
       toast({
         title: "Error",
         description: "Failed to cleanup old records",
@@ -191,7 +191,7 @@ export function ExportHistoryModal({
       case "failed":
         return <AlertCircle className="w-4 h-4 text-red-500" />;
       case "processing":
-        return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+        return <Spinner size="sm" className="text-blue-500" />;
       default:
         return <Clock className="w-4 h-4 text-gray-500" />;
     }
@@ -361,7 +361,7 @@ export function ExportHistoryModal({
       <ScrollArea className="h-[400px]">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <Loader2 className="w-8 h-8 animate-spin" />
+            <Spinner size="lg" />
           </div>
         ) : exportHistory.length === 0 ? (
           <div className="text-center py-8 text-gray-500">

@@ -50,7 +50,7 @@ export function useExportHistory() {
       setExportSummary(summary);
       return summary;
     } catch (err) {
-      console.error("Failed to fetch export summary:", err);
+      // Failed to fetch export summary
       return null;
     }
   };
@@ -61,7 +61,7 @@ export function useExportHistory() {
       setExportStats(stats);
       return stats;
     } catch (err) {
-      console.error("Failed to fetch export statistics:", err);
+      // Failed to fetch export statistics
       return [];
     }
   };
@@ -72,7 +72,7 @@ export function useExportHistory() {
       setRecentActivity(activity);
       return activity;
     } catch (err) {
-      console.error("Failed to fetch recent activity:", err);
+      // Failed to fetch recent activity
       return [];
     }
   };

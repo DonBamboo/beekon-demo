@@ -21,7 +21,7 @@ export function useProfile() {
       const profileData = await profileService.getProfile(user.id);
       setProfile(profileData);
     } catch (error) {
-      console.error('Failed to load profile:', error);
+      // Failed to load profile
       setError('Failed to load profile');
     } finally {
       setIsLoading(false);
@@ -43,7 +43,7 @@ export function useProfile() {
       setProfile(updatedProfile);
       return updatedProfile;
     } catch (error) {
-      console.error('Failed to update profile:', error);
+      // Failed to update profile
       setError('Failed to update profile');
       throw error;
     } finally {
@@ -61,7 +61,7 @@ export function useProfile() {
       setProfile(prev => prev ? { ...prev, avatar_url: avatarUrl } : null);
       return avatarUrl;
     } catch (error) {
-      console.error('Failed to upload avatar:', error);
+      // Failed to upload avatar
       setError('Failed to upload avatar');
       throw error;
     } finally {
@@ -78,7 +78,7 @@ export function useProfile() {
       await profileService.deleteAvatar(user.id, profile.avatar_url);
       setProfile(prev => prev ? { ...prev, avatar_url: null } : null);
     } catch (error) {
-      console.error('Failed to delete avatar:', error);
+      // Failed to delete avatar
       setError('Failed to delete avatar');
       throw error;
     } finally {

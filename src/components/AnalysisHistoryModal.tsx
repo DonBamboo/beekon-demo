@@ -56,7 +56,7 @@ export function AnalysisHistoryModal({
       setSessions(analysisSessions);
       setFilteredSessions(analysisSessions);
     } catch (error) {
-      console.error("Failed to load analysis sessions:", error);
+      // Failed to load analysis sessions
       toast({
         title: "Error",
         description: "Failed to load analysis history. Please try again.",
@@ -139,7 +139,7 @@ export function AnalysisHistoryModal({
     return `${hours}h ${minutes}m`;
   };
 
-  const getConfigurationSummary = (config: any) => {
+  const getConfigurationSummary = (config: { topics?: string[]; llmModels?: string[]; customPrompts?: string[]; } | null) => {
     if (!config) return "No configuration data";
     
     const topics = config.topics?.length || 0;
