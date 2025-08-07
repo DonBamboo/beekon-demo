@@ -36,6 +36,7 @@ import {
   History,
 } from "lucide-react";
 import { Spinner } from "@/components/LoadingStates";
+import { SettingsSkeleton } from "@/components/skeletons";
 import { useEffect, useState } from "react";
 
 export default function Settings() {
@@ -424,12 +425,7 @@ export default function Settings() {
         </div>
 
         {(isLoading || isLoadingProfile) ? (
-          <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <Spinner size="lg" />
-            <p className="text-sm text-muted-foreground">
-              Loading your settings...
-            </p>
-          </div>
+          <SettingsSkeleton />
         ) : loadingError ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
             <Alert variant="destructive" className="max-w-md">
