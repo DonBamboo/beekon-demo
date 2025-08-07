@@ -111,19 +111,27 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     Set<(workspace: Workspace | null) => void>
   >(new Set());
 
-  // Function to notify all listeners about workspace changes
+  // State to track workspace changes for event broadcasting
+  const [workspaceForEvent, setWorkspaceForEvent] = useState<Workspace | null>(null);
+
+  // Function to notify all listeners about workspace changes (without event dispatch)
   const notifyWorkspaceChange = useCallback((workspace: Workspace | null) => {
     workspaceChangeListeners.current.forEach((listener) => listener(workspace));
 
-    // Also dispatch a custom event for useAuth to listen to
+    // Set workspace for event broadcasting (will be handled by useEffect)
+    setWorkspaceForEvent(workspace);
+  }, []);
+
+  // useEffect to dispatch workspace change events asynchronously (after render)
+  useEffect(() => {
     if (typeof window !== "undefined") {
       window.dispatchEvent(
         new CustomEvent("workspaceChange", {
-          detail: { workspaceId: workspace?.id || null },
+          detail: { workspaceId: workspaceForEvent?.id || null },
         })
       );
     }
-  }, []);
+  }, [workspaceForEvent]);
 
   // Custom setCurrentWorkspace that notifies listeners
   const setCurrentWorkspaceWithNotification = useCallback(
