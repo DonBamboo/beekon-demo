@@ -4,10 +4,10 @@ import { ExportFormat } from "@/types/database";
 import { useExportHandler } from "@/lib/export-utils";
 import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import {
-  useCompetitorData,
   useAddCompetitor,
   useDeleteCompetitor,
 } from "@/hooks/useCompetitorsQuery";
+import { useCompetitorsCoordinated } from "@/hooks/useCompetitorsCoordinated";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import CompetitorsHeader from "@/components/competitors/CompetitorsHeader";
 import CompetitorsLoadingState from "@/components/competitors/CompetitorsLoadingState";
@@ -72,19 +72,20 @@ export default function Competitors() {
     };
   }, [dateFilter]);
 
-  // Use competitors React Query hooks
+  // Use coordinated competitors loading to prevent flickering
   const {
     competitors,
     competitorsWithStatus,
     performance,
     analytics,
     isLoading,
+    isInitialLoad,
     isRefreshing,
     error,
     refetch,
     targetWebsiteId,
     hasData,
-  } = useCompetitorData(selectedWebsiteId, {
+  } = useCompetitorsCoordinated(selectedWebsiteId, {
     dateRange,
     sortBy,
     sortOrder: "desc",
@@ -359,8 +360,8 @@ export default function Competitors() {
   };
 
 
-  // Show loading state
-  if (workspaceLoading || isLoading) {
+  // Show loading state only on initial load to prevent flickering
+  if (workspaceLoading || (isLoading && isInitialLoad)) {
     return <CompetitorsSkeleton />;
   }
 

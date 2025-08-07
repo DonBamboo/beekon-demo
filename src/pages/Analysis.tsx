@@ -55,7 +55,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useInfiniteAnalysisResults } from "@/hooks/useInfiniteAnalysisResults";
+import { useAnalysisCoordinated } from "@/hooks/useAnalysisCoordinated";
 import { InfiniteScrollContainer } from "@/components/InfiniteScrollContainer";
 
 // LegacyAnalysisResult interface removed - now using modern AnalysisResult directly
@@ -319,17 +319,19 @@ export default function Analysis() {
     ]
   );
 
-  // Use infinite scroll hook for data management
+  // Use coordinated infinite scroll hook for data management
   const {
     loadedResults: analysisResults,
     hasMore,
     isLoading: isLoadingResults,
+    isInitialLoad,
     isLoadingMore,
     error: infiniteScrollError,
     loadMore,
     refresh: refreshResults,
     totalLoaded,
-  } = useInfiniteAnalysisResults(
+    placeholderCount,
+  } = useAnalysisCoordinated(
     selectedWebsite || "",
     filters,
     debouncedAdvancedSearchQuery,
@@ -986,8 +988,8 @@ export default function Analysis() {
     </div>
   );
 
-  // Show loading state
-  if (loading) {
+  // Show loading state only on initial load to prevent flickering
+  if (loading || (isLoadingResults && isInitialLoad)) {
     return <AnalysisSkeleton />;
   }
 

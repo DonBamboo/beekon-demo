@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
+import { LoadingProvider } from "@/contexts/LoadingContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Suspense, lazy, useEffect } from "react";
@@ -38,9 +39,21 @@ const queryClient = new QueryClient({
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       refetchOnWindowFocus: false,
       refetchOnReconnect: 'always',
+      // Prevent duplicate requests for the same query
+      refetchOnMount: (query) => {
+        return Date.now() - query.dataUpdatedAt > 2 * 60 * 1000; // Only refetch if data is older than 2 minutes
+      },
+      // Enable background refetching with longer intervals
+      refetchInterval: false, // Disable automatic background refetching by default
+      // Optimize network usage
+      networkMode: 'online',
     },
     mutations: {
       retry: 1,
+      // Add better error handling for mutations
+      onError: (error) => {
+        console.warn('Mutation error:', error);
+      },
     },
   },
 });
@@ -125,8 +138,9 @@ const App = () => {
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <WorkspaceErrorBoundary>
-            <WorkspaceProvider>
+          <LoadingProvider>
+            <WorkspaceErrorBoundary>
+              <WorkspaceProvider>
               <BrowserRouter>
                 <Suspense fallback={<PageLoading message="Loading application..." />}>
                   <Routes>
@@ -190,8 +204,9 @@ const App = () => {
                   </Routes>
                 </Suspense>
               </BrowserRouter>
-            </WorkspaceProvider>
-          </WorkspaceErrorBoundary>
+              </WorkspaceProvider>
+            </WorkspaceErrorBoundary>
+          </LoadingProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

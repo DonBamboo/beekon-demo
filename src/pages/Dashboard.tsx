@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ExportFormat, useExportHandler, captureMultipleCharts, ChartInfo, ChartCaptureConfig } from "@/lib/export-utils";
 import { useToast } from "@/hooks/use-toast";
-import { useDashboardMetrics } from "@/hooks/useDashboard";
+import { useDashboardCoordinated } from "@/hooks/useDashboardCoordinated";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { dashboardService } from "@/services/dashboardService";
 import {
@@ -85,7 +85,7 @@ export default function Dashboard() {
     [dateFilter]
   );
 
-  // Use dashboard data hooks
+  // Use coordinated dashboard data loading to prevent flickering
   const {
     metrics,
     timeSeriesData,
@@ -93,12 +93,13 @@ export default function Dashboard() {
     llmPerformance,
     websitePerformance,
     isLoading: isDashboardLoading,
+    isInitialLoad,
     isRefreshing,
-    refreshData,
+    refresh: refreshData,
     error: dashboardError,
     hasData,
     clearError,
-  } = useDashboardMetrics(filters);
+  } = useDashboardCoordinated(filters);
 
   const websiteIds = useMemo(() => websites?.map((w) => w.id) || [], [websites]);
 
@@ -397,8 +398,8 @@ export default function Dashboard() {
     return trend >= 0 ? "text-success" : "text-destructive";
   };
 
-  // Show loading state
-  if (loading || isDashboardLoading) {
+  // Show loading state only on initial load to prevent flickering
+  if (loading || (isDashboardLoading && isInitialLoad)) {
     return <DashboardSkeleton />;
   }
 

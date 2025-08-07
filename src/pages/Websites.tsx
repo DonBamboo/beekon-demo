@@ -32,6 +32,7 @@ import { WebsiteSettingsModal } from "@/components/WebsiteSettingsModal";
 import { WorkspaceGuard } from "@/components/WorkspaceGuard";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace, Website } from "@/hooks/useWorkspace";
+import { useWebsitesCoordinated } from "@/hooks/useWebsitesCoordinated";
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { useExportHandler } from "@/lib/export-utils";
@@ -62,60 +63,20 @@ export default function Websites() {
   const [websiteToDelete, setWebsiteToDelete] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [websiteMetrics, setWebsiteMetrics] = useState<
-    Record<string, { totalTopics: number; avgVisibility: number }>
-  >({});
   const { toast } = useToast();
   const { websites, deleteWebsite, refetchWebsites, currentWorkspace, loading: workspaceLoading } = useWorkspace();
   const { handleExport } = useExportHandler();
+  
+  // Use coordinated websites loading to prevent flickering
+  const {
+    websites: websitesWithMetrics,
+    totalMetrics,
+    isLoading: isLoadingMetrics,
+    isInitialLoad,
+    refresh: refreshMetrics,
+    getWebsiteMetrics,
+  } = useWebsitesCoordinated();
 
-  useEffect(() => {
-    websites?.forEach(async (website) => {
-      await getTotalTopics(website.id);
-    });
-  }, [websites]);
-
-  const getTotalTopics = async (websiteId: string) => {
-    const totalTopics = await supabase
-      .schema("beekon_data")
-      .from("topics")
-      .select("*", { count: "exact", head: true })
-      .eq("website_id", websiteId);
-
-    const visibility = await supabase
-      .schema("beekon_data")
-      .from("llm_analysis_results")
-      .select("is_mentioned")
-      .eq("website_id", websiteId);
-
-    const items = visibility.data ?? [];
-
-    const totalItems = items.length;
-    const visibleCount = items.filter((item) => item.is_mentioned).length;
-
-    const visibilityPercentage =
-      totalItems > 0 ? (visibleCount / totalItems) * 100 : 0;
-
-    setWebsiteMetrics((prev) => ({
-      ...prev,
-      [websiteId]: {
-        totalTopics: totalTopics.count ?? 0,
-        avgVisibility: Math.round(visibilityPercentage),
-      },
-    }));
-  };
-
-  // Get website metrics (placeholder implementation)
-  const getWebsiteMetrics = (websiteId: string) => {
-    // This is a placeholder implementation
-    // In a real application, this would fetch from the database
-
-    if (!websiteId) {
-      return { totalTopics: 0, avgVisibility: 0 };
-    }
-
-    return websiteMetrics[websiteId];
-  };
 
   const handleAddWebsite = async () => {
     setProcessing(true);
@@ -325,6 +286,9 @@ export default function Websites() {
     }
   };
 
+
+  // Show loading for initial metrics load to prevent flickering stats
+  const showMetricsLoading = isLoadingMetrics && isInitialLoad;
 
   return (
     <WorkspaceGuard requireWorkspace={true}>
@@ -570,7 +534,7 @@ export default function Websites() {
                   <div>
                     <p className="text-sm font-medium">Total Topics</p>
                     <p className="text-sm text-muted-foreground">
-                      {getWebsiteMetrics(website.id)?.totalTopics}
+                      {showMetricsLoading ? "..." : getWebsiteMetrics(website.id)?.totalTopics || 0}
                     </p>
                   </div>
                 </div>
@@ -579,7 +543,7 @@ export default function Websites() {
                   <div>
                     <p className="text-sm font-medium">Avg Visibility</p>
                     <p className="text-sm text-muted-foreground">
-                      {getWebsiteMetrics(website.id)?.avgVisibility}%
+                      {showMetricsLoading ? "..." : `${Math.round(getWebsiteMetrics(website.id)?.avgVisibility || 0)}%`}
                     </p>
                   </div>
                 </div>
