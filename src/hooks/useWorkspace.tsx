@@ -10,19 +10,7 @@ import {
   useState,
 } from "react";
 
-export type SubscriptionTier =
-  | "free"
-  | "starter"
-  | "professional"
-  | "enterprise";
-
-// Type guard for SubscriptionTier
-export function isValidSubscriptionTier(value: any): value is SubscriptionTier {
-  return (
-    typeof value === "string" &&
-    ["free", "starter", "professional", "enterprise"].includes(value)
-  );
-}
+import { SubscriptionTier, isValidSubscriptionTier } from "@/utils/typeGuards";
 
 export interface WorkspaceSettings {
   theme?: "light" | "dark" | "system";
@@ -229,7 +217,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, toast]);
+  }, [user?.id, toast, setCurrentWorkspaceWithNotification]);
 
   const createWorkspace = useCallback(
     async (
@@ -385,7 +373,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
     },
-    [currentWorkspace?.id, toast]
+    [currentWorkspace?.id, toast, setCurrentWorkspaceWithNotification]
   );
 
   const deleteWorkspace = useCallback(
@@ -429,7 +417,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
     },
-    [currentWorkspace?.id, toast]
+    [currentWorkspace?.id, toast, setCurrentWorkspaceWithNotification]
   );
 
   const switchWorkspace = useCallback(

@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { AnalysisResult, LLMResult, UIAnalysisResult } from "@/types/database";
+import { isValidAnalysisSession } from "@/utils/typeGuards";
 
 // Helper functions for safe type extraction
 function safeString(value: unknown, fallback = ""): string {
@@ -75,21 +76,6 @@ export interface AnalysisProgress {
   error?: string;
 }
 
-// Type guard for AnalysisSession
-function isValidAnalysisSession(data: any): data is AnalysisSession {
-  return (
-    data &&
-    typeof data === "object" &&
-    typeof data.id === "string" &&
-    typeof data.analysis_name === "string" &&
-    typeof data.website_id === "string" &&
-    typeof data.user_id === "string" &&
-    typeof data.workspace_id === "string" &&
-    typeof data.status === "string" &&
-    typeof data.created_at === "string" &&
-    typeof data.updated_at === "string"
-  );
-}
 
 export class AnalysisService {
   private static instance: AnalysisService;

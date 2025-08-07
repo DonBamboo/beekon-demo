@@ -24,11 +24,10 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 
 import {
-  SubscriptionTier,
   useWorkspace,
   Workspace,
-  isValidSubscriptionTier,
 } from "@/hooks/useWorkspace";
+import { SubscriptionTier, isValidSubscriptionTier } from "@/utils/typeGuards";
 import { Building, Plus, Save } from "lucide-react";
 
 const workspaceSchema = z.object({

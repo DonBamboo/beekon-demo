@@ -1,5 +1,6 @@
 import { useToast } from "@/hooks/use-toast";
-import { SubscriptionTier, useWorkspace, isValidSubscriptionTier } from "./useWorkspace";
+import { useWorkspace } from "./useWorkspace";
+import { SubscriptionTier, isValidSubscriptionTier } from "@/utils/typeGuards";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface SubscriptionLimits {

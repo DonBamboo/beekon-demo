@@ -119,7 +119,7 @@ export function useClientPagination<T>(
   // Update total items when data changes
   useEffect(() => {
     paginationActions.setTotalItems(data.length);
-  }, [data.length, paginationActions.setTotalItems]);
+  }, [data.length, paginationActions]);
 
   // Get current page data
   const currentPageData = useMemo(() => {

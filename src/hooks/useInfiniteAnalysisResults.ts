@@ -308,7 +308,7 @@ export function useInfiniteAnalysisResults(
     searchInInsights,
     sortBy,
     sortOrder,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    refresh,
   ]);
 
   // Memoized return value
