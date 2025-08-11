@@ -55,7 +55,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAnalysisCoordinated } from "@/hooks/useAnalysisCoordinated";
+import { useOptimizedAnalysisData } from "@/hooks/useOptimizedPageData";
 import { InfiniteScrollContainer } from "@/components/InfiniteScrollContainer";
 
 // LegacyAnalysisResult interface removed - now using modern AnalysisResult directly
@@ -115,12 +115,6 @@ export default function Analysis() {
   const [isFiltering, setIsFiltering] = useState(false);
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [topics, setTopics] = useState<
-    Array<{ id: string; name: string; resultCount: number }>
-  >([]);
-  const [availableLLMs, setAvailableLLMs] = useState<
-    Array<{ id: string; name: string; resultCount: number }>
-  >([]);
   const [availableAnalysisSessions, setAvailableAnalysisSessions] = useState<
     Array<{ id: string; name: string; resultCount: number }>
   >([]);
@@ -278,21 +272,10 @@ export default function Analysis() {
     }
   }, [selectedDateRange, customDateRange]);
 
-  // Helper function to get topic name for filtering
-  const getTopicNameForFilter = useCallback(
-    (topicId: string): string | undefined => {
-      if (topicId === "all") return undefined;
-
-      const topic = topics.find((topic) => topic.id === topicId);
-      return topic?.name;
-    },
-    [topics]
-  );
-
   // Prepare filters for infinite scroll hook
   const filters = useMemo(
     () => ({
-      topic: getTopicNameForFilter(selectedTopic),
+      topic: selectedTopic !== "all" ? selectedTopic : undefined,
       llmProvider: selectedLLM !== "all" ? selectedLLM : undefined,
       searchQuery: debouncedSearchQuery.trim() || undefined,
       mentionStatus:
@@ -315,168 +298,92 @@ export default function Analysis() {
       selectedConfidenceRange,
       selectedSentiment,
       selectedAnalysisSession,
-      getTopicNameForFilter,
     ]
   );
 
-  // Use coordinated infinite scroll hook for data management
+  // Use optimized data management with instant cache-first loading
   const {
-    loadedResults: analysisResults,
-    hasMore,
+    analysisResults,
+    topics,
+    llmProviders,
     isLoading: isLoadingResults,
     isInitialLoad,
-    isLoadingMore,
-    error: infiniteScrollError,
+    sharedDataLoading,
+    error: analysisError,
+    hasMore,
     loadMore,
     refresh: refreshResults,
-    totalLoaded,
-    placeholderCount,
-  } = useAnalysisCoordinated(
-    selectedWebsite || "",
-    filters,
-    debouncedAdvancedSearchQuery,
-    searchInResponses,
-    searchInInsights,
-    sortBy,
-    sortOrder,
-    {
-      initialLimit: initialLoadSize,
-      loadMoreLimit: loadMoreSize,
-    }
+    hasCachedData,
+  } = useOptimizedAnalysisData();
+
+  // Helper function to get topic name for filtering (moved after hook definition)
+  const getTopicNameForFilter = useCallback(
+    (topicId: string): string | undefined => {
+      if (topicId === "all") return undefined;
+
+      const topic = topics.find((topic) => topic.id === topicId);
+      return topic?.name;
+    },
+    [topics]
   );
 
-  // Handle infinite scroll errors
+  // Handle analysis errors
   useEffect(() => {
-    if (infiniteScrollError) {
-      handleError(infiniteScrollError);
+    if (analysisError) {
+      handleError(analysisError);
       toast({
         title: "Error",
         description: "Failed to load analysis results. Please try again.",
         variant: "destructive",
       });
     }
-  }, [infiniteScrollError, handleError, toast]);
+  }, [analysisError, handleError, toast]);
 
-  // Load topics for the selected website
-  const loadTopics = useCallback(async () => {
-    if (!selectedWebsite) return;
+  // Data loading is now handled automatically by useOptimizedAnalysisData hook
+  // No manual loading functions needed - data is cached and shared across pages
 
-    try {
-      const websiteTopics = await analysisService.getTopicsForWebsite(
-        selectedWebsite
-      );
-      setTopics([
-        {
-          id: "all",
-          name: "All Topics",
-          resultCount: websiteTopics.reduce(
-            (sum, topic) => sum + topic.resultCount,
-            0
-          ),
-        },
-        ...websiteTopics,
-      ]);
-    } catch (error) {
-      // Failed to load topics
-      handleError(error);
-    }
-  }, [selectedWebsite, handleError]);
-
-  // Load available LLMs for the selected website
-  const loadAvailableLLMs = useCallback(async () => {
-    if (!selectedWebsite) return;
-
-    try {
-      const llmProviders = await analysisService.getAvailableLLMProviders(
-        selectedWebsite
-      );
-      setAvailableLLMs([
-        {
-          id: "all",
-          name: "All LLMs",
-          resultCount: llmProviders.reduce(
-            (sum, llm) => sum + llm.resultCount,
-            0
-          ),
-        },
-        ...llmProviders,
-      ]);
-    } catch (error) {
-      // Failed to load LLM providers
-      handleError(error);
-    }
-  }, [selectedWebsite, handleError]);
-
-  // Load available analysis sessions for the selected website
+  // Data loading is now handled automatically by the optimized hook
+  // Only load analysis sessions (not cached yet) when website changes
   const loadAvailableAnalysisSessions = useCallback(async () => {
-    if (!selectedWebsite) return;
+    if (!selectedWebsite) {
+      setAvailableAnalysisSessions([]);
+      return;
+    }
 
     try {
-      // For now, we'll extract sessions from the analysis results
-      // In a future version, this could be a separate API endpoint
-      const results = await analysisService.getAnalysisResults(
-        selectedWebsite,
-        {}
+      const sessions = await analysisService.getAnalysisSessionsForWebsite(
+        selectedWebsite
       );
-
-      // Group by analysis session
-      const sessionsMap = new Map<string, { name: string; count: number }>();
-      results.forEach((result) => {
-        if (result.analysis_session_id && result.analysis_name) {
-          const key = result.analysis_session_id;
-          const existing = sessionsMap.get(key);
-          if (existing) {
-            existing.count++;
-          } else {
-            sessionsMap.set(key, {
-              name: result.analysis_name,
-              count: 1,
-            });
-          }
-        }
-      });
-
-      const sessions = Array.from(sessionsMap.entries()).map(([id, info]) => ({
-        id,
-        name: info.name,
-        resultCount: info.count,
-      }));
-
-      setAvailableAnalysisSessions(sessions);
+      const sessionsWithAll = [
+        {
+          id: "all",
+          name: "All Sessions",
+          resultCount: sessions.reduce((sum, s) => sum + s.resultCount, 0),
+        },
+        ...sessions,
+      ];
+      setAvailableAnalysisSessions(sessionsWithAll);
     } catch (error) {
-      // Failed to load available analysis sessions
-      // Don't handle error here as it's not critical
-      setAvailableAnalysisSessions([]);
+      console.error("Failed to load analysis sessions:", error);
     }
   }, [selectedWebsite]);
 
-  // Load data when dependencies change
-  // Consolidated filter and data management
   useEffect(() => {
-    // Load metadata (topics, LLMs, and sessions) when website changes
     if (selectedWebsite) {
-      loadTopics();
-      loadAvailableLLMs();
       loadAvailableAnalysisSessions();
     }
-  }, [
-    selectedWebsite,
-    loadTopics,
-    loadAvailableLLMs,
-    loadAvailableAnalysisSessions,
-  ]);
+  }, [selectedWebsite, loadAvailableAnalysisSessions]);
 
   // No longer needed - infinite scroll hook handles data loading automatically
 
   // Improved filter validation with debouncing to prevent unnecessary resets
+  // Filter validation using optimized data
   useEffect(() => {
     // Only validate if we have topics loaded and a specific topic selected
     if (topics.length > 0 && selectedTopic !== "all") {
       const topicExists = topics.some((topic) => topic.id === selectedTopic);
       if (!topicExists) {
-        // Add a small delay to prevent unnecessary state updates during rapid data changes
         const timeoutId = setTimeout(() => {
-          // Topic no longer exists, resetting to "all"
           setSelectedTopic("all");
         }, 100);
         return () => clearTimeout(timeoutId);
@@ -485,18 +392,16 @@ export default function Analysis() {
   }, [topics, selectedTopic]);
 
   useEffect(() => {
-    if (availableLLMs.length > 0 && selectedLLM !== "all") {
-      const llmExists = availableLLMs.some((llm) => llm.id === selectedLLM);
+    if (llmProviders.length > 0 && selectedLLM !== "all") {
+      const llmExists = llmProviders.some((llm) => llm.id === selectedLLM);
       if (!llmExists) {
-        // Add a small delay to prevent unnecessary state updates during rapid data changes
         const timeoutId = setTimeout(() => {
-          // LLM no longer exists, resetting to "all"
           setSelectedLLM("all");
         }, 100);
         return () => clearTimeout(timeoutId);
       }
     }
-  }, [availableLLMs, selectedLLM]);
+  }, [llmProviders, selectedLLM]);
 
   // No need for legacy format transformation - work directly with modern format
   // Use analysisResults directly from infinite scroll hook
@@ -576,10 +481,10 @@ export default function Analysis() {
     };
   }, [analysisResults, resultStats]);
 
-  // Use dynamic LLM filters from server data
+  // Use dynamic LLM filters from optimized data
   const llmFilters =
-    availableLLMs.length > 0
-      ? availableLLMs
+    llmProviders.length > 0
+      ? llmProviders
       : [
           { id: "all", name: "All LLMs", resultCount: 0 },
           { id: "chatgpt", name: "ChatGPT", resultCount: 0 },
@@ -1096,10 +1001,15 @@ export default function Analysis() {
                   <Select
                     value={selectedWebsite}
                     onValueChange={(value) => {
-                      console.log('Analysis: Website changing from', selectedWebsite, 'to', value);
+                      console.log(
+                        "Analysis: Website changing from",
+                        selectedWebsite,
+                        "to",
+                        value
+                      );
                       // Immediate optimistic update - never wait for loading
                       setSelectedWebsite(value);
-                      
+
                       // Reset filters that are specific to the previous website
                       setSelectedTopic("all");
                       setSelectedLLM("all");
@@ -1527,7 +1437,9 @@ export default function Analysis() {
                         </Select>
                         <Select
                           value={sortOrder}
-                          onValueChange={(value: 'asc' | 'desc') => setSortOrder(value)}
+                          onValueChange={(value: "asc" | "desc") =>
+                            setSortOrder(value)
+                          }
                         >
                           <SelectTrigger className="w-24">
                             <SelectValue />
@@ -1651,18 +1563,20 @@ export default function Analysis() {
                       {showPerformanceStats && (
                         <div className="bg-muted/10 p-3 rounded text-xs space-y-1">
                           <div className="grid grid-cols-2 gap-2">
-                            <span>Loaded: {totalLoaded}</span>
+                            <span>Loaded: {analysisResults.length}</span>
                             <span>Has More: {hasMore ? "Yes" : "No"}</span>
-                            <span>Loading: {isLoadingMore ? "Yes" : "No"}</span>
+                            <span>
+                              Loading: {isLoadingResults ? "Yes" : "No"}
+                            </span>
                             <span>
                               Scroll: {infiniteScrollEnabled ? "On" : "Off"}
                             </span>
                             <span>Initial: {initialLoadSize}</span>
                             <span>Load More: {loadMoreSize}</span>
                           </div>
-                          {infiniteScrollError && (
+                          {analysisError && (
                             <div className="text-red-500 text-xs">
-                              Error: {infiniteScrollError.message}
+                              Error: {analysisError.message}
                             </div>
                           )}
                         </div>
@@ -1948,7 +1862,7 @@ export default function Analysis() {
               // Infinite scroll ungrouped view
               <InfiniteScrollContainer
                 hasMore={hasMore}
-                isLoadingMore={isLoadingMore}
+                isLoadingMore={isLoadingResults}
                 onLoadMore={loadMore}
                 enabled={infiniteScrollEnabled}
                 className="space-y-4"
@@ -2036,7 +1950,7 @@ export default function Analysis() {
             analysisResults.length > 0 && (
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-muted-foreground">
                 <span className="truncate">
-                  Loaded {totalLoaded} results
+                  Loaded {analysisResults.length} results
                   {hasMore && " (more available)"}
                   {searchQuery && (
                     <span className="hidden sm:inline">

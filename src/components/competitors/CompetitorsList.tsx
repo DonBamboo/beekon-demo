@@ -77,7 +77,7 @@ export default function CompetitorsList({
     }
   };
 
-  const getAnalysisStatusBadge = (status: "completed" | "in_progress" | "pending") => {
+  const getAnalysisStatusBadge = (status: "completed" | "in_progress" | "pending" | undefined) => {
     switch (status) {
       case 'completed':
         return { text: 'Analyzed', variant: 'default' as const, icon: null };
@@ -85,6 +85,8 @@ export default function CompetitorsList({
         return { text: 'Analyzing', variant: 'secondary' as const, icon: <Spinner size="sm" /> };
       case 'pending':
         return { text: 'Pending', variant: 'outline' as const, icon: <Clock className="h-3 w-3" /> };
+      default:
+        return { text: 'Unknown', variant: 'outline' as const, icon: null };
     }
   };
 

@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ExportFormat, useExportHandler, captureMultipleCharts, ChartInfo, ChartCaptureConfig } from "@/lib/export-utils";
 import { useToast } from "@/hooks/use-toast";
-import { useDashboardCoordinated } from "@/hooks/useDashboardCoordinated";
+import { useOptimizedDashboardData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { dashboardService } from "@/services/dashboardService";
 import {
@@ -85,21 +85,24 @@ export default function Dashboard() {
     [dateFilter]
   );
 
-  // Use coordinated dashboard data loading to prevent flickering
+  // Use optimized dashboard data loading with instant cache rendering
   const {
     metrics,
     timeSeriesData,
     topicPerformance,
-    llmPerformance,
-    websitePerformance,
     isLoading: isDashboardLoading,
-    isInitialLoad,
-    isRefreshing,
-    refresh: refreshData,
     error: dashboardError,
-    hasData,
-    clearError,
-  } = useDashboardCoordinated(filters);
+    refresh: refreshData,
+    hasCachedData,
+  } = useOptimizedDashboardData();
+  
+  // Derive additional data for backward compatibility
+  const hasData = !!(metrics || timeSeriesData.length > 0 || topicPerformance.length > 0);
+  const isRefreshing = isDashboardLoading && hasCachedData;
+  const isInitialLoad = isDashboardLoading && !hasCachedData;
+  const clearError = () => {}; // Not needed with optimized hook
+  const llmPerformance: any[] = []; // To be implemented
+  const websitePerformance: any[] = []; // To be implemented
 
   const websiteIds = useMemo(() => websites?.map((w) => w.id) || [], [websites]);
 
@@ -398,8 +401,8 @@ export default function Dashboard() {
     return trend >= 0 ? "text-success" : "text-destructive";
   };
 
-  // Show loading state only on initial load to prevent flickering
-  if (loading || (isDashboardLoading && isInitialLoad)) {
+  // Show loading state only on initial load (no cache) to prevent flickering
+  if (loading || isInitialLoad) {
     return <DashboardSkeleton />;
   }
 

@@ -959,6 +959,35 @@ export class AnalysisService {
     }
   }
 
+  /**
+   * Get website metadata for caching and display purposes
+   */
+  async getWebsiteMetadata(websiteId: string): Promise<import('@/contexts/AppStateContext').WebsiteMetadata> {
+    const { data: website, error } = await supabase
+      .schema("beekon_data")
+      .from("websites")
+      .select("id, domain, display_name, last_crawled_at, crawl_status, is_active")
+      .eq("id", websiteId)
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to fetch website metadata: ${error.message}`);
+    }
+
+    if (!website) {
+      throw new Error("Website not found");
+    }
+
+    return {
+      id: website.id,
+      domain: website.domain,
+      displayName: website.display_name || website.domain,
+      lastCrawledAt: website.last_crawled_at || new Date().toISOString(),
+      crawlStatus: website.crawl_status || 'unknown',
+      isActive: website.is_active ?? true,
+    };
+  }
+
   subscribeToProgress(
     analysisId: string,
     callback: (progress: AnalysisProgress) => void

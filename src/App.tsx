@@ -5,11 +5,11 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
-import { LoadingProvider } from "@/contexts/LoadingContext";
+import { WorkspaceProvider } from "@/hooks/useWorkspace";
+import { OptimizedAppProvider, StateManagementDevTools } from "@/contexts/OptimizedAppProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Suspense, lazy, useEffect } from "react";
-import { WorkspaceProvider } from "./hooks/useWorkspace";
 import { registerSW } from "./lib/serviceWorker";
 import { PageLoading, InlineLoading } from "@/components/LoadingStates";
 
@@ -138,10 +138,10 @@ const App = () => {
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <LoadingProvider>
-            <WorkspaceErrorBoundary>
-              <WorkspaceProvider>
-              <BrowserRouter>
+          <WorkspaceProvider>
+            <OptimizedAppProvider>
+              <WorkspaceErrorBoundary>
+                <BrowserRouter>
                 <Suspense fallback={<PageLoading message="Loading application..." />}>
                   <Routes>
                     <Route path="/" element={<LandingPage />} />
@@ -203,10 +203,11 @@ const App = () => {
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>
-              </BrowserRouter>
-              </WorkspaceProvider>
-            </WorkspaceErrorBoundary>
-          </LoadingProvider>
+                <StateManagementDevTools />
+                </BrowserRouter>
+              </WorkspaceErrorBoundary>
+            </OptimizedAppProvider>
+          </WorkspaceProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

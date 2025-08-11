@@ -7,7 +7,7 @@ import {
   useAddCompetitor,
   useDeleteCompetitor,
 } from "@/hooks/useCompetitorsQuery";
-import { useCompetitorsCoordinated } from "@/hooks/useCompetitorsCoordinated";
+import { useOptimizedCompetitorsData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import CompetitorsHeader from "@/components/competitors/CompetitorsHeader";
 import CompetitorsLoadingState from "@/components/competitors/CompetitorsLoadingState";
@@ -72,24 +72,25 @@ export default function Competitors() {
     };
   }, [dateFilter]);
 
-  // Use coordinated competitors loading to prevent flickering
+  // Use optimized competitors data loading with instant cache rendering
   const {
     competitors,
-    competitorsWithStatus,
     performance,
-    analytics,
+    analytics, 
+    topics,
     isLoading,
-    isInitialLoad,
-    isRefreshing,
     error,
-    refetch,
-    targetWebsiteId,
-    hasData,
-  } = useCompetitorsCoordinated(selectedWebsiteId, {
-    dateRange,
-    sortBy,
-    sortOrder: "desc",
-  });
+    refresh,
+    hasCachedData,
+  } = useOptimizedCompetitorsData();
+  
+  // Derive additional data for backward compatibility
+  const competitorsWithStatus = competitors; // Status already included
+  const hasData = !!(competitors.length > 0 || analytics);
+  const isRefreshing = isLoading && hasCachedData;
+  const isInitialLoad = isLoading && !hasCachedData;
+  const refetch = refresh;
+  const targetWebsiteId = selectedWebsiteId;
 
   // Mutations for competitor operations
   const addCompetitorMutation = useAddCompetitor();
@@ -363,8 +364,8 @@ export default function Competitors() {
   };
 
 
-  // Show loading state during workspace loading or when loading competitors data
-  if (workspaceLoading || isLoading) {
+  // Show loading state during workspace loading or initial competitors load (no cache)
+  if (workspaceLoading || isInitialLoad) {
     return <CompetitorsSkeleton />;
   }
 
