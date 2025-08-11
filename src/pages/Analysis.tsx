@@ -1095,11 +1095,26 @@ export default function Analysis() {
                   <Building className="h-4 w-4 text-muted-foreground shrink-0" />
                   <Select
                     value={selectedWebsite}
-                    onValueChange={setSelectedWebsite}
-                    disabled={isLoadingResults}
+                    onValueChange={(value) => {
+                      console.log('Analysis: Website changing from', selectedWebsite, 'to', value);
+                      // Immediate optimistic update - never wait for loading
+                      setSelectedWebsite(value);
+                      
+                      // Reset filters that are specific to the previous website
+                      setSelectedTopic("all");
+                      setSelectedLLM("all");
+                      setSearchQuery("");
+                      setSelectedAnalysisSession("all");
+                    }}
+                    disabled={false}
                   >
                     <SelectTrigger className="w-full sm:w-[250px] min-w-[200px]">
-                      <SelectValue placeholder="Select website" />
+                      <div className="flex items-center justify-between w-full">
+                        <SelectValue placeholder="Select website" />
+                        {isLoadingResults && (
+                          <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
                     </SelectTrigger>
                     <SelectContent>
                       {websites.map((website) => (

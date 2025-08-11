@@ -57,7 +57,7 @@ export function useAnalysisCoordinated(
   // Track previous filters to detect changes
   const previousFiltersRef = useRef<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const requestCacheRef = useRef<Map<string, Promise<{ results: UIAnalysisResult[]; hasMore: boolean; cursor: string | null }>>>(new Map());
 
   // Serialize filters for comparison
   const filtersKey = useMemo(() => {
@@ -176,9 +176,17 @@ export function useAnalysisCoordinated(
     []
   );
 
-  // Load initial results
+  // Load initial results with request deduplication
   const loadInitialResults = useCallback(async () => {
     if (!websiteId) return;
+
+    // Create a unique request key for deduplication
+    const requestKey = `${websiteId}-${JSON.stringify(filters)}-${advancedSearchQuery}-${searchInResponses}-${searchInInsights}-${sortBy}-${sortOrder}-${initialLimit}`;
+    
+    // Check if identical request is already in progress
+    if (requestCacheRef.current.has(requestKey)) {
+      return requestCacheRef.current.get(requestKey);
+    }
 
     // Cancel any existing request
     if (abortControllerRef.current) {
@@ -196,53 +204,66 @@ export function useAnalysisCoordinated(
       setPlaceholderCount(initialLimit);
     }
 
-    try {
-      const response = await analysisService.getAnalysisResultsPaginated(
-        websiteId,
-        {
-          limit: initialLimit,
-          filters,
-        },
-        abortControllerRef.current.signal
-      );
-
-      let results = response.results;
-
-      // Apply advanced search if enabled
-      if (advancedSearchQuery?.trim()) {
-        results = performAdvancedSearch(
-          results,
-          advancedSearchQuery,
-          searchInResponses || false,
-          searchInInsights || false
+    // Create the request promise and cache it
+    const requestPromise = (async () => {
+      try {
+        const response = await analysisService.getAnalysisResultsPaginated(
+          websiteId,
+          {
+            limit: initialLimit,
+            filters,
+          },
+          abortControllerRef.current?.signal
         );
-      }
 
-      // Apply sorting
-      if (sortBy && sortOrder) {
-        results = sortResults(results, sortBy, sortOrder);
-      }
+        let results = response.results;
 
-      setLoadedResults(results);
-      setHasMore(response.hasMore);
-      setCursor(response.nextCursor);
-      setPlaceholderCount(0);
-      
-      if (isInitialLoad) {
-        setIsInitialLoad(false);
+        // Apply advanced search if enabled
+        if (advancedSearchQuery?.trim()) {
+          results = performAdvancedSearch(
+            results,
+            advancedSearchQuery,
+            searchInResponses || false,
+            searchInInsights || false
+          );
+        }
+
+        // Apply sorting
+        if (sortBy && sortOrder) {
+          results = sortResults(results, sortBy, sortOrder);
+        }
+
+        setLoadedResults(results);
+        setHasMore(response.hasMore);
+        setCursor(response.nextCursor);
+        setPlaceholderCount(0);
+        
+        if (isInitialLoad) {
+          setIsInitialLoad(false);
+        }
+
+        return { results, hasMore: response.hasMore, cursor: response.nextCursor };
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw err; // Let abort errors bubble up
+        }
+        
+        setError(err as Error);
+        setLoadedResults([]);
+        setHasMore(false);
+        setPlaceholderCount(0);
+        throw err;
+      } finally {
+        setIsLoading(false);
+        // Remove from cache when completed (success or error)
+        requestCacheRef.current.delete(requestKey);
       }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        return; // Request was cancelled, don't set error
-      }
-      
-      setError(err as Error);
-      setLoadedResults([]);
-      setHasMore(false);
-      setPlaceholderCount(0);
-    } finally {
-      setIsLoading(false);
-    }
+    })();
+
+    // Cache the promise
+    requestCacheRef.current.set(requestKey, requestPromise);
+
+    return requestPromise;
   }, [
     websiteId,
     filters,
@@ -327,40 +348,51 @@ export function useAnalysisCoordinated(
     await loadInitialResults();
   }, [loadInitialResults, initialLimit]);
 
-  // Reset when filters change with debouncing
+  // Load data immediately when filters change (no debouncing)
   useEffect(() => {
     const hasFiltersChanged = previousFiltersRef.current !== filtersKey;
     
     if (hasFiltersChanged) {
+      const previousFilters = previousFiltersRef.current ? JSON.parse(previousFiltersRef.current) : {};
+      const currentFilters = JSON.parse(filtersKey);
+      const websiteChanged = previousFilters.websiteId !== currentFilters.websiteId;
+      
       previousFiltersRef.current = filtersKey;
       
-      // Clear existing debounce timer
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
+      if (websiteChanged) {
+        // Immediate optimistic update for website changes
+        setLoadedResults([]);
+        setError(null);
+        setIsInitialLoad(true);
+        setPlaceholderCount(initialLimit);
+        
+        // Load data immediately - no debouncing for website changes
+        loadInitialResults().catch(err => {
+          if (err?.name !== 'AbortError') {
+            console.error('Failed to load analysis data:', err);
+          }
+        });
+      } else {
+        // For non-website changes (filters, search), load immediately as well
+        // The request deduplication will handle rapid changes automatically
+        loadInitialResults().catch(err => {
+          if (err?.name !== 'AbortError') {
+            console.error('Failed to load analysis data:', err);
+          }
+        });
       }
-      
-      // Debounce the refresh to prevent rapid filter changes from causing multiple requests
-      debounceTimerRef.current = setTimeout(() => {
-        refresh();
-      }, 300);
     }
-
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, [filtersKey, refresh]);
+  }, [filtersKey, loadInitialResults, initialLimit]);
 
   // Cleanup on unmount
   useEffect(() => {
+    const currentCache = requestCacheRef.current;
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
+      // Clear request cache
+      currentCache.clear();
     };
   }, []);
 

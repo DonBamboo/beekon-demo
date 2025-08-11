@@ -98,31 +98,40 @@ export default function CompetitorsHeader({
         {/* Website Selector - Primary control */}
         <Select
           value={selectedWebsiteId}
-          onValueChange={setSelectedWebsiteId}
-          disabled={websitesLoading || websites.length === 0 || isRefreshing}
+          onValueChange={(value) => {
+            console.log('Competitors: Website changing from', selectedWebsiteId, 'to', value);
+            // Immediate optimistic update - never wait for loading
+            setSelectedWebsiteId(value);
+          }}
+          disabled={websitesLoading || websites.length === 0}
         >
-          <SelectTrigger
-            className={`w-[200px] ${isRefreshing ? "opacity-50" : ""}`}
-          >
-            <Globe className="h-4 w-4 mr-2" />
-            <SelectValue
-              placeholder={
-                websitesLoading
-                  ? "Loading websites..."
-                  : websites.length === 0
-                  ? "No websites available"
-                  : "Select website..."
-              }
-            >
-              {selectedWebsiteId && websites.length > 0 && (
-                <span className="truncate">
-                  {websites.find((w) => w.id === selectedWebsiteId)
-                    ?.display_name ||
-                    websites.find((w) => w.id === selectedWebsiteId)?.domain ||
-                    "Selected website"}
-                </span>
+          <SelectTrigger className="w-[200px]">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center">
+                <Globe className="h-4 w-4 mr-2" />
+                <SelectValue
+                  placeholder={
+                    websitesLoading
+                      ? "Loading websites..."
+                      : websites.length === 0
+                      ? "No websites available"
+                      : "Select website..."
+                  }
+                >
+                  {selectedWebsiteId && websites.length > 0 && (
+                    <span className="truncate">
+                      {websites.find((w) => w.id === selectedWebsiteId)
+                        ?.display_name ||
+                        websites.find((w) => w.id === selectedWebsiteId)?.domain ||
+                        "Selected website"}
+                    </span>
+                  )}
+                </SelectValue>
+              </div>
+              {(isRefreshing || websitesLoading) && (
+                <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
               )}
-            </SelectValue>
+            </div>
           </SelectTrigger>
           <SelectContent>
             {websites.length > 0 ? (

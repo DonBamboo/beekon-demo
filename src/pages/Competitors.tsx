@@ -231,6 +231,9 @@ export default function Competitors() {
         name: competitorName || undefined,
       });
 
+      // Immediately refresh competitors data to show the new competitor in UI
+      refreshData();
+
       // Step 2: Send webhook to N8N for analysis processing
       setIsWebhookProcessing(true);
       const response = await sendN8nWebhook("webhook/competitors-onboarding", {
@@ -360,8 +363,8 @@ export default function Competitors() {
   };
 
 
-  // Show loading state only on initial load to prevent flickering
-  if (workspaceLoading || (isLoading && isInitialLoad)) {
+  // Show loading state during workspace loading or when loading competitors data
+  if (workspaceLoading || isLoading) {
     return <CompetitorsSkeleton />;
   }
 
@@ -392,7 +395,7 @@ export default function Competitors() {
           selectedWebsiteId={selectedWebsiteId}
           isAdding={addCompetitorMutation.isPending || isWebhookProcessing}
           websites={websites || []}
-          websitesLoading={workspaceLoading}
+          websitesLoading={workspaceLoading || isLoading}
           isExporting={isExporting}
           competitorsData={competitors}
           setDateFilter={setDateFilter}
