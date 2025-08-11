@@ -14,6 +14,97 @@ export type Database = {
   };
   beekon_data: {
     Tables: {
+      analysis_sessions: {
+        Row: {
+          analysis_name: string;
+          completed_at: string | null;
+          configuration: Json;
+          created_at: string;
+          error_message: string | null;
+          id: string;
+          progress_data: Json | null;
+          started_at: string | null;
+          status: string | null;
+          updated_at: string;
+          user_id: string;
+          website_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          analysis_name: string;
+          completed_at?: string | null;
+          configuration?: Json;
+          created_at?: string;
+          error_message?: string | null;
+          id?: string;
+          progress_data?: Json | null;
+          started_at?: string | null;
+          status?: string | null;
+          updated_at?: string;
+          user_id: string;
+          website_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          analysis_name?: string;
+          completed_at?: string | null;
+          configuration?: Json;
+          created_at?: string;
+          error_message?: string | null;
+          id?: string;
+          progress_data?: Json | null;
+          started_at?: string | null;
+          status?: string | null;
+          updated_at?: string;
+          user_id?: string;
+          website_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "analysis_sessions_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_daily_metrics";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "analysis_sessions_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_performance";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "analysis_sessions_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_share_of_voice";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "analysis_sessions_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "user_accessible_websites";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "analysis_sessions_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "websites";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "analysis_sessions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       api_keys: {
         Row: {
           created_at: string | null;
@@ -61,42 +152,48 @@ export type Database = {
       };
       competitor_analysis_results: {
         Row: {
+          analysis_session_id: string | null;
           analyzed_at: string | null;
           competitor_id: string;
           confidence_score: number | null;
           created_at: string | null;
           id: string;
           is_mentioned: boolean | null;
+          llm_analysis_id: string;
           llm_provider: string;
-          prompt_id: string;
+          prompt_id: string | null;
           rank_position: number | null;
           response_text: string | null;
           sentiment_score: number | null;
           summary_text: string | null;
         };
         Insert: {
+          analysis_session_id?: string | null;
           analyzed_at?: string | null;
           competitor_id: string;
           confidence_score?: number | null;
           created_at?: string | null;
           id?: string;
           is_mentioned?: boolean | null;
+          llm_analysis_id: string;
           llm_provider: string;
-          prompt_id: string;
+          prompt_id?: string | null;
           rank_position?: number | null;
           response_text?: string | null;
           sentiment_score?: number | null;
           summary_text?: string | null;
         };
         Update: {
+          analysis_session_id?: string | null;
           analyzed_at?: string | null;
           competitor_id?: string;
           confidence_score?: number | null;
           created_at?: string | null;
           id?: string;
           is_mentioned?: boolean | null;
+          llm_analysis_id?: string;
           llm_provider?: string;
-          prompt_id?: string;
+          prompt_id?: string | null;
           rank_position?: number | null;
           response_text?: string | null;
           sentiment_score?: number | null;
@@ -104,10 +201,38 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "competitor_analysis_results_analysis_session_id_fkey";
+            columns: ["analysis_session_id"];
+            isOneToOne: false;
+            referencedRelation: "analysis_sessions";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "competitor_analysis_results_competitor_id_fkey";
             columns: ["competitor_id"];
             isOneToOne: false;
             referencedRelation: "competitors";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "competitor_analysis_results_competitor_id_fkey";
+            columns: ["competitor_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_performance";
+            referencedColumns: ["competitor_id"];
+          },
+          {
+            foreignKeyName: "competitor_analysis_results_competitor_id_fkey";
+            columns: ["competitor_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_share_of_voice";
+            referencedColumns: ["competitor_id"];
+          },
+          {
+            foreignKeyName: "competitor_analysis_results_llm_analysis_id_fkey";
+            columns: ["llm_analysis_id"];
+            isOneToOne: false;
+            referencedRelation: "llm_analysis_results";
             referencedColumns: ["id"];
           },
           {
@@ -158,6 +283,27 @@ export type Database = {
             foreignKeyName: "competitors_website_id_fkey";
             columns: ["website_id"];
             isOneToOne: false;
+            referencedRelation: "mv_competitor_daily_metrics";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "competitors_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_performance";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "competitors_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_share_of_voice";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "competitors_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
             referencedRelation: "user_accessible_websites";
             referencedColumns: ["website_id"];
           },
@@ -170,8 +316,63 @@ export type Database = {
           }
         ];
       };
+      export_history: {
+        Row: {
+          completed_at: string | null;
+          created_at: string | null;
+          date_range: Json | null;
+          error_message: string | null;
+          export_type: string;
+          file_size: number | null;
+          filename: string;
+          filters: Json | null;
+          format: string;
+          id: string;
+          metadata: Json | null;
+          started_at: string | null;
+          status: string;
+          updated_at: string | null;
+          user_id: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          created_at?: string | null;
+          date_range?: Json | null;
+          error_message?: string | null;
+          export_type: string;
+          file_size?: number | null;
+          filename: string;
+          filters?: Json | null;
+          format: string;
+          id?: string;
+          metadata?: Json | null;
+          started_at?: string | null;
+          status?: string;
+          updated_at?: string | null;
+          user_id: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          created_at?: string | null;
+          date_range?: Json | null;
+          error_message?: string | null;
+          export_type?: string;
+          file_size?: number | null;
+          filename?: string;
+          filters?: Json | null;
+          format?: string;
+          id?: string;
+          metadata?: Json | null;
+          started_at?: string | null;
+          status?: string;
+          updated_at?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       llm_analysis_results: {
         Row: {
+          analysis_session_id: string | null;
           analyzed_at: string | null;
           confidence_score: number | null;
           created_at: string | null;
@@ -186,6 +387,7 @@ export type Database = {
           website_id: string;
         };
         Insert: {
+          analysis_session_id?: string | null;
           analyzed_at?: string | null;
           confidence_score?: number | null;
           created_at?: string | null;
@@ -200,6 +402,7 @@ export type Database = {
           website_id: string;
         };
         Update: {
+          analysis_session_id?: string | null;
           analyzed_at?: string | null;
           confidence_score?: number | null;
           created_at?: string | null;
@@ -215,11 +418,39 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "llm_analysis_results_analysis_session_id_fkey";
+            columns: ["analysis_session_id"];
+            isOneToOne: false;
+            referencedRelation: "analysis_sessions";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "llm_analysis_results_prompt_id_fkey";
             columns: ["prompt_id"];
             isOneToOne: false;
             referencedRelation: "prompts";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "llm_analysis_results_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_daily_metrics";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "llm_analysis_results_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_performance";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "llm_analysis_results_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_share_of_voice";
+            referencedColumns: ["website_id"];
           },
           {
             foreignKeyName: "llm_analysis_results_website_id_fkey";
@@ -338,6 +569,13 @@ export type Database = {
             foreignKeyName: "prompts_topic_id_fkey";
             columns: ["topic_id"];
             isOneToOne: false;
+            referencedRelation: "mv_competitive_gap_analysis";
+            referencedColumns: ["topic_id"];
+          },
+          {
+            foreignKeyName: "prompts_topic_id_fkey";
+            columns: ["topic_id"];
+            isOneToOne: false;
             referencedRelation: "topics";
             referencedColumns: ["id"];
           }
@@ -382,6 +620,27 @@ export type Database = {
             foreignKeyName: "topics_website_id_fkey";
             columns: ["website_id"];
             isOneToOne: false;
+            referencedRelation: "mv_competitor_daily_metrics";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "topics_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_performance";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "topics_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_share_of_voice";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "topics_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
             referencedRelation: "user_accessible_websites";
             referencedColumns: ["website_id"];
           },
@@ -417,6 +676,27 @@ export type Database = {
           website_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "website_settings_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: true;
+            referencedRelation: "mv_competitor_daily_metrics";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "website_settings_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: true;
+            referencedRelation: "mv_competitor_performance";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "website_settings_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: true;
+            referencedRelation: "mv_competitor_share_of_voice";
+            referencedColumns: ["website_id"];
+          },
           {
             foreignKeyName: "website_settings_website_id_fkey";
             columns: ["website_id"];
@@ -530,6 +810,71 @@ export type Database = {
       };
     };
     Views: {
+      export_statistics: {
+        Row: {
+          avg_duration_seconds: number | null;
+          avg_size: number | null;
+          export_type: string | null;
+          failed_exports: number | null;
+          format: string | null;
+          last_export: string | null;
+          status: string | null;
+          successful_exports: number | null;
+          total_exports: number | null;
+          total_size: number | null;
+          user_id: string | null;
+        };
+        Relationships: [];
+      };
+      mv_competitive_gap_analysis: {
+        Row: {
+          competitor_avg_score: number | null;
+          competitor_count: number | null;
+          gap_type: string | null;
+          performance_gap: number | null;
+          topic_id: string | null;
+          topic_name: string | null;
+          website_id: string | null;
+          your_brand_score: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "topics_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_daily_metrics";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "topics_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_performance";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "topics_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_share_of_voice";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "topics_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "user_accessible_websites";
+            referencedColumns: ["website_id"];
+          },
+          {
+            foreignKeyName: "topics_website_id_fkey";
+            columns: ["website_id"];
+            isOneToOne: false;
+            referencedRelation: "websites";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       mv_competitor_daily_metrics: {
         Row: {
           analysis_date: string | null;
@@ -542,22 +887,7 @@ export type Database = {
           llm_providers_list: string[] | null;
           website_id: string | null;
         };
-        Relationships: [
-          {
-            foreignKeyName: "competitors_website_id_fkey";
-            columns: ["website_id"];
-            isOneToOne: false;
-            referencedRelation: "user_accessible_websites";
-            referencedColumns: ["website_id"];
-          },
-          {
-            foreignKeyName: "competitors_website_id_fkey";
-            columns: ["website_id"];
-            isOneToOne: false;
-            referencedRelation: "websites";
-            referencedColumns: ["id"];
-          }
-        ];
+        Relationships: [];
       };
       mv_competitor_performance: {
         Row: {
@@ -578,22 +908,7 @@ export type Database = {
           total_mentions: number | null;
           website_id: string | null;
         };
-        Relationships: [
-          {
-            foreignKeyName: "competitors_website_id_fkey";
-            columns: ["website_id"];
-            isOneToOne: false;
-            referencedRelation: "user_accessible_websites";
-            referencedColumns: ["website_id"];
-          },
-          {
-            foreignKeyName: "competitors_website_id_fkey";
-            columns: ["website_id"];
-            isOneToOne: false;
-            referencedRelation: "websites";
-            referencedColumns: ["id"];
-          }
-        ];
+        Relationships: [];
       };
       mv_competitor_share_of_voice: {
         Row: {
@@ -609,50 +924,7 @@ export type Database = {
           total_voice_mentions: number | null;
           website_id: string | null;
         };
-        Relationships: [
-          {
-            foreignKeyName: "competitors_website_id_fkey";
-            columns: ["website_id"];
-            isOneToOne: false;
-            referencedRelation: "user_accessible_websites";
-            referencedColumns: ["website_id"];
-          },
-          {
-            foreignKeyName: "competitors_website_id_fkey";
-            columns: ["website_id"];
-            isOneToOne: false;
-            referencedRelation: "websites";
-            referencedColumns: ["id"];
-          }
-        ];
-      };
-      mv_competitive_gap_analysis: {
-        Row: {
-          competitor_avg_score: number | null;
-          competitor_count: number | null;
-          gap_type: string | null;
-          performance_gap: number | null;
-          topic_id: string | null;
-          topic_name: string | null;
-          website_id: string | null;
-          your_brand_score: number | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "topics_website_id_fkey";
-            columns: ["website_id"];
-            isOneToOne: false;
-            referencedRelation: "user_accessible_websites";
-            referencedColumns: ["website_id"];
-          },
-          {
-            foreignKeyName: "topics_website_id_fkey";
-            columns: ["website_id"];
-            isOneToOne: false;
-            referencedRelation: "websites";
-            referencedColumns: ["id"];
-          }
-        ];
+        Relationships: [];
       };
       user_accessible_websites: {
         Row: {
@@ -672,6 +944,22 @@ export type Database = {
       };
     };
     Functions: {
+      analyze_competitor_mentions: {
+        Args: {
+          p_website_id: string;
+          p_competitor_id: string;
+          p_prompt_id: string;
+          p_llm_provider: string;
+          p_response_text: string;
+        };
+        Returns: {
+          is_mentioned: boolean;
+          rank_position: number;
+          sentiment_score: number;
+          confidence_score: number;
+          summary_text: string;
+        }[];
+      };
       get_batch_website_metrics: {
         Args: {
           p_website_ids: string[];
@@ -687,6 +975,19 @@ export type Database = {
           avg_sentiment: number;
           avg_rank: number;
           visibility_score: number;
+        }[];
+      };
+      get_competitive_gap_analysis: {
+        Args: {
+          p_website_id: string;
+          p_date_start?: string;
+          p_date_end?: string;
+        };
+        Returns: {
+          topic_id: string;
+          topic_name: string;
+          your_brand_score: number;
+          competitor_data: Json;
         }[];
       };
       get_competitor_performance: {
@@ -709,6 +1010,15 @@ export type Database = {
           recent_avg_rank: number;
         }[];
       };
+      get_competitor_query_stats: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          query_type: string;
+          avg_execution_time: unknown;
+          total_calls: number;
+          cache_hit_ratio: number;
+        }[];
+      };
       get_competitor_share_of_voice: {
         Args: {
           p_website_id: string;
@@ -725,44 +1035,6 @@ export type Database = {
           avg_rank_position: number;
           avg_sentiment_score: number;
           avg_confidence_score: number;
-        }[];
-      };
-      get_competitive_gap_analysis: {
-        Args: {
-          p_website_id: string;
-          p_date_start?: string;
-          p_date_end?: string;
-        };
-        Returns: {
-          topic_id: string;
-          topic_name: string;
-          your_brand_score: number;
-          competitor_data: unknown;
-        }[];
-      };
-      analyze_competitor_mentions: {
-        Args: {
-          p_website_id: string;
-          p_competitor_id: string;
-          p_prompt_id: string;
-          p_llm_provider: string;
-          p_response_text: string;
-        };
-        Returns: {
-          is_mentioned: boolean;
-          rank_position: number;
-          sentiment_score: number;
-          confidence_score: number;
-          summary_text: string;
-        }[];
-      };
-      get_competitor_query_stats: {
-        Args: Record<PropertyKey, never>;
-        Returns: {
-          query_type: string;
-          avg_execution_time: unknown;
-          total_calls: number;
-          cache_hit_ratio: number;
         }[];
       };
       get_competitor_time_series: {
@@ -824,13 +1096,22 @@ export type Database = {
           visibility_score: number;
         }[];
       };
+      refresh_competitor_analysis_views: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
+      };
       refresh_competitor_performance_views: {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
       };
-      refresh_competitor_analysis_views: {
-        Args: Record<PropertyKey, never>;
-        Returns: undefined;
+      validate_competitor_data_consistency: {
+        Args: { p_website_id: string };
+        Returns: {
+          check_name: string;
+          status: string;
+          message: string;
+          affected_records: number;
+        }[];
       };
     };
     Enums: {

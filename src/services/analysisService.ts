@@ -76,7 +76,6 @@ export interface AnalysisProgress {
   error?: string;
 }
 
-
 export class AnalysisService {
   private static instance: AnalysisService;
   private progressCallbacks: Map<string, (progress: AnalysisProgress) => void> =
@@ -125,6 +124,7 @@ export class AnalysisService {
         userId,
         workspaceId
       );
+      console.log("analysisSession", analysisSession);
 
       // First, create topics if they don't exist
       const topicIds = await this.ensureTopicsExist(
@@ -158,12 +158,6 @@ export class AnalysisService {
       return analysisSession.id;
     } catch (error) {
       // Failed to create analysis
-
-      // Clean up any polling intervals that might have been started
-      if (analysisSession?.id) {
-        this.unsubscribeFromProgress(analysisSession.id);
-      }
-
       throw error;
     }
   }
@@ -478,7 +472,7 @@ export class AnalysisService {
           (prompts?.topics as Record<string, unknown>)?.topic_name,
           "Unknown topic"
         );
-        resultWebsiteId = safeString(row.website_id);
+        resultWebsiteId = websiteId || safeString(row.website_id);
       }
 
       if (!resultsMap.has(promptId)) {
@@ -1130,10 +1124,7 @@ export class AnalysisService {
       .update(updates)
       .eq("id", sessionId);
 
-    if (error) {
-      // Failed to update analysis session
-      throw error;
-    }
+    if (error) throw error;
   }
 
   async getAnalysisSession(sessionId: string): Promise<AnalysisSession | null> {
@@ -1144,10 +1135,7 @@ export class AnalysisService {
       .eq("id", sessionId)
       .single();
 
-    if (error) {
-      // Failed to get analysis session
-      return null;
-    }
+    if (error) return null;
 
     if (!isValidAnalysisSession(data)) {
       throw new Error("Invalid analysis session data received from database");
@@ -1165,10 +1153,7 @@ export class AnalysisService {
       .eq("website_id", websiteId)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      // Failed to get analysis sessions
-      return [];
-    }
+    if (error) return [];
 
     if (!Array.isArray(data) || !data.every(isValidAnalysisSession)) {
       throw new Error(

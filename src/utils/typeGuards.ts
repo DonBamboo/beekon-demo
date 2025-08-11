@@ -18,16 +18,16 @@ export interface AnalysisSession {
   id: string;
   analysis_name: string;
   website_id: string;
+  user_id: string;
+  workspace_id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  configuration: any;
+  progress_data: any;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
   created_at: string;
-  topics: string[];
-  custom_prompts?: string[];
-  llm_models: string[];
-  analysis_depth: string;
-  concurrent_analyses: number;
-  include_sentiment: boolean;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  progress?: number;
-  error?: string;
+  updated_at: string;
 }
 
 // Type guard for AnalysisSession
@@ -42,14 +42,12 @@ export function isValidAnalysisSession(data: unknown): data is AnalysisSession {
     typeof obj.id === "string" &&
     typeof obj.analysis_name === "string" &&
     typeof obj.website_id === "string" &&
-    typeof obj.created_at === "string" &&
-    Array.isArray(obj.topics) &&
-    Array.isArray(obj.llm_models) &&
-    typeof obj.analysis_depth === "string" &&
-    typeof obj.concurrent_analyses === "number" &&
-    typeof obj.include_sentiment === "boolean" &&
+    typeof obj.user_id === "string" &&
+    typeof obj.workspace_id === "string" &&
     typeof obj.status === "string" &&
-    ["pending", "in_progress", "completed", "failed"].includes(obj.status)
+    ["pending", "running", "completed", "failed"].includes(obj.status) &&
+    typeof obj.created_at === "string" &&
+    typeof obj.updated_at === "string"
   );
 }
 
