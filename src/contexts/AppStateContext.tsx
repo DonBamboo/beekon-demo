@@ -196,12 +196,31 @@ const initialState: AppState = {
 function appStateReducer(state: AppState, action: AppStateAction): AppState {
   switch (action.type) {
     case 'SET_WORKSPACE':
+      const newWebsites = action.payload.websites;
+      let selectedWebsiteId = state.workspace.selectedWebsiteId;
+      
+      // Intelligent website selection logic
+      if (!selectedWebsiteId && newWebsites.length > 0) {
+        // No website selected, select the first one
+        selectedWebsiteId = newWebsites[0].id;
+      } else if (selectedWebsiteId && newWebsites.length > 0) {
+        // Check if currently selected website still exists in new website list
+        const selectedWebsiteStillExists = newWebsites.some(w => w.id === selectedWebsiteId);
+        if (!selectedWebsiteStillExists) {
+          // Selected website no longer exists, select the first available
+          selectedWebsiteId = newWebsites[0].id;
+        }
+      } else if (newWebsites.length === 0) {
+        // No websites available, clear selection
+        selectedWebsiteId = null;
+      }
+      
       return {
         ...state,
         workspace: {
           current: action.payload.workspace,
-          websites: action.payload.websites,
-          selectedWebsiteId: state.workspace.selectedWebsiteId || action.payload.websites[0]?.id || null,
+          websites: newWebsites,
+          selectedWebsiteId,
           loading: action.payload.loading,
         },
       };
@@ -403,9 +422,11 @@ const AppStateContext = createContext<{
   getFromCache: <T>(key: string) => T | null;
   setCache: <T>(key: string, data: T, expiresIn: number, metadata?: any) => void;
   clearCache: (pattern?: string, websiteId?: string) => void;
+  invalidateDependentCaches: (dependency: string) => void;
   setPageFilters: <T>(page: keyof AppState['ui']['filters'], filters: T) => void;
   navigateToPage: (page: string) => void;
   isRequestActive: (key: string) => boolean;
+  getCurrentPage: () => string;
 } | null>(null);
 
 // Provider component
@@ -438,6 +459,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'CACHE_CLEAR', payload: { pattern, websiteId } });
   }, []);
   
+  // Intelligent cache invalidation based on dependencies
+  const invalidateDependentCaches = useCallback((dependency: string) => {
+    const dependentKeys = state.cache.dependencies.get(dependency);
+    if (dependentKeys) {
+      dependentKeys.forEach(key => {
+        dispatch({ type: 'CACHE_DELETE', payload: { key } });
+      });
+    }
+  }, [state.cache.dependencies]);
+  
   const setPageFilters = useCallback(<T,>(page: keyof AppState['ui']['filters'], filters: T) => {
     dispatch({ type: 'SET_FILTERS', payload: { page, filters } });
   }, []);
@@ -450,20 +481,45 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return state.requests.active.has(key);
   }, [state.requests.active]);
   
-  // Cleanup expired cache entries periodically
+  const getCurrentPage = useCallback(() => {
+    return state.ui.navigation.currentPage;
+  }, [state.ui.navigation.currentPage]);
+  
+  // Intelligent cache cleanup and optimization
   useEffect(() => {
     const cleanup = () => {
       const now = Date.now();
+      let cleanedCount = 0;
+      
+      // Clean expired entries
       state.cache.expiration.forEach((expiresAt, key) => {
         if (now > expiresAt) {
           dispatch({ type: 'CACHE_DELETE', payload: { key } });
+          cleanedCount++;
         }
       });
+      
+      // Memory management: If cache gets too large (>100 entries), clean oldest entries
+      if (state.cache.memory.size > 100) {
+        const entries = Array.from(state.cache.memory.entries());
+        const sortedByAge = entries.sort(([, a], [, b]) => a.timestamp - b.timestamp);
+        const toDelete = sortedByAge.slice(0, Math.floor(state.cache.memory.size * 0.2)); // Remove oldest 20%
+        
+        toDelete.forEach(([key]) => {
+          dispatch({ type: 'CACHE_DELETE', payload: { key } });
+          cleanedCount++;
+        });
+      }
+      
+      // Only log in development if cleanup actually happened
+      if (process.env.NODE_ENV === 'development' && cleanedCount > 0) {
+        console.log(`Cache cleanup: removed ${cleanedCount} entries`);
+      }
     };
     
-    const interval = setInterval(cleanup, 60000); // Cleanup every minute
+    const interval = setInterval(cleanup, 120000); // Cleanup every 2 minutes
     return () => clearInterval(interval);
-  }, [state.cache.expiration]);
+  }, [state.cache.expiration, state.cache.memory]);
   
   return (
     <AppStateContext.Provider
@@ -474,9 +530,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         getFromCache,
         setCache,
         clearCache,
+        invalidateDependentCaches,
         setPageFilters,
         navigateToPage,
         isRequestActive,
+        getCurrentPage,
       }}
     >
       {children}
@@ -495,8 +553,8 @@ export function useAppState() {
 
 // Convenience hooks for specific state slices
 export function useGlobalCache() {
-  const { getFromCache, setCache, clearCache } = useAppState();
-  return { getFromCache, setCache, clearCache };
+  const { getFromCache, setCache, clearCache, invalidateDependentCaches } = useAppState();
+  return { getFromCache, setCache, clearCache, invalidateDependentCaches };
 }
 
 export function usePageFilters<T>(page: keyof AppState['ui']['filters']) {

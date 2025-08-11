@@ -60,26 +60,46 @@ function PerformanceMonitor({ children }: { children: React.ReactNode }) {
 // Workspace integration component
 function WorkspaceStateSync({ children }: { children: React.ReactNode }) {
   // Always call hooks first
-  const { dispatch } = useAppState();
+  const { dispatch, state } = useAppState();
   const { websites, currentWorkspace, loading: workspaceLoading } = useWorkspace();
 
   // Sync workspace data with app state
   React.useEffect(() => {
     try {
       if (dispatch) {
-        dispatch({
-          type: 'SET_WORKSPACE',
-          payload: {
-            workspace: currentWorkspace,
-            websites: websites || [],
-            loading: workspaceLoading,
-          },
-        });
+        const websiteList = websites || [];
+        
+        // Only sync if there's meaningful data change
+        const hasWorkspaceChanged = state.workspace.current?.id !== currentWorkspace?.id;
+        const hasWebsitesChanged = JSON.stringify(state.workspace.websites.map(w => w.id).sort()) 
+          !== JSON.stringify(websiteList.map(w => w.id).sort());
+        const hasLoadingChanged = state.workspace.loading !== workspaceLoading;
+        
+        if (hasWorkspaceChanged || hasWebsitesChanged || hasLoadingChanged) {
+          dispatch({
+            type: 'SET_WORKSPACE',
+            payload: {
+              workspace: currentWorkspace,
+              websites: websiteList,
+              loading: workspaceLoading,
+            },
+          });
+          
+          // Debug logging for website selection
+          if (process.env.NODE_ENV === 'development' && websiteList.length > 0) {
+            const selectedWebsiteId = state.workspace.selectedWebsiteId || websiteList[0]?.id;
+            console.log('WorkspaceStateSync: Website selection updated', {
+              selectedWebsiteId,
+              availableWebsites: websiteList.length,
+              workspaceName: currentWorkspace?.name
+            });
+          }
+        }
       }
     } catch (error) {
       console.error('WorkspaceStateSync sync error:', error);
     }
-  }, [currentWorkspace, websites, workspaceLoading, dispatch]);
+  }, [currentWorkspace, websites, workspaceLoading, dispatch, state.workspace]);
 
   return <>{children}</>;
 }
@@ -92,12 +112,10 @@ function CacheWarmer({ children }: { children: React.ReactNode }) {
   // Warm up cache with essential data on app start
   React.useEffect(() => {
     try {
+      // Cache warming logic here (removed console logs for cleaner output)
       if (state && state.workspace.websites.length > 0 && !state.workspace.loading) {
         const selectedWebsiteId = state.workspace.selectedWebsiteId;
-        
-        if (selectedWebsiteId && process.env.NODE_ENV === 'development') {
-          console.log(`🔥 Cache warming for website: ${selectedWebsiteId}`);
-        }
+        // Cache warming happens silently
       }
     } catch (error) {
       console.error('CacheWarmer warming error:', error);

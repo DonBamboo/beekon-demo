@@ -33,6 +33,7 @@ import { WorkspaceGuard } from "@/components/WorkspaceGuard";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace, Website } from "@/hooks/useWorkspace";
 import { useWebsitesCoordinated } from "@/hooks/useWebsitesCoordinated";
+import { useSelectedWebsite } from "@/contexts/AppStateContext";
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { useExportHandler } from "@/lib/export-utils";
@@ -55,7 +56,7 @@ import { useEffect, useState } from "react";
 export default function Websites() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [selectedWebsite, setSelectedWebsite] = useState<Website | null>(null);
+  const [selectedWebsiteForModal, setSelectedWebsiteForModal] = useState<Website | null>(null);
   const [domain, setDomain] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export default function Websites() {
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
   const { websites, deleteWebsite, refetchWebsites, currentWorkspace, loading: workspaceLoading } = useWorkspace();
+  const { selectedWebsiteId, setSelectedWebsite } = useSelectedWebsite();
   const { handleExport } = useExportHandler();
   
   // Use coordinated websites loading to prevent flickering
@@ -76,6 +78,16 @@ export default function Websites() {
     refresh: refreshMetrics,
     getWebsiteMetrics,
   } = useWebsitesCoordinated();
+
+  // Ensure a website is selected for global state consistency
+  useEffect(() => {
+    if (websites && websites.length > 0 && !selectedWebsiteId) {
+      setSelectedWebsite(websites[0].id);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Websites page: Auto-selected first website', websites[0].id);
+      }
+    }
+  }, [websites, selectedWebsiteId, setSelectedWebsite]);
 
 
   const handleAddWebsite = async () => {
@@ -170,13 +182,13 @@ export default function Websites() {
   };
 
   const handleOpenSettings = (website: Website) => {
-    setSelectedWebsite(website);
+    setSelectedWebsiteForModal(website);
     setIsSettingsModalOpen(true);
   };
 
   const handleCloseSettings = () => {
     setIsSettingsModalOpen(false);
-    setSelectedWebsite(null);
+    setSelectedWebsiteForModal(null);
   };
 
   const handleAnalyzeNow = async (
@@ -460,16 +472,31 @@ export default function Websites() {
       {/* Websites Grid */}
       <div className="grid gap-6">
         {websites?.map((website) => (
-          <Card key={website.id}>
+          <Card 
+            key={website.id}
+            className={`cursor-pointer transition-colors ${
+              selectedWebsiteId === website.id 
+                ? 'ring-2 ring-primary bg-primary/5' 
+                : 'hover:bg-accent/50'
+            }`}
+            onClick={() => setSelectedWebsite(website.id)}
+          >
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-lg">
-                    <Globe className="h-5 w-5 text-primary" />
+                  <div className={`flex items-center justify-center w-10 h-10 rounded-lg ${
+                    selectedWebsiteId === website.id 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'bg-primary/10 text-primary'
+                  }`}>
+                    <Globe className="h-5 w-5" />
                   </div>
                   <div>
-                    <CardTitle>
+                    <CardTitle className="flex items-center gap-2">
                       {website.display_name || website.domain}
+                      {selectedWebsiteId === website.id && (
+                        <Badge variant="default" className="text-xs">Selected</Badge>
+                      )}
                     </CardTitle>
                     <CardDescription>{website.domain}</CardDescription>
                   </div>
@@ -555,7 +582,7 @@ export default function Websites() {
 
       {/* Website Settings Modal */}
       <WebsiteSettingsModal
-        website={selectedWebsite}
+        website={selectedWebsiteForModal}
         isOpen={isSettingsModalOpen}
         onClose={handleCloseSettings}
       />

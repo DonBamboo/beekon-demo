@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAnalysisErrorHandler } from "@/hooks/useAnalysisError";
 import { useSubscriptionEnforcement } from "@/hooks/useSubscriptionEnforcement";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useSelectedWebsite } from "@/contexts/AppStateContext";
 import { capitalizeFirstLetters } from "@/lib/utils";
 import { analysisService, LLMResult } from "@/services/analysisService";
 import { UIAnalysisResult, ExportFormat } from "@/types/database";
@@ -118,18 +119,16 @@ export default function Analysis() {
   const [availableAnalysisSessions, setAvailableAnalysisSessions] = useState<
     Array<{ id: string; name: string; resultCount: number }>
   >([]);
-  const [selectedWebsite, setSelectedWebsite] = useState<string>("");
   const [showVisualization, setShowVisualization] = useState(true);
   const [groupBySession, setGroupBySession] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const { handleExport } = useExportHandler();
-
-  // Set selected website to first website when websites load
-  useEffect(() => {
-    if (websites && websites.length > 0 && !selectedWebsite) {
-      setSelectedWebsite(websites[0]!.id);
-    }
-  }, [websites, selectedWebsite]);
+  
+  // Use global website selection state instead of local state
+  const { selectedWebsiteId, setSelectedWebsite, websites: globalWebsites } = useSelectedWebsite();
+  
+  // Use global websites if available, fallback to workspace websites
+  const websitesForDropdown = globalWebsites.length > 0 ? globalWebsites : websites;
 
   // Debounce search query
   useEffect(() => {
@@ -345,14 +344,14 @@ export default function Analysis() {
   // Data loading is now handled automatically by the optimized hook
   // Only load analysis sessions (not cached yet) when website changes
   const loadAvailableAnalysisSessions = useCallback(async () => {
-    if (!selectedWebsite) {
+    if (!selectedWebsiteId) {
       setAvailableAnalysisSessions([]);
       return;
     }
 
     try {
       const sessions = await analysisService.getAnalysisSessionsForWebsite(
-        selectedWebsite
+        selectedWebsiteId
       );
       const sessionsWithAll = [
         {
@@ -366,13 +365,13 @@ export default function Analysis() {
     } catch (error) {
       console.error("Failed to load analysis sessions:", error);
     }
-  }, [selectedWebsite]);
+  }, [selectedWebsiteId]);
 
   useEffect(() => {
-    if (selectedWebsite) {
+    if (selectedWebsiteId) {
       loadAvailableAnalysisSessions();
     }
-  }, [selectedWebsite, loadAvailableAnalysisSessions]);
+  }, [selectedWebsiteId, loadAvailableAnalysisSessions]);
 
   // No longer needed - infinite scroll hook handles data loading automatically
 

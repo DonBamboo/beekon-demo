@@ -9,8 +9,10 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAppState } from "@/contexts/AppStateContext";
 import { BarChart3, Globe, Search, Settings, Users } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: BarChart3 },
@@ -22,6 +24,14 @@ const navigation = [
 
 export function AppSidebar() {
   const { open } = useSidebar();
+  const location = useLocation();
+  const { navigateToPage } = useAppState();
+  
+  // Track navigation changes in the global state
+  useEffect(() => {
+    navigateToPage(location.pathname);
+  }, [location.pathname, navigateToPage]);
+  
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>

@@ -1,4 +1,3 @@
-import { WorkspaceErrorBoundary } from "@/components/WorkspaceErrorBoundary";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -140,8 +139,7 @@ const App = () => {
         <AuthProvider>
           <WorkspaceProvider>
             <OptimizedAppProvider>
-              <WorkspaceErrorBoundary>
-                <BrowserRouter>
+              <BrowserRouter>
                 <Suspense fallback={<PageLoading message="Loading application..." />}>
                   <Routes>
                     <Route path="/" element={<LandingPage />} />
@@ -204,8 +202,7 @@ const App = () => {
                   </Routes>
                 </Suspense>
                 <StateManagementDevTools />
-                </BrowserRouter>
-              </WorkspaceErrorBoundary>
+              </BrowserRouter>
             </OptimizedAppProvider>
           </WorkspaceProvider>
         </AuthProvider>
