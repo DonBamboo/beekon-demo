@@ -17,7 +17,7 @@ import { Spinner } from "@/components/LoadingStates";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { apiKeyService, ApiKey as ApiKeyType, ApiKeyUsage } from "@/services/apiKeyService";
+import { apiKeyService, ApiKey, ApiKeyUsage } from "@/services/apiKeyService";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import {
   Key,

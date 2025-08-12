@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Spinner, ProgressiveLoading } from "@/components/LoadingStates";
+import { Spinner } from "@/components/LoadingStates";
 import {
   Dialog,
   DialogContent,
@@ -587,7 +587,10 @@ export function AnalysisConfigModal({
                     variant="ghost"
                     size="sm"
                     className="h-6 w-6 p-0"
-                    onClick={() => removeTopic(form.watch("topics")[0])}
+                    onClick={() => {
+                      const firstTopic = form.watch("topics")[0];
+                      if (firstTopic) removeTopic(firstTopic);
+                    }}
                   >
                     <X className="h-3 w-3" />
                   </Button>

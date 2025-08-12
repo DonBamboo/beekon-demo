@@ -1007,7 +1007,7 @@ export default function Analysis() {
                     <SelectTrigger className="w-full sm:w-[250px] min-w-[200px]">
                       <div className="flex items-center justify-between w-full">
                         <SelectValue placeholder="Select website" />
-                        {(isLoadingResults && (!cachedResults || cachedResults.length === 0)) && (
+                        {(isLoadingResults && (!analysisResults || analysisResults.length === 0)) && (
                           <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
                         )}
                       </div>

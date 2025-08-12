@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useAppState } from '@/contexts/AppStateContext';
 import { useTrueNavigation } from '@/hooks/useTrueNavigation';
 import { InlineLoading } from '@/components/LoadingStates';

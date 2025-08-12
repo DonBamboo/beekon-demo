@@ -24,7 +24,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000, // 5 minutes
-      cacheTime: 10 * 60 * 1000, // 10 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
       retry: (failureCount, error) => {
         // Don't retry on 4xx errors
         if (error && typeof error === 'object' && 'status' in error) {
@@ -38,7 +38,7 @@ const queryClient = new QueryClient({
       refetchOnReconnect: 'always',
       // Prevent duplicate requests for the same query
       refetchOnMount: (query) => {
-        return Date.now() - query.dataUpdatedAt > 2 * 60 * 1000; // Only refetch if data is older than 2 minutes
+        return Date.now() - query.state.dataUpdatedAt > 2 * 60 * 1000; // Only refetch if data is older than 2 minutes
       },
       // Enable background refetching with longer intervals
       refetchInterval: false, // Disable automatic background refetching by default

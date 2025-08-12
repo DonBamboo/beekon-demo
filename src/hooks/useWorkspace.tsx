@@ -384,6 +384,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     [currentWorkspace?.id, toast, setCurrentWorkspaceWithNotification]
   );
 
+  const invalidateWebsitesCache = useCallback(() => {
+    websitesCache.current = null;
+  }, []);
+
   const deleteWorkspace = useCallback(
     async (workspaceId: string) => {
       try {
@@ -549,10 +553,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
     return true;
   }, [currentWorkspace, workspaces, setCurrentWorkspaceWithNotification]);
-
-  const invalidateWebsitesCache = useCallback(() => {
-    websitesCache.current = null;
-  }, []);
 
   const deleteWebsite = useCallback(
     async (websiteId: string) => {

@@ -59,17 +59,29 @@ export function useOptimizedAnalysisData() {
     return baseFilters;
   }, [filters]);
 
-  // Cache keys
-  const resultsCacheKey = `analysis_results_${selectedWebsiteId}_${JSON.stringify(
-    transformedFilters
-  )}`;
+  // Smart cache key strategy: base cache for website, filtered cache for specific filters
+  const baseCacheKey = `analysis_results_${selectedWebsiteId}`;
+  const filteredCacheKey = `analysis_filtered_${selectedWebsiteId}_${JSON.stringify(transformedFilters)}`;
   const metadataCacheKey = `analysis_metadata_${selectedWebsiteId}`;
 
-  // Check if we have cached data for instant rendering - remove unstable getFromCache dependency
-  const cachedResults = useMemo(() => {
+  // Check multiple cache levels for instant rendering
+  const getCachedData = useCallback(() => {
     if (!selectedWebsiteId) return null;
-    return getFromCache<UIAnalysisResult[]>(resultsCacheKey);
-  }, [selectedWebsiteId, resultsCacheKey]);
+    
+    // Priority 1: Try filtered cache first (exact match for current filters)
+    const filteredCache = getFromCache<UIAnalysisResult[]>(filteredCacheKey);
+    if (filteredCache && filteredCache.length > 0) {
+      return { data: filteredCache, source: 'filtered', key: filteredCacheKey };
+    }
+    
+    // Priority 2: Try base cache (unfiltered data for this website)
+    const baseCache = getFromCache<UIAnalysisResult[]>(baseCacheKey);
+    if (baseCache && baseCache.length > 0) {
+      return { data: baseCache, source: 'base', key: baseCacheKey };
+    }
+    
+    return null;
+  }, [selectedWebsiteId, filteredCacheKey, baseCacheKey, getFromCache]);
 
   // Stable reference to previous filters to prevent unnecessary updates
   const prevFiltersRef = useRef(transformedFilters);
@@ -88,22 +100,19 @@ export function useOptimizedAnalysisData() {
         return;
       }
 
-      // Get current cache state
-      const currentCachedResults =
-        getFromCache<UIAnalysisResult[]>(resultsCacheKey);
-
-      // First, check cache for instant rendering
-      if (!forceRefresh && currentCachedResults) {
-        setAnalysisResults(currentCachedResults);
-        setIsInitialLoad(false);
-        setIsLoading(false);
-        return;
+      // Check smart cache only if not forcing refresh
+      if (!forceRefresh) {
+        const cachedResult = getCachedData();
+        if (cachedResult) {
+          setAnalysisResults(cachedResult.data);
+          setIsInitialLoad(false);
+          setIsLoading(false);
+          return;
+        }
       }
 
-      // Show loading only if no cached data
-      if (!currentCachedResults) {
-        setIsLoading(true);
-      }
+      // No cache found or forcing refresh - fetch fresh data
+      setIsLoading(true);
       setError(null);
 
       try {
@@ -122,8 +131,12 @@ export function useOptimizedAnalysisData() {
         const results = deduplicateById(rawResults);
         setAnalysisResults(results);
 
-        // Cache the deduplicated results
-        setCache(resultsCacheKey, results, 5 * 60 * 1000); // 5 minutes cache
+        // Smart caching strategy: Cache both base and filtered data
+        // Base cache (for website switching)
+        setCache(baseCacheKey, results, 10 * 60 * 1000); // 10 minutes cache
+        
+        // Filtered cache (for exact filter match)
+        setCache(filteredCacheKey, results, 5 * 60 * 1000); // 5 minutes cache
 
         // Cache metadata for other components
         if (data.metadata) {
@@ -139,9 +152,10 @@ export function useOptimizedAnalysisData() {
     },
     [
       selectedWebsiteId,
-      resultsCacheKey,
+      baseCacheKey,
+      filteredCacheKey,
       metadataCacheKey,
-      getFromCache,
+      getCachedData,
       setCache,
     ]
   );
@@ -171,8 +185,9 @@ export function useOptimizedAnalysisData() {
       setAnalysisResults(newResults);
       setHasMore(additionalResults.hasMore);
 
-      // Update cache with deduplicated results
-      setCache(resultsCacheKey, newResults, 5 * 60 * 1000);
+      // Update cache with deduplicated results (both base and filtered cache)
+      setCache(baseCacheKey, newResults, 10 * 60 * 1000);
+      setCache(filteredCacheKey, newResults, 5 * 60 * 1000);
     } catch (error) {
       console.error("Failed to load more results:", error);
       setError(
@@ -187,10 +202,11 @@ export function useOptimizedAnalysisData() {
     hasMore,
     isLoading,
     setCache,
-    resultsCacheKey,
+    baseCacheKey,
+    filteredCacheKey,
   ]);
 
-  // Enhanced cache-first navigation for instant website switching
+  // Smart cache-first navigation for instant website switching
   useEffect(() => {
     if (!selectedWebsiteId) {
       setAnalysisResults([]);
@@ -201,11 +217,11 @@ export function useOptimizedAnalysisData() {
       return;
     }
 
-    // Check cache first before resetting any loading states
-    const cachedData = getFromCache<UIAnalysisResult[]>(resultsCacheKey);
-    if (cachedData && cachedData.length > 0) {
+    // Check cache hierarchy: filtered cache > base cache > fresh fetch
+    const cachedResult = getCachedData();
+    if (cachedResult) {
       // We have cached data - use it immediately without showing loading
-      setAnalysisResults(cachedData);
+      setAnalysisResults(cachedResult.data);
       setIsInitialLoad(false);
       setIsLoading(false);
       setError(null);
@@ -213,8 +229,9 @@ export function useOptimizedAnalysisData() {
       if (process.env.NODE_ENV === "development") {
         console.log("Analysis: Using cached data for instant navigation", {
           websiteId: selectedWebsiteId,
-          cachedResults: cachedData.length,
-          cacheKey: resultsCacheKey
+          cachedResults: cachedResult.data.length,
+          source: cachedResult.source,
+          cacheKey: cachedResult.key
         });
       }
       return;
@@ -228,38 +245,48 @@ export function useOptimizedAnalysisData() {
     if (process.env.NODE_ENV === "development") {
       console.log("Analysis: No cache found, loading fresh data", {
         websiteId: selectedWebsiteId,
-        cacheKey: resultsCacheKey
+        baseCacheKey,
+        filteredCacheKey
       });
     }
-  }, [selectedWebsiteId, filtersChanged, resultsCacheKey, getFromCache, loadAnalysisData]);
+  }, [selectedWebsiteId, getCachedData, loadAnalysisData, baseCacheKey, filteredCacheKey]);
 
-  // Detect website changes and clear local state for smooth navigation
-  const prevWebsiteIdRef = React.useRef<string | null>(null);
+  // Separate effect for filter changes - preserves website cache, only reloads if no filtered cache
   useEffect(() => {
-    const prevWebsiteId = prevWebsiteIdRef.current;
-    prevWebsiteIdRef.current = selectedWebsiteId;
+    // Only handle filter changes if we have a website selected and filters actually changed
+    if (!selectedWebsiteId || !filtersChanged) return;
 
-    // Only reset local state when actually switching to a different website, not on initial load
-    if (
-      prevWebsiteId &&
-      selectedWebsiteId &&
-      prevWebsiteId !== selectedWebsiteId
-    ) {
-      // Clear local state for loading transition (but preserve cache)
-      setAnalysisResults([]);
-      setIsInitialLoad(true);
+    // Check if we have filtered cache for these specific filters
+    const filteredCache = getFromCache<UIAnalysisResult[]>(filteredCacheKey);
+    if (filteredCache && filteredCache.length > 0) {
+      // We have cache for these exact filters - use it immediately
+      setAnalysisResults(filteredCache);
+      setIsLoading(false);
       setError(null);
-      setHasMore(true);
       
       if (process.env.NODE_ENV === "development") {
-        console.log("Analysis: Website changed, clearing local state", {
-          from: prevWebsiteId,
-          to: selectedWebsiteId,
-          note: "Cache preserved for future navigation"
+        console.log("Analysis: Using filtered cache for filter change", {
+          websiteId: selectedWebsiteId,
+          filteredResults: filteredCache.length,
+          filteredCacheKey
         });
       }
+      return;
     }
-  }, [selectedWebsiteId]);
+
+    // No filtered cache found - need to reload with new filters
+    if (process.env.NODE_ENV === "development") {
+      console.log("Analysis: No filtered cache, reloading with new filters", {
+        websiteId: selectedWebsiteId,
+        filters: transformedFilters,
+        filteredCacheKey
+      });
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    loadAnalysisData();
+  }, [filtersChanged, selectedWebsiteId, filteredCacheKey, getFromCache, transformedFilters, loadAnalysisData]);
 
   return {
     // Data
@@ -268,8 +295,8 @@ export function useOptimizedAnalysisData() {
     llmProviders,
 
     // Loading states (optimized - only show when no cache)
-    isLoading: isLoading && !cachedResults,
-    isInitialLoad: isInitialLoad && !cachedResults,
+    isLoading: isLoading && !getCachedData(),
+    isInitialLoad: isInitialLoad && !getCachedData(),
     sharedDataLoading,
 
     // State
@@ -285,7 +312,7 @@ export function useOptimizedAnalysisData() {
     setFilters,
 
     // Cache status
-    hasCachedData: !!cachedResults,
+    hasCachedData: !!getCachedData(),
   };
 }
 
@@ -512,60 +539,86 @@ export function useOptimizedCompetitorsData() {
     prevCompetitorFiltersRef.current = transformedFilters;
   }
 
-  const cacheKey = `competitors_data_${selectedWebsiteId}_${JSON.stringify(
+  // Smart cache key strategy: base cache for website, filtered cache for specific filters
+  const competitorsBaseCacheKey = `competitors_data_${selectedWebsiteId}`;
+  const competitorsFilteredCacheKey = `competitors_filtered_${selectedWebsiteId}_${JSON.stringify(
     prevCompetitorFiltersRef.current
   )}`;
 
-  // Check cached data - remove unstable getFromCache dependency
-  const cachedData = useMemo(() => {
+  // Check multiple cache levels for instant rendering
+  const getCompetitorsCachedData = useCallback(() => {
     if (!selectedWebsiteId) return null;
-    return getFromCache<any>(cacheKey);
-  }, [selectedWebsiteId, cacheKey]);
+    
+    // Priority 1: Try filtered cache first (exact match for current filters)
+    const filteredCache = getFromCache<any>(competitorsFilteredCacheKey);
+    if (filteredCache && (filteredCache.competitors?.length > 0 || filteredCache.performance?.length > 0)) {
+      return { data: filteredCache, source: 'filtered', key: competitorsFilteredCacheKey };
+    }
+    
+    // Priority 2: Try base cache (unfiltered data for this website)
+    const baseCache = getFromCache<any>(competitorsBaseCacheKey);
+    if (baseCache && (baseCache.competitors?.length > 0 || baseCache.performance?.length > 0)) {
+      return { data: baseCache, source: 'base', key: competitorsBaseCacheKey };
+    }
+    
+    return null;
+  }, [selectedWebsiteId, competitorsFilteredCacheKey, competitorsBaseCacheKey, getFromCache]);
 
   const loadCompetitorsData = useCallback(
     async (forceRefresh = false) => {
       if (!selectedWebsiteId) return;
 
-      // Get current cache state
-      const currentCachedData = getFromCache<any>(cacheKey);
+      // Check smart cache only if not forcing refresh
+      if (!forceRefresh) {
+        const cachedResult = getCompetitorsCachedData();
+        if (cachedResult) {
+          const currentCachedData = cachedResult.data;
+          
+          // Ensure cached data has the correct structure with analysisStatus
+          const transformedCachedCompetitors = (
+            currentCachedData.competitors || []
+          ).map((competitor: any) => {
+            // If already has analysisStatus, keep it; otherwise derive it
+            if (competitor.analysisStatus) {
+              return competitor;
+            }
+            const performance = (currentCachedData.performance || []).find(
+              (p: any) => p.domain === competitor.competitor_domain
+            );
+            return {
+              ...competitor,
+              analysisStatus: performance ? "completed" : ("pending" as const),
+              performance,
+              addedAt: competitor.created_at || new Date().toISOString(),
+            };
+          });
 
-      // Instant render from cache
-      if (!forceRefresh && currentCachedData) {
-        // Ensure cached data has the correct structure with analysisStatus
-        const transformedCachedCompetitors = (
-          currentCachedData.competitors || []
-        ).map((competitor: any) => {
-          // If already has analysisStatus, keep it; otherwise derive it
-          if (competitor.analysisStatus) {
-            return competitor;
-          }
-          const performance = (currentCachedData.performance || []).find(
-            (p: any) => p.domain === competitor.competitor_domain
+          // Deduplicate cached competitors by ID to prevent React key conflicts
+          const competitorsWithStatus = transformedCachedCompetitors.filter(
+            (competitor: any, index: number, array: any[]) =>
+              array.findIndex((c: any) => c.id === competitor.id) === index
           );
-          return {
-            ...competitor,
-            analysisStatus: performance ? "completed" : ("pending" as const),
-            performance,
-            addedAt: competitor.created_at || new Date().toISOString(),
-          };
-        });
 
-        // Deduplicate cached competitors by ID to prevent React key conflicts
-        const competitorsWithStatus = transformedCachedCompetitors.filter(
-          (competitor: any, index: number, array: any[]) =>
-            array.findIndex((c: any) => c.id === competitor.id) === index
-        );
-
-        setCompetitors(competitorsWithStatus);
-        setPerformance(currentCachedData.performance);
-        setAnalytics(currentCachedData.analytics);
-        setIsLoading(false);
-        return;
+          setCompetitors(competitorsWithStatus);
+          setPerformance(currentCachedData.performance || []);
+          setAnalytics(currentCachedData.analytics);
+          setIsLoading(false);
+          
+          if (process.env.NODE_ENV === "development") {
+            console.log("Competitors: Using cached data for instant navigation", {
+              websiteId: selectedWebsiteId,
+              cachedCompetitors: competitorsWithStatus.length,
+              source: cachedResult.source,
+              cacheKey: cachedResult.key
+            });
+          }
+          return;
+        }
       }
 
-      if (!currentCachedData) {
-        setIsLoading(true);
-      }
+      // No cache found or forcing refresh - fetch fresh data
+      setIsLoading(true);
+      setError(null);
 
       try {
         // Use stable filter reference
@@ -601,7 +654,7 @@ export function useOptimizedCompetitorsData() {
         setPerformance(data.performance || []);
         setAnalytics(data.analytics);
 
-        // Cache competitors data with transformed structure
+        // Smart caching strategy: Cache both base and filtered data
         const competitorsData = {
           competitors: competitorsWithStatus, // Use transformed data
           performance: data.performance || [],
@@ -609,7 +662,11 @@ export function useOptimizedCompetitorsData() {
           topics: data.topics || [], // Include topics for cross-page sharing
         };
 
-        setCache(cacheKey, competitorsData, 10 * 60 * 1000); // 10 minutes cache
+        // Base cache (for website switching)
+        setCache(competitorsBaseCacheKey, competitorsData, 10 * 60 * 1000); // 10 minutes cache
+        
+        // Filtered cache (for exact filter match)
+        setCache(competitorsFilteredCacheKey, competitorsData, 5 * 60 * 1000); // 5 minutes cache
       } catch (error) {
         console.error("Failed to load competitors data:", error);
         setError(error instanceof Error ? error : new Error("Unknown error"));
@@ -617,10 +674,16 @@ export function useOptimizedCompetitorsData() {
         setIsLoading(false);
       }
     },
-    [selectedWebsiteId, cacheKey, getFromCache, setCache]
+    [
+      selectedWebsiteId, 
+      competitorsBaseCacheKey, 
+      competitorsFilteredCacheKey, 
+      getCompetitorsCachedData, 
+      setCache
+    ]
   );
 
-  // Enhanced cache-first navigation for instant website switching - Competitors
+  // Smart cache-first navigation for instant website switching - Competitors
   useEffect(() => {
     if (!selectedWebsiteId) {
       setCompetitors([]);
@@ -631,9 +694,11 @@ export function useOptimizedCompetitorsData() {
       return;
     }
 
-    // Check cache first before resetting any loading states
-    const cachedData = getFromCache<any>(cacheKey);
-    if (cachedData) {
+    // Check cache hierarchy: filtered cache > base cache > fresh fetch
+    const cachedResult = getCompetitorsCachedData();
+    if (cachedResult) {
+      const cachedData = cachedResult.data;
+      
       // We have cached data - use it immediately without showing loading
       const transformedCachedCompetitors = (
         cachedData.competitors || []
@@ -669,7 +734,8 @@ export function useOptimizedCompetitorsData() {
         console.log("Competitors: Using cached data for instant navigation", {
           websiteId: selectedWebsiteId,
           cachedCompetitors: competitorsWithStatus.length,
-          cacheKey: cacheKey
+          source: cachedResult.source,
+          cacheKey: cachedResult.key
         });
       }
       return;
@@ -683,38 +749,73 @@ export function useOptimizedCompetitorsData() {
     if (process.env.NODE_ENV === "development") {
       console.log("Competitors: No cache found, loading fresh data", {
         websiteId: selectedWebsiteId,
-        cacheKey: cacheKey
+        baseCacheKey: competitorsBaseCacheKey,
+        filteredCacheKey: competitorsFilteredCacheKey
       });
     }
-  }, [selectedWebsiteId, competitorFiltersChanged, cacheKey, getFromCache, loadCompetitorsData]);
+  }, [selectedWebsiteId, getCompetitorsCachedData, loadCompetitorsData, competitorsBaseCacheKey, competitorsFilteredCacheKey]);
 
-  // Detect website changes and clear local state for smooth navigation
-  const prevCompetitorsWebsiteIdRef = React.useRef<string | null>(null);
+  // Separate effect for competitor filter changes - preserves website cache, only reloads if no filtered cache
   useEffect(() => {
-    const prevWebsiteId = prevCompetitorsWebsiteIdRef.current;
-    prevCompetitorsWebsiteIdRef.current = selectedWebsiteId;
+    // Only handle filter changes if we have a website selected and filters actually changed
+    if (!selectedWebsiteId || !competitorFiltersChanged) return;
 
-    // Only reset local state when actually switching to a different website, not on initial load
-    if (
-      prevWebsiteId &&
-      selectedWebsiteId &&
-      prevWebsiteId !== selectedWebsiteId
-    ) {
-      // Clear local state for loading transition (but preserve cache)
-      setCompetitors([]);
-      setPerformance([]);
-      setAnalytics(null);
+    // Check if we have filtered cache for these specific filters
+    const filteredCache = getFromCache<any>(competitorsFilteredCacheKey);
+    if (filteredCache && (filteredCache.competitors?.length > 0 || filteredCache.performance?.length > 0)) {
+      // We have cache for these exact filters - use it immediately
+      const transformedCachedCompetitors = (
+        filteredCache.competitors || []
+      ).map((competitor: any) => {
+        // If already has analysisStatus, keep it; otherwise derive it
+        if (competitor.analysisStatus) {
+          return competitor;
+        }
+        const performance = (filteredCache.performance || []).find(
+          (p: any) => p.domain === competitor.competitor_domain
+        );
+        return {
+          ...competitor,
+          analysisStatus: performance ? "completed" : ("pending" as const),
+          performance,
+          addedAt: competitor.created_at || new Date().toISOString(),
+        };
+      });
+
+      const competitorsWithStatus = transformedCachedCompetitors.filter(
+        (competitor: any, index: number, array: any[]) =>
+          array.findIndex((c: any) => c.id === competitor.id) === index
+      );
+
+      setCompetitors(competitorsWithStatus);
+      setPerformance(filteredCache.performance || []);
+      setAnalytics(filteredCache.analytics);
+      setIsLoading(false);
       setError(null);
       
       if (process.env.NODE_ENV === "development") {
-        console.log("Competitors: Website changed, clearing local state", {
-          from: prevWebsiteId,
-          to: selectedWebsiteId,
-          note: "Cache preserved for future navigation"
+        console.log("Competitors: Using filtered cache for filter change", {
+          websiteId: selectedWebsiteId,
+          filteredCompetitors: competitorsWithStatus.length,
+          competitorsFilteredCacheKey
         });
       }
+      return;
     }
-  }, [selectedWebsiteId]);
+
+    // No filtered cache found - need to reload with new filters
+    if (process.env.NODE_ENV === "development") {
+      console.log("Competitors: No filtered cache, reloading with new filters", {
+        websiteId: selectedWebsiteId,
+        filters: transformedFilters,
+        competitorsFilteredCacheKey
+      });
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    loadCompetitorsData();
+  }, [competitorFiltersChanged, selectedWebsiteId, competitorsFilteredCacheKey, getFromCache, transformedFilters, loadCompetitorsData]);
 
   return {
     // Data
@@ -724,7 +825,7 @@ export function useOptimizedCompetitorsData() {
     topics, // Shared across pages
 
     // Loading states (optimized)
-    isLoading: isLoading && !cachedData,
+    isLoading: isLoading && !getCompetitorsCachedData(),
 
     // State
     error,
@@ -737,6 +838,6 @@ export function useOptimizedCompetitorsData() {
     setFilters,
 
     // Cache status
-    hasCachedData: !!cachedData,
+    hasCachedData: !!getCompetitorsCachedData(),
   };
 }

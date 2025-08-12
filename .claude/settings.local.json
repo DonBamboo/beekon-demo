@@ -26,7 +26,8 @@
       "Bash(mv:*)",
       "WebFetch(domain:github.com)",
       "Bash(npx eslint:*)",
-      "Bash(timeout 10s npm run dev:*)"
+      "Bash(timeout 10s npm run dev:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   },
