@@ -10,17 +10,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Suspense, lazy, useEffect } from "react";
 import { registerSW } from "./lib/serviceWorker";
-import { PageLoading, InlineLoading } from "@/components/LoadingStates";
+import { PageLoading } from "@/components/LoadingStates";
+import AppDashboard from "@/components/AppDashboard";
 
-// Lazy load all pages for code splitting
-const Analysis = lazy(() => import("./pages/Analysis"));
+// Lazy load only non-core pages for code splitting
 const Auth = lazy(() => import("./pages/Auth"));
-const Competitors = lazy(() => import("./pages/Competitors"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Websites = lazy(() => import("./pages/Websites"));
+
+// Core dashboard pages are now directly imported in AppDashboard for instant navigation
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -144,60 +142,59 @@ const App = () => {
                   <Routes>
                     <Route path="/" element={<LandingPage />} />
                     <Route path="/auth" element={<Auth />} />
+                    
+                    {/* Unified route for all dashboard pages - true SPA */}
                     <Route
-                      path="/dashboard"
+                      path="/dashboard/*"
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Dashboard />
+                            <AppDashboard />
                           </AppLayout>
                         </ProtectedRoute>
                       }
                     />
                     <Route
-                      path="/websites"
+                      path="/websites/*"
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Websites />
+                            <AppDashboard />
                           </AppLayout>
                         </ProtectedRoute>
                       }
                     />
                     <Route
-                      path="/analysis"
+                      path="/analysis/*"
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Suspense fallback={<InlineLoading message="Loading page..." />}>
-                              <Analysis />
-                            </Suspense>
+                            <AppDashboard />
                           </AppLayout>
                         </ProtectedRoute>
                       }
                     />
                     <Route
-                      path="/competitors"
+                      path="/competitors/*"
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Suspense fallback={<InlineLoading message="Loading page..." />}>
-                              <Competitors />
-                            </Suspense>
+                            <AppDashboard />
                           </AppLayout>
                         </ProtectedRoute>
                       }
                     />
                     <Route
-                      path="/settings"
+                      path="/settings/*"
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Settings />
+                            <AppDashboard />
                           </AppLayout>
                         </ProtectedRoute>
                       }
                     />
+                    
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>

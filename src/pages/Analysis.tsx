@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAnalysisErrorHandler } from "@/hooks/useAnalysisError";
 import { useSubscriptionEnforcement } from "@/hooks/useSubscriptionEnforcement";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { useSelectedWebsite } from "@/contexts/AppStateContext";
+import { useSelectedWebsite, usePageFilters } from "@/contexts/AppStateContext";
 import { capitalizeFirstLetters } from "@/lib/utils";
 import { analysisService, LLMResult } from "@/services/analysisService";
 import { UIAnalysisResult, ExportFormat } from "@/types/database";
@@ -61,29 +61,27 @@ import { InfiniteScrollContainer } from "@/components/InfiniteScrollContainer";
 
 // LegacyAnalysisResult interface removed - now using modern AnalysisResult directly
 
-export default function Analysis() {
+interface AnalysisProps {
+  isVisible?: boolean;
+}
+
+export default function Analysis({ isVisible = true }: AnalysisProps) {
   const { toast } = useToast();
   const { currentWorkspace, loading, websites } = useWorkspace();
   const { enforceLimit, getRemainingCredits } = useSubscriptionEnforcement();
   const { error, isRetrying, handleError, retryOperation, clearError } =
     useAnalysisErrorHandler();
-  const [selectedTopic, setSelectedTopic] = useState("all");
-  const [selectedLLM, setSelectedLLM] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  // Use global filter state from AppStateContext
+  const { filters, setFilters } = usePageFilters("analysis");
+  
+  // Debounced search query for API calls (keep local for performance)
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-
-  // New filter states
-  const [selectedMentionStatus, setSelectedMentionStatus] = useState("all"); // "all", "mentioned", "not_mentioned"
-  const [selectedDateRange, setSelectedDateRange] = useState("all"); // "all", "7d", "30d", "90d", "custom"
+  
+  // Custom date range state (keep local as it's temporary UI state)
   const [customDateRange, setCustomDateRange] = useState<{
     start: string;
     end: string;
   } | null>(null);
-  const [selectedConfidenceRange, setSelectedConfidenceRange] = useState<
-    [number, number]
-  >([0, 100]);
-  const [selectedSentiment, setSelectedSentiment] = useState("all"); // "all", "positive", "neutral", "negative"
-  const [selectedAnalysisSession, setSelectedAnalysisSession] = useState("all");
 
   // Enhanced filtering state
   const [sortBy, setSortBy] = useState<
@@ -98,7 +96,6 @@ export default function Analysis() {
     }>
   >([]);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
-  const [advancedSearchQuery, setAdvancedSearchQuery] = useState("");
   const [searchInResponses, setSearchInResponses] = useState(false);
   const [searchInInsights, setSearchInInsights] = useState(false);
 
@@ -126,29 +123,26 @@ export default function Analysis() {
   
   // Use global website selection state instead of local state
   const { selectedWebsiteId, setSelectedWebsite, websites: globalWebsites } = useSelectedWebsite();
-  
-  // Use global websites if available, fallback to workspace websites
-  const websitesForDropdown = globalWebsites.length > 0 ? globalWebsites : websites;
 
-  // Debounce search query
+  // Debounce search query from global filters
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
+      setDebouncedSearchQuery(filters.searchQuery);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [filters.searchQuery]);
 
-  // Debounce advanced search query
+  // Debounce advanced search query from global filters
   const [debouncedAdvancedSearchQuery, setDebouncedAdvancedSearchQuery] =
     useState("");
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedAdvancedSearchQuery(advancedSearchQuery);
+      setDebouncedAdvancedSearchQuery(filters.advancedSearchQuery);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [advancedSearchQuery]);
+  }, [filters.advancedSearchQuery]);
 
   // Enhanced search function
   const performAdvancedSearch = useCallback(
@@ -254,49 +248,49 @@ export default function Analysis() {
     []
   );
 
-  // Calculate date range based on selection
+  // Calculate date range based on global filter selection
   const dateRange = useMemo(() => {
-    if (selectedDateRange === "all") return undefined;
+    if (filters.dateRange === "all") return undefined;
 
     const now = new Date();
-    if (selectedDateRange === "custom" && customDateRange) {
+    if (filters.dateRange === "custom" && customDateRange) {
       return customDateRange;
     } else {
-      const days = parseInt(selectedDateRange.replace("d", ""));
+      const days = parseInt(filters.dateRange.replace("d", ""));
       const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       return {
         start: startDate.toISOString(),
         end: now.toISOString(),
       };
     }
-  }, [selectedDateRange, customDateRange]);
+  }, [filters.dateRange, customDateRange]);
 
-  // Prepare filters for infinite scroll hook
-  const filters = useMemo(
+  // Prepare filters for infinite scroll hook using global filter state
+  const preparedFilters = useMemo(
     () => ({
-      topic: selectedTopic !== "all" ? selectedTopic : undefined,
-      llmProvider: selectedLLM !== "all" ? selectedLLM : undefined,
+      topic: filters.topic !== "all" ? filters.topic : undefined,
+      llmProvider: filters.llm !== "all" ? filters.llm : undefined,
       searchQuery: debouncedSearchQuery.trim() || undefined,
       mentionStatus:
-        selectedMentionStatus !== "all" ? selectedMentionStatus : undefined,
+        filters.mentionStatus !== "all" ? filters.mentionStatus : undefined,
       dateRange,
       confidenceRange:
-        selectedConfidenceRange[0] > 0 || selectedConfidenceRange[1] < 100
-          ? selectedConfidenceRange
+        filters.confidenceRange && (filters.confidenceRange[0] > 0 || filters.confidenceRange[1] < 100)
+          ? filters.confidenceRange
           : undefined,
-      sentiment: selectedSentiment !== "all" ? selectedSentiment : undefined,
+      sentiment: filters.sentiment !== "all" ? filters.sentiment : undefined,
       analysisSession:
-        selectedAnalysisSession !== "all" ? selectedAnalysisSession : undefined,
+        filters.analysisSession !== "all" ? filters.analysisSession : undefined,
     }),
     [
-      selectedTopic,
-      selectedLLM,
+      filters.topic,
+      filters.llm,
       debouncedSearchQuery,
-      selectedMentionStatus,
+      filters.mentionStatus,
       dateRange,
-      selectedConfidenceRange,
-      selectedSentiment,
-      selectedAnalysisSession,
+      filters.confidenceRange,
+      filters.sentiment,
+      filters.analysisSession,
     ]
   );
 
@@ -314,6 +308,8 @@ export default function Analysis() {
     refresh: refreshResults,
     hasCachedData,
   } = useOptimizedAnalysisData();
+  
+  // Filters are now managed globally - no local sync needed
 
   // Helper function to get topic name for filtering (moved after hook definition)
   const getTopicNameForFilter = useCallback(
@@ -379,28 +375,28 @@ export default function Analysis() {
   // Filter validation using optimized data
   useEffect(() => {
     // Only validate if we have topics loaded and a specific topic selected
-    if (topics.length > 0 && selectedTopic !== "all") {
-      const topicExists = topics.some((topic) => topic.id === selectedTopic);
+    if (topics.length > 0 && filters.topic !== "all") {
+      const topicExists = topics.some((topic) => topic.id === filters.topic);
       if (!topicExists) {
         const timeoutId = setTimeout(() => {
-          setSelectedTopic("all");
+          setFilters({ ...filters, topic: "all" });
         }, 100);
         return () => clearTimeout(timeoutId);
       }
     }
-  }, [topics, selectedTopic]);
+  }, [topics, filters, setFilters]);
 
   useEffect(() => {
-    if (llmProviders.length > 0 && selectedLLM !== "all") {
-      const llmExists = llmProviders.some((llm) => llm.id === selectedLLM);
+    if (llmProviders.length > 0 && filters.llm !== "all") {
+      const llmExists = llmProviders.some((llm) => llm.id === filters.llm);
       if (!llmExists) {
         const timeoutId = setTimeout(() => {
-          setSelectedLLM("all");
+          setFilters({ ...filters, llm: "all" });
         }, 100);
         return () => clearTimeout(timeoutId);
       }
     }
-  }, [llmProviders, selectedLLM]);
+  }, [llmProviders, filters, setFilters]);
 
   // No need for legacy format transformation - work directly with modern format
   // Use analysisResults directly from infinite scroll hook
@@ -615,15 +611,8 @@ export default function Analysis() {
       });
     },
     [
-      selectedTopic,
-      selectedLLM,
-      selectedMentionStatus,
-      selectedDateRange,
+      filters,
       customDateRange,
-      selectedConfidenceRange,
-      selectedSentiment,
-      selectedAnalysisSession,
-      searchQuery,
       sortBy,
       sortOrder,
       filterPresets,
@@ -654,7 +643,7 @@ export default function Analysis() {
         description: `"${preset.name}" filters have been applied.`,
       });
     },
-    [toast]
+    [filters, setFilters, toast]
   );
 
   // Load filter presets from localStorage on mount
@@ -732,7 +721,7 @@ export default function Analysis() {
         description: `"${preset.name}" filter has been applied.`,
       });
     },
-    [toast]
+    [filters, setFilters, toast]
   );
 
   // Clear all filters function
@@ -756,7 +745,7 @@ export default function Analysis() {
       title: "Filters Cleared",
       description: "All filters have been reset to default values.",
     });
-  }, [toast]);
+  }, [setFilters, toast]);
 
   const handleRemoveFilter = (
     filterType:
@@ -771,29 +760,29 @@ export default function Analysis() {
   ) => {
     switch (filterType) {
       case "topic":
-        setSelectedTopic("all");
+        setFilters({ ...filters, topic: "all" });
         break;
       case "llm":
-        setSelectedLLM("all");
+        setFilters({ ...filters, llm: "all" });
         break;
       case "search":
-        setSearchQuery("");
+        setFilters({ ...filters, searchQuery: "" });
         break;
       case "mentionStatus":
-        setSelectedMentionStatus("all");
+        setFilters({ ...filters, mentionStatus: "all" });
         break;
       case "dateRange":
-        setSelectedDateRange("all");
+        setFilters({ ...filters, dateRange: "all" });
         setCustomDateRange(null);
         break;
       case "confidence":
-        setSelectedConfidenceRange([0, 100]);
+        // Confidence range is not part of global filters yet - skip for now
         break;
       case "sentiment":
-        setSelectedSentiment("all");
+        setFilters({ ...filters, sentiment: "all" });
         break;
       case "analysisSession":
-        setSelectedAnalysisSession("all");
+        setFilters({ ...filters, analysisSession: "all" });
         break;
     }
   };
@@ -829,9 +818,9 @@ export default function Analysis() {
           resultCount: analysisResults.length,
           exportType: "analysis_results",
           filters: {
-            topic: selectedTopic !== "all" ? getTopicName(selectedTopic) : null,
-            llm: selectedLLM !== "all" ? selectedLLM : null,
-            search: searchQuery || null,
+            topic: filters.topic !== "all" ? getTopicName(filters.topic) : null,
+            llm: filters.llm !== "all" ? filters.llm : null,
+            search: filters.searchQuery || null,
           },
         },
       });
@@ -851,15 +840,13 @@ export default function Analysis() {
   };
 
   const hasActiveFilters =
-    selectedTopic !== "all" ||
-    selectedLLM !== "all" ||
-    searchQuery.trim() !== "" ||
-    selectedMentionStatus !== "all" ||
-    selectedDateRange !== "all" ||
-    selectedConfidenceRange[0] > 0 ||
-    selectedConfidenceRange[1] < 100 ||
-    selectedSentiment !== "all" ||
-    selectedAnalysisSession !== "all";
+    filters.topic !== "all" ||
+    filters.llm !== "all" ||
+    filters.searchQuery.trim() !== "" ||
+    filters.mentionStatus !== "all" ||
+    filters.dateRange !== "all" ||
+    filters.sentiment !== "all" ||
+    filters.analysisSession !== "all";
 
   const createAnalysis = () => {
     if (enforceLimit("websiteAnalyses", "New Analysis")) {
@@ -994,15 +981,15 @@ export default function Analysis() {
           ) : (
             <div className="space-y-4">
               {/* Website Selection */}
-              {websites && websites.length > 1 && (
+              {globalWebsites && globalWebsites.length > 1 && (
                 <div className="flex items-center space-x-2">
                   <Building className="h-4 w-4 text-muted-foreground shrink-0" />
                   <Select
-                    value={selectedWebsite}
+                    value={selectedWebsiteId || ""}
                     onValueChange={(value) => {
                       console.log(
                         "Analysis: Website changing from",
-                        selectedWebsite,
+                        selectedWebsiteId,
                         "to",
                         value
                       );
@@ -1010,10 +997,13 @@ export default function Analysis() {
                       setSelectedWebsite(value);
 
                       // Reset filters that are specific to the previous website
-                      setSelectedTopic("all");
-                      setSelectedLLM("all");
-                      setSearchQuery("");
-                      setSelectedAnalysisSession("all");
+                      setFilters({
+                        ...filters,
+                        topic: "all",
+                        llm: "all",
+                        searchQuery: "",
+                        analysisSession: "all",
+                      });
                     }}
                     disabled={false}
                   >
@@ -1026,7 +1016,7 @@ export default function Analysis() {
                       </div>
                     </SelectTrigger>
                     <SelectContent>
-                      {websites.map((website) => (
+                      {globalWebsites.map((website) => (
                         <SelectItem key={website.id} value={website.id}>
                           <span className="truncate">
                             {website.display_name || website.domain}
@@ -1055,11 +1045,11 @@ export default function Analysis() {
                     <LoadingButton
                       key={filter.id}
                       variant={
-                        selectedDateRange === filter.id ? "default" : "outline"
+                        filters.dateRange === filter.id ? "default" : "outline"
                       }
                       size="sm"
-                      loading={isFiltering && selectedDateRange !== filter.id}
-                      onClick={() => setSelectedDateRange(filter.id)}
+                      loading={isFiltering && filters.dateRange !== filter.id}
+                      onClick={() => setFilters({ ...filters, dateRange: filter.id })}
                       disabled={isLoadingResults}
                       className="shrink-0"
                     >
@@ -1075,8 +1065,8 @@ export default function Analysis() {
                     <Search className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Input
                       placeholder="Search by analysis name, topic, or prompt..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      value={filters.searchQuery}
+                      onChange={(e) => setFilters({ ...filters, searchQuery: e.target.value })}
                       className="w-full min-w-0"
                       disabled={isLoadingResults}
                     />
@@ -1086,9 +1076,9 @@ export default function Analysis() {
                   <div className="flex items-center space-x-2 shrink-0">
                     <Filter className="h-4 w-4 text-muted-foreground" />
                     <Select
-                      value={selectedTopic}
-                      onValueChange={(value) =>
-                        handleFilterChange("topic", value)
+                      value={filters.topic}
+                      onValueChange={(value) => 
+                        setFilters({ ...filters, topic: value })
                       }
                       disabled={isFiltering || isLoadingResults}
                     >
@@ -1120,10 +1110,10 @@ export default function Analysis() {
                     <LoadingButton
                       key={filter.id}
                       variant={
-                        selectedLLM === filter.id ? "default" : "outline"
+                        filters.llm === filter.id ? "default" : "outline"
                       }
                       size="sm"
-                      loading={isFiltering && selectedLLM !== filter.id}
+                      loading={isFiltering && filters.llm !== filter.id}
                       onClick={() => handleFilterChange("llm", filter.id)}
                       disabled={isLoadingResults || filter.resultCount === 0}
                       className="shrink-0"
@@ -1162,15 +1152,15 @@ export default function Analysis() {
                     <LoadingButton
                       key={filter.id}
                       variant={
-                        selectedMentionStatus === filter.id
+                        filters.mentionStatus === filter.id
                           ? "default"
                           : "outline"
                       }
                       size="sm"
                       loading={
-                        isFiltering && selectedMentionStatus !== filter.id
+                        isFiltering && filters.mentionStatus !== filter.id
                       }
-                      onClick={() => setSelectedMentionStatus(filter.id)}
+                      onClick={() => setFilters({ ...filters, mentionStatus: filter.id })}
                       disabled={isLoadingResults}
                       className="shrink-0"
                     >
@@ -1200,16 +1190,14 @@ export default function Analysis() {
                       <div className="ml-2 transition-transform">▼</div>
                     )}
                   </Button>
-                  {(selectedTopic !== "all" ||
-                    selectedLLM !== "all" ||
-                    selectedMentionStatus !== "all" ||
-                    selectedDateRange !== "all" ||
-                    selectedConfidenceRange[0] > 0 ||
-                    selectedConfidenceRange[1] < 100 ||
-                    selectedSentiment !== "all" ||
-                    selectedAnalysisSession !== "all" ||
-                    searchQuery.trim() ||
-                    advancedSearchQuery.trim() ||
+                  {(filters.topic !== "all" ||
+                    filters.llm !== "all" ||
+                    filters.mentionStatus !== "all" ||
+                    filters.dateRange !== "all" ||
+                    filters.sentiment !== "all" ||
+                    filters.analysisSession !== "all" ||
+                    filters.searchQuery.trim() ||
+                    filters.advancedSearchQuery.trim() ||
                     sortBy !== "date" ||
                     sortOrder !== "desc") && (
                     <>
@@ -1239,41 +1227,14 @@ export default function Analysis() {
                           Confidence Score Range
                         </label>
                         <span className="text-xs text-muted-foreground">
-                          {selectedConfidenceRange[0]}% -{" "}
-                          {selectedConfidenceRange[1]}%
+                          0% - 100%
                         </span>
                       </div>
                       <div className="flex items-center gap-4">
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={selectedConfidenceRange[0]}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value);
-                            setSelectedConfidenceRange([
-                              value,
-                              Math.max(value, selectedConfidenceRange[1]),
-                            ]);
-                          }}
-                          className="flex-1"
-                          disabled={isLoadingResults}
-                        />
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={selectedConfidenceRange[1]}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value);
-                            setSelectedConfidenceRange([
-                              Math.min(selectedConfidenceRange[0], value),
-                              value,
-                            ]);
-                          }}
-                          className="flex-1"
-                          disabled={isLoadingResults}
-                        />
+                        {/* Confidence range will be implemented later */}
+                        <div className="text-sm text-muted-foreground">
+                          Confidence filtering will be available soon
+                        </div>
                       </div>
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>0%</span>
@@ -1307,12 +1268,12 @@ export default function Analysis() {
                           <Button
                             key={filter.id}
                             variant={
-                              selectedSentiment === filter.id
+                              filters.sentiment === filter.id
                                 ? "default"
                                 : "outline"
                             }
                             size="sm"
-                            onClick={() => setSelectedSentiment(filter.id)}
+                            onClick={() => setFilters({ ...filters, sentiment: filter.id })}
                             disabled={isLoadingResults}
                             className={`shrink-0 ${filter.color || ""}`}
                           >
@@ -1330,8 +1291,8 @@ export default function Analysis() {
                         Analysis Session
                       </label>
                       <Select
-                        value={selectedAnalysisSession}
-                        onValueChange={setSelectedAnalysisSession}
+                        value={filters.analysisSession}
+                        onValueChange={(value) => setFilters({ ...filters, analysisSession: value })}
                         disabled={isLoadingResults}
                       >
                         <SelectTrigger className="w-full">
@@ -1378,9 +1339,9 @@ export default function Analysis() {
                         <div className="space-y-3">
                           <Input
                             placeholder="Advanced search in analysis data..."
-                            value={advancedSearchQuery}
+                            value={filters.advancedSearchQuery}
                             onChange={(e) =>
-                              setAdvancedSearchQuery(e.target.value)
+                              setFilters({ ...filters, advancedSearchQuery: e.target.value })
                             }
                             disabled={isLoadingResults}
                           />
@@ -1609,7 +1570,7 @@ export default function Analysis() {
                     variant="outline"
                     size="sm"
                     onClick={() => setGroupBySession(!groupBySession)}
-                    disabled={!selectedWebsite || isLoadingResults}
+                    disabled={!selectedWebsiteId || isLoadingResults}
                     className="shrink-0"
                   >
                     <span className="whitespace-nowrap">
@@ -1624,7 +1585,7 @@ export default function Analysis() {
                     variant="outline"
                     size="sm"
                     onClick={() => setIsHistoryModalOpen(true)}
-                    disabled={!selectedWebsite}
+                    disabled={!selectedWebsiteId}
                     className="shrink-0"
                   >
                     <History className="h-4 w-4" />
@@ -1638,7 +1599,7 @@ export default function Analysis() {
                       }
                     }}
                     icon={<Plus className="h-4 w-4" />}
-                    disabled={!selectedWebsite || isLoadingResults}
+                    disabled={!selectedWebsiteId || isLoadingResults}
                     className="shrink-0"
                   >
                     <span className="whitespace-nowrap">New Analysis</span>
@@ -1663,11 +1624,11 @@ export default function Analysis() {
             <FilterBreadcrumbs
               filters={{
                 topic:
-                  selectedTopic !== "all"
-                    ? capitalizeFirstLetters(getTopicName(selectedTopic))
+                  filters.topic !== "all"
+                    ? capitalizeFirstLetters(getTopicName(filters.topic))
                     : undefined,
-                llm: selectedLLM !== "all" ? selectedLLM : undefined,
-                search: searchQuery.trim() || undefined,
+                llm: filters.llm !== "all" ? filters.llm : undefined,
+                search: filters.searchQuery.trim() || undefined,
               }}
               onRemoveFilter={handleRemoveFilter}
               onClearAll={handleClearFilters}
@@ -1718,7 +1679,7 @@ export default function Analysis() {
                           </Badge>
                         </div>
                         {sessionResults.map((result) => (
-                          <Card key={result.id} className="ml-4">
+                          <Card key={`${sessionKey}-${result.id}`} className="ml-4">
                             <CardHeader>
                               <div className="flex justify-between items-start">
                                 <div className="flex-1 flex flex-col gap-3">
@@ -1798,7 +1759,7 @@ export default function Analysis() {
                         </Badge>
                       </div>
                       {groupedResults.ungrouped.map((result) => (
-                        <Card key={result.id} className="ml-4">
+                        <Card key={`ungrouped-${result.id}`} className="ml-4">
                           <CardHeader>
                             <div className="flex justify-between items-start">
                               <div className="flex-1 flex flex-col gap-3">
@@ -1867,7 +1828,7 @@ export default function Analysis() {
                 className="space-y-4"
               >
                 {analysisResults.map((result) => (
-                  <Card key={result.id}>
+                  <Card key={`main-${result.id}`}>
                     <CardHeader>
                       <div className="flex justify-between items-start">
                         <div className="flex-1 flex flex-col gap-3">
@@ -1932,9 +1893,9 @@ export default function Analysis() {
               hasData={analysisResults.length > 0}
               hasFilters={hasActiveFilters}
               activeFilters={{
-                topic: selectedTopic !== "all" ? selectedTopic : undefined,
-                llm: selectedLLM !== "all" ? selectedLLM : undefined,
-                search: searchQuery.trim() || undefined,
+                topic: filters.topic !== "all" ? filters.topic : undefined,
+                llm: filters.llm !== "all" ? filters.llm : undefined,
+                search: filters.searchQuery.trim() || undefined,
               }}
               onClearFilters={handleClearFilters}
               onCreateAnalysis={createAnalysis}
@@ -1951,9 +1912,9 @@ export default function Analysis() {
                 <span className="truncate">
                   Loaded {analysisResults.length} results
                   {hasMore && " (more available)"}
-                  {searchQuery && (
+                  {filters.searchQuery && (
                     <span className="hidden sm:inline">
-                      {` for "${searchQuery}"`}
+                      {` for "${filters.searchQuery}"`}
                     </span>
                   )}
                 </span>
@@ -1989,7 +1950,7 @@ export default function Analysis() {
         <AnalysisConfigModal
           isOpen={isConfigModalOpen}
           onClose={() => setIsConfigModalOpen(false)}
-          websiteId={selectedWebsite}
+          websiteId={selectedWebsiteId}
         />
 
         <DetailedAnalysisModal
@@ -2001,7 +1962,7 @@ export default function Analysis() {
         <AnalysisHistoryModal
           isOpen={isHistoryModalOpen}
           onClose={() => setIsHistoryModalOpen(false)}
-          websiteId={selectedWebsite}
+          websiteId={selectedWebsiteId}
           onSelectSession={(sessionId) => {
             // Future: Navigate to session details or filter by session
           }}

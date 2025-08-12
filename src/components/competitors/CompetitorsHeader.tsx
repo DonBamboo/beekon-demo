@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, RefreshCw, Filter, Globe } from "lucide-react";
 import { Website } from "@/hooks/useWorkspace";
 import { ExportFormat } from "@/types/database";
+import { useSelectedWebsite } from "@/contexts/AppStateContext";
 
 interface CompetitorsHeaderProps {
   totalCompetitors: number;
@@ -34,9 +35,7 @@ interface CompetitorsHeaderProps {
   isAddDialogOpen: boolean;
   competitorDomain: string;
   competitorName: string;
-  selectedWebsiteId: string;
   isAdding: boolean;
-  websites: Website[];
   websitesLoading: boolean;
   setDateFilter: (value: "7d" | "30d" | "90d") => void;
   setSortBy: (
@@ -45,7 +44,6 @@ interface CompetitorsHeaderProps {
   setIsAddDialogOpen: (value: boolean) => void;
   setCompetitorDomain: (value: string) => void;
   setCompetitorName: (value: string) => void;
-  setSelectedWebsiteId: (value: string) => void;
   refreshData: () => void;
   handleAddCompetitor: () => void;
   isExporting: boolean;
@@ -63,22 +61,21 @@ export default function CompetitorsHeader({
   isAddDialogOpen,
   competitorDomain,
   competitorName,
-  selectedWebsiteId,
   isAdding,
-  websites,
   websitesLoading,
   setDateFilter,
   setSortBy,
   setIsAddDialogOpen,
   setCompetitorDomain,
   setCompetitorName,
-  setSelectedWebsiteId,
   refreshData,
   handleAddCompetitor,
   isExporting,
   competitorsData,
   handleExportData,
 }: CompetitorsHeaderProps) {
+  // Use global website selection state
+  const { selectedWebsiteId, setSelectedWebsite, websites } = useSelectedWebsite();
   return (
     <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
       <div>
@@ -97,11 +94,11 @@ export default function CompetitorsHeader({
       <div className="flex flex-wrap items-center gap-2">
         {/* Website Selector - Primary control */}
         <Select
-          value={selectedWebsiteId}
+          value={selectedWebsiteId || ""}
           onValueChange={(value) => {
             console.log('Competitors: Website changing from', selectedWebsiteId, 'to', value);
             // Immediate optimistic update - never wait for loading
-            setSelectedWebsiteId(value);
+            setSelectedWebsite(value);
           }}
           disabled={websitesLoading || websites.length === 0}
         >
@@ -239,8 +236,8 @@ export default function CompetitorsHeader({
               <div className="space-y-2">
                 <Label htmlFor="websiteSelect">Website</Label>
                 <Select
-                  value={selectedWebsiteId}
-                  onValueChange={setSelectedWebsiteId}
+                  value={selectedWebsiteId || ""}
+                  onValueChange={setSelectedWebsite}
                   disabled={websitesLoading || websites.length === 0}
                 >
                   <SelectTrigger>

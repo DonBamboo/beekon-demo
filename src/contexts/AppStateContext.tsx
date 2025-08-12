@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { Website, Workspace } from '@/hooks/useWorkspace';
 
 // Cache entry with expiration and metadata
@@ -433,13 +433,18 @@ const AppStateContext = createContext<{
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appStateReducer, initialState);
   
+  // Use ref to access current state without causing re-renders
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  
   // Helper functions
   const setSelectedWebsite = useCallback((websiteId: string) => {
     dispatch({ type: 'SET_SELECTED_WEBSITE', payload: { websiteId } });
   }, []);
   
+  // Stabilized getFromCache - no dependencies on state
   const getFromCache = useCallback(<T,>(key: string): T | null => {
-    const entry = state.cache.memory.get(key);
+    const entry = stateRef.current.cache.memory.get(key);
     if (!entry) return null;
     
     // Check expiration
@@ -449,7 +454,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
     
     return entry.data as T;
-  }, [state.cache.memory]);
+  }, []);
   
   const setCache = useCallback(<T,>(key: string, data: T, expiresIn: number, metadata?: any) => {
     dispatch({ type: 'CACHE_SET', payload: { key, data, expiresIn, metadata } });
@@ -459,15 +464,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'CACHE_CLEAR', payload: { pattern, websiteId } });
   }, []);
   
-  // Intelligent cache invalidation based on dependencies
+  // Intelligent cache invalidation based on dependencies - stabilized
   const invalidateDependentCaches = useCallback((dependency: string) => {
-    const dependentKeys = state.cache.dependencies.get(dependency);
+    const dependentKeys = stateRef.current.cache.dependencies.get(dependency);
     if (dependentKeys) {
       dependentKeys.forEach(key => {
         dispatch({ type: 'CACHE_DELETE', payload: { key } });
       });
     }
-  }, [state.cache.dependencies]);
+  }, []);
   
   const setPageFilters = useCallback(<T,>(page: keyof AppState['ui']['filters'], filters: T) => {
     dispatch({ type: 'SET_FILTERS', payload: { page, filters } });
@@ -478,12 +483,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, []);
   
   const isRequestActive = useCallback((key: string) => {
-    return state.requests.active.has(key);
-  }, [state.requests.active]);
+    return stateRef.current.requests.active.has(key);
+  }, []);
   
   const getCurrentPage = useCallback(() => {
-    return state.ui.navigation.currentPage;
-  }, [state.ui.navigation.currentPage]);
+    return stateRef.current.ui.navigation.currentPage;
+  }, []);
   
   // Intelligent cache cleanup and optimization
   useEffect(() => {

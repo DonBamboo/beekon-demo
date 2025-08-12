@@ -10,9 +10,10 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAppState } from "@/contexts/AppStateContext";
+import { useTrueNavigation } from "@/hooks/useTrueNavigation";
 import { BarChart3, Globe, Search, Settings, Users } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { NavLink } from "react-router-dom";
+import { useCallback } from "react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: BarChart3 },
@@ -24,13 +25,21 @@ const navigation = [
 
 export function AppSidebar() {
   const { open } = useSidebar();
-  const location = useLocation();
-  const { navigateToPage } = useAppState();
+  const { navigateTo, currentPage } = useTrueNavigation();
   
-  // Track navigation changes in the global state
-  useEffect(() => {
-    navigateToPage(location.pathname);
-  }, [location.pathname, navigateToPage]);
+  // Handle true instant navigation with no React Router involvement
+  const handleNavClick = useCallback((event: React.MouseEvent, path: string) => {
+    event.preventDefault(); // Prevent any default behavior
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📌 Sidebar navigation (true instant):', {
+        from: currentPage,
+        to: path
+      });
+    }
+    
+    navigateTo(path);
+  }, [navigateTo, currentPage]);
   
   return (
     <Sidebar collapsible="icon">
@@ -52,6 +61,7 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.href}
+                      onClick={(event) => handleNavClick(event, item.href)}
                       className={({ isActive }) =>
                         `flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                           isActive

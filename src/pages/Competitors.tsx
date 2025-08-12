@@ -9,6 +9,7 @@ import {
 } from "@/hooks/useCompetitorsQuery";
 import { useOptimizedCompetitorsData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useSelectedWebsite, usePageFilters } from "@/contexts/AppStateContext";
 import CompetitorsHeader from "@/components/competitors/CompetitorsHeader";
 import CompetitorsLoadingState from "@/components/competitors/CompetitorsLoadingState";
 import { CompetitorsSkeleton } from "@/components/skeletons";
@@ -25,7 +26,11 @@ import { sendN8nWebhook } from "@/lib/http-request";
 import { addProtocol } from "@/lib/utils";
 import { getCompetitorColor, getYourBrandColor } from "@/lib/color-utils";
 
-export default function Competitors() {
+interface CompetitorsProps {
+  isVisible?: boolean;
+}
+
+export default function Competitors({ isVisible = true }: CompetitorsProps) {
   const {
     currentWorkspace,
     websites,
@@ -37,40 +42,33 @@ export default function Competitors() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [competitorDomain, setCompetitorDomain] = useState("");
   const [competitorName, setCompetitorName] = useState("");
-  const [selectedWebsiteId, setSelectedWebsiteId] = useState("");
   const [isWebhookProcessing, setIsWebhookProcessing] = useState(false);
+  
+  // Use global website selection state
+  const { selectedWebsiteId, setSelectedWebsite, websites: globalWebsites } = useSelectedWebsite();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [competitorToDelete, setCompetitorToDelete] = useState<string | null>(
     null
   );
-  const [dateFilter, setDateFilter] = useState<"7d" | "30d" | "90d">("30d");
-  const [sortBy, setSortBy] = useState<
-    "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore"
-  >("shareOfVoice");
+  // Use global filter state from AppStateContext
+  const { filters, setFilters } = usePageFilters("competitors");
   const [isExporting, setIsExporting] = useState(false);
   const { handleExport } = useExportHandler();
 
-  // Get first website ID for competitor tracking (fallback)
-  const websiteId = websites?.[0]?.id;
+  // Get first website ID for competitor tracking (fallback) - use global websites
+  const websiteId = globalWebsites?.[0]?.id;
 
-  // Initialize selectedWebsiteId when websites are loaded
-  React.useEffect(() => {
-    if (websites && websites.length > 0 && !selectedWebsiteId) {
-      setSelectedWebsiteId(websites[0]!.id);
-    }
-  }, [websites, selectedWebsiteId]);
-
-  // Calculate date range (memoized to prevent infinite re-renders)
+  // Calculate date range using global filters (memoized to prevent infinite re-renders)
   const dateRange = useMemo(() => {
     const end = new Date();
     const start = new Date();
-    const days = dateFilter === "7d" ? 7 : dateFilter === "30d" ? 30 : 90;
+    const days = filters.dateFilter === "7d" ? 7 : filters.dateFilter === "30d" ? 30 : 90;
     start.setDate(end.getDate() - days);
     return {
       start: start.toISOString(),
       end: end.toISOString(),
     };
-  }, [dateFilter]);
+  }, [filters.dateFilter]);
 
   // Use optimized competitors data loading with instant cache rendering
   const {
@@ -164,7 +162,7 @@ export default function Competitors() {
   };
 
   const handleAddCompetitor = async () => {
-    if (!websites || websites.length === 0) {
+    if (!globalWebsites || globalWebsites.length === 0) {
       toast({
         title: "Error",
         description: "No websites available. Please add a website first.",
@@ -192,7 +190,7 @@ export default function Competitors() {
     }
 
     // Validate that the selected website exists and is available
-    const selectedWebsite = websites?.find((w) => w.id === selectedWebsiteId);
+    const selectedWebsite = globalWebsites?.find((w) => w.id === selectedWebsiteId);
     if (!selectedWebsite) {
       toast({
         title: "Error",
@@ -283,7 +281,7 @@ export default function Competitors() {
     try {
       await deleteCompetitorMutation.mutateAsync({
         competitorId,
-        websiteId: selectedWebsiteId,
+        websiteId: selectedWebsiteId || "",
       });
       setShowDeleteConfirm(false);
       setCompetitorToDelete(null);
@@ -314,10 +312,10 @@ export default function Competitors() {
       const { competitorService } = await import("@/services/competitorService");
       
       // Export with comprehensive options using the competitorService
-      const dateRange = (() => {
+      const exportDateRange = (() => {
         const end = new Date();
         const start = new Date();
-        switch (dateFilter) {
+        switch (filters.dateFilter) {
           case "7d":
             start.setDate(end.getDate() - 7);
             break;
@@ -334,7 +332,7 @@ export default function Competitors() {
       const blob = await competitorService.exportCompetitorData(
         selectedWebsiteId,
         format as "csv" | "json" | "pdf",
-        dateRange
+        exportDateRange
       );
 
       await handleExport(
@@ -346,8 +344,8 @@ export default function Competitors() {
           metadata: {
             competitorCount: competitors?.length || 0,
             exportType: "competitor_analysis",
-            dateFilter,
-            sortBy,
+            dateFilter: filters.dateFilter,
+            sortBy: filters.sortBy,
           },
         }
       );
@@ -386,25 +384,22 @@ export default function Competitors() {
         <CompetitorsHeader
           totalCompetitors={competitorsWithStatus.length}
           activeCompetitors={competitorsWithStatus.filter(c => c.analysisStatus === 'completed').length}
-          dateFilter={dateFilter}
-          sortBy={sortBy}
+          dateFilter={filters.dateFilter}
+          sortBy={filters.sortBy}
           isRefreshing={isRefreshing}
           hasData={hasData}
           isAddDialogOpen={isAddDialogOpen}
           competitorDomain={competitorDomain}
           competitorName={competitorName}
-          selectedWebsiteId={selectedWebsiteId}
           isAdding={addCompetitorMutation.isPending || isWebhookProcessing}
-          websites={websites || []}
           websitesLoading={workspaceLoading || isLoading}
           isExporting={isExporting}
           competitorsData={competitors}
-          setDateFilter={setDateFilter}
-          setSortBy={setSortBy}
+          setDateFilter={(value) => setFilters({ ...filters, dateFilter: value })}
+          setSortBy={(value) => setFilters({ ...filters, sortBy: value })}
           setIsAddDialogOpen={setIsAddDialogOpen}
           setCompetitorDomain={setCompetitorDomain}
           setCompetitorName={setCompetitorName}
-          setSelectedWebsiteId={setSelectedWebsiteId}
           refreshData={refreshData}
           handleAddCompetitor={handleAddCompetitor}
           handleExportData={handleExportData}
@@ -423,7 +418,7 @@ export default function Competitors() {
         {/* Share of Voice Chart */}
         <ShareOfVoiceChart
           data={shareOfVoiceChartData}
-          dateFilter={dateFilter}
+          dateFilter={filters.dateFilter}
           chartType="share_of_voice"
         />
 
@@ -432,7 +427,7 @@ export default function Competitors() {
           competitorsWithStatus={competitorsWithStatus}
           marketShareData={analytics?.marketShareData || []}
           performance={performance}
-          sortBy={sortBy}
+          sortBy={filters.sortBy}
           confirmDelete={confirmDelete}
           isDeleting={deleteCompetitorMutation.isPending}
         />
@@ -441,7 +436,7 @@ export default function Competitors() {
         <CompetitiveGapChart
           gapAnalysis={analytics?.gapAnalysis || []}
           analytics={analytics}
-          dateFilter={dateFilter}
+          dateFilter={filters.dateFilter}
         />
 
         {/* Competitive Intelligence */}

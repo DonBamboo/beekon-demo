@@ -85,7 +85,7 @@ export default function Dashboard() {
     [dateFilter]
   );
 
-  // Use optimized dashboard data loading with instant cache rendering
+  // Use optimized dashboard data loading
   const {
     metrics,
     timeSeriesData,
