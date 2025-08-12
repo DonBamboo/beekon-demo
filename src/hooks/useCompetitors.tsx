@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "./use-toast";
 import { useWorkspace } from "./useWorkspace";
 import { useSubscriptionEnforcement } from "./useSubscriptionEnforcement";
+import { useCompetitorStatus } from "./useCompetitorStatus";
 import {
   competitorService,
   type Competitor,
@@ -37,6 +38,13 @@ export function useCompetitors(
   const { websites, loading: workspaceLoading } = useWorkspace();
   const { toast } = useToast();
   const { consumeCreditForCompetitor, restoreCredit } = useSubscriptionEnforcement();
+  const {
+    competitorStatusMap,
+    addCompetitorToMonitoring,
+    removeCompetitorFromMonitoring,
+    startCompetitorAnalysis,
+    getCompetitorStatus
+  } = useCompetitorStatus();
   const [state, setState] = useState<CompetitorState>({
     competitors: [],
     performance: [],
@@ -168,9 +176,17 @@ export function useCompetitors(
           competitors: [...prev.competitors, newCompetitor],
         }));
 
+        // Start monitoring the new competitor for status updates
+        await addCompetitorToMonitoring(newCompetitor.id);
+        
+        // Trigger initial analysis status if it's pending
+        if (newCompetitor.id) {
+          await startCompetitorAnalysis(newCompetitor.id);
+        }
+
         toast({
           title: "Competitor added",
-          description: `${name || domain} has been added to your competitor list.`,
+          description: `${name || domain} has been added to your competitor list and analysis has started.`,
         });
 
         // Refresh performance data
@@ -204,7 +220,7 @@ export function useCompetitors(
         throw error;
       }
     },
-    [targetWebsiteId, loadCompetitorData, toast, consumeCreditForCompetitor, restoreCredit]
+    [targetWebsiteId, loadCompetitorData, toast, consumeCreditForCompetitor, restoreCredit, addCompetitorToMonitoring, startCompetitorAnalysis]
   );
 
   const updateCompetitor = useCallback(
@@ -265,6 +281,9 @@ export function useCompetitors(
       try {
         await competitorService.deleteCompetitor(competitorId);
 
+        // Stop monitoring the competitor for status updates
+        removeCompetitorFromMonitoring(competitorId);
+
         setState((prev) => ({
           ...prev,
           competitors: prev.competitors.filter((c) => c.id !== competitorId),
@@ -305,7 +324,7 @@ export function useCompetitors(
         throw error;
       }
     },
-    [loadCompetitorData, toast]
+    [loadCompetitorData, toast, removeCompetitorFromMonitoring]
   );
 
   const exportCompetitorData = useCallback(
@@ -369,6 +388,10 @@ export function useCompetitors(
     clearError,
     hasData: state.competitors.length > 0,
     targetWebsiteId,
+    // Real-time status tracking
+    competitorStatusMap,
+    getCompetitorStatus,
+    startCompetitorAnalysis,
   };
 }
 

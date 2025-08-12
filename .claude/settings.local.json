@@ -27,7 +27,8 @@
       "WebFetch(domain:github.com)",
       "Bash(npx eslint:*)",
       "Bash(timeout 10s npm run dev:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(timeout 15s npm run dev)"
     ],
     "deny": []
   },

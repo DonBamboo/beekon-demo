@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppStateProvider, useAppState } from './AppStateContext';
+import { useAppState } from './AppStateContext';
 import { useWorkspace } from '@/hooks/useWorkspace';
 
 // Error boundary for context-related errors
@@ -166,23 +166,19 @@ function CacheWarmer({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Main optimized app provider
+// Main optimized app provider (AppStateProvider is now handled at App level)
 export function OptimizedAppProvider({ children }: { children: React.ReactNode }) {
   return (
     <ContextErrorBoundary>
-      <AppStateProvider>
+      <WorkspaceStateSync>
         <ContextErrorBoundary>
-          <WorkspaceStateSync>
-            <ContextErrorBoundary>
-              <CacheWarmer>
-                <PerformanceMonitor>
-                  {children}
-                </PerformanceMonitor>
-              </CacheWarmer>
-            </ContextErrorBoundary>
-          </WorkspaceStateSync>
+          <CacheWarmer>
+            <PerformanceMonitor>
+              {children}
+            </PerformanceMonitor>
+          </CacheWarmer>
         </ContextErrorBoundary>
-      </AppStateProvider>
+      </WorkspaceStateSync>
     </ContextErrorBoundary>
   );
 }

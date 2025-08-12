@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { WorkspaceProvider } from "@/hooks/useWorkspace";
+import { AppStateProvider } from "@/contexts/AppStateContext";
 import { OptimizedAppProvider, StateManagementDevTools } from "@/contexts/OptimizedAppProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
@@ -135,9 +136,10 @@ const App = () => {
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <WorkspaceProvider>
-            <OptimizedAppProvider>
-              <BrowserRouter>
+          <AppStateProvider>
+            <WorkspaceProvider>
+              <OptimizedAppProvider>
+                <BrowserRouter>
                 <Suspense fallback={<PageLoading message="Loading application..." />}>
                   <Routes>
                     <Route path="/" element={<LandingPage />} />
@@ -198,10 +200,11 @@ const App = () => {
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>
-                <StateManagementDevTools />
-              </BrowserRouter>
-            </OptimizedAppProvider>
-          </WorkspaceProvider>
+                  <StateManagementDevTools />
+                </BrowserRouter>
+              </OptimizedAppProvider>
+            </WorkspaceProvider>
+          </AppStateProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

@@ -67,6 +67,18 @@ export interface NavigationState {
   lastPageChangeAt: number;
 }
 
+// Competitor status information
+export interface CompetitorStatus {
+  competitorId: string;
+  websiteId: string;
+  status: 'pending' | 'analyzing' | 'completed' | 'failed';
+  progress?: number;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  updatedAt: string;
+}
+
 // Complete application state
 export interface AppState {
   // Workspace and website management
@@ -75,6 +87,14 @@ export interface AppState {
     websites: Website[];
     selectedWebsiteId: string | null;
     loading: boolean;
+  };
+  
+  // Competitor status tracking
+  competitors: {
+    // Map of competitor ID to status information
+    statusMap: Map<string, CompetitorStatus>;
+    // Track which competitors are actively being monitored
+    monitoredCompetitors: Set<string>;
   };
   
   // Multi-level cache system
@@ -128,6 +148,8 @@ export interface AppState {
 export type AppStateAction = 
   | { type: 'SET_WORKSPACE'; payload: { workspace: Workspace | null; websites: Website[]; loading: boolean } }
   | { type: 'SET_SELECTED_WEBSITE'; payload: { websiteId: string } }
+  | { type: 'UPDATE_WEBSITE_STATUS'; payload: { websiteId: string; status: string; lastCrawledAt?: string | null; updatedAt: string } }
+  | { type: 'UPDATE_COMPETITOR_STATUS'; payload: { competitorId: string; websiteId: string; status: string; progress?: number; errorMessage?: string | null; startedAt?: string | null; completedAt?: string | null; updatedAt: string } }
   | { type: 'CACHE_SET'; payload: { key: string; data: any; expiresIn: number; metadata?: any } }
   | { type: 'CACHE_DELETE'; payload: { key: string } }
   | { type: 'CACHE_CLEAR'; payload: { pattern?: string; websiteId?: string } }
@@ -144,6 +166,10 @@ const initialState: AppState = {
     websites: [],
     selectedWebsiteId: null,
     loading: true,
+  },
+  competitors: {
+    statusMap: new Map(),
+    monitoredCompetitors: new Set(),
   },
   cache: {
     memory: new Map(),
@@ -233,6 +259,61 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           selectedWebsiteId: action.payload.websiteId,
         },
       };
+
+    case 'UPDATE_WEBSITE_STATUS':
+      const { websiteId, status, lastCrawledAt, updatedAt } = action.payload;
+      const updatedWebsites = state.workspace.websites.map(website =>
+        website.id === websiteId
+          ? {
+              ...website,
+              crawl_status: status,
+              last_crawled_at: lastCrawledAt,
+              updated_at: updatedAt,
+            }
+          : website
+      );
+      
+      return {
+        ...state,
+        workspace: {
+          ...state.workspace,
+          websites: updatedWebsites,
+        },
+      };
+
+    case 'UPDATE_COMPETITOR_STATUS': {
+      const { competitorId, websiteId, status, progress, errorMessage, startedAt, completedAt, updatedAt } = action.payload;
+      const newStatusMap = new Map(state.competitors.statusMap);
+      const newMonitoredCompetitors = new Set(state.competitors.monitoredCompetitors);
+      
+      // Update competitor status
+      newStatusMap.set(competitorId, {
+        competitorId,
+        websiteId,
+        status: status as CompetitorStatus['status'],
+        progress,
+        errorMessage,
+        startedAt,
+        completedAt,
+        updatedAt,
+      });
+      
+      // Add to monitored set if in active state
+      if (status === 'pending' || status === 'analyzing') {
+        newMonitoredCompetitors.add(competitorId);
+      } else {
+        // Remove from monitored set if in terminal state
+        newMonitoredCompetitors.delete(competitorId);
+      }
+      
+      return {
+        ...state,
+        competitors: {
+          statusMap: newStatusMap,
+          monitoredCompetitors: newMonitoredCompetitors,
+        },
+      };
+    }
       
     case 'CACHE_SET': {
       const { key, data, expiresIn, metadata } = action.payload;
@@ -419,6 +500,12 @@ const AppStateContext = createContext<{
   dispatch: React.Dispatch<AppStateAction>;
   // Helper functions for common operations
   setSelectedWebsite: (websiteId: string) => void;
+  updateWebsiteStatus: (websiteId: string, status: string, lastCrawledAt?: string | null, updatedAt?: string) => void;
+  updateCompetitorStatus: (competitorId: string, websiteId: string, status: string, progress?: number, errorMessage?: string | null, startedAt?: string | null, completedAt?: string | null, updatedAt?: string) => void;
+  getCompetitorStatus: (competitorId: string) => CompetitorStatus | null;
+  isCompetitorMonitored: (competitorId: string) => boolean;
+  getMonitoredCompetitors: () => string[];
+  clearCompetitorStatus: (competitorId?: string) => void;
   getFromCache: <T>(key: string) => T | null;
   setCache: <T>(key: string, data: T, expiresIn: number, metadata?: any) => void;
   clearCache: (pattern?: string, websiteId?: string) => void;
@@ -441,6 +528,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const setSelectedWebsite = useCallback((websiteId: string) => {
     dispatch({ type: 'SET_SELECTED_WEBSITE', payload: { websiteId } });
   }, []);
+
+  // Note: updateWebsiteStatus will be defined after other cache functions
   
   // Stabilized getFromCache - no dependencies on state
   const getFromCache = useCallback(<T,>(key: string): T | null => {
@@ -489,6 +578,95 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const getCurrentPage = useCallback(() => {
     return stateRef.current.ui.navigation.currentPage;
   }, []);
+
+  // Competitor status management functions
+  const updateCompetitorStatus = useCallback((
+    competitorId: string,
+    websiteId: string,
+    status: string,
+    progress?: number,
+    errorMessage?: string | null,
+    startedAt?: string | null,
+    completedAt?: string | null,
+    updatedAt?: string
+  ) => {
+    dispatch({
+      type: 'UPDATE_COMPETITOR_STATUS',
+      payload: {
+        competitorId,
+        websiteId,
+        status,
+        progress,
+        errorMessage,
+        startedAt,
+        completedAt,
+        updatedAt: updatedAt || new Date().toISOString(),
+      },
+    });
+
+    // Invalidate competitor-related caches when status updates
+    invalidateDependentCaches(`competitor_${competitorId}`);
+    invalidateDependentCaches(`website_${websiteId}_competitors`);
+  }, [invalidateDependentCaches]);
+
+  const getCompetitorStatus = useCallback((competitorId: string): CompetitorStatus | null => {
+    return stateRef.current.competitors.statusMap.get(competitorId) || null;
+  }, []);
+
+  const isCompetitorMonitored = useCallback((competitorId: string): boolean => {
+    return stateRef.current.competitors.monitoredCompetitors.has(competitorId);
+  }, []);
+
+  const getMonitoredCompetitors = useCallback((): string[] => {
+    return Array.from(stateRef.current.competitors.monitoredCompetitors);
+  }, []);
+
+  const clearCompetitorStatus = useCallback((competitorId?: string) => {
+    if (competitorId) {
+      // Clear specific competitor status
+      const newStatusMap = new Map(stateRef.current.competitors.statusMap);
+      const newMonitoredCompetitors = new Set(stateRef.current.competitors.monitoredCompetitors);
+      
+      newStatusMap.delete(competitorId);
+      newMonitoredCompetitors.delete(competitorId);
+      
+      dispatch({
+        type: 'UPDATE_COMPETITOR_STATUS',
+        payload: {
+          competitorId,
+          websiteId: '',
+          status: 'pending',
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    } else {
+      // Clear all competitor status - we'll need to implement this as a new action if needed
+      console.log('Clearing all competitor status not yet implemented');
+    }
+  }, []);
+
+  const updateWebsiteStatus = useCallback((
+    websiteId: string, 
+    status: string, 
+    lastCrawledAt?: string | null, 
+    updatedAt?: string
+  ) => {
+    dispatch({ 
+      type: 'UPDATE_WEBSITE_STATUS', 
+      payload: { 
+        websiteId, 
+        status, 
+        lastCrawledAt, 
+        updatedAt: updatedAt || new Date().toISOString() 
+      } 
+    });
+
+    // Invalidate website-related caches when status updates
+    invalidateDependentCaches(`website_${websiteId}`);
+    
+    // Also clear workspace cache to trigger refresh of website lists
+    clearCache('workspace_');
+  }, [clearCache, invalidateDependentCaches]);
   
   // Intelligent cache cleanup and optimization
   useEffect(() => {
@@ -532,6 +710,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         state,
         dispatch,
         setSelectedWebsite,
+        updateWebsiteStatus,
+        updateCompetitorStatus,
+        getCompetitorStatus,
+        isCompetitorMonitored,
+        getMonitoredCompetitors,
+        clearCompetitorStatus,
         getFromCache,
         setCache,
         clearCache,
@@ -577,5 +761,26 @@ export function useSelectedWebsite() {
     websites: state.workspace.websites,
     setSelectedWebsite,
     selectedWebsite: state.workspace.websites.find(w => w.id === state.workspace.selectedWebsiteId),
+  };
+}
+
+export function useCompetitorStatus() {
+  const { 
+    state,
+    updateCompetitorStatus,
+    getCompetitorStatus,
+    isCompetitorMonitored,
+    getMonitoredCompetitors,
+    clearCompetitorStatus 
+  } = useAppState();
+  
+  return {
+    competitorStatusMap: state.competitors.statusMap,
+    monitoredCompetitors: state.competitors.monitoredCompetitors,
+    updateCompetitorStatus,
+    getCompetitorStatus,
+    isCompetitorMonitored,
+    getMonitoredCompetitors,
+    clearCompetitorStatus,
   };
 }

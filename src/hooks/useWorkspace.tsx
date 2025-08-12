@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { SubscriptionTier, isValidSubscriptionTier } from "@/utils/typeGuards";
+import { useWorkspaceWebsiteStatus } from "@/hooks/useWebsiteStatus";
 
 export interface WorkspaceSettings {
   theme?: "light" | "dark" | "system";
@@ -78,6 +79,15 @@ export interface WorkspaceContextType {
   ) => () => void;
   // State validation
   isWorkspaceStateValid: () => boolean;
+  // Real-time website status functions
+  addWebsiteToMonitoring: (websiteId: string) => Promise<void>;
+  removeWebsiteFromMonitoring: (websiteId: string) => void;
+  getWebsiteStatusSubscriptionInfo: () => {
+    isActive: boolean;
+    hasRealtime: boolean;
+    monitoredWebsites: number;
+    pollingWebsites: number;
+  } | null;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(
@@ -101,6 +111,16 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     workspaceId: string;
   } | null>(null);
   const WEBSITES_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  // Real-time website status monitoring
+  const websiteStatus = useWorkspaceWebsiteStatus(
+    currentWorkspace?.id || null,
+    websites.map(w => w.id),
+    {
+      showToastNotifications: true,
+      enableRealTimeUpdates: true,
+    }
+  );
 
   // Workspace change listeners
   const workspaceChangeListeners = useRef<
@@ -636,6 +656,26 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return validateWorkspaceState();
   }, [validateWorkspaceState]);
 
+  // Website status monitoring functions
+  const addWebsiteToMonitoring = useCallback(async (websiteId: string) => {
+    if (currentWorkspace?.id) {
+      await websiteStatus.addWebsiteToMonitoring(currentWorkspace.id, websiteId);
+    }
+  }, [currentWorkspace?.id, websiteStatus]);
+
+  const removeWebsiteFromMonitoring = useCallback((websiteId: string) => {
+    if (currentWorkspace?.id) {
+      websiteStatus.removeWebsiteFromMonitoring(currentWorkspace.id, websiteId);
+    }
+  }, [currentWorkspace?.id, websiteStatus]);
+
+  const getWebsiteStatusSubscriptionInfo = useCallback(() => {
+    if (currentWorkspace?.id) {
+      return websiteStatus.getSubscriptionStatus(currentWorkspace.id);
+    }
+    return null;
+  }, [currentWorkspace?.id, websiteStatus]);
+
   const value = {
     currentWorkspace,
     workspaces,
@@ -650,6 +690,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     refetchWorkspaces,
     onWorkspaceChange,
     isWorkspaceStateValid,
+    addWebsiteToMonitoring,
+    removeWebsiteFromMonitoring,
+    getWebsiteStatusSubscriptionInfo,
   };
 
   return (

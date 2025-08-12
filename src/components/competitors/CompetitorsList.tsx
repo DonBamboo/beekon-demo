@@ -2,10 +2,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Globe, MoreHorizontal, Trash2, TrendingUp, TrendingDown, Clock } from 'lucide-react';
-import { Spinner } from '@/components/LoadingStates';
+import { Globe, MoreHorizontal, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
 import { CompetitorPerformance } from '@/services/competitorService';
 import { CompetitorWithStatus } from '@/hooks/useCompetitorsQuery';
+import { CompetitorStatusIndicator } from './CompetitorStatusIndicator';
+import { useCompetitorStatus } from '@/hooks/useCompetitorStatus';
 
 interface MarketShareItem {
   name: string;
@@ -34,6 +35,8 @@ export default function CompetitorsList({
   confirmDelete,
   isDeleting = false,
 }: CompetitorsListProps) {
+  const { getCompetitorStatus } = useCompetitorStatus();
+
   // Helper function to get market share for a competitor
   const getCompetitorMarketShare = (competitorId: string, competitorName: string): number => {
     // First try to find by competitor ID
@@ -77,17 +80,11 @@ export default function CompetitorsList({
     }
   };
 
-  const getAnalysisStatusBadge = (status: "completed" | "in_progress" | "pending" | undefined) => {
-    switch (status) {
-      case 'completed':
-        return { text: 'Analyzed', variant: 'default' as const, icon: null };
-      case 'in_progress':
-        return { text: 'Analyzing', variant: 'secondary' as const, icon: <Spinner size="sm" /> };
-      case 'pending':
-        return { text: 'Pending', variant: 'outline' as const, icon: <Clock className="h-3 w-3" /> };
-      default:
-        return { text: 'Unknown', variant: 'outline' as const, icon: null };
-    }
+  // Get real-time status for a competitor
+  const getCompetitorRealtimeStatus = (competitorId: string) => {
+    const statusData = getCompetitorStatus(competitorId);
+    // Fallback to legacy status if no real-time status available
+    return statusData || null;
   };
 
   return (
@@ -112,8 +109,11 @@ export default function CompetitorsList({
             const performanceData = getCompetitorPerformance(competitor.id) || competitor.performance;
             const marketShareValue = getCompetitorMarketShare(competitor.id, competitor.competitor_name || competitor.competitor_domain);
             const TrendIcon = performanceData ? getTrendIcon(performanceData.trend) : () => <div className="w-5 h-5" />;
-            const statusBadge = getAnalysisStatusBadge(competitor.analysisStatus);
-            const isAnalyzed = competitor.analysisStatus === 'completed';
+            
+            // Get real-time status data
+            const realtimeStatus = getCompetitorRealtimeStatus(competitor.id);
+            const currentStatus = realtimeStatus?.status || (competitor.analysisStatus === 'in_progress' ? 'analyzing' : competitor.analysisStatus === 'completed' ? 'completed' : 'pending');
+            const isAnalyzed = currentStatus === 'completed';
             
             // Debug logging for rank data
             if (performanceData?.averageRank !== null && performanceData?.averageRank !== undefined) {
@@ -121,7 +121,7 @@ export default function CompetitorsList({
             }
             
             return (
-              <div key={competitor.id} className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors ${!isAnalyzed ? 'opacity-75' : ''}`}>
+              <div key={competitor.id} className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors ${!isAnalyzed ? 'opacity-75' : ''} ${currentStatus === 'analyzing' ? 'border-blue-200 bg-blue-50/30' : ''} ${currentStatus === 'failed' ? 'border-red-200 bg-red-50/30' : ''}`}>
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center justify-center w-10 h-10 bg-muted rounded-lg">
                     <Globe className="h-5 w-5 text-muted-foreground" />
@@ -129,13 +129,28 @@ export default function CompetitorsList({
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="font-medium">{competitor.competitor_name || competitor.competitor_domain}</h4>
-                      <Badge variant={statusBadge.variant} className="text-xs">
-                        {statusBadge.icon && <span className="mr-1">{statusBadge.icon}</span>}
-                        {statusBadge.text}
-                      </Badge>
+                      <CompetitorStatusIndicator
+                        status={currentStatus as 'pending' | 'analyzing' | 'completed' | 'failed'}
+                        progress={realtimeStatus?.progress}
+                        errorMessage={realtimeStatus?.errorMessage}
+                        size="sm"
+                        showProgress={currentStatus === 'analyzing'}
+                      />
                     </div>
                     <p className="text-sm text-muted-foreground">{competitor.competitor_domain}</p>
-                    {performanceData?.lastAnalyzed && (
+                    {/* Show analysis timing based on real-time status */}
+                    {realtimeStatus?.completedAt && isAnalyzed && (
+                      <p className="text-xs text-muted-foreground">
+                        Analyzed: {new Date(realtimeStatus.completedAt).toLocaleDateString()}
+                      </p>
+                    )}
+                    {realtimeStatus?.startedAt && currentStatus === 'analyzing' && (
+                      <p className="text-xs text-muted-foreground">
+                        Started: {new Date(realtimeStatus.startedAt).toLocaleDateString()}
+                      </p>
+                    )}
+                    {/* Fallback to legacy data if no real-time status */}
+                    {!realtimeStatus && performanceData?.lastAnalyzed && (
                       <p className="text-xs text-muted-foreground">
                         Last analyzed: {new Date(performanceData.lastAnalyzed).toLocaleDateString()}
                       </p>
@@ -144,6 +159,22 @@ export default function CompetitorsList({
                       <p className="text-xs text-muted-foreground">
                         Added: {new Date(competitor.addedAt).toLocaleDateString()}
                       </p>
+                    )}
+                    {/* Progress bar for analyzing competitors */}
+                    {currentStatus === 'analyzing' && realtimeStatus?.progress !== undefined && (
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="bg-blue-600 h-full rounded-full transition-all duration-500 ease-out"
+                              style={{ width: `${Math.min(Math.max(realtimeStatus.progress, 0), 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-blue-600 font-medium min-w-0 whitespace-nowrap">
+                            {realtimeStatus.progress}%
+                          </span>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>

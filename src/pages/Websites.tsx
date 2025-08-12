@@ -1,5 +1,6 @@
 import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Badge } from "@/components/ui/badge";
+import { WebsiteStatusIndicator, WebsiteStatusType } from "@/components/WebsiteStatusIndicator";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -65,7 +66,7 @@ export default function Websites() {
   const [processing, setProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
-  const { websites, deleteWebsite, refetchWebsites, currentWorkspace, loading: workspaceLoading } = useWorkspace();
+  const { websites, deleteWebsite, refetchWebsites, currentWorkspace, loading: workspaceLoading, addWebsiteToMonitoring } = useWorkspace();
   const { selectedWebsiteId, setSelectedWebsite } = useSelectedWebsite();
   const { handleExport } = useExportHandler();
   
@@ -159,26 +160,50 @@ export default function Websites() {
       description: `Analysis started for ${domain}`,
     });
 
-    refetchWebsites();
+    // Refetch websites to get the new website data
+    await refetchWebsites();
+    
+    // Find the newly added website and start monitoring it
+    const updatedWebsites = await supabase
+      .schema('beekon_data')
+      .from('websites')
+      .select('*')
+      .eq('workspace_id', currentWorkspace.id)
+      .eq('domain', addProtocol(domain))
+      .order('created_at', { ascending: false })
+      .limit(1);
+      
+    if (updatedWebsites.data && updatedWebsites.data.length > 0) {
+      const newWebsite = updatedWebsites.data[0];
+      await addWebsiteToMonitoring(newWebsite.id);
+      
+      // Select the new website
+      setSelectedWebsite(newWebsite.id);
+      
+      toast({
+        title: "Real-time monitoring started",
+        description: "You'll receive updates as the website is analyzed",
+        variant: "default",
+      });
+    }
+
     setDomain("");
     setDisplayName("");
     setProcessing(false);
     setIsAddDialogOpen(false);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <Badge className="bg-primary">Completed</Badge>;
-      case "pending":
-        return <Badge variant="secondary">Pending</Badge>;
-      case "crawling":
-        return <Badge variant="secondary">Crawling</Badge>;
-      case "failed":
-        return <Badge variant="destructive">Failed</Badge>;
-      default:
-        return <Badge variant="destructive">Failed</Badge>;
-    }
+  const getStatusIndicator = (website: Website) => {
+    return (
+      <WebsiteStatusIndicator
+        status={website.crawl_status as WebsiteStatusType}
+        lastCrawledAt={website.last_crawled_at}
+        variant="badge"
+        size="sm"
+        showLabel={true}
+        showTimestamp={false}
+      />
+    );
   };
 
   const handleOpenSettings = (website: Website) => {
@@ -502,7 +527,7 @@ export default function Websites() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {getStatusBadge(website.crawl_status!)}
+                  {getStatusIndicator(website)}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm">
@@ -544,34 +569,49 @@ export default function Websites() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Last Analyzed</p>
-                    <p className="text-sm text-muted-foreground">
-                      {website.last_crawled_at
-                        ? new Date(website.created_at).toLocaleDateString()
-                        : new Date(website.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
+              <div className="space-y-4">
+                {/* Status Information */}
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <WebsiteStatusIndicator
+                    status={website.crawl_status as WebsiteStatusType}
+                    lastCrawledAt={website.last_crawled_at}
+                    variant="card"
+                    size="md"
+                    showLabel={true}
+                    showTimestamp={true}
+                  />
                 </div>
-                <div className="flex items-center space-x-2">
-                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Total Topics</p>
-                    <p className="text-sm text-muted-foreground">
-                      {showMetricsLoading ? "..." : getWebsiteMetrics(website.id)?.totalTopics || 0}
-                    </p>
+                
+                {/* Metrics Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Last Analyzed</p>
+                      <p className="text-sm text-muted-foreground">
+                        {website.last_crawled_at
+                          ? new Date(website.created_at).toLocaleDateString()
+                          : new Date(website.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-primary rounded-full" />
-                  <div>
-                    <p className="text-sm font-medium">Avg Visibility</p>
-                    <p className="text-sm text-muted-foreground">
-                      {showMetricsLoading ? "..." : `${Math.round(getWebsiteMetrics(website.id)?.avgVisibility || 0)}%`}
-                    </p>
+                  <div className="flex items-center space-x-2">
+                    <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Total Topics</p>
+                      <p className="text-sm text-muted-foreground">
+                        {showMetricsLoading ? "..." : getWebsiteMetrics(website.id)?.totalTopics || 0}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-4 h-4 bg-primary rounded-full" />
+                    <div>
+                      <p className="text-sm font-medium">Avg Visibility</p>
+                      <p className="text-sm text-muted-foreground">
+                        {showMetricsLoading ? "..." : `${Math.round(getWebsiteMetrics(website.id)?.avgVisibility || 0)}%`}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
