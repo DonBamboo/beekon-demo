@@ -54,7 +54,7 @@ export function AppDashboard() {
         style={{ display: isPageActive('dashboard') ? 'block' : 'none' }}
         className="page-container"
       >
-        <Dashboard isVisible={isPageActive('dashboard')} />
+        <Dashboard />
       </div>
       
       {/* Analysis Page */}
@@ -62,7 +62,7 @@ export function AppDashboard() {
         style={{ display: isPageActive('analysis') ? 'block' : 'none' }}
         className="page-container"
       >
-        <Analysis isVisible={isPageActive('analysis')} />
+        <Analysis />
       </div>
       
       {/* Competitors Page */}
@@ -70,7 +70,7 @@ export function AppDashboard() {
         style={{ display: isPageActive('competitors') ? 'block' : 'none' }}
         className="page-container"
       >
-        <Competitors isVisible={isPageActive('competitors')} />
+        <Competitors />
       </div>
       
       {/* Websites Page */}

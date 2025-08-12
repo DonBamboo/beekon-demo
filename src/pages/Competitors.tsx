@@ -26,11 +26,7 @@ import { sendN8nWebhook } from "@/lib/http-request";
 import { addProtocol } from "@/lib/utils";
 import { getCompetitorColor, getYourBrandColor } from "@/lib/color-utils";
 
-interface CompetitorsProps {
-  isVisible?: boolean;
-}
-
-export default function Competitors({ isVisible = true }: CompetitorsProps) {
+export default function Competitors() {
   const {
     currentWorkspace,
     websites,

@@ -25,7 +25,8 @@
       "Bash(npx rimraf:*)",
       "Bash(mv:*)",
       "WebFetch(domain:github.com)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(timeout 10s npm run dev:*)"
     ],
     "deny": []
   },

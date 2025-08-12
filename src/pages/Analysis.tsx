@@ -61,11 +61,7 @@ import { InfiniteScrollContainer } from "@/components/InfiniteScrollContainer";
 
 // LegacyAnalysisResult interface removed - now using modern AnalysisResult directly
 
-interface AnalysisProps {
-  isVisible?: boolean;
-}
-
-export default function Analysis({ isVisible = true }: AnalysisProps) {
+export default function Analysis() {
   const { toast } = useToast();
   const { currentWorkspace, loading, websites } = useWorkspace();
   const { enforceLimit, getRemainingCredits } = useSubscriptionEnforcement();

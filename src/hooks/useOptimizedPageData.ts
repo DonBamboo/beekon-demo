@@ -34,7 +34,7 @@ export function useOptimizedAnalysisData() {
   const [analysisResults, setAnalysisResults] = useState<UIAnalysisResult[]>(
     []
   );
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(!!selectedWebsiteId);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -192,22 +192,28 @@ export function useOptimizedAnalysisData() {
 
   // Navigation-aware data loading - only load if no valid cache exists
   useEffect(() => {
-    if (selectedWebsiteId) {
-      // Check if we have valid cached data first
-      const cachedResults = getFromCache<UIAnalysisResult[]>(resultsCacheKey);
-      if (!cachedResults) {
-        // No cache, load fresh data
-        loadAnalysisData();
-      } else {
-        // Use cached data for instant navigation
-        setAnalysisResults(cachedResults);
-        setIsLoading(false);
-        setIsInitialLoad(false);
-      }
+    if (!selectedWebsiteId) {
+      setIsLoading(false);
+      setIsInitialLoad(false);
+      return;
     }
-  }, [selectedWebsiteId, filtersChanged]);
+
+    // Check if we have valid cached data first
+    const cachedResults = getFromCache<UIAnalysisResult[]>(resultsCacheKey);
+    if (!cachedResults) {
+      // No cache, ensure loading state is true and load fresh data
+      setIsLoading(true);
+      loadAnalysisData();
+    } else {
+      // Use cached data for instant navigation
+      setAnalysisResults(cachedResults);
+      setIsLoading(false);
+      setIsInitialLoad(false);
+    }
+  }, [selectedWebsiteId, filtersChanged, resultsCacheKey, getFromCache, loadAnalysisData]);
 
   // Detect website changes and properly invalidate cache  
+  const { clearCache } = useAppState();
   const prevWebsiteIdRef = React.useRef<string | null>(null);
   useEffect(() => {
     const prevWebsiteId = prevWebsiteIdRef.current;
@@ -225,8 +231,9 @@ export function useOptimizedAnalysisData() {
       setError(null);
       setHasMore(true);
 
-      // Clear global cache for the previous website
-      setCache(`analysis_results_${prevWebsiteId}`, null, 0); // Invalidate by setting to expire immediately
+      // Clear global cache for the previous website using pattern matching
+      clearCache(`analysis_results_${prevWebsiteId}`);
+      clearCache(`analysis_metadata_${prevWebsiteId}`);
       
       if (process.env.NODE_ENV === "development") {
         console.log("Analysis: Website changed, clearing cache", {
@@ -235,7 +242,7 @@ export function useOptimizedAnalysisData() {
         });
       }
     }
-  }, [selectedWebsiteId, setCache]);
+  }, [selectedWebsiteId, clearCache]);
 
   return {
     // Data
@@ -275,8 +282,10 @@ export function useOptimizedDashboardData() {
   const [metrics, setMetrics] = useState<any>(null);
   const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
   const [topicPerformance, setTopicPerformance] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  
+  // Initialize loading state as true if we have a website to load data for
+  const [isLoading, setIsLoading] = useState(!!selectedWebsiteId);
 
   // Transform dashboard filters if needed
   const transformedFilters = useMemo(() => {
@@ -360,11 +369,29 @@ export function useOptimizedDashboardData() {
     ]
   );
 
+  // Handle initial loading state and cached data
   useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]);
+    if (!selectedWebsiteId) {
+      setIsLoading(false);
+      return;
+    }
+
+    const currentCachedData = getFromCache<any>(cacheKey);
+    if (currentCachedData) {
+      // We have cached data, use it immediately and stop loading
+      setMetrics(currentCachedData.metrics);
+      setTimeSeriesData(currentCachedData.timeSeriesData);
+      setTopicPerformance(currentCachedData.topicPerformance);
+      setIsLoading(false);
+    } else {
+      // No cached data, ensure loading state is true and load data
+      setIsLoading(true);
+      loadDashboardData();
+    }
+  }, [selectedWebsiteId, cacheKey, getFromCache, loadDashboardData]);
 
   // Detect website changes and reload data immediately
+  const { clearCache: clearDashboardCache } = useAppState();
   const prevDashboardWebsiteIdRef = React.useRef<string | null>(null);
   useEffect(() => {
     const prevWebsiteId = prevDashboardWebsiteIdRef.current;
@@ -383,13 +410,19 @@ export function useOptimizedDashboardData() {
         });
       }
       
+      // Clear local state first to prevent showing stale data
+      setMetrics(null);
+      setTimeSeriesData([]);
+      setTopicPerformance([]);
+      setError(null);
+      
       // Always reload data immediately - no complex visibility logic
       loadDashboardData(true);
       
-      // Clear global cache for the previous website
-      setCache(`dashboard_data_${prevWebsiteId}`, null, 0);
+      // Clear global cache for the previous website using pattern matching
+      clearDashboardCache(`dashboard_data_${prevWebsiteId}`);
     }
-  }, [selectedWebsiteId, loadDashboardData, setCache]);
+  }, [selectedWebsiteId, loadDashboardData, clearDashboardCache]);
 
   return {
     // Data
@@ -428,7 +461,7 @@ export function useOptimizedCompetitorsData() {
   const [competitors, setCompetitors] = useState<any[]>([]);
   const [performance, setPerformance] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(!!selectedWebsiteId);
   const [error, setError] = useState<Error | null>(null);
 
   // Transform competitors filters from global state format to service format
@@ -572,36 +605,40 @@ export function useOptimizedCompetitorsData() {
 
   // Navigation-aware competitors loading - only load if no valid cache exists
   useEffect(() => {
-    if (selectedWebsiteId) {
-      // Check if we have valid cached data first
-      const currentCachedData = getFromCache<any>(cacheKey);
-      if (!currentCachedData) {
-        // No cache, load fresh data
-        loadCompetitorsData();
-      } else {
-        // Use cached data for instant navigation
-        const transformedCachedCompetitors = (
-          currentCachedData.competitors || []
-        ).map((competitor: any) => ({
-          ...competitor,
-          analysisStatus: competitor.performance
-            ? "completed"
-            : ("pending" as const),
-          addedAt: competitor.created_at || new Date().toISOString(),
-        }));
-
-        const competitorsWithStatus = transformedCachedCompetitors.filter(
-          (competitor: any, index: number, array: any[]) =>
-            array.findIndex((c: any) => c.id === competitor.id) === index
-        );
-
-        setCompetitors(competitorsWithStatus);
-        setPerformance(currentCachedData.performance);
-        setAnalytics(currentCachedData.analytics);
-        setIsLoading(false);
-      }
+    if (!selectedWebsiteId) {
+      setIsLoading(false);
+      return;
     }
-  }, [selectedWebsiteId, competitorFiltersChanged]);
+
+    // Check if we have valid cached data first
+    const currentCachedData = getFromCache<any>(cacheKey);
+    if (!currentCachedData) {
+      // No cache, ensure loading state is true and load fresh data
+      setIsLoading(true);
+      loadCompetitorsData();
+    } else {
+      // Use cached data for instant navigation
+      const transformedCachedCompetitors = (
+        currentCachedData.competitors || []
+      ).map((competitor: any) => ({
+        ...competitor,
+        analysisStatus: competitor.performance
+          ? "completed"
+          : ("pending" as const),
+        addedAt: competitor.created_at || new Date().toISOString(),
+      }));
+
+      const competitorsWithStatus = transformedCachedCompetitors.filter(
+        (competitor: any, index: number, array: any[]) =>
+          array.findIndex((c: any) => c.id === competitor.id) === index
+      );
+
+      setCompetitors(competitorsWithStatus);
+      setPerformance(currentCachedData.performance);
+      setAnalytics(currentCachedData.analytics);
+      setIsLoading(false);
+    }
+  }, [selectedWebsiteId, competitorFiltersChanged, cacheKey, getFromCache, loadCompetitorsData]);
 
   // Detect website changes and properly invalidate cache
   const { clearCache } = useAppState();
