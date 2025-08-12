@@ -16,6 +16,13 @@ export function useOptimizedApiKeys() {
   
   // Check if we have cached API keys
   const cachedApiKeys = getFromCache<ApiKey[]>(apiKeysCacheKey);
+  
+  // Synchronous cache detection for immediate skeleton bypass
+  const hasSyncCache = useCallback(() => {
+    if (!user?.id) return false;
+    const cached = getFromCache<ApiKey[]>(apiKeysCacheKey);
+    return !!cached;
+  }, [user?.id, apiKeysCacheKey, getFromCache]);
 
   const loadApiKeys = useCallback(async (forceRefresh = false) => {
     if (!user?.id) {
@@ -73,10 +80,11 @@ export function useOptimizedApiKeys() {
   return {
     apiKeys,
     primaryApiKey,
-    isLoading: isLoading && !cachedApiKeys, // Only show loading if no cache
+    isLoading: isLoading && !hasSyncCache(), // Only show loading if no cache
     error,
     loadApiKeys,
     refreshApiKeys,
     hasCachedData: !!cachedApiKeys,
+    hasSyncCache,
   };
 }

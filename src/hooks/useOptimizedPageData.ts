@@ -66,6 +66,25 @@ export function useOptimizedAnalysisData() {
   const filteredCacheKey = `analysis_filtered_${selectedWebsiteId}_${JSON.stringify(transformedFilters)}`;
   const metadataCacheKey = `analysis_metadata_${selectedWebsiteId}`;
 
+  // Synchronous cache detection for immediate skeleton bypass
+  const hasSyncCache = useCallback(() => {
+    if (!selectedWebsiteId) return false;
+    
+    // Check filtered cache first (exact match for current filters)
+    const filteredCache = getFromCache<UIAnalysisResult[]>(filteredCacheKey);
+    if (filteredCache && filteredCache.length > 0) {
+      return true;
+    }
+    
+    // Check base cache (unfiltered data for this website)
+    const baseCache = getFromCache<UIAnalysisResult[]>(baseCacheKey);
+    if (baseCache && baseCache.length > 0) {
+      return true;
+    }
+    
+    return false;
+  }, [selectedWebsiteId, filteredCacheKey, baseCacheKey, getFromCache]);
+
   // Check multiple cache levels for instant rendering
   const getCachedData = useCallback(() => {
     if (!selectedWebsiteId) return null;
@@ -302,9 +321,9 @@ export function useOptimizedAnalysisData() {
     llmProviders,
 
     // Loading states (optimized - only show when no cache)
-    isLoading: isLoading && !getCachedData(),
+    isLoading: isLoading && !hasSyncCache(),
     isLoadingMore, // Always show pagination loading regardless of cache
-    isInitialLoad: isInitialLoad && !getCachedData(),
+    isInitialLoad: isInitialLoad && !hasSyncCache(),
     sharedDataLoading,
 
     // State
@@ -321,6 +340,7 @@ export function useOptimizedAnalysisData() {
 
     // Cache status
     hasCachedData: !!getCachedData(),
+    hasSyncCache,
   };
 }
 
@@ -348,7 +368,14 @@ export function useOptimizedDashboardData() {
 
   const cacheKey = `dashboard_data_${selectedWebsiteId}_${transformedFilters.period}`;
 
-  // Check cached data - remove unstable getFromCache dependency
+  // Synchronous cache detection for immediate skeleton bypass
+  const hasSyncCache = useCallback(() => {
+    if (!selectedWebsiteId) return false;
+    const cached = getFromCache<any>(cacheKey);
+    return !!(cached && (cached.metrics || cached.timeSeriesData?.length > 0 || cached.topicPerformance?.length > 0));
+  }, [selectedWebsiteId, cacheKey, getFromCache]);
+
+  // Check cached data - remove unstable getFromCache dependency  
   const cachedData = useMemo(() => {
     if (!selectedWebsiteId) return null;
     return getFromCache<any>(cacheKey);
@@ -483,8 +510,8 @@ export function useOptimizedDashboardData() {
     topicPerformance,
 
     // Loading states (optimized)
-    isLoading: isLoading && !cachedData,
-
+    isLoading: isLoading && !hasSyncCache(),
+    
     // State
     error,
 
@@ -497,6 +524,7 @@ export function useOptimizedDashboardData() {
 
     // Cache status
     hasCachedData: !!cachedData,
+    hasSyncCache,
   };
 }
 
@@ -552,6 +580,25 @@ export function useOptimizedCompetitorsData() {
   const competitorsFilteredCacheKey = `competitors_filtered_${selectedWebsiteId}_${JSON.stringify(
     prevCompetitorFiltersRef.current
   )}`;
+
+  // Synchronous cache detection for immediate skeleton bypass
+  const hasSyncCache = useCallback(() => {
+    if (!selectedWebsiteId) return false;
+    
+    // Check filtered cache first (exact match for current filters)
+    const filteredCache = getFromCache<any>(competitorsFilteredCacheKey);
+    if (filteredCache && (filteredCache.competitors?.length > 0 || filteredCache.performance?.length > 0)) {
+      return true;
+    }
+    
+    // Check base cache (unfiltered data for this website)
+    const baseCache = getFromCache<any>(competitorsBaseCacheKey);
+    if (baseCache && (baseCache.competitors?.length > 0 || baseCache.performance?.length > 0)) {
+      return true;
+    }
+    
+    return false;
+  }, [selectedWebsiteId, competitorsFilteredCacheKey, competitorsBaseCacheKey, getFromCache]);
 
   // Check multiple cache levels for instant rendering
   const getCompetitorsCachedData = useCallback(() => {
@@ -833,7 +880,7 @@ export function useOptimizedCompetitorsData() {
     topics, // Shared across pages
 
     // Loading states (optimized)
-    isLoading: isLoading && !getCompetitorsCachedData(),
+    isLoading: isLoading && !hasSyncCache(),
 
     // State
     error,
@@ -847,5 +894,6 @@ export function useOptimizedCompetitorsData() {
 
     // Cache status
     hasCachedData: !!getCompetitorsCachedData(),
+    hasSyncCache,
   };
 }

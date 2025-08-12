@@ -304,6 +304,7 @@ export default function Analysis() {
     loadMore,
     refresh: refreshResults,
     hasCachedData,
+    hasSyncCache,
   } = useOptimizedAnalysisData();
   
   // Filters are now managed globally - no local sync needed
@@ -876,8 +877,11 @@ export default function Analysis() {
     </div>
   );
 
-  // Show loading state only on initial load to prevent flickering
-  if (loading || (isLoadingResults && isInitialLoad)) {
+  // Show skeleton immediately unless we have synchronous cache data
+  // This eliminates empty state flash by showing skeleton first
+  const shouldShowSkeleton = loading || (isLoadingResults && !hasSyncCache());
+  
+  if (shouldShowSkeleton) {
     return <AnalysisSkeleton />;
   }
 

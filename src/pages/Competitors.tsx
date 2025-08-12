@@ -76,6 +76,7 @@ export default function Competitors() {
     error,
     refresh,
     hasCachedData,
+    hasSyncCache,
   } = useOptimizedCompetitorsData();
   
   // Derive additional data for backward compatibility
@@ -358,8 +359,11 @@ export default function Competitors() {
   };
 
 
-  // Show loading state during workspace loading or initial competitors load (no cache)
-  if (workspaceLoading || isInitialLoad) {
+  // Show skeleton immediately unless we have synchronous cache data
+  // This eliminates empty state flash by showing skeleton first
+  const shouldShowSkeleton = workspaceLoading || (isLoading && !hasSyncCache());
+  
+  if (shouldShowSkeleton) {
     return <CompetitorsSkeleton />;
   }
 

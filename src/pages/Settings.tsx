@@ -44,8 +44,8 @@ import { useEffect, useState } from "react";
 export default function Settings() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { profile, isLoading: isLoadingProfile, loadProfile, updateProfile, uploadAvatar, deleteAvatar, getInitials, hasCachedData } = useOptimizedProfile();
-  const { apiKeys, primaryApiKey, isLoading: isLoadingApiKeys, error: apiKeysError, refreshApiKeys } = useOptimizedApiKeys();
+  const { profile, isLoading: isLoadingProfile, loadProfile, updateProfile, uploadAvatar, deleteAvatar, getInitials, hasCachedData, hasSyncCache: hasProfileSyncCache } = useOptimizedProfile();
+  const { apiKeys, primaryApiKey, isLoading: isLoadingApiKeys, error: apiKeysError, refreshApiKeys, hasSyncCache: hasApiKeysSyncCache } = useOptimizedApiKeys();
   const { exportSummary, recentActivity } = useExportHistory();
   const { selectedWebsiteId, websites } = useSelectedWebsite();
   const [isProfileSaving, setIsProfileSaving] = useState(false);
@@ -378,6 +378,10 @@ export default function Settings() {
     }
   };
 
+  // Show skeleton immediately unless we have synchronous cache data for both profile and API keys
+  // This eliminates empty state flash by showing skeleton first
+  const shouldShowSkeleton = (isLoadingProfile && !hasProfileSyncCache()) || (isLoadingApiKeys && !hasApiKeysSyncCache());
+
   return (
     <>
       <div className="space-y-6">
@@ -399,7 +403,7 @@ export default function Settings() {
           )}
         </div>
 
-        {(isLoadingProfile || isLoadingApiKeys) ? (
+        {shouldShowSkeleton ? (
           <SettingsSkeleton />
         ) : loadingError ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">

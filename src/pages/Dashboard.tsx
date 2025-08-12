@@ -94,6 +94,7 @@ export default function Dashboard() {
     error: dashboardError,
     refresh: refreshData,
     hasCachedData,
+    hasSyncCache,
   } = useOptimizedDashboardData();
   
   // Derive additional data for backward compatibility
@@ -401,8 +402,11 @@ export default function Dashboard() {
     return trend >= 0 ? "text-success" : "text-destructive";
   };
 
-  // Show loading state only on initial load (no cache) to prevent flickering
-  if (loading || isInitialLoad) {
+  // Show skeleton immediately unless we have synchronous cache data
+  // This eliminates empty state flash by showing skeleton first
+  const shouldShowSkeleton = loading || (isDashboardLoading && !hasSyncCache());
+  
+  if (shouldShowSkeleton) {
     return <DashboardSkeleton />;
   }
 

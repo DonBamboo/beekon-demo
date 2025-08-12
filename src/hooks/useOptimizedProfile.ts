@@ -16,6 +16,13 @@ export function useOptimizedProfile() {
 
   // Check if we have cached profile data
   const cachedProfile = getFromCache<UserProfile>(profileCacheKey);
+  
+  // Synchronous cache detection for immediate skeleton bypass
+  const hasSyncCache = useCallback(() => {
+    if (!user?.id) return false;
+    const cached = getFromCache<UserProfile>(profileCacheKey);
+    return !!cached;
+  }, [user?.id, profileCacheKey, getFromCache]);
 
   const loadProfile = useCallback(async (forceRefresh = false) => {
     if (!user?.id) {
@@ -134,7 +141,7 @@ export function useOptimizedProfile() {
 
   return {
     profile,
-    isLoading: isLoading && !cachedProfile, // Only show loading if no cache
+    isLoading: isLoading && !hasSyncCache(), // Only show loading if no cache
     error,
     loadProfile,
     updateProfile,
@@ -143,6 +150,7 @@ export function useOptimizedProfile() {
     getInitials,
     getDisplayName,
     hasCachedData: !!cachedProfile,
+    hasSyncCache,
     refresh: () => loadProfile(true),
   };
 }
