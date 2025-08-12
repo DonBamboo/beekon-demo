@@ -296,6 +296,7 @@ export default function Analysis() {
     topics,
     llmProviders,
     isLoading: isLoadingResults,
+    isLoadingMore,
     isInitialLoad,
     sharedDataLoading,
     error: analysisError,
@@ -1819,7 +1820,7 @@ export default function Analysis() {
               // Infinite scroll ungrouped view
               <InfiniteScrollContainer
                 hasMore={hasMore}
-                isLoadingMore={isLoadingResults}
+                isLoadingMore={isLoadingMore}
                 onLoadMore={loadMore}
                 enabled={infiniteScrollEnabled}
                 className="space-y-4"

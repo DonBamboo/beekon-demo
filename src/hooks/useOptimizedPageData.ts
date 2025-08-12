@@ -35,9 +35,11 @@ export function useOptimizedAnalysisData() {
     []
   );
   const [isLoading, setIsLoading] = useState(!!selectedWebsiteId);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [cursor, setCursor] = useState<string | null>(null);
 
   // Transform filters from global state format to service-expected format
   const transformedFilters = useMemo(() => {
@@ -119,17 +121,20 @@ export function useOptimizedAnalysisData() {
         // Use current transformed filters (from ref for stability)
         const currentFilters = prevFiltersRef.current;
 
-        // Use batch API for efficient loading with transformed filters
-        const batchResponse = await batchAPI.loadAnalysisPage(
+        // Use analysis service for consistent cursor-based pagination
+        const response = await analysisService.getAnalysisResultsPaginated(
           selectedWebsiteId,
-          currentFilters
+          {
+            limit: 20,
+            filters: currentFilters,
+          }
         );
-        const data = batchResponse.data as any;
 
         // Update results with deduplication
-        const rawResults = data.recentResults || [];
-        const results = deduplicateById(rawResults);
+        const results = deduplicateById(response.results);
         setAnalysisResults(results);
+        setHasMore(response.hasMore);
+        setCursor(response.nextCursor);
 
         // Smart caching strategy: Cache both base and filtered data
         // Base cache (for website switching)
@@ -137,11 +142,6 @@ export function useOptimizedAnalysisData() {
         
         // Filtered cache (for exact filter match)
         setCache(filteredCacheKey, results, 5 * 60 * 1000); // 5 minutes cache
-
-        // Cache metadata for other components
-        if (data.metadata) {
-          setCache(metadataCacheKey, data.metadata, 15 * 60 * 1000);
-        }
       } catch (error) {
         console.error("Failed to load analysis data:", error);
         setError(error instanceof Error ? error : new Error("Unknown error"));
@@ -154,7 +154,6 @@ export function useOptimizedAnalysisData() {
       selectedWebsiteId,
       baseCacheKey,
       filteredCacheKey,
-      metadataCacheKey,
       getCachedData,
       setCache,
     ]
@@ -162,18 +161,17 @@ export function useOptimizedAnalysisData() {
 
   // Load more results for infinite scroll
   const loadMoreResults = useCallback(async () => {
-    if (!selectedWebsiteId || isLoading || !hasMore) return;
+    if (!selectedWebsiteId || isLoadingMore || !hasMore || !cursor) return;
 
-    setIsLoading(true);
+    setIsLoadingMore(true);
     try {
-      const offset = analysisResults.length;
       // Use stable filter reference for pagination
       const currentFilters = prevFiltersRef.current;
       const additionalResults =
         await analysisService.getAnalysisResultsPaginated(selectedWebsiteId, {
-          ...currentFilters,
+          cursor,
           limit: 20,
-          offset,
+          filters: currentFilters,
         });
 
       // Deduplicate results to prevent duplicate keys
@@ -184,6 +182,7 @@ export function useOptimizedAnalysisData() {
       const newResults = deduplicateById(combinedResults);
       setAnalysisResults(newResults);
       setHasMore(additionalResults.hasMore);
+      setCursor(additionalResults.nextCursor);
 
       // Update cache with deduplicated results (both base and filtered cache)
       setCache(baseCacheKey, newResults, 10 * 60 * 1000);
@@ -194,13 +193,14 @@ export function useOptimizedAnalysisData() {
         error instanceof Error ? error : new Error("Failed to load more")
       );
     } finally {
-      setIsLoading(false);
+      setIsLoadingMore(false);
     }
   }, [
     selectedWebsiteId,
+    cursor,
     analysisResults,
     hasMore,
-    isLoading,
+    isLoadingMore,
     setCache,
     baseCacheKey,
     filteredCacheKey,
@@ -211,9 +211,11 @@ export function useOptimizedAnalysisData() {
     if (!selectedWebsiteId) {
       setAnalysisResults([]);
       setIsLoading(false);
+      setIsLoadingMore(false);
       setIsInitialLoad(false);
       setError(null);
       setHasMore(true);
+      setCursor(null);
       return;
     }
 
@@ -239,6 +241,8 @@ export function useOptimizedAnalysisData() {
 
     // No cache found - set loading state and fetch fresh data
     setIsLoading(true);
+    setIsLoadingMore(false); // Reset pagination state when loading fresh data for new website
+    setCursor(null); // Reset cursor for fresh data load
     setError(null);
     loadAnalysisData();
     
@@ -262,6 +266,7 @@ export function useOptimizedAnalysisData() {
       // We have cache for these exact filters - use it immediately
       setAnalysisResults(filteredCache);
       setIsLoading(false);
+      setIsLoadingMore(false);
       setError(null);
       
       if (process.env.NODE_ENV === "development") {
@@ -284,6 +289,8 @@ export function useOptimizedAnalysisData() {
     }
     
     setIsLoading(true);
+    setIsLoadingMore(false); // Reset pagination state when loading fresh data due to filter change
+    setCursor(null); // Reset cursor for fresh filtered data load
     setError(null);
     loadAnalysisData();
   }, [filtersChanged, selectedWebsiteId, filteredCacheKey, getFromCache, transformedFilters, loadAnalysisData]);
@@ -296,6 +303,7 @@ export function useOptimizedAnalysisData() {
 
     // Loading states (optimized - only show when no cache)
     isLoading: isLoading && !getCachedData(),
+    isLoadingMore, // Always show pagination loading regardless of cache
     isInitialLoad: isInitialLoad && !getCachedData(),
     sharedDataLoading,
 
