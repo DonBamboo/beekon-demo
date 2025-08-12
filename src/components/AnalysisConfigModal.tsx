@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AdvancedExportDropdown } from "@/components/ui/export-components";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionEnforcement } from "@/hooks/useSubscriptionEnforcement";
+import { useGlobalCache } from "@/contexts/AppStateContext";
 import {
   analysisService,
   type AnalysisProgress,
@@ -97,6 +98,7 @@ export function AnalysisConfigModal({
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
   const [topicError, setTopicError] = useState<string | null>(null);
   const { handleExport } = useExportHandler();
+  const { clearCache } = useGlobalCache();
 
   const availableLLMs = [
     {
@@ -220,6 +222,10 @@ export function AnalysisConfigModal({
       // Start the analysis
       const sessionId = await analysisService.createAnalysis(config);
       setCurrentAnalysisId(sessionId);
+
+      // Clear analysis cache for this website since new analysis is being created
+      clearCache(`analysis_results_${websiteId}`);
+      clearCache(`analysis_metadata_${websiteId}`);
 
       // Get the created session for display purposes
       const session = await analysisService.getAnalysisSession(sessionId);

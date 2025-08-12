@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "./use-toast";
+import { useGlobalCache } from "@/contexts/AppStateContext";
 import {
   analysisService,
   type AnalysisStatus,
@@ -108,6 +109,7 @@ export function useAnalysisData(websiteId: string, filters?: AnalysisFilters) {
 export function useCreateAnalysis() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { clearCache } = useGlobalCache();
 
   return useMutation({
     mutationFn: (config: AnalysisConfig) => analysisService.createAnalysis(config),
@@ -115,6 +117,10 @@ export function useCreateAnalysis() {
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: analysisKeys.results(variables.websiteId) });
       queryClient.invalidateQueries({ queryKey: analysisKeys.topics(variables.websiteId) });
+      
+      // Clear global app state cache for this website
+      clearCache(`analysis_results_${variables.websiteId}`);
+      clearCache(`analysis_metadata_${variables.websiteId}`);
       
       toast({
         title: "Analysis started",

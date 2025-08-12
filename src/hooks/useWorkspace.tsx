@@ -93,6 +93,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [websites, setWebsites] = useState<Website[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Add intelligent caching for websites
+  const websitesCache = useRef<{
+    data: Website[];
+    timestamp: number;
+    workspaceId: string;
+  } | null>(null);
+  const WEBSITES_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   // Workspace change listeners
   const workspaceChangeListeners = useRef<
@@ -424,6 +432,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     async (workspaceId: string) => {
       const workspace = workspaces.find((w) => w.id === workspaceId);
       if (workspace) {
+        // Clear websites cache when switching workspaces to ensure fresh data
+        invalidateWebsitesCache();
         setCurrentWorkspaceWithNotification(workspace);
         toast({
           title: "Success",
@@ -431,7 +441,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    [workspaces, toast, setCurrentWorkspaceWithNotification]
+    [workspaces, toast, setCurrentWorkspaceWithNotification, invalidateWebsitesCache]
   );
 
   const refetchWorkspaces = useCallback(async () => {
@@ -439,8 +449,21 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     await fetchWorkspaces();
   }, [fetchWorkspaces]);
 
-  const fetchWebsites = useCallback(async () => {
+  const fetchWebsites = useCallback(async (forceRefresh = false) => {
     if (!user?.id || !currentWorkspace?.id) {
+      setLoading(false);
+      return;
+    }
+
+    // Check cache first
+    const now = Date.now();
+    const cache = websitesCache.current;
+    
+    if (!forceRefresh && cache && 
+        cache.workspaceId === currentWorkspace.id && 
+        (now - cache.timestamp) < WEBSITES_CACHE_DURATION) {
+      // Use cached data
+      setWebsites(cache.data);
       setLoading(false);
       return;
     }
@@ -465,6 +488,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         created_at: w.created_at ?? "",
         updated_at: w.updated_at ?? "",
       }));
+
+      // Update cache
+      websitesCache.current = {
+        data: websiteData,
+        timestamp: now,
+        workspaceId: currentWorkspace.id,
+      };
 
       setWebsites((prev) => {
         // Use a more efficient comparison - check length and IDs first
@@ -495,7 +525,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, currentWorkspace?.id, toast]);
+  }, [user?.id, currentWorkspace?.id, toast, WEBSITES_CACHE_DURATION]);
 
   // State validation function to ensure workspace consistency
   const validateWorkspaceState = useCallback(() => {
@@ -520,6 +550,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, [currentWorkspace, workspaces, setCurrentWorkspaceWithNotification]);
 
+  const invalidateWebsitesCache = useCallback(() => {
+    websitesCache.current = null;
+  }, []);
+
   const deleteWebsite = useCallback(
     async (websiteId: string) => {
       if (!user?.id || !currentWorkspace?.id) {
@@ -536,13 +570,16 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           .eq("workspace_id", currentWorkspace?.id);
 
         if (error) throw error;
+        
+        // Invalidate cache and update state
+        invalidateWebsitesCache();
         setWebsites((prev) => prev.filter((w) => w.id !== websiteId));
       } catch (error) {
         // Website deletion failed, but we can ignore the error
         // The UI will refresh and show the actual state
       }
     },
-    [user?.id, currentWorkspace?.id]
+    [user?.id, currentWorkspace?.id, invalidateWebsitesCache]
   );
 
   useEffect(() => {
@@ -578,7 +615,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const refetchWebsites = useCallback(async () => {
     setLoading(true);
-    await fetchWebsites();
+    await fetchWebsites(true); // Force refresh to bypass cache
   }, [fetchWebsites]);
 
   // Add listener registration function

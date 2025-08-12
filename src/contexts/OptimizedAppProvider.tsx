@@ -62,6 +62,18 @@ function WorkspaceStateSync({ children }: { children: React.ReactNode }) {
   // Always call hooks first
   const { dispatch, state } = useAppState();
   const { websites, currentWorkspace, loading: workspaceLoading } = useWorkspace();
+  
+  // Add debounced state sync to prevent cascading updates
+  const syncTimeoutRef = React.useRef<NodeJS.Timeout>();
+  const lastSyncDataRef = React.useRef<{
+    workspaceId: string | null;
+    websiteIds: string;
+    loading: boolean;
+  }>({
+    workspaceId: null,
+    websiteIds: '',
+    loading: true,
+  });
 
   // Sync workspace data with app state
   React.useEffect(() => {
@@ -69,37 +81,66 @@ function WorkspaceStateSync({ children }: { children: React.ReactNode }) {
       if (dispatch) {
         const websiteList = websites || [];
         
-        // Only sync if there's meaningful data change
-        const hasWorkspaceChanged = state.workspace.current?.id !== currentWorkspace?.id;
-        const hasWebsitesChanged = JSON.stringify(state.workspace.websites.map(w => w.id).sort()) 
-          !== JSON.stringify(websiteList.map(w => w.id).sort());
-        const hasLoadingChanged = state.workspace.loading !== workspaceLoading;
+        // Create sync data for comparison
+        const currentSyncData = {
+          workspaceId: currentWorkspace?.id || null,
+          websiteIds: JSON.stringify(websiteList.map(w => w.id).sort()),
+          loading: workspaceLoading,
+        };
+        
+        // Check if there's meaningful data change
+        const hasWorkspaceChanged = lastSyncDataRef.current.workspaceId !== currentSyncData.workspaceId;
+        const hasWebsitesChanged = lastSyncDataRef.current.websiteIds !== currentSyncData.websiteIds;
+        const hasLoadingChanged = lastSyncDataRef.current.loading !== currentSyncData.loading;
         
         if (hasWorkspaceChanged || hasWebsitesChanged || hasLoadingChanged) {
-          dispatch({
-            type: 'SET_WORKSPACE',
-            payload: {
-              workspace: currentWorkspace,
-              websites: websiteList,
-              loading: workspaceLoading,
-            },
-          });
-          
-          // Debug logging for website selection
-          if (process.env.NODE_ENV === 'development' && websiteList.length > 0) {
-            const selectedWebsiteId = state.workspace.selectedWebsiteId || websiteList[0]?.id;
-            console.log('WorkspaceStateSync: Website selection updated', {
-              selectedWebsiteId,
-              availableWebsites: websiteList.length,
-              workspaceName: currentWorkspace?.name
-            });
+          // Clear existing timeout
+          if (syncTimeoutRef.current) {
+            clearTimeout(syncTimeoutRef.current);
           }
+          
+          // Debounce the state sync to reduce cascading updates
+          syncTimeoutRef.current = setTimeout(() => {
+            dispatch({
+              type: 'SET_WORKSPACE',
+              payload: {
+                workspace: currentWorkspace,
+                websites: websiteList,
+                loading: workspaceLoading,
+              },
+            });
+            
+            // Update last sync data
+            lastSyncDataRef.current = currentSyncData;
+            
+            // Debug logging for website selection
+            if (process.env.NODE_ENV === 'development' && websiteList.length > 0) {
+              const selectedWebsiteId = state.workspace.selectedWebsiteId || websiteList[0]?.id;
+              console.log('WorkspaceStateSync: Debounced sync completed', {
+                selectedWebsiteId,
+                availableWebsites: websiteList.length,
+                workspaceName: currentWorkspace?.name,
+                hasWorkspaceChanged,
+                hasWebsitesChanged,
+                hasLoadingChanged,
+              });
+            }
+          }, 50); // 50ms debounce to prevent cascading updates
         }
       }
     } catch (error) {
       console.error('WorkspaceStateSync sync error:', error);
     }
-  }, [currentWorkspace, websites, workspaceLoading, dispatch, state.workspace]);
+  }, [currentWorkspace, websites, workspaceLoading, dispatch, state.workspace.selectedWebsiteId]);
+
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return <>{children}</>;
 }

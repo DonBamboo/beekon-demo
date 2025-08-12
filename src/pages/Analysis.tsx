@@ -983,13 +983,14 @@ export default function Analysis() {
                   <Select
                     value={selectedWebsiteId || ""}
                     onValueChange={(value) => {
-                      console.log(
-                        "Analysis: Website changing from",
-                        selectedWebsiteId,
-                        "to",
-                        value
-                      );
-                      // Immediate optimistic update - never wait for loading
+                      if (process.env.NODE_ENV === "development") {
+                        console.log("Analysis: Optimistic website change", {
+                          from: selectedWebsiteId,
+                          to: value,
+                          timestamp: Date.now()
+                        });
+                      }
+                      // Immediate optimistic update - UI responds instantly
                       setSelectedWebsite(value);
 
                       // Reset filters that are specific to the previous website
@@ -1006,7 +1007,7 @@ export default function Analysis() {
                     <SelectTrigger className="w-full sm:w-[250px] min-w-[200px]">
                       <div className="flex items-center justify-between w-full">
                         <SelectValue placeholder="Select website" />
-                        {isLoadingResults && (
+                        {(isLoadingResults && (!cachedResults || cachedResults.length === 0)) && (
                           <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
                         )}
                       </div>

@@ -598,7 +598,7 @@ export class OptimizedCompetitorService extends BaseService {
     }
 
     // Clear all relevant cache for this website
-    this.clearCache(`competitors_${websiteId}`);
+    this.clearCache(`competitors_data_${websiteId}`);
     this.clearCache(`performance_${websiteId}`);
     this.clearCache(`analytics_${websiteId}`);
 
@@ -669,7 +669,7 @@ export class OptimizedCompetitorService extends BaseService {
     if (error) throw error;
 
     // Clear relevant cache
-    this.clearCache(`competitors_${data.website_id}`);
+    this.clearCache(`competitors_data_${data.website_id}`);
 
     // Refresh materialized views to ensure updated competitors appear in analytics
     try {
@@ -700,7 +700,7 @@ export class OptimizedCompetitorService extends BaseService {
 
     // Clear relevant cache
     if (data) {
-      this.clearCache(`competitors_${data.website_id}`);
+      this.clearCache(`competitors_data_${data.website_id}`);
 
       // Refresh materialized views to ensure deleted competitors are removed from analytics
       try {

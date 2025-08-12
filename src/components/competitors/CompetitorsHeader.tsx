@@ -96,8 +96,14 @@ export default function CompetitorsHeader({
         <Select
           value={selectedWebsiteId || ""}
           onValueChange={(value) => {
-            console.log('Competitors: Website changing from', selectedWebsiteId, 'to', value);
-            // Immediate optimistic update - never wait for loading
+            if (process.env.NODE_ENV === "development") {
+              console.log('Competitors: Optimistic website change', {
+                from: selectedWebsiteId, 
+                to: value,
+                timestamp: Date.now()
+              });
+            }
+            // Immediate optimistic update - UI responds instantly
             setSelectedWebsite(value);
           }}
           disabled={websitesLoading || websites.length === 0}
@@ -125,7 +131,7 @@ export default function CompetitorsHeader({
                   )}
                 </SelectValue>
               </div>
-              {(isRefreshing || websitesLoading) && (
+              {(isRefreshing || (websitesLoading && websites.length === 0)) && (
                 <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
               )}
             </div>

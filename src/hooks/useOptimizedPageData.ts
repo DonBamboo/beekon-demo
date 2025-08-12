@@ -190,59 +190,76 @@ export function useOptimizedAnalysisData() {
     resultsCacheKey,
   ]);
 
-  // Navigation-aware data loading - only load if no valid cache exists
+  // Enhanced cache-first navigation for instant website switching
   useEffect(() => {
     if (!selectedWebsiteId) {
+      setAnalysisResults([]);
       setIsLoading(false);
       setIsInitialLoad(false);
+      setError(null);
+      setHasMore(true);
       return;
     }
 
-    // Check if we have valid cached data first
-    const cachedResults = getFromCache<UIAnalysisResult[]>(resultsCacheKey);
-    if (!cachedResults) {
-      // No cache, ensure loading state is true and load fresh data
-      setIsLoading(true);
-      loadAnalysisData();
-    } else {
-      // Use cached data for instant navigation
-      setAnalysisResults(cachedResults);
-      setIsLoading(false);
+    // Check cache first before resetting any loading states
+    const cachedData = getFromCache<UIAnalysisResult[]>(resultsCacheKey);
+    if (cachedData && cachedData.length > 0) {
+      // We have cached data - use it immediately without showing loading
+      setAnalysisResults(cachedData);
       setIsInitialLoad(false);
+      setIsLoading(false);
+      setError(null);
+      
+      if (process.env.NODE_ENV === "development") {
+        console.log("Analysis: Using cached data for instant navigation", {
+          websiteId: selectedWebsiteId,
+          cachedResults: cachedData.length,
+          cacheKey: resultsCacheKey
+        });
+      }
+      return;
+    }
+
+    // No cache found - set loading state and fetch fresh data
+    setIsLoading(true);
+    setError(null);
+    loadAnalysisData();
+    
+    if (process.env.NODE_ENV === "development") {
+      console.log("Analysis: No cache found, loading fresh data", {
+        websiteId: selectedWebsiteId,
+        cacheKey: resultsCacheKey
+      });
     }
   }, [selectedWebsiteId, filtersChanged, resultsCacheKey, getFromCache, loadAnalysisData]);
 
-  // Detect website changes and properly invalidate cache  
-  const { clearCache } = useAppState();
+  // Detect website changes and clear local state for smooth navigation
   const prevWebsiteIdRef = React.useRef<string | null>(null);
   useEffect(() => {
     const prevWebsiteId = prevWebsiteIdRef.current;
     prevWebsiteIdRef.current = selectedWebsiteId;
 
-    // Only reset data when actually switching to a different website, not on initial load
+    // Only reset local state when actually switching to a different website, not on initial load
     if (
       prevWebsiteId &&
       selectedWebsiteId &&
       prevWebsiteId !== selectedWebsiteId
     ) {
-      // Clear local state
+      // Clear local state for loading transition (but preserve cache)
       setAnalysisResults([]);
       setIsInitialLoad(true);
       setError(null);
       setHasMore(true);
-
-      // Clear global cache for the previous website using pattern matching
-      clearCache(`analysis_results_${prevWebsiteId}`);
-      clearCache(`analysis_metadata_${prevWebsiteId}`);
       
       if (process.env.NODE_ENV === "development") {
-        console.log("Analysis: Website changed, clearing cache", {
+        console.log("Analysis: Website changed, clearing local state", {
           from: prevWebsiteId,
           to: selectedWebsiteId,
+          note: "Cache preserved for future navigation"
         });
       }
     }
-  }, [selectedWebsiteId, clearCache]);
+  }, [selectedWebsiteId]);
 
   return {
     // Data
@@ -603,73 +620,101 @@ export function useOptimizedCompetitorsData() {
     [selectedWebsiteId, cacheKey, getFromCache, setCache]
   );
 
-  // Navigation-aware competitors loading - only load if no valid cache exists
+  // Enhanced cache-first navigation for instant website switching - Competitors
   useEffect(() => {
     if (!selectedWebsiteId) {
+      setCompetitors([]);
+      setPerformance([]);
+      setAnalytics(null);
       setIsLoading(false);
+      setError(null);
       return;
     }
 
-    // Check if we have valid cached data first
-    const currentCachedData = getFromCache<any>(cacheKey);
-    if (!currentCachedData) {
-      // No cache, ensure loading state is true and load fresh data
-      setIsLoading(true);
-      loadCompetitorsData();
-    } else {
-      // Use cached data for instant navigation
+    // Check cache first before resetting any loading states
+    const cachedData = getFromCache<any>(cacheKey);
+    if (cachedData) {
+      // We have cached data - use it immediately without showing loading
       const transformedCachedCompetitors = (
-        currentCachedData.competitors || []
-      ).map((competitor: any) => ({
-        ...competitor,
-        analysisStatus: competitor.performance
-          ? "completed"
-          : ("pending" as const),
-        addedAt: competitor.created_at || new Date().toISOString(),
-      }));
+        cachedData.competitors || []
+      ).map((competitor: any) => {
+        // If already has analysisStatus, keep it; otherwise derive it
+        if (competitor.analysisStatus) {
+          return competitor;
+        }
+        const performance = (cachedData.performance || []).find(
+          (p: any) => p.domain === competitor.competitor_domain
+        );
+        return {
+          ...competitor,
+          analysisStatus: performance ? "completed" : ("pending" as const),
+          performance,
+          addedAt: competitor.created_at || new Date().toISOString(),
+        };
+      });
 
+      // Deduplicate cached competitors by ID to prevent React key conflicts
       const competitorsWithStatus = transformedCachedCompetitors.filter(
         (competitor: any, index: number, array: any[]) =>
           array.findIndex((c: any) => c.id === competitor.id) === index
       );
 
       setCompetitors(competitorsWithStatus);
-      setPerformance(currentCachedData.performance);
-      setAnalytics(currentCachedData.analytics);
+      setPerformance(cachedData.performance || []);
+      setAnalytics(cachedData.analytics);
       setIsLoading(false);
+      setError(null);
+      
+      if (process.env.NODE_ENV === "development") {
+        console.log("Competitors: Using cached data for instant navigation", {
+          websiteId: selectedWebsiteId,
+          cachedCompetitors: competitorsWithStatus.length,
+          cacheKey: cacheKey
+        });
+      }
+      return;
+    }
+
+    // No cache found - set loading state and fetch fresh data
+    setIsLoading(true);
+    setError(null);
+    loadCompetitorsData();
+    
+    if (process.env.NODE_ENV === "development") {
+      console.log("Competitors: No cache found, loading fresh data", {
+        websiteId: selectedWebsiteId,
+        cacheKey: cacheKey
+      });
     }
   }, [selectedWebsiteId, competitorFiltersChanged, cacheKey, getFromCache, loadCompetitorsData]);
 
-  // Detect website changes and properly invalidate cache
-  const { clearCache } = useAppState();
+  // Detect website changes and clear local state for smooth navigation
   const prevCompetitorsWebsiteIdRef = React.useRef<string | null>(null);
   useEffect(() => {
     const prevWebsiteId = prevCompetitorsWebsiteIdRef.current;
     prevCompetitorsWebsiteIdRef.current = selectedWebsiteId;
 
-    // Only reset data when actually switching to a different website, not on initial load
+    // Only reset local state when actually switching to a different website, not on initial load
     if (
       prevWebsiteId &&
       selectedWebsiteId &&
       prevWebsiteId !== selectedWebsiteId
     ) {
-      // Clear local state
+      // Clear local state for loading transition (but preserve cache)
       setCompetitors([]);
       setPerformance([]);
       setAnalytics(null);
       setError(null);
-
-      // Clear global cache for the previous website
-      clearCache(`competitors_data_${prevWebsiteId}`);
       
       if (process.env.NODE_ENV === "development") {
-        console.log("Competitors: Website changed, clearing cache", {
+        console.log("Competitors: Website changed, clearing local state", {
           from: prevWebsiteId,
           to: selectedWebsiteId,
+          note: "Cache preserved for future navigation"
         });
       }
     }
-  }, [selectedWebsiteId, clearCache]);
+  }, [selectedWebsiteId]);
 
   return {
     // Data
