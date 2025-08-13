@@ -136,7 +136,7 @@ export class OptimizedCompetitorService extends BaseService {
     const now = Date.now();
 
     if (cached && now - cached.timestamp < cached.ttl) {
-      return cached.data;
+      return cached.data as T;
     }
 
     const data = await fetchFunction();
@@ -211,19 +211,20 @@ export class OptimizedCompetitorService extends BaseService {
       if (error) throw error;
 
       // Transform database results to match interface with safe calculations
-      return (data || []).map((row: Record<string, unknown>) => {
-        const totalMentions = row.total_mentions || 0;
-        const positiveMentions = row.positive_mentions || 0;
-        const avgSentiment = row.avg_sentiment_score;
-        const avgRank = row.avg_rank_position;
-        const mentionTrend = row.mention_trend_7d;
+      const performanceData = Array.isArray(data) ? data : [];
+      return performanceData.map((row: Record<string, unknown>) => {
+        const totalMentions = Number(row.total_mentions) || 0;
+        const positiveMentions = Number(row.positive_mentions) || 0;
+        const avgSentiment = Number(row.avg_sentiment_score);
+        const avgRank = Number(row.avg_rank_position);
+        const mentionTrend = Number(row.mention_trend_7d);
 
         // Average rank processing completed
 
         return {
-          competitorId: row.competitor_id,
-          domain: row.competitor_domain,
-          name: row.competitor_name || row.competitor_domain,
+          competitorId: String(row.competitor_id),
+          domain: String(row.competitor_domain),
+          name: String(row.competitor_name || row.competitor_domain),
           shareOfVoice:
             totalMentions > 0
               ? Math.round((positiveMentions / totalMentions) * 100)
@@ -231,7 +232,7 @@ export class OptimizedCompetitorService extends BaseService {
           averageRank:
             avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20
               ? avgRank
-              : null,
+              : 0,
           mentionCount: totalMentions,
           sentimentScore:
             avgSentiment && !isNaN(avgSentiment)
@@ -244,7 +245,7 @@ export class OptimizedCompetitorService extends BaseService {
           trend: this.calculateTrend(mentionTrend),
           trendPercentage:
             mentionTrend && !isNaN(mentionTrend) ? Math.abs(mentionTrend) : 0,
-          lastAnalyzed: row.last_analysis_date || new Date().toISOString(),
+          lastAnalyzed: String(row.last_analysis_date || new Date().toISOString()),
           isActive: true,
         };
       });
@@ -288,9 +289,10 @@ export class OptimizedCompetitorService extends BaseService {
 
       // Group by date
       const timeSeriesMap = new Map<string, CompetitorTimeSeriesData>();
+      const timeSeriesData = Array.isArray(data) ? data : [];
 
-      (data || []).forEach((row: Record<string, unknown>) => {
-        const dateStr = row.analysis_date;
+      timeSeriesData.forEach((row: Record<string, unknown>) => {
+        const dateStr = String(row.analysis_date);
         if (!timeSeriesMap.has(dateStr)) {
           timeSeriesMap.set(dateStr, {
             date: dateStr,
@@ -298,14 +300,14 @@ export class OptimizedCompetitorService extends BaseService {
           });
         }
 
-        const dailyMentions = row.daily_mentions || 0;
-        const dailyPositiveMentions = row.daily_positive_mentions || 0;
-        const dailyAvgSentiment = row.daily_avg_sentiment;
-        const dailyAvgRank = row.daily_avg_rank;
+        const dailyMentions = Number(row.daily_mentions) || 0;
+        const dailyPositiveMentions = Number(row.daily_positive_mentions) || 0;
+        const dailyAvgSentiment = Number(row.daily_avg_sentiment);
+        const dailyAvgRank = Number(row.daily_avg_rank);
 
         timeSeriesMap.get(dateStr)!.competitors.push({
           competitorId: "", // Would need to join with competitors table
-          name: row.competitor_domain,
+          name: String(row.competitor_domain),
           shareOfVoice:
             dailyMentions > 0
               ? Math.round((dailyPositiveMentions / dailyMentions) * 100)
@@ -471,7 +473,7 @@ export class OptimizedCompetitorService extends BaseService {
           ),
           rawValue: yourBrandMentionRate, // Keep old mention rate for reference
           mentions: yourBrandMentions,
-          avgRank: null, // Your brand doesn't have a rank position
+          avgRank: undefined, // Your brand doesn't have a rank position
           dataType: "market_share",
         },
         ...competitorTrueShares.map((comp) => ({
@@ -494,7 +496,7 @@ export class OptimizedCompetitorService extends BaseService {
           shareOfVoice: yourBrandTrueShareOfVoice, // Use true share of voice
           totalMentions: yourBrandMentions,
           totalAnalyses: yourBrandAnalyses,
-          avgRank: null,
+          avgRank: undefined,
           dataType: "share_of_voice",
         },
         ...competitorTrueShares.map((comp) => ({
@@ -980,24 +982,6 @@ export class OptimizedCompetitorService extends BaseService {
     return "stable";
   }
 
-  private calculateBrandMetrics(results: AnalysisResult[]): {
-    overallVisibilityScore: number;
-  } {
-    if (results.length === 0) return { overallVisibilityScore: 0 };
-
-    // Calculate share of voice using same methodology as competitor database function
-    // Count total analyses and total mentions across all LLM results
-    const allLLMResults = results.flatMap((r) => r.llm_results);
-    const totalAnalyses = allLLMResults.length;
-    const totalMentions = allLLMResults.filter((r) => r.is_mentioned).length;
-
-    // Calculate share of voice as percentage of mentions
-    // This matches the database function logic: (total_voice_mentions / total_analyses) * 100
-    const overallVisibilityScore =
-      totalAnalyses > 0 ? Math.round((totalMentions / totalAnalyses) * 100) : 0;
-
-    return { overallVisibilityScore };
-  }
 
   /**
    * @deprecated Legacy method - no longer used. Gap analysis now handled in unified analytics.

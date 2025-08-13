@@ -9,7 +9,7 @@ export type { SubscriptionTier };
 export function isValidSubscriptionTier(value: unknown): value is SubscriptionTier {
   return (
     typeof value === "string" &&
-    ["free", "pro", "enterprise"].includes(value)
+    ["free", "starter", "pro", "professional", "enterprise"].includes(value)
   );
 }
 

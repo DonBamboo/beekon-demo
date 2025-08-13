@@ -37,7 +37,7 @@ export const COMMON_FIELD_MAPPINGS: Record<string, FieldMapping> = {
   website: {
     category: { displayName: 'Category', format: 'text', description: 'Data category grouping', width: 150 },
     metric: { displayName: 'Metric Name', format: 'text', description: 'Specific metric or field name', width: 200 },
-    value: { displayName: 'Value', format: 'auto', description: 'Metric value or data', width: 150 },
+    value: { displayName: 'Value', format: 'text', description: 'Metric value or data', width: 150 },
     unit: { displayName: 'Unit/Type', format: 'text', description: 'Unit of measurement or data type', width: 120 },
     websiteId: { displayName: 'Website ID', format: 'text', description: 'Associated website identifier', width: 120 },
   },
@@ -49,7 +49,7 @@ export const COMMON_FIELD_MAPPINGS: Record<string, FieldMapping> = {
     created_at: { displayName: 'Date Added', format: 'date', description: 'Date added', width: 120 },
     updated_at: { displayName: 'Last Updated', format: 'date', description: 'Date last updated', width: 120 },
     shareOfVoice: { displayName: 'Share of Voice', format: 'percentage', description: 'Share of voice percentage', width: 120 },
-    averageRank: { displayName: 'Average Ranking', format: 'rank', description: 'Average ranking position', width: 100 },
+    averageRank: { displayName: 'Average Ranking', format: 'number', description: 'Average ranking position', width: 100 },
     mentionCount: { displayName: 'Total Mentions', format: 'number', description: 'Total mentions', width: 100 },
     sentimentScore: { displayName: 'Sentiment Score', format: 'percentage', description: 'Average sentiment', width: 120 },
     analysisStatus: { displayName: 'Analysis Status', format: 'text', description: 'Current analysis status', width: 120 },
@@ -65,7 +65,7 @@ export const COMMON_FIELD_MAPPINGS: Record<string, FieldMapping> = {
     updated_at: { displayName: 'Last Updated', format: 'datetime', description: 'Date last updated', width: 150 },
     llm_provider: { displayName: 'AI Provider', format: 'text', description: 'AI provider used', width: 120 },
     is_mentioned: { displayName: 'Website Mentioned', format: 'boolean', description: 'Whether mentioned', width: 100 },
-    rank_position: { displayName: 'Ranking Position', format: 'rank', description: 'Ranking position', width: 100 },
+    rank_position: { displayName: 'Ranking Position', format: 'number', description: 'Ranking position', width: 100 },
     sentiment_score: { displayName: 'Sentiment Score', format: 'percentage', description: 'Sentiment score', width: 100 },
     summary_text: { displayName: 'Summary', format: 'text', description: 'Analysis summary', width: 400 },
     response_text: { displayName: 'Full Response', format: 'text', description: 'Complete response', width: 500 },
@@ -73,7 +73,7 @@ export const COMMON_FIELD_MAPPINGS: Record<string, FieldMapping> = {
   dashboard: {
     category: { displayName: 'Category', format: 'text', description: 'Data category', width: 120 },
     metric: { displayName: 'Metric Name', format: 'text', description: 'Performance metric', width: 200 },
-    value: { displayName: 'Value', format: 'auto', description: 'Metric value', width: 120 },
+    value: { displayName: 'Value', format: 'text', description: 'Metric value', width: 120 },
     unit: { displayName: 'Unit', format: 'text', description: 'Unit or status information', width: 120 },
     details: { displayName: 'Additional Details', format: 'text', description: 'Extra information', width: 200 },
     // Enhanced mappings with proper formatting
@@ -84,17 +84,17 @@ export const COMMON_FIELD_MAPPINGS: Record<string, FieldMapping> = {
     topPerformingTopic: { displayName: 'Top Performing Topic', format: 'text', description: 'Best performing topic', width: 150 },
     totalWebsites: { displayName: 'Total Websites', format: 'number', description: 'Number of websites', width: 120 },
     activeWebsites: { displayName: 'Active Websites', format: 'number', description: 'Number of active websites', width: 120 },
-    averageRank: { displayName: 'Average Ranking', format: 'rank', description: 'Average ranking position', width: 100 },
+    averageRank: { displayName: 'Average Ranking', format: 'number', description: 'Average ranking position', width: 100 },
     trendDirection: { displayName: 'Performance Trend', format: 'text', description: 'Performance trend indicator', width: 100 },
     period: { displayName: 'Time Period', format: 'text', description: 'Analysis time period', width: 120 },
     overallVisibilityScore: { displayName: 'Visibility Score', format: 'percentage', description: 'Overall visibility score', width: 120 },
     sentimentScore: { displayName: 'Sentiment Score', format: 'percentage', description: 'Sentiment score', width: 120 },
-    averageRanking: { displayName: 'Average Ranking', format: 'rank', description: 'Average ranking position', width: 100 },
+    averageRanking: { displayName: 'Average Ranking', format: 'number', description: 'Average ranking position', width: 100 },
     totalMentions: { displayName: 'Total Mentions', format: 'number', description: 'Total number of mentions', width: 120 },
     visibility: { displayName: 'Visibility Score', format: 'percentage', description: 'Topic visibility score', width: 120 },
     sentiment: { displayName: 'Sentiment', format: 'percentage', description: 'Topic sentiment score', width: 120 },
     mentions: { displayName: 'Mentions', format: 'number', description: 'Number of mentions', width: 100 },
-    ranking: { displayName: 'Ranking', format: 'rank', description: 'Ranking position', width: 100 },
+    ranking: { displayName: 'Ranking', format: 'number', description: 'Ranking position', width: 100 },
   },
   // Add specific mappings for export types
   export_summary: {
@@ -106,11 +106,11 @@ export const COMMON_FIELD_MAPPINGS: Record<string, FieldMapping> = {
   },
   performance_metrics: {
     metric_name: { displayName: 'Performance Metric', format: 'text', description: 'Name of the metric', width: 180 },
-    current_value: { displayName: 'Current Value', format: 'auto', description: 'Current metric value', width: 120 },
-    previous_value: { displayName: 'Previous Value', format: 'auto', description: 'Previous period value', width: 120 },
+    current_value: { displayName: 'Current Value', format: 'text', description: 'Current metric value', width: 120 },
+    previous_value: { displayName: 'Previous Value', format: 'text', description: 'Previous period value', width: 120 },
     change_percent: { displayName: 'Change %', format: 'percentage', description: 'Percentage change', width: 100 },
     trend_direction: { displayName: 'Trend', format: 'text', description: 'Trend direction', width: 80 },
-    benchmark: { displayName: 'Benchmark', format: 'auto', description: 'Industry benchmark', width: 120 },
+    benchmark: { displayName: 'Benchmark', format: 'text', description: 'Industry benchmark', width: 120 },
   }
 };
 
@@ -168,6 +168,7 @@ export const EXPORT_MIME_TYPES: Record<ExportFormat, string> = {
   pdf: "application/pdf",
   csv: "text/csv",
   json: "application/json",
+  word: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
 // File extension mappings
@@ -175,6 +176,7 @@ export const EXPORT_FILE_EXTENSIONS: Record<ExportFormat, string> = {
   pdf: "pdf",
   csv: "csv",
   json: "json",
+  word: "docx",
 };
 
 // Validate export item to ensure it has required fields and no undefined values
@@ -198,7 +200,7 @@ export function isValidExportItem(item: Record<string, unknown>): boolean {
   );
   
   // For categorized data, require either valid metric+value OR at least 2 non-empty fields
-  return hasValidMetric && hasValidValue || entries.filter(([key, value]) => 
+  return hasValidMetric && hasValidValue || entries.filter(([_, value]) => 
     value !== undefined && value !== null && String(value).trim() !== ''
   ).length >= 2;
 }
@@ -243,6 +245,7 @@ export function serializeForExport(value: unknown, maxLength: number = 200): str
       
       // For large objects, show summary
       const firstKey = keys[0];
+      if (!firstKey) return '{empty object}';
       const firstValue = (value as Record<string, unknown>)[firstKey];
       const summary = `{${firstKey}: ${serializeForExport(firstValue, 50)}${keys.length > 1 ? `, ...+${keys.length - 1} more` : ''}}`;
       
@@ -272,7 +275,6 @@ export async function captureChartAsImage(
   try {
     // Get element's actual dimensions for dynamic sizing
     const elementRect = element.getBoundingClientRect();
-    const computedStyle = window.getComputedStyle(element);
     
     // Calculate actual content dimensions including padding/margins
     const actualWidth = element.offsetWidth;
@@ -627,7 +629,7 @@ export function formatValue(value: unknown, fieldMapping?: FieldMapping[string])
           // Format objects as key-value pairs
           const entries = Object.entries(value);
           if (entries.length === 0) return 'Empty';
-          if (entries.length === 1) return `${entries[0][0]}: ${entries[0][1]}`;
+          if (entries.length === 1 && entries[0]) return `${entries[0][0]}: ${entries[0][1]}`;
           return `${entries.length} properties`;
         }
       }
@@ -989,7 +991,7 @@ export function formatCsvExport(data: ExportData, dataType?: string): Blob {
     csvContent += `"Property","Value","Data Type"\n`;
     
     Object.entries(data.data)
-      .filter(([key, value]) => value !== undefined && value !== null)
+      .filter(([_, value]) => value !== undefined && value !== null)
       .forEach(([key, value]) => {
         const mapping = fieldMapping[key];
         const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -1189,7 +1191,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
           // Filter and process valid items only
           const validCategoryData = categoryData.filter(item => isValidExportItem(item));
           
-          validCategoryData.slice(0, 20).forEach((item, index) => { // Limit items per category
+          validCategoryData.slice(0, 20).forEach((item, _) => { // Limit items per category
             checkPageBreak(8);
             
             // Extract metric and value (skip category field)
@@ -1256,7 +1258,6 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
           });
           
           // Update count message to reflect actual valid items
-          const validItemsShown = Math.min(validCategoryData.length, 20);
           const remainingValidItems = Math.max(0, validCategoryData.length - 20);
           
           // Add note if category has more valid items
@@ -1296,7 +1297,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
         
         // Data rows
         doc.setFont(undefined, 'normal');
-        processedData.slice(0, 50).forEach((row, index) => { // Limit to 50 rows for PDF readability
+        processedData.slice(0, 50).forEach((row, _) => { // Limit to 50 rows for PDF readability
           checkPageBreak();
           xPosition = 20;
           headers.forEach(header => {
@@ -1466,116 +1467,9 @@ function groupDataByCategory(data: Record<string, unknown>[]): Record<string, Re
 }
 
 
-// Helper function to format array data to CSV
-function formatArrayToCsv(data: Record<string, unknown>[], dataType?: string): string {
-  if (data.length === 0) return `"No data available"\n`;
-  
-  // Apply field mapping if dataType is provided
-  const processedData = dataType ? applyFieldMapping(data, dataType) : data;
-  
-  // Get headers from the first object
-  const headers = Object.keys(processedData[0]);
-  
-  // Create CSV header with proper quoting
-  let csvContent = headers.map(header => `"${header}"`).join(",") + "\n";
-  
-  // Add data rows
-  processedData.forEach(row => {
-    const values = headers.map(header => {
-      const value = row[header];
-      
-      // Handle nested objects and arrays with smart serialization
-      if (typeof value === 'object' && value !== null) {
-        const serialized = serializeForExport(value, 500); // Allow more space in CSV
-        return `"${serialized.replace(/"/g, '""')}"`;
-      }
-      
-      // Convert to string and escape quotes
-      const stringValue = String(value ?? '');
-      return `"${stringValue.replace(/"/g, '""')}"`;
-    });
-    csvContent += values.join(",") + "\n";
-  });
-  
-  return csvContent;
-}
 
-// Helper function to format object data to CSV
-function formatObjectToCsv(data: Record<string, unknown>, dataType?: string): string {
-  let csvContent = `"Property","Value"\n`;
-  
-  const fieldMapping = dataType ? getFieldMapping(dataType) : {};
-  
-  Object.entries(data).forEach(([key, value]) => {
-    const mapping = fieldMapping[key];
-    const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    const formattedValue = mapping ? formatValue(value, mapping) : 
-      (typeof value === 'object' && value !== null ? serializeForExport(value, 500) : String(value ?? ''));
-    
-    csvContent += `"${displayName}","${formattedValue.replace(/"/g, '""')}"\n`;
-  });
-  
-  return csvContent;
-}
 
-// Helper function to format array data to PDF
-function formatArrayToPdf(data: Record<string, unknown>[], dataType?: string): string {
-  if (data.length === 0) return "No data available\n";
-  
-  // Apply field mapping if dataType is provided
-  const processedData = dataType ? applyFieldMapping(data, dataType) : data;
-  
-  let pdfContent = "DATA RECORDS\n";
-  pdfContent += "-".repeat(20) + "\n\n";
-  
-  processedData.forEach((item, index) => {
-    pdfContent += `${(index + 1).toString().padStart(3, '0')}. RECORD\n`;
-    pdfContent += "-".repeat(15) + "\n";
-    
-    Object.entries(item).forEach(([key, value]) => {
-      const formattedKey = key.length > 25 ? key.substring(0, 25) + '...' : key;
-      const formattedValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? '');
-      
-      // Wrap long values
-      if (formattedValue.length > 80) {
-        const wrappedValue = formattedValue.match(/.{1,80}/g)?.join('\n    ') || formattedValue;
-        pdfContent += `${formattedKey.padEnd(25)}: ${wrappedValue}\n`;
-      } else {
-        pdfContent += `${formattedKey.padEnd(25)}: ${formattedValue}\n`;
-      }
-    });
-    
-    pdfContent += "\n";
-  });
-  
-  return pdfContent;
-}
 
-// Helper function to format object data to PDF
-function formatObjectToPdf(data: Record<string, unknown>, dataType?: string): string {
-  let pdfContent = "DATA SUMMARY\n";
-  pdfContent += "-".repeat(20) + "\n\n";
-  
-  const fieldMapping = dataType ? getFieldMapping(dataType) : {};
-  
-  Object.entries(data).forEach(([key, value]) => {
-    const mapping = fieldMapping[key];
-    const displayName = mapping?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    const formattedValue = mapping ? formatValue(value, mapping) : (typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? ''));
-    
-    const formattedKey = displayName.length > 25 ? displayName.substring(0, 25) + '...' : displayName;
-    
-    // Wrap long values
-    if (formattedValue.length > 80) {
-      const wrappedValue = formattedValue.match(/.{1,80}/g)?.join('\n    ') || formattedValue;
-      pdfContent += `${formattedKey.padEnd(25)}: ${wrappedValue}\n`;
-    } else {
-      pdfContent += `${formattedKey.padEnd(25)}: ${formattedValue}\n`;
-    }
-  });
-  
-  return pdfContent;
-}
 
 // Export hook with consistent error handling and toast notifications
 export function useExportHandler() {
@@ -1677,8 +1571,7 @@ export function validateExportData(data: ExportData): { isValid: boolean; errors
     
     // Check for consistent data structure in arrays
     if (data.data.length > 0) {
-      const firstItemKeys = Object.keys(data.data[0]);
-      const hasInconsistentStructure = data.data.some((item, index) => {
+      data.data.some((item, index) => {
         if (typeof item !== 'object' || item === null) {
           errors.push(`Data item at index ${index} is not a valid object`);
           return true;

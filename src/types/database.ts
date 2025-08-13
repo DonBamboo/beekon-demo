@@ -244,7 +244,7 @@ export interface DashboardMetrics {
 }
 
 // Subscription tier types
-export type SubscriptionTier = "free" | "pro" | "enterprise";
+export type SubscriptionTier = "free" | "starter" | "pro" | "professional" | "enterprise";
 
 // Export format types for data export functionality
 export type ExportColumnType = "number" | "boolean" | "date" | "text" | "url" | "percentage" | "currency" | "datetime" | "rank" | "auto";

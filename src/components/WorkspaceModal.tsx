@@ -35,7 +35,7 @@ const workspaceSchema = z.object({
     .string()
     .min(1, "Workspace name is required")
     .max(50, "Name must be 50 characters or less"),
-  subscriptionTier: z.enum(["free", "pro", "enterprise"]) as z.ZodEnum<["free", "pro", "enterprise"]>,
+  subscriptionTier: z.enum(["free", "starter", "pro", "professional", "enterprise"]) as z.ZodEnum<["free", "starter", "pro", "professional", "enterprise"]>,
   creditLimit: z.number().min(1, "Credit limit must be at least 1").optional(),
 });
 

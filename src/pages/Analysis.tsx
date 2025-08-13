@@ -69,11 +69,11 @@ export default function Analysis() {
     useAnalysisErrorHandler();
   // Use global filter state from AppStateContext
   const { filters, setFilters } = usePageFilters("analysis");
-  const typedFilters = filters as Record<string, any>;
-  
+  const typedFilters = filters as Record<string, unknown>;
+
   // Debounced search query for API calls (keep local for performance)
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  
+
   // Custom date range state (keep local as it's temporary UI state)
   const [customDateRange, setCustomDateRange] = useState<{
     start: string;
@@ -117,25 +117,30 @@ export default function Analysis() {
   const [groupBySession, setGroupBySession] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const { handleExport } = useExportHandler();
-  
+
   // Use global website selection state instead of local state
-  const { selectedWebsiteId, setSelectedWebsite, websites: globalWebsites } = useSelectedWebsite();
+  const {
+    selectedWebsiteId,
+    setSelectedWebsite,
+    websites: globalWebsites,
+  } = useSelectedWebsite();
 
   // Debounce search query from global filters
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearchQuery(typedFilters.searchQuery);
+      setDebouncedSearchQuery(typedFilters.searchQuery as string);
     }, 300);
 
     return () => clearTimeout(timer);
   }, [typedFilters.searchQuery]);
 
   // Debounce advanced search query from global filters
-  const [, setDebouncedAdvancedSearchQuery] =
-    useState("");
+  const [, setDebouncedAdvancedSearchQuery] = useState("");
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedAdvancedSearchQuery(typedFilters.advancedSearchQuery);
+      setDebouncedAdvancedSearchQuery(
+        typedFilters.advancedSearchQuery as string
+      );
     }, 500);
 
     return () => clearTimeout(timer);
@@ -253,7 +258,9 @@ export default function Analysis() {
     if (typedFilters.dateRange === "custom" && customDateRange) {
       return customDateRange;
     } else {
-      const days = parseInt(typedFilters.dateRange.replace("d", ""));
+      const days = parseInt(
+        (typedFilters.dateRange as string).replace("d", "")
+      );
       const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       return {
         start: startDate.toISOString(),
@@ -269,15 +276,22 @@ export default function Analysis() {
       llmProvider: typedFilters.llm !== "all" ? typedFilters.llm : undefined,
       searchQuery: debouncedSearchQuery.trim() || undefined,
       mentionStatus:
-        typedFilters.mentionStatus !== "all" ? typedFilters.mentionStatus : undefined,
+        typedFilters.mentionStatus !== "all"
+          ? typedFilters.mentionStatus
+          : undefined,
       dateRange,
       confidenceRange:
-        typedFilters.confidenceRange && (typedFilters.confidenceRange[0] > 0 || typedFilters.confidenceRange[1] < 100)
+        typedFilters.confidenceRange &&
+        (typedFilters.confidenceRange[0] > 0 ||
+          typedFilters.confidenceRange[1] < 100)
           ? typedFilters.confidenceRange
           : undefined,
-      sentiment: typedFilters.sentiment !== "all" ? typedFilters.sentiment : undefined,
+      sentiment:
+        typedFilters.sentiment !== "all" ? typedFilters.sentiment : undefined,
       analysisSession:
-        typedFilters.analysisSession !== "all" ? typedFilters.analysisSession : undefined,
+        typedFilters.analysisSession !== "all"
+          ? typedFilters.analysisSession
+          : undefined,
     }),
     [
       typedFilters.topic,
@@ -298,28 +312,28 @@ export default function Analysis() {
     llmProviders,
     isLoading: isLoadingResults,
     isLoadingMore,
-    isInitialLoad,
-    sharedDataLoading,
+    // isInitialLoad,
+    // sharedDataLoading,
     error: analysisError,
     hasMore,
     loadMore,
     refresh: refreshResults,
-    hasCachedData,
+    // hasCachedData,
     hasSyncCache,
   } = useOptimizedAnalysisData();
-  
+
   // Filters are now managed globally - no local sync needed
 
   // Helper function to get topic name for filtering (moved after hook definition)
-  const getTopicNameForFilter = useCallback(
-    (topicId: string): string | undefined => {
-      if (topicId === "all") return undefined;
+  // const getTopicNameForFilter = useCallback(
+  //   (topicId: string): string | undefined => {
+  //     if (topicId === "all") return undefined;
 
-      const topic = topics.find((topic) => topic.id === topicId);
-      return topic?.name;
-    },
-    [topics]
-  );
+  //     const topic = topics.find((topic) => topic.id === topicId);
+  //     return topic?.name;
+  //   },
+  //   [topics]
+  // );
 
   // Handle analysis errors
   useEffect(() => {
@@ -375,7 +389,9 @@ export default function Analysis() {
   useEffect(() => {
     // Only validate if we have topics loaded and a specific topic selected
     if (topics.length > 0 && typedFilters.topic !== "all") {
-      const topicExists = topics.some((topic) => topic.id === typedFilters.topic);
+      const topicExists = topics.some(
+        (topic) => topic.id === typedFilters.topic
+      );
       if (!topicExists) {
         const timeoutId = setTimeout(() => {
           setFilters({ ...filters, topic: "all" });
@@ -486,28 +502,28 @@ export default function Analysis() {
           { id: "gemini", name: "Gemini", resultCount: 0 },
         ];
 
-  const getSentimentColor = (sentiment: string | null) => {
-    if (!sentiment) return "";
-    switch (sentiment) {
-      case "positive":
-        return "text-success";
-      case "negative":
-        return "text-destructive";
-      default:
-        return "text-warning";
-    }
-  };
+  // const getSentimentColor = (sentiment: string | null) => {
+  //   if (!sentiment) return "";
+  //   switch (sentiment) {
+  //     case "positive":
+  //       return "text-success";
+  //     case "negative":
+  //       return "text-destructive";
+  //     default:
+  //       return "text-warning";
+  //   }
+  // };
 
-  const getSentimentBadge = (sentiment: string | null) => {
-    if (!sentiment) return null;
-    const className =
-      sentiment === "positive"
-        ? "bg-success"
-        : sentiment === "negative"
-        ? "bg-destructive"
-        : "bg-warning";
-    return <Badge className={`${className} text-white`}>{sentiment}</Badge>;
-  };
+  // const getSentimentBadge = (sentiment: string | null) => {
+  //   if (!sentiment) return null;
+  //   const className =
+  //     sentiment === "positive"
+  //       ? "bg-success"
+  //       : sentiment === "negative"
+  //       ? "bg-destructive"
+  //       : "bg-warning";
+  //   return <Badge className={`${className} text-white`}>{sentiment}</Badge>;
+  // };
 
   const getSentimentBadgeFromScore = (score: number | null) => {
     if (score === null) return null;
@@ -609,20 +625,16 @@ export default function Analysis() {
         description: `"${name}" has been saved as a filter preset.`,
       });
     },
-    [
-      filterPresets,
-      toast,
-      customDateRange,
-      sortBy,
-      sortOrder,
-    ]
+    [filterPresets, toast, customDateRange, sortBy, sortOrder]
   );
 
   const loadFilterPreset = useCallback(
     (preset: { filters: Record<string, unknown> }) => {
       setSelectedTopic(preset.typedFilters.selectedTopic || "all");
       setSelectedLLM(preset.typedFilters.selectedLLM || "all");
-      setSelectedMentionStatus(preset.typedFilters.selectedMentionStatus || "all");
+      setSelectedMentionStatus(
+        preset.typedFilters.selectedMentionStatus || "all"
+      );
       setSelectedDateRange(preset.typedFilters.selectedDateRange || "all");
       setCustomDateRange(preset.typedFilters.customDateRange || null);
       setSelectedConfidenceRange(
@@ -641,9 +653,7 @@ export default function Analysis() {
         description: `"${preset.name}" filters have been applied.`,
       });
     },
-    [
-      toast,
-    ]
+    [toast]
   );
 
   // Load filter presets from localStorage on mount
@@ -721,9 +731,7 @@ export default function Analysis() {
         description: `"${preset.name}" filter has been applied.`,
       });
     },
-    [
-      toast,
-    ]
+    [toast]
   );
 
   // Clear all filters function
@@ -820,7 +828,10 @@ export default function Analysis() {
           resultCount: analysisResults.length,
           exportType: "analysis_results",
           filters: {
-            topic: typedFilters.topic !== "all" ? getTopicName(typedFilters.topic) : null,
+            topic:
+              typedFilters.topic !== "all"
+                ? getTopicName(typedFilters.topic)
+                : null,
             llm: typedFilters.llm !== "all" ? typedFilters.llm : null,
             search: typedFilters.searchQuery || null,
           },
@@ -884,7 +895,7 @@ export default function Analysis() {
   // Show skeleton immediately unless we have synchronous cache data
   // This eliminates empty state flash by showing skeleton first
   const shouldShowSkeleton = loading || (isLoadingResults && !hasSyncCache());
-  
+
   if (shouldShowSkeleton) {
     return <AnalysisSkeleton />;
   }
@@ -996,7 +1007,7 @@ export default function Analysis() {
                         console.log("Analysis: Optimistic website change", {
                           from: selectedWebsiteId,
                           to: value,
-                          timestamp: Date.now()
+                          timestamp: Date.now(),
                         });
                       }
                       // Immediate optimistic update - UI responds instantly
@@ -1016,9 +1027,11 @@ export default function Analysis() {
                     <SelectTrigger className="w-full sm:w-[250px] min-w-[200px]">
                       <div className="flex items-center justify-between w-full">
                         <SelectValue placeholder="Select website" />
-                        {(isLoadingResults && (!analysisResults || analysisResults.length === 0)) && (
-                          <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-                        )}
+                        {isLoadingResults &&
+                          (!analysisResults ||
+                            analysisResults.length === 0) && (
+                            <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+                          )}
                       </div>
                     </SelectTrigger>
                     <SelectContent>
@@ -1051,11 +1064,17 @@ export default function Analysis() {
                     <LoadingButton
                       key={filter.id}
                       variant={
-                        typedFilters.dateRange === filter.id ? "default" : "outline"
+                        typedFilters.dateRange === filter.id
+                          ? "default"
+                          : "outline"
                       }
                       size="sm"
-                      loading={isFiltering && typedFilters.dateRange !== filter.id}
-                      onClick={() => setFilters({ ...filters, dateRange: filter.id })}
+                      loading={
+                        isFiltering && typedFilters.dateRange !== filter.id
+                      }
+                      onClick={() =>
+                        setFilters({ ...filters, dateRange: filter.id })
+                      }
                       disabled={isLoadingResults}
                       className="shrink-0"
                     >
@@ -1072,7 +1091,9 @@ export default function Analysis() {
                     <Input
                       placeholder="Search by analysis name, topic, or prompt..."
                       value={typedFilters.searchQuery}
-                      onChange={(e) => setFilters({ ...filters, searchQuery: e.target.value })}
+                      onChange={(e) =>
+                        setFilters({ ...filters, searchQuery: e.target.value })
+                      }
                       className="w-full min-w-0"
                       disabled={isLoadingResults}
                     />
@@ -1083,7 +1104,7 @@ export default function Analysis() {
                     <Filter className="h-4 w-4 text-muted-foreground" />
                     <Select
                       value={typedFilters.topic}
-                      onValueChange={(value) => 
+                      onValueChange={(value) =>
                         setFilters({ ...filters, topic: value })
                       }
                       disabled={isFiltering || isLoadingResults}
@@ -1166,7 +1187,9 @@ export default function Analysis() {
                       loading={
                         isFiltering && typedFilters.mentionStatus !== filter.id
                       }
-                      onClick={() => setFilters({ ...filters, mentionStatus: filter.id })}
+                      onClick={() =>
+                        setFilters({ ...filters, mentionStatus: filter.id })
+                      }
                       disabled={isLoadingResults}
                       className="shrink-0"
                     >
@@ -1279,7 +1302,9 @@ export default function Analysis() {
                                 : "outline"
                             }
                             size="sm"
-                            onClick={() => setFilters({ ...filters, sentiment: filter.id })}
+                            onClick={() =>
+                              setFilters({ ...filters, sentiment: filter.id })
+                            }
                             disabled={isLoadingResults}
                             className={`shrink-0 ${filter.color || ""}`}
                           >
@@ -1298,7 +1323,9 @@ export default function Analysis() {
                       </label>
                       <Select
                         value={typedFilters.analysisSession}
-                        onValueChange={(value) => setFilters({ ...filters, analysisSession: value })}
+                        onValueChange={(value) =>
+                          setFilters({ ...filters, analysisSession: value })
+                        }
                         disabled={isLoadingResults}
                       >
                         <SelectTrigger className="w-full">
@@ -1347,7 +1374,10 @@ export default function Analysis() {
                             placeholder="Advanced search in analysis data..."
                             value={typedFilters.advancedSearchQuery}
                             onChange={(e) =>
-                              setFilters({ ...filters, advancedSearchQuery: e.target.value })
+                              setFilters({
+                                ...filters,
+                                advancedSearchQuery: e.target.value,
+                              })
                             }
                             disabled={isLoadingResults}
                           />
@@ -1685,7 +1715,10 @@ export default function Analysis() {
                           </Badge>
                         </div>
                         {sessionResults.map((result) => (
-                          <Card key={`${sessionKey}-${result.id}`} className="ml-4">
+                          <Card
+                            key={`${sessionKey}-${result.id}`}
+                            className="ml-4"
+                          >
                             <CardHeader>
                               <div className="flex justify-between items-start">
                                 <div className="flex-1 flex flex-col gap-3">
@@ -1899,7 +1932,8 @@ export default function Analysis() {
               hasData={analysisResults.length > 0}
               hasFilters={hasActiveFilters}
               activeFilters={{
-                topic: typedFilters.topic !== "all" ? typedFilters.topic : undefined,
+                topic:
+                  typedFilters.topic !== "all" ? typedFilters.topic : undefined,
                 llm: typedFilters.llm !== "all" ? typedFilters.llm : undefined,
                 search: typedFilters.searchQuery.trim() || undefined,
               }}

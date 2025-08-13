@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ExportFormat } from "@/types/database";
 import { useExportHandler } from "@/lib/export-utils";
@@ -11,7 +11,6 @@ import { useOptimizedCompetitorsData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useSelectedWebsite, usePageFilters } from "@/hooks/appStateHooks";
 import CompetitorsHeader from "@/components/competitors/CompetitorsHeader";
-import CompetitorsLoadingState from "@/components/competitors/CompetitorsLoadingState";
 import { CompetitorsSkeleton } from "@/components/skeletons";
 import WorkspaceRequiredState from "@/components/competitors/WorkspaceRequiredState";
 import CompetitorsErrorState from "@/components/competitors/CompetitorsErrorState";
@@ -29,7 +28,6 @@ import { getCompetitorColor, getYourBrandColor } from "@/lib/color-utils";
 export default function Competitors() {
   const {
     currentWorkspace,
-    websites,
     loading: workspaceLoading,
   } = useWorkspace();
   const { toast } = useToast();

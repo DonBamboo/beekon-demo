@@ -56,7 +56,7 @@ export default function Dashboard() {
   const { currentWorkspace, loading, websites } = useWorkspace();
   const navigate = useNavigate();
   const [isExporting, setIsExporting] = useState(false);
-  const [, setShowCreateWorkspace] = useState(false);
+  const [, ] = useState(false);
   const [dateFilter, setDateFilter] = useState<"7d" | "30d" | "90d">("7d");
   const [showAllCharts, setShowAllCharts] = useState(false);
   const { handleExport } = useExportHandler();
@@ -69,12 +69,6 @@ export default function Dashboard() {
   const topicRadarChartRef = useRef<HTMLDivElement>(null);
   const visibilityChartRef = useRef<HTMLDivElement>(null);
   
-  const filters = useMemo(
-    () => ({
-      period: dateFilter,
-    }),
-    [dateFilter]
-  );
 
   // Use optimized dashboard data loading
   const {
@@ -91,7 +85,6 @@ export default function Dashboard() {
   // Derive additional data for backward compatibility
   const hasData = !!(metrics || timeSeriesData.length > 0 || topicPerformance.length > 0);
   const isRefreshing = isDashboardLoading && hasCachedData;
-  const isInitialLoad = isDashboardLoading && !hasCachedData;
   const clearError = () => {}; // Not needed with optimized hook
   const llmPerformance: Array<Record<string, unknown>> = []; // To be implemented
   const websitePerformance: Array<Record<string, unknown>> = []; // To be implemented
@@ -155,7 +148,7 @@ export default function Dashboard() {
           category: "Websites", 
           metric: w.display_name, 
           value: w.domain, 
-          unit: `${w.is_active ? 'Active' : 'Inactive'}${w.monitoring_enabled ? ' | Monitored' : ''}`
+          unit: `${w.is_active ? 'Active' : 'Inactive'}`
         })) || []),
         
         // Topic Performance (top 5) - Fixed property mapping to match TopicPerformance interface
@@ -164,36 +157,36 @@ export default function Dashboard() {
         ).slice(0, 5).map((topic, index) => ({
           category: "Top Topics",
           metric: `#${index + 1} ${topic.topic}`,
-          value: `${topic.visibility.toFixed(1)}%`,
+          value: `${Number(topic.visibility).toFixed(1)}%`,
           unit: "visibility"
         })) || []),
         
         // Performance by Topics - Comprehensive section with detailed metrics
         ...(topicPerformance?.filter(topic => 
           topic?.topic && typeof topic?.visibility === 'number'
-        ).slice(0, 10).flatMap((topic, index) => [
+        ).slice(0, 10).flatMap((topic, _) => [
           {
             category: "Performance by Topics",
             metric: `${topic.topic} - Visibility`,
-            value: `${topic.visibility.toFixed(1)}%`,
+            value: `${Number(topic.visibility).toFixed(1)}%`,
             unit: "visibility score"
           },
           {
             category: "Performance by Topics", 
             metric: `${topic.topic} - Sentiment`,
-            value: `${topic.sentiment.toFixed(1)}%`,
+            value: `${Number(topic.sentiment).toFixed(1)}%`,
             unit: "sentiment score" 
           },
           {
             category: "Performance by Topics",
             metric: `${topic.topic} - Mentions`,
-            value: topic.mentions.toString(),
+            value: Number(topic.mentions).toString(),
             unit: "total mentions"
           },
           {
             category: "Performance by Topics",
             metric: `${topic.topic} - Avg Rank`,
-            value: topic.averageRank.toFixed(1),
+            value: Number(topic.averageRank).toFixed(1),
             unit: "ranking position"
           }
         ]) || []),
@@ -204,7 +197,7 @@ export default function Dashboard() {
         ).map(llm => ({
           category: "LLM Performance",
           metric: llm.provider,
-          value: `${llm.mentionRate.toFixed(1)}%`,
+          value: `${Number(llm.mentionRate).toFixed(1)}%`,
           unit: `${llm.totalAnalyses} analyses`
         })) || []),
         
@@ -214,7 +207,7 @@ export default function Dashboard() {
         ).slice(0, 5).map((site, index) => ({
           category: "Website Performance",
           metric: `#${index + 1} ${site.displayName}`,
-          value: `${site.visibility.toFixed(1)}%`,
+          value: `${Number(site.visibility).toFixed(1)}%`,
           unit: `${site.mentions} mentions`
         })) || []),
         

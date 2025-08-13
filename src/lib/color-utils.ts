@@ -474,7 +474,7 @@ export function getCompetitorColorWithPattern(
   // Calculate pattern index - cycle through patterns when colors are exhausted
   const patternCycle = Math.floor(fallbackIndex / AVAILABLE_CHART_COLORS.length);
   const patternIndex = patternCycle % PATTERN_FALLBACKS.length;
-  const pattern = PATTERN_FALLBACKS[patternIndex];
+  const pattern = PATTERN_FALLBACKS[patternIndex] ?? 'solid';
   
   // Create display name with pattern indicator if needed
   const baseName = competitorName || `Competitor ${fallbackIndex + 1}`;

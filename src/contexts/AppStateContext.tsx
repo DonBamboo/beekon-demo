@@ -47,16 +47,19 @@ export interface AnalysisFilters {
   analysisSession: string;
   searchQuery: string;
   advancedSearchQuery: string;
+  [key: string]: unknown;
 }
 
 export interface CompetitorFilters {
   dateFilter: "7d" | "30d" | "90d";
   sortBy: "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore";
+  [key: string]: unknown;
 }
 
 export interface DashboardFilters {
   period: "7d" | "30d" | "90d";
   dateRange?: { start: string; end: string };
+  [key: string]: unknown;
 }
 
 // Navigation state

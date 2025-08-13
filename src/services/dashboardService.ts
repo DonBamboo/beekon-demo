@@ -22,7 +22,7 @@ export interface TimeSeriesData {
   visibility: number;
   mentions: number;
   sentiment: number;
-}
+  [key: string]: unknown;}
 
 export interface TopicPerformance {
   topic: string;
@@ -31,7 +31,7 @@ export interface TopicPerformance {
   averageRank: number;
   sentiment: number;
   trend: number; // percentage change
-}
+  [key: string]: unknown;}
 
 export interface LLMPerformance {
   provider: string;
@@ -599,44 +599,6 @@ export class DashboardService {
     });
   }
 
-  private convertToCSV(data: {
-    metrics: DashboardMetrics;
-    timeSeriesData: TimeSeriesData[];
-    topicPerformance: TopicPerformance[];
-  }): string {
-    const { metrics, timeSeriesData, topicPerformance } = data;
-
-    let csv = "Dashboard Export\n\n";
-
-    // Metrics section
-    csv += "Metrics\n";
-    csv += "Metric,Value\n";
-    csv += `Overall Visibility Score,${metrics.overallVisibilityScore}%\n`;
-    csv += `Average Ranking,${metrics.averageRanking}\n`;
-    csv += `Total Mentions,${metrics.totalMentions}\n`;
-    csv += `Sentiment Score,${metrics.sentimentScore}%\n`;
-    csv += `Total Analyses,${metrics.totalAnalyses}\n`;
-    csv += `Active Websites,${metrics.activeWebsites}\n`;
-    csv += `Top Performing Topic,${metrics.topPerformingTopic || "N/A"}\n`;
-    csv += `Improvement Trend,${metrics.improvementTrend}%\n\n`;
-
-    // Time series data
-    csv += "Time Series Data\n";
-    csv += "Date,Visibility,Mentions,Sentiment\n";
-    timeSeriesData.forEach((item: TimeSeriesData) => {
-      csv += `${item.date},${item.visibility},${item.mentions},${item.sentiment}\n`;
-    });
-    csv += "\n";
-
-    // Topic performance
-    csv += "Topic Performance\n";
-    csv += "Topic,Visibility,Mentions,Average Rank,Sentiment\n";
-    topicPerformance.forEach((item: TopicPerformance) => {
-      csv += `${item.topic},${item.visibility},${item.mentions},${item.averageRank},${item.sentiment}\n`;
-    });
-
-    return csv;
-  }
 }
 
 export const dashboardService = DashboardService.getInstance();

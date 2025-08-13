@@ -10,6 +10,7 @@ import {
   useSelectedWebsite,
   usePageFilters,
 } from "@/hooks/appStateHooks";
+import type { CompetitorFilters } from "@/contexts/AppStateContext";
 import { useWebsiteData } from "./useSharedData";
 import { batchAPI } from "@/services/batchService";
 import { analysisService } from "@/services/analysisService";
@@ -28,10 +29,6 @@ interface Competitor {
 interface CompetitorProfile {
   domain: string;
   name?: string;
-  [key: string]: unknown;
-}
-
-interface DashboardMetrics {
   [key: string]: unknown;
 }
 
@@ -457,8 +454,6 @@ export function useOptimizedDashboardData() {
           metrics: data.metrics,
           timeSeriesData: data.timeSeriesData || [],
           topicPerformance: data.topicPerformance || [],
-          llmPerformance: data.llmPerformance || [],
-          websitePerformance: data.websitePerformance || [],
         };
 
         setCache(cacheKey, dashboardData, 10 * 60 * 1000); // 10 minutes cache
@@ -488,9 +483,9 @@ export function useOptimizedDashboardData() {
     const currentCachedData = getFromCache<Record<string, unknown>>(cacheKey);
     if (currentCachedData) {
       // We have cached data, use it immediately and stop loading
-      setMetrics(currentCachedData.metrics);
-      setTimeSeriesData(currentCachedData.timeSeriesData);
-      setTopicPerformance(currentCachedData.topicPerformance);
+      setMetrics(currentCachedData.metrics as ServiceDashboardMetrics | null);
+      setTimeSeriesData(currentCachedData.timeSeriesData as TimeSeriesDataPoint[]);
+      setTopicPerformance(currentCachedData.topicPerformance as TopicPerformanceData[]);
       setIsLoading(false);
     } else {
       // No cached data, ensure loading state is true and load data
@@ -561,7 +556,7 @@ export function useOptimizedDashboardData() {
 // Competitors page optimized hook
 export function useOptimizedCompetitorsData() {
   const { selectedWebsiteId } = useSelectedWebsite();
-  const { filters, setFilters } = usePageFilters("competitors");
+  const { filters, setFilters } = usePageFilters<CompetitorFilters>("competitors");
   const { getFromCache, setCache } = useAppState();
 
   // Use shared topics data
@@ -576,21 +571,26 @@ export function useOptimizedCompetitorsData() {
 
   // Transform competitors filters from global state format to service format
   const transformedFilters = useMemo(() => {
-    const baseFilters = { ...filters };
+    const typedFilters = filters as Record<string, any>;
+    const baseFilters = { ...typedFilters };
 
     // Transform dateFilter to dateRange if needed
-    if (filters.dateFilter && filters.dateFilter !== "all") {
-      const days = parseInt(filters.dateFilter.replace("d", ""));
+    if (typedFilters.dateFilter && typedFilters.dateFilter !== "all") {
+      const days = parseInt(typedFilters.dateFilter.replace("d", ""));
       const now = new Date();
       const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       baseFilters.dateRange = {
         start: startDate.toISOString(),
         end: now.toISOString(),
       };
-      delete baseFilters.dateFilter; // Remove the string version
+      if ('dateFilter' in baseFilters) {
+        delete baseFilters.dateFilter;
+      }
     } else {
       baseFilters.dateRange = undefined;
-      delete baseFilters.dateFilter;
+      if ('dateFilter' in baseFilters) {
+        delete baseFilters.dateFilter;
+      }
     }
 
     return baseFilters;
@@ -617,13 +617,17 @@ export function useOptimizedCompetitorsData() {
     
     // Check filtered cache first (exact match for current filters)
     const filteredCache = getFromCache<Record<string, unknown>>(competitorsFilteredCacheKey);
-    if (filteredCache && (filteredCache.competitors?.length > 0 || filteredCache.performance?.length > 0)) {
+    const filteredCompetitors = Array.isArray(filteredCache?.competitors) ? filteredCache.competitors : [];
+    const filteredPerformance = Array.isArray(filteredCache?.performance) ? filteredCache.performance : [];
+    if (filteredCache && (filteredCompetitors.length > 0 || filteredPerformance.length > 0)) {
       return true;
     }
     
     // Check base cache (unfiltered data for this website)
     const baseCache = getFromCache<Record<string, unknown>>(competitorsBaseCacheKey);
-    if (baseCache && (baseCache.competitors?.length > 0 || baseCache.performance?.length > 0)) {
+    const baseCompetitors = Array.isArray(baseCache?.competitors) ? baseCache.competitors : [];
+    const basePerformance = Array.isArray(baseCache?.performance) ? baseCache.performance : [];
+    if (baseCache && (baseCompetitors.length > 0 || basePerformance.length > 0)) {
       return true;
     }
     
@@ -636,13 +640,17 @@ export function useOptimizedCompetitorsData() {
     
     // Priority 1: Try filtered cache first (exact match for current filters)
     const filteredCache = getFromCache<Record<string, unknown>>(competitorsFilteredCacheKey);
-    if (filteredCache && (filteredCache.competitors?.length > 0 || filteredCache.performance?.length > 0)) {
+    const filteredCompetitors = Array.isArray(filteredCache?.competitors) ? filteredCache.competitors : [];
+    const filteredPerformance = Array.isArray(filteredCache?.performance) ? filteredCache.performance : [];
+    if (filteredCache && (filteredCompetitors.length > 0 || filteredPerformance.length > 0)) {
       return { data: filteredCache, source: 'filtered', key: competitorsFilteredCacheKey };
     }
     
     // Priority 2: Try base cache (unfiltered data for this website)
     const baseCache = getFromCache<Record<string, unknown>>(competitorsBaseCacheKey);
-    if (baseCache && (baseCache.competitors?.length > 0 || baseCache.performance?.length > 0)) {
+    const baseCompetitors = Array.isArray(baseCache?.competitors) ? baseCache.competitors : [];
+    const basePerformance = Array.isArray(baseCache?.performance) ? baseCache.performance : [];
+    if (baseCache && (baseCompetitors.length > 0 || basePerformance.length > 0)) {
       return { data: baseCache, source: 'base', key: competitorsBaseCacheKey };
     }
     
@@ -660,14 +668,14 @@ export function useOptimizedCompetitorsData() {
           const currentCachedData = cachedResult.data;
           
           // Ensure cached data has the correct structure with analysisStatus
-          const transformedCachedCompetitors = (
-            currentCachedData.competitors || []
-          ).map((competitor: Competitor) => {
+          const cachedCompetitors = Array.isArray(currentCachedData.competitors) ? currentCachedData.competitors : [];
+          const transformedCachedCompetitors = cachedCompetitors.map((competitor: Competitor) => {
             // If already has analysisStatus, keep it; otherwise derive it
             if (competitor.analysisStatus) {
               return competitor;
             }
-            const performance = (currentCachedData.performance || []).find(
+            const cachedPerformance = Array.isArray(currentCachedData.performance) ? currentCachedData.performance : [];
+            const performance = cachedPerformance.find(
               (p: CompetitorProfile) => p.domain === competitor.competitor_domain
             );
             return {
@@ -685,8 +693,10 @@ export function useOptimizedCompetitorsData() {
           );
 
           setCompetitors(competitorsWithStatus);
-          setPerformance(currentCachedData.performance || []);
-          setAnalytics(currentCachedData.analytics);
+          const performanceData = Array.isArray(currentCachedData.performance) ? currentCachedData.performance : [];
+          setPerformance(performanceData);
+          const analyticsData = currentCachedData.analytics as Record<string, unknown> | null;
+          setAnalytics(analyticsData || null);
           setIsLoading(false);
           
           if (process.env.NODE_ENV === "development") {
@@ -715,9 +725,11 @@ export function useOptimizedCompetitorsData() {
         const data = batchResponse.data as Record<string, unknown>;
 
         // Transform competitors to include analysisStatus (like the old coordinated hook)
-        const transformedCompetitors = (data.competitors || []).map(
+        const dataCompetitors = Array.isArray(data.competitors) ? data.competitors : [];
+        const dataPerformance = Array.isArray(data.performance) ? data.performance : [];
+        const transformedCompetitors = dataCompetitors.map(
           (competitor: Competitor) => {
-            const performance = (data.performance || []).find(
+            const performance = dataPerformance.find(
               (p: CompetitorProfile) => p.domain === competitor.competitor_domain
             );
             return {
@@ -736,8 +748,9 @@ export function useOptimizedCompetitorsData() {
         );
 
         setCompetitors(competitorsWithStatus);
-        setPerformance(data.performance || []);
-        setAnalytics(data.analytics);
+        setPerformance(dataPerformance);
+        const analyticsData = data.analytics as Record<string, unknown> | null;
+        setAnalytics(analyticsData || null);
 
         // Smart caching strategy: Cache both base and filtered data
         const competitorsData = {
@@ -785,14 +798,14 @@ export function useOptimizedCompetitorsData() {
       const cachedData = cachedResult.data;
       
       // We have cached data - use it immediately without showing loading
-      const transformedCachedCompetitors = (
-        cachedData.competitors || []
-      ).map((competitor: Competitor) => {
+      const cachedCompetitors = Array.isArray(cachedData.competitors) ? cachedData.competitors : [];
+      const cachedPerformanceData = Array.isArray(cachedData.performance) ? cachedData.performance : [];
+      const transformedCachedCompetitors = cachedCompetitors.map((competitor: Competitor) => {
         // If already has analysisStatus, keep it; otherwise derive it
         if (competitor.analysisStatus) {
           return competitor;
         }
-        const performance = (cachedData.performance || []).find(
+        const performance = cachedPerformanceData.find(
           (p: CompetitorProfile) => p.domain === competitor.competitor_domain
         );
         return {
@@ -810,8 +823,9 @@ export function useOptimizedCompetitorsData() {
       );
 
       setCompetitors(competitorsWithStatus);
-      setPerformance(cachedData.performance || []);
-      setAnalytics(cachedData.analytics);
+      setPerformance(cachedPerformanceData);
+      const analyticsData = cachedData.analytics as Record<string, unknown> | null;
+      setAnalytics(analyticsData || null);
       setIsLoading(false);
       setError(null);
       
@@ -847,16 +861,16 @@ export function useOptimizedCompetitorsData() {
 
     // Check if we have filtered cache for these specific filters
     const filteredCache = getFromCache<Record<string, unknown>>(competitorsFilteredCacheKey);
-    if (filteredCache && (filteredCache.competitors?.length > 0 || filteredCache.performance?.length > 0)) {
+    const filteredCompetitors = Array.isArray(filteredCache?.competitors) ? filteredCache.competitors : [];
+    const filteredPerformance = Array.isArray(filteredCache?.performance) ? filteredCache.performance : [];
+    if (filteredCache && (filteredCompetitors.length > 0 || filteredPerformance.length > 0)) {
       // We have cache for these exact filters - use it immediately
-      const transformedCachedCompetitors = (
-        filteredCache.competitors || []
-      ).map((competitor: Competitor) => {
+      const transformedCachedCompetitors = filteredCompetitors.map((competitor: Competitor) => {
         // If already has analysisStatus, keep it; otherwise derive it
         if (competitor.analysisStatus) {
           return competitor;
         }
-        const performance = (filteredCache.performance || []).find(
+        const performance = filteredPerformance.find(
           (p: CompetitorProfile) => p.domain === competitor.competitor_domain
         );
         return {
@@ -873,8 +887,9 @@ export function useOptimizedCompetitorsData() {
       );
 
       setCompetitors(competitorsWithStatus);
-      setPerformance(filteredCache.performance || []);
-      setAnalytics(filteredCache.analytics);
+      setPerformance(filteredPerformance);
+      const analyticsData = filteredCache.analytics as Record<string, unknown> | null;
+      setAnalytics(analyticsData || null);
       setIsLoading(false);
       setError(null);
       

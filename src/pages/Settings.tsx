@@ -23,7 +23,8 @@ import { useOptimizedApiKeys } from "@/hooks/useOptimizedApiKeys";
 import { useExportHistory } from "@/hooks/useExportHistory";
 import { useSelectedWebsite } from "@/hooks/appStateHooks";
 import { ApiKey, apiKeyService } from "@/services/apiKeyService";
-import { profileService, UserProfile } from "@/services/profileService";
+import { profileService } from "@/services/profileService";
+import { UserProfile } from "@/types/database";
 import {
   AlertCircle,
   Bell,
