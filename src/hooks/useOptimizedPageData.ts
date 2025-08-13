@@ -13,7 +13,7 @@ import {
 import { useWebsiteData } from "./useSharedData";
 import { batchAPI } from "@/services/batchService";
 import { analysisService } from "@/services/analysisService";
-import { dashboardService } from "@/services/dashboardService";
+import { dashboardService, type DashboardMetrics as ServiceDashboardMetrics } from "@/services/dashboardService";
 import { deduplicateById } from "@/lib/utils";
 import type { UIAnalysisResult } from "@/types/database";
 
@@ -69,11 +69,12 @@ export function useOptimizedAnalysisData() {
 
   // Transform filters from global state format to service-expected format
   const transformedFilters = useMemo(() => {
-    const baseFilters = { ...filters };
+    const typedFilters = filters as Record<string, any>;
+    const baseFilters = { ...typedFilters };
 
     // Transform dateRange from string to object format expected by services
-    if (filters.dateRange && filters.dateRange !== "all") {
-      const days = parseInt(filters.dateRange.replace("d", ""));
+    if (typedFilters.dateRange && typedFilters.dateRange !== "all") {
+      const days = parseInt(typedFilters.dateRange.replace("d", ""));
       const now = new Date();
       const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       baseFilters.dateRange = {
@@ -90,7 +91,6 @@ export function useOptimizedAnalysisData() {
   // Smart cache key strategy: base cache for website, filtered cache for specific filters
   const baseCacheKey = `analysis_results_${selectedWebsiteId}`;
   const filteredCacheKey = `analysis_filtered_${selectedWebsiteId}_${JSON.stringify(transformedFilters)}`;
-  const metadataCacheKey = `analysis_metadata_${selectedWebsiteId}`;
 
   // Synchronous cache detection for immediate skeleton bypass
   const hasSyncCache = useCallback(() => {
@@ -377,7 +377,7 @@ export function useOptimizedDashboardData() {
   const { getFromCache, setCache } = useAppState();
 
   // State for dashboard data
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [metrics, setMetrics] = useState<ServiceDashboardMetrics | null>(null);
   const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesDataPoint[]>([]);
   const [topicPerformance, setTopicPerformance] = useState<TopicPerformanceData[]>([]);
   const [error, setError] = useState<Error | null>(null);
@@ -387,7 +387,8 @@ export function useOptimizedDashboardData() {
 
   // Transform dashboard filters if needed
   const transformedFilters = useMemo(() => {
-    const baseFilters = { ...filters };
+    const typedFilters = filters as Record<string, any>;
+    const baseFilters = { ...typedFilters };
     // Dashboard filters are simpler, just ensure period is handled correctly
     return baseFilters;
   }, [filters]);
@@ -401,7 +402,7 @@ export function useOptimizedDashboardData() {
   const hasSyncCache = useCallback(() => {
     if (!selectedWebsiteId) return false;
     const cached = getFromCache<Record<string, unknown>>(cacheKey);
-    return !!(cached && (cached.metrics || cached.timeSeriesData?.length > 0 || cached.topicPerformance?.length > 0));
+    return !!(cached && (cached.metrics || (cached.timeSeriesData as any[])?.length > 0 || (cached.topicPerformance as any[])?.length > 0));
   }, [selectedWebsiteId, cacheKey, getFromCache]);
 
   // Check cached data - remove unstable getFromCache dependency  
@@ -419,9 +420,9 @@ export function useOptimizedDashboardData() {
 
       // Instant render from cache
       if (!forceRefresh && currentCachedData) {
-        setMetrics(currentCachedData.metrics);
-        setTimeSeriesData(currentCachedData.timeSeriesData);
-        setTopicPerformance(currentCachedData.topicPerformance);
+        setMetrics(currentCachedData.metrics as any);
+        setTimeSeriesData(currentCachedData.timeSeriesData as any);
+        setTopicPerformance(currentCachedData.topicPerformance as any);
         setIsLoading(false);
         return;
       }

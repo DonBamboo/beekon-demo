@@ -228,13 +228,13 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
       // Intelligent website selection logic
       if (!selectedWebsiteId && newWebsites.length > 0) {
         // No website selected, select the first one
-        selectedWebsiteId = newWebsites[0].id;
+        selectedWebsiteId = newWebsites[0]?.id || null;
       } else if (selectedWebsiteId && newWebsites.length > 0) {
         // Check if currently selected website still exists in new website list
         const selectedWebsiteStillExists = newWebsites.some(w => w.id === selectedWebsiteId);
         if (!selectedWebsiteStillExists) {
           // Selected website no longer exists, select the first available
-          selectedWebsiteId = newWebsites[0].id;
+          selectedWebsiteId = newWebsites[0]?.id || null;
         }
       } else if (newWebsites.length === 0) {
         // No websites available, clear selection
@@ -268,9 +268,9 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           ? {
               ...website,
               crawl_status: status,
-              last_crawled_at: lastCrawledAt,
-              updated_at: updatedAt,
-            }
+              last_crawled_at: lastCrawledAt || website.last_crawled_at,
+              updated_at: updatedAt || website.updated_at,
+            } as Website
           : website
       );
       
@@ -338,8 +338,8 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
       newExpiration.set(key, expiresAt);
       
       // Track dependencies for invalidation
-      if (metadata?.dependencies) {
-        metadata.dependencies.forEach((dep: string) => {
+      if (metadata && 'dependencies' in metadata && Array.isArray(metadata.dependencies)) {
+        (metadata.dependencies as string[]).forEach((dep: string) => {
           if (!newDependencies.has(dep)) {
             newDependencies.set(dep, new Set());
           }

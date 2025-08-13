@@ -45,8 +45,8 @@ export function useResourceLoading(resourceId: string) {
 export function useGlobalLoadingStates() {
   const { loadingStates, clearAllLoadingStates } = useLoadingContext();
   
-  const isAnyLoading = Object.values(loadingStates).some(state => state.isLoading);
-  const hasAnyError = Object.values(loadingStates).some(state => state.error);
+  const isAnyLoading = Object.values(loadingStates).some((state: any) => state.isLoading);
+  const hasAnyError = Object.values(loadingStates).some((state: any) => state.error);
   
   return {
     loadingStates,

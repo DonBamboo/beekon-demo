@@ -1,10 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
   Competitor,
-  CompetitorInsert,
-  CompetitorUpdate,
   AnalysisResult,
-  LLMResult,
 } from "@/types/database";
 import BaseService from "./baseService";
 import {

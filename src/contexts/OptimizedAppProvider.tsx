@@ -188,11 +188,10 @@ export function StateManagementDevTools() {
   
   // Safe context usage with error handling
   let contextAvailable = false;
-  let state: Record<string, unknown> | null = null;
+  let appState: any = null;
   
   try {
-    const appState = useAppState();
-    state = appState.state;
+    appState = useAppState();
     contextAvailable = true;
   } catch (error) {
     console.warn('StateManagementDevTools: AppState context not available');
@@ -200,23 +199,23 @@ export function StateManagementDevTools() {
   }
 
   React.useEffect(() => {
-    if (isOpen && contextAvailable && state) {
+    if (isOpen && contextAvailable && appState) {
       const updateStats = () => {
         try {
           setStats({
             workspace: {
-              current: state.workspace?.current?.name || 'No workspace',
-              websites: state.workspace?.websites?.length || 0,
-              selectedWebsiteId: state.workspace?.selectedWebsiteId || null,
-              loading: state.workspace?.loading || false,
+              current: appState.state?.workspace?.current?.name || 'No workspace',
+              websites: appState.state?.workspace?.websites?.length || 0,
+              selectedWebsiteId: appState.state?.workspace?.selectedWebsiteId || null,
+              loading: appState.state?.workspace?.loading || false,
             },
             cache: {
-              entries: state.cache?.memory?.size || 0,
-              dependencies: state.cache?.dependencies?.size || 0,
+              entries: appState.state?.cache?.memory?.size || 0,
+              dependencies: appState.state?.cache?.dependencies?.size || 0,
             },
             requests: {
-              active: state.requests?.active?.size || 0,
-              settings: state.requests?.settings || {},
+              active: appState.state?.requests?.active?.size || 0,
+              settings: appState.state?.requests?.settings || {},
             },
             contextAvailable,
           });
@@ -229,7 +228,9 @@ export function StateManagementDevTools() {
       const interval = setInterval(updateStats, 1000);
       return () => clearInterval(interval);
     }
-  }, [isOpen, contextAvailable, state]);
+    // Return undefined if conditions aren't met
+    return undefined;
+  }, [isOpen, contextAvailable, appState]);
 
   if (process.env.NODE_ENV !== 'development') {
     return null;

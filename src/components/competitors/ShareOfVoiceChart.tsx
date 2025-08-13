@@ -505,7 +505,7 @@ export default function ShareOfVoiceChart({
                               <div className="font-semibold">
                                 {item.name === "Your Brand"
                                   ? "You"
-                                  : item.name.split(" ")[0].substring(0, 8)}
+                                  : item.name?.split(" ")[0]?.substring(0, 8)}
                               </div>
                             )}
                             {/* Percentage always shown for segments > 6% */}

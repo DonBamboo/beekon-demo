@@ -227,10 +227,11 @@ export class ExportService {
         
         // Calculate metrics
         const totalAnalyses = websiteMetrics?.metrics.length || 0;
-        const averageConfidence = websiteMetrics?.metrics.reduce((sum, m) => sum + (m.confidence_score || 0), 0) / (websiteMetrics?.metrics.length || 1) || 0;
-        const averageSentiment = websiteMetrics?.metrics.reduce((sum, m) => sum + (m.sentiment_score || 0), 0) / (websiteMetrics?.metrics.length || 1) || 0;
-        const mentionRate = (websiteMetrics?.metrics.filter(m => m.is_mentioned).length || 0) / (websiteMetrics?.metrics.length || 1) * 100;
-        const averageRank = websiteMetrics?.metrics.reduce((sum, m) => sum + (m.rank_position || 0), 0) / (websiteMetrics?.metrics.length || 1) || 0;
+        const metrics = websiteMetrics?.metrics || [];
+        const averageConfidence = metrics.length > 0 ? metrics.reduce((sum, m) => sum + (m.confidence_score || 0), 0) / metrics.length : 0;
+        const averageSentiment = metrics.length > 0 ? metrics.reduce((sum, m) => sum + (m.sentiment_score || 0), 0) / metrics.length : 0;
+        const mentionRate = metrics.length > 0 ? (metrics.filter(m => m.is_mentioned).length / metrics.length) * 100 : 0;
+        const averageRank = metrics.length > 0 ? metrics.reduce((sum, m) => sum + (m.rank_position || 0), 0) / metrics.length : 0;
         
         // Return flattened tabular data - each row represents one data point
         return [
@@ -418,7 +419,7 @@ export class ExportService {
 
     const exportContent: ExportData = {
       title,
-      data: (data as Record<string, unknown>[]) || [],
+      data: Array.isArray(data) ? (data as unknown as Record<string, unknown>[]) : [],
       exportedAt: new Date().toISOString(),
       totalRecords: data?.length || 0,
       filters,

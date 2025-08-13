@@ -348,6 +348,20 @@ export const persistentStorage = {
   },
 
   /**
+   * Clear data matching pattern from localStorage
+   */
+  clearLocal: (pattern: string) => {
+    storage.clearLocal(pattern);
+  },
+
+  /**
+   * Clear data matching pattern from sessionStorage  
+   */
+  clearSession: (pattern: string) => {
+    storage.clearSession(pattern);
+  },
+
+  /**
    * Clear all application data (for logout/reset)
    */
   clearAllData: () => {

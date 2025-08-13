@@ -37,6 +37,12 @@ interface LoadingContextType {
   
   // Reset all loading states
   resetAllStates: () => void;
+  
+  // Access to all loading states (for debugging/monitoring)
+  loadingStates: LoadingState;
+  
+  // Clear all loading states
+  clearAllLoadingStates: () => void;
 }
 
 const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
@@ -144,6 +150,11 @@ export function LoadingProvider({ children }: LoadingProviderProps) {
     setResolveCallbacks(new Map());
   }, []);
 
+  const clearAllLoadingStates = useCallback(() => {
+    setLoadingStates({});
+    setResolveCallbacks(new Map());
+  }, []);
+
   const contextValue: LoadingContextType = {
     getLoadingState,
     setLoadingState,
@@ -152,6 +163,8 @@ export function LoadingProvider({ children }: LoadingProviderProps) {
     clearLoadingState,
     waitForResources,
     resetAllStates,
+    loadingStates,
+    clearAllLoadingStates,
   };
 
   return (

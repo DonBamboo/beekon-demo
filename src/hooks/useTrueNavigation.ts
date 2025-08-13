@@ -56,7 +56,7 @@ export function useTrueNavigation() {
 
   // Handle browser back/forward buttons
   useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
+    const handlePopState = (_: PopStateEvent) => {
       const newPath = getCurrentPageFromUrl(window.location.pathname);
       navigateToPage(newPath);
       

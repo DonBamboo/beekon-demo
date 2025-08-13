@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { DataLoader } from "@/lib/request-batching";
-import { AnalysisResult, UIAnalysisResult, LLMResult } from "@/types/database";
+import { UIAnalysisResult } from "@/types/database";
 
 // Helper functions for safe type extraction
 function safeString(value: unknown, fallback = ""): string {
@@ -112,7 +112,7 @@ export const websiteInfoLoader = new DataLoader<
     data?.forEach(website => {
       results.set(website.id, {
         domain: website.domain,
-        display_name: website.display_name,
+        display_name: website.display_name || website.domain, // Handle null display_name
       });
     });
 

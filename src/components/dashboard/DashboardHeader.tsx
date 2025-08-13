@@ -92,7 +92,7 @@ export function DashboardHeader({
           isLoading={isExporting}
           disabled={!hasData}
           formats={["pdf", "csv", "json", "word"]}
-          data={metrics ? [metrics] as Record<string, unknown>[] : []}
+          data={metrics ? [metrics as unknown as Record<string, unknown>] : []}
           showEstimatedSize={true}
         />
       </div>

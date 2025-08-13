@@ -212,8 +212,7 @@ export function useAnalysisCoordinated(
           {
             limit: initialLimit,
             filters,
-          },
-          abortControllerRef.current?.signal
+          }
         );
 
         let results = response.results;

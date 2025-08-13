@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useResourceLoading, useLoadingContext } from '@/hooks/loadingHooks';
 
 // Generic hook for coordinating multiple async operations
@@ -35,7 +35,7 @@ export function useCoordinatedData<T = unknown>({
 }: CoordinatedDataOptions): CoordinatedDataResult<T> {
   const [data, setData] = useState<Record<string, T>>({});
   const [errors, setErrors] = useState<Record<string, Error>>({});
-  const [individualLoadingStates, setIndividualLoadingStates] = useState<Record<string, boolean>>({});
+  const [, setIndividualLoadingStates] = useState<Record<string, boolean>>({});
 
   const loaderIds = loaders.map(l => `${resourceId}-${l.id}`);
   const mainResource = useResourceLoading(resourceId);
@@ -53,7 +53,7 @@ export function useCoordinatedData<T = unknown>({
       
       const result = await loader.loader();
       
-      setData(prev => ({ ...prev, [loader.id]: result }));
+      setData(prev => ({ ...prev, [loader.id]: result as T }));
       setErrors(prev => {
         const updated = { ...prev };
         delete updated[loader.id];
@@ -75,7 +75,7 @@ export function useCoordinatedData<T = unknown>({
       if (waitForAll) {
         // Execute all loaders in parallel but wait for all to complete
         await Promise.allSettled(loaders.map(executeLoader));
-        await coordinated.waitForAll();
+        // Wait for all loaders to complete
       } else {
         // Execute loaders independently
         loaders.forEach(executeLoader);
@@ -87,7 +87,7 @@ export function useCoordinatedData<T = unknown>({
     }
 
     // Only finish main loading if we're waiting for all or if no loaders are still running
-    if (waitForAll || !coordinated.isAnyLoading) {
+    if (waitForAll || !coordinated.isLoading) {
       mainResource.finishLoading();
     }
   }, [loaders, executeLoader, mainResource, coordinated, waitForAll]);
@@ -137,7 +137,7 @@ export function useCoordinatedData<T = unknown>({
     );
   }, [data]);
 
-  const isLoading = waitForAll ? mainResource.isLoading : coordinated.isAnyLoading;
+  const isLoading = waitForAll ? mainResource.isLoading : coordinated.isLoading;
 
   return {
     data,
@@ -161,7 +161,9 @@ export function useDashboardCoordinatedData(filters: Record<string, unknown>) {
         id: 'metrics',
         loader: async () => {
           const { dashboardService } = await import('@/services/dashboardService');
-          return dashboardService.getMetrics(filters);
+          const websiteIds = (filters as any).websiteIds as string[];
+          const dateRange = (filters as any).dateRange as { start: string; end: string } | undefined;
+          return dashboardService.getDashboardMetrics(websiteIds, dateRange);
         },
         dependencies: [filters],
       },
@@ -169,7 +171,9 @@ export function useDashboardCoordinatedData(filters: Record<string, unknown>) {
         id: 'timeSeriesData',
         loader: async () => {
           const { dashboardService } = await import('@/services/dashboardService');
-          return dashboardService.getTimeSeriesData(filters);
+          const websiteIds = (filters as any).websiteIds as string[];
+          const period = (filters as any).period as '7d' | '30d' | '90d' | undefined;
+          return dashboardService.getTimeSeriesData(websiteIds, period);
         },
         dependencies: [filters],
       },
@@ -177,7 +181,9 @@ export function useDashboardCoordinatedData(filters: Record<string, unknown>) {
         id: 'topicPerformance',
         loader: async () => {
           const { dashboardService } = await import('@/services/dashboardService');
-          return dashboardService.getTopicPerformance(filters);
+          const websiteIds = (filters as any).websiteIds as string[];
+          const limit = (filters as any).limit as number | undefined;
+          return dashboardService.getTopicPerformance(websiteIds, limit);
         },
         dependencies: [filters],
       },
@@ -185,7 +191,8 @@ export function useDashboardCoordinatedData(filters: Record<string, unknown>) {
         id: 'llmPerformance',
         loader: async () => {
           const { dashboardService } = await import('@/services/dashboardService');
-          return dashboardService.getLLMPerformance(filters);
+          const websiteIds = (filters as any).websiteIds as string[];
+          return dashboardService.getLLMPerformance(websiteIds);
         },
         dependencies: [filters],
       },
@@ -193,7 +200,8 @@ export function useDashboardCoordinatedData(filters: Record<string, unknown>) {
         id: 'websitePerformance',
         loader: async () => {
           const { dashboardService } = await import('@/services/dashboardService');
-          return dashboardService.getWebsitePerformance(filters);
+          const websiteIds = (filters as any).websiteIds as string[];
+          return dashboardService.getWebsitePerformance(websiteIds);
         },
         dependencies: [filters],
       },

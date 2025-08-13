@@ -73,6 +73,8 @@ export function FileDropZone({
     if (!files || files.length === 0) return;
 
     const file = files[0];
+    if (!file) return; // Guard against undefined
+    
     const validationError = validateFile(file);
     
     if (validationError) {

@@ -75,7 +75,7 @@ export function useSubscriptionEnforcement() {
 
   const enforceLimit = (
     action: keyof SubscriptionLimits,
-    actionName: string
+    _: string
   ): boolean => {
     if (!canPerformAction(action)) {
       const tier =
@@ -168,7 +168,7 @@ export function useSubscriptionEnforcement() {
 
     try {
       // Make actual database call to consume a credit
-      const { data, error } = await supabase
+      const { error } = await supabase
         .schema("beekon_data")
         .from("workspaces")
         .update({ 
@@ -247,7 +247,7 @@ export function useSubscriptionEnforcement() {
       const currentCredits = currentWorkspace.credits_remaining || 0;
       
       // Restore one credit to the workspace
-      const { data, error } = await supabase
+      const { error } = await supabase
         .schema("beekon_data")
         .from("workspaces")
         .update({ 

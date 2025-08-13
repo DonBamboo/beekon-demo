@@ -60,7 +60,7 @@ export function useIntersectionLazyLoading<T extends React.ComponentType<Record<
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
+        if (entry?.isIntersecting) {
           setIsLoading(true);
           setError(null);
           

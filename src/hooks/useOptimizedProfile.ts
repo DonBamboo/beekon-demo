@@ -12,7 +12,6 @@ export function useOptimizedProfile() {
 
   // Cache keys for profile data
   const profileCacheKey = `profile_${user?.id}`;
-  const apiKeysCacheKey = `api_keys_${user?.id}`;
 
   // Check if we have cached profile data
   const cachedProfile = getFromCache<UserProfile>(profileCacheKey);

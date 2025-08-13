@@ -49,7 +49,7 @@ export function useInfiniteAnalysisResults(
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
+  const [, setInitialized] = useState(false);
 
   // Sorting utility function
   const sortResults = useCallback(

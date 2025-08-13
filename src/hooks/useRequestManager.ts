@@ -271,7 +271,7 @@ export function useRequestManager() {
       
       // Remove from queues
       queue.pending.delete(key);
-      queue.priorities.forEach((requests, priority) => {
+      queue.priorities.forEach((requests, _) => {
         const index = requests.indexOf(key);
         if (index !== -1) {
           requests.splice(index, 1);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppState, usePageFilters } from '@/hooks/appStateHooks';
-import { persistentStorage, STORAGE_KEYS } from '@/lib/storage';
+import { persistentStorage } from '@/lib/storage';
 import type { AnalysisFilters, CompetitorFilters, DashboardFilters } from '@/contexts/AppStateContext';
 
 // Navigation context for intelligent prefetching
@@ -60,7 +60,7 @@ const PAGE_CONFIGS: Record<string, PageConfig> = {
 export function useStatePersistence() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { state, navigateToPage, setSelectedWebsite } = useAppState();
+  const { state, navigateToPage } = useAppState();
   
   const currentPage = location.pathname;
   const config = PAGE_CONFIGS[currentPage] || PAGE_CONFIGS['/'];
@@ -84,7 +84,7 @@ export function useStatePersistence() {
 
   // Save scroll position before navigation
   const saveScrollPosition = useCallback(() => {
-    if (!config.persistScrollPosition) return;
+    if (!config?.persistScrollPosition) return;
 
     const scrollData = {
       x: window.scrollX,
@@ -99,11 +99,11 @@ export function useStatePersistence() {
         [currentPage]: scrollData,
       },
     });
-  }, [currentPage, config.persistScrollPosition]);
+  }, [currentPage, config?.persistScrollPosition]);
 
   // Restore scroll position after navigation
   const restoreScrollPosition = useCallback(() => {
-    if (!config.persistScrollPosition) return;
+    if (!config?.persistScrollPosition) return;
 
     const navState = persistentStorage.loadNavigationState();
     const scrollData = navState?.scrollPositions?.[currentPage];
@@ -114,7 +114,7 @@ export function useStatePersistence() {
         window.scrollTo(scrollData.x, scrollData.y);
       }, 100);
     }
-  }, [currentPage, config.persistScrollPosition]);
+  }, [currentPage, config?.persistScrollPosition]);
 
   // Track navigation patterns for intelligent prefetching
   const trackNavigation = useCallback((from: string, to: string, action: NavigationContext['userAction']) => {
@@ -163,7 +163,7 @@ export function useStatePersistence() {
     prefetch?: boolean;
   }) => {
     // Save current page state
-    if (config.persistScrollPosition) {
+    if (config?.persistScrollPosition) {
       saveScrollPosition();
     }
 
@@ -210,7 +210,6 @@ export function useStatePersistence() {
     // Restore filters for current page
     const savedFilters = restoreFiltersForPage(currentPage);
     if (savedFilters) {
-      const pageKey = currentPage.replace('/', '') as keyof typeof state.ui.filters;
       // This would need to be handled by the AppStateContext
       console.log(`Restoring filters for ${currentPage}:`, savedFilters);
     }
@@ -237,11 +236,11 @@ export function useStatePersistence() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (config.persistScrollPosition) {
+      if (config?.persistScrollPosition) {
         saveScrollPosition();
       }
     };
-  }, [config.persistScrollPosition, saveScrollPosition]);
+  }, [config?.persistScrollPosition, saveScrollPosition]);
 
   return {
     // Navigation with state management

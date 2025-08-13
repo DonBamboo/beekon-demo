@@ -18,6 +18,21 @@ export type CompetitorInsert =
 export type CompetitorUpdate =
   Database["beekon_data"]["Tables"]["competitors"]["Update"];
 
+// Extended competitor types for status tracking
+export interface CompetitorPerformance {
+  visibility_score: number;
+  avg_rank: number;
+  total_mentions: number;
+  sentiment_score: number;
+}
+
+export interface CompetitorWithStatus extends Competitor {
+  analysisStatus: "completed" | "pending" | "in_progress";
+  performance?: CompetitorPerformance;
+  addedAt: string; // Non-nullable version of created_at
+  analysis_frequency: string | null;
+}
+
 export type LLMAnalysisResult =
   Database["beekon_data"]["Tables"]["llm_analysis_results"]["Row"];
 export type LLMAnalysisResultInsert =
@@ -119,6 +134,7 @@ export interface AnalysisInsights {
 export interface AnalysisResult {
   id: string;
   topic_name: string;
+  topic: string; // Added missing topic property
   topic_keywords: string[];
   llm_results: LLMResult[];
   total_mentions: number;
@@ -126,6 +142,10 @@ export interface AnalysisResult {
   avg_confidence: number | null;
   avg_sentiment: number | null;
   insights?: AnalysisInsights;
+  // Additional properties commonly accessed
+  created_at?: string;
+  website_id?: string;
+  filters?: Record<string, unknown>;
 }
 
 // UI-specific analysis result format for DetailedAnalysisModal
@@ -197,7 +217,7 @@ export interface WebsiteFilter {
   analysis_status: "all" | "completed" | "pending" | "failed";
 }
 
-// Dashboard metrics
+// Dashboard metrics - Unified interface
 export interface DashboardMetrics {
   total_websites: number;
   total_competitors: number;
@@ -207,10 +227,46 @@ export interface DashboardMetrics {
   rank_trend: number;
   confidence_trend: number;
   sentiment_trend: number;
+  // Additional properties accessed throughout the app
+  visibilityScore: number;
+  overallVisibilityScore: number;
+  averageRanking: number;
+  totalMentions: number;
+  sentimentScore: number;
+  totalAnalyses: number;
+  activeWebsites: number;
+  topPerformingTopic: string | null;
+  improvementTrend: number;
+  averageVisibility: number;
+  competitorCount: number;
+  lastAnalysisDate?: string | null;
+  growthRate: number;
 }
 
 // Subscription tier types
 export type SubscriptionTier = "free" | "pro" | "enterprise";
+
+// Export format types for data export functionality
+export type ExportColumnType = "number" | "boolean" | "date" | "text" | "url" | "percentage" | "currency" | "datetime" | "rank" | "auto";
+
+// Generic filter type for handling unknown filter objects
+export interface FilterData {
+  filters: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+// Cache level types for cache system
+export interface CacheLevel {
+  name: string;
+  storage: Storage | Record<string, unknown>;
+  ttl: number;
+}
+
+export interface CacheLevels {
+  L1_MEMORY: CacheLevel;
+  L2_SESSION: CacheLevel;
+  L3_LOCAL: CacheLevel;
+}
 
 // Export history types
 export type ExportStatus = "pending" | "processing" | "completed" | "failed";

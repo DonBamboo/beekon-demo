@@ -8,10 +8,7 @@ import {
 } from "@/components/DashboardCharts";
 import { DashboardErrorState } from "@/components/dashboard/DashboardErrorState";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { DashboardLoadingState } from "@/components/dashboard/DashboardLoadingState";
 import { DashboardSkeleton } from "@/components/skeletons";
-import { DashboardMetricsCards } from "@/components/dashboard/DashboardMetricsCards";
-import { VisibilityChart } from "@/components/dashboard/VisibilityChart";
 import { WorkspaceCreationPrompt } from "@/components/dashboard/WorkspaceCreationPrompt";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +18,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { LoadingButton } from "@/components/ui/loading-button";
 import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
@@ -33,16 +29,11 @@ import { ExportFormat, useExportHandler, captureMultipleCharts, ChartInfo, Chart
 import { useToast } from "@/hooks/use-toast";
 import { useOptimizedDashboardData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { dashboardService } from "@/services/dashboardService";
 import {
-  AlertCircle,
   BarChart3,
-  Building,
   Download,
   ExternalLink,
   MessageSquare,
-  Plus,
-  RefreshCw,
   Target,
   TrendingDown,
   TrendingUp,
@@ -65,7 +56,7 @@ export default function Dashboard() {
   const { currentWorkspace, loading, websites } = useWorkspace();
   const navigate = useNavigate();
   const [isExporting, setIsExporting] = useState(false);
-  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
+  const [, setShowCreateWorkspace] = useState(false);
   const [dateFilter, setDateFilter] = useState<"7d" | "30d" | "90d">("7d");
   const [showAllCharts, setShowAllCharts] = useState(false);
   const { handleExport } = useExportHandler();

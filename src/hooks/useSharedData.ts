@@ -118,7 +118,7 @@ export function useTopics(websiteId: string | null) {
  * Reduces duplicate API calls across Analysis page components
  */
 export function useLLMProviders(websiteId: string | null) {
-  const { getFromCache, setCache, clearCache, isRequestActive, dispatch } = useAppState();
+  const { getFromCache, setCache, isRequestActive, dispatch } = useAppState();
   const { toast } = useToast();
   const [llmProviders, setLLMProviders] = useState<LLMProvider[]>([]);
   const [loading, setLoading] = useState(false);

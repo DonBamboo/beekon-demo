@@ -491,7 +491,7 @@ export function AdvancedExportDropdown({
       <ExportPreviewModal
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
-        data={data}
+        data={data || []}
         title={title}
         exportType={exportType}
         onExport={handleExportWithOptions}

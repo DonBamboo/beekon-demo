@@ -63,8 +63,40 @@ export interface CacheStats {
 
 // Enhanced cache hook with multi-level support
 export function useCacheSystem() {
-  const { getFromCache, setCache, clearCache, dispatch } = useAppState();
+  const { getFromCache, setCache, clearCache } = useAppState();
   const statsRef = useRef<Map<string, CacheStats>>(new Map());
+  
+  // Update cache statistics
+  const updateCacheStats = useCallback((key: string, hit: boolean, responseTime: number): void => {
+    const currentStats = statsRef.current.get(key) || {
+      hits: 0,
+      misses: 0,
+      hitRate: 0,
+      size: 0,
+      totalRequests: 0,
+      averageResponseTime: 0,
+    };
+
+    const newStats: CacheStats = {
+      hits: hit ? currentStats.hits + 1 : currentStats.hits,
+      misses: hit ? currentStats.misses : currentStats.misses + 1,
+      hitRate: ((hit ? currentStats.hits + 1 : currentStats.hits) / (currentStats.totalRequests + 1)) * 100,
+      size: currentStats.size,
+      totalRequests: currentStats.totalRequests + 1,
+      averageResponseTime: ((currentStats.averageResponseTime * currentStats.totalRequests) + responseTime) / (currentStats.totalRequests + 1),
+    };
+
+    statsRef.current.set(key, newStats);
+  }, []);
+
+  // Invalidate cache entries by tags
+  const invalidateByTags = useCallback((tags: string[]): void => {
+    // This would need to be implemented in the AppStateContext
+    // to track cache entries by tags and invalidate them
+    tags.forEach(tag => {
+      clearCache(`tag:${tag}`);
+    });
+  }, [clearCache]);
   
   // Get from multi-level cache with fallback
   const getMultiLevel = useCallback(async <T,>(
@@ -73,27 +105,29 @@ export function useCacheSystem() {
   ): Promise<T | null> => {
     const startTime = performance.now();
     let result: T | null = null;
-    let hitLevel: string | null = null;
 
     // L1: Memory cache (fastest)
     result = getFromCache<T>(key);
     if (result !== null) {
-      hitLevel = 'L1_MEMORY';
+      return result;
     }
 
     // L2: Session storage (medium speed)
     if (result === null && (config.level === 'L2_SESSION' || config.level === 'L3_LOCAL')) {
       const sessionData = persistentStorage.getCachedData(`session_${key}`);
       if (sessionData) {
-        result = config.deserialize ? config.deserialize(sessionData) : sessionData;
-        hitLevel = 'L2_SESSION';
+        result = config.deserialize ? (config.deserialize(String(sessionData)) as T) : (sessionData as T);
         
         // Promote to L1 for faster future access
         if (result !== null) {
-          setCache(key, result, CACHE_LEVELS.L1_MEMORY.maxAge, {
-            level: 'L1_MEMORY',
-            promotedFrom: 'L2_SESSION',
-          });
+          const l1Cache = CACHE_LEVELS['L1_MEMORY'];
+          if (l1Cache) {
+            setCache(key, result, l1Cache.maxAge, {
+              level: 'L1_MEMORY',
+              promotedFrom: 'L2_SESSION',
+            });
+          }
+          return result;
         }
       }
     }
@@ -102,16 +136,21 @@ export function useCacheSystem() {
     if (result === null && config.level === 'L3_LOCAL') {
       const localData = persistentStorage.getCachedData(`local_${key}`);
       if (localData) {
-        result = config.deserialize ? config.deserialize(localData) : localData;
-        hitLevel = 'L3_LOCAL';
+        result = config.deserialize ? (config.deserialize(String(localData)) as T) : (localData as T);
         
         // Promote to higher levels for faster future access
         if (result !== null) {
-          setCache(key, result, CACHE_LEVELS.L1_MEMORY.maxAge);
-          persistentStorage.cacheData(`session_${key}`, 
-            config.serialize ? config.serialize(result) : result,
-            CACHE_LEVELS.L2_SESSION.maxAge
-          );
+          const l1Cache = CACHE_LEVELS['L1_MEMORY'];
+          const l2Cache = CACHE_LEVELS['L2_SESSION'];
+          if (l1Cache) {
+            setCache(key, result, l1Cache.maxAge);
+          }
+          if (l2Cache) {
+            persistentStorage.cacheData(`session_${key}`, 
+              config.serialize ? config.serialize(result) : String(result),
+              l2Cache.maxAge
+            );
+          }
         }
       }
     }
@@ -132,7 +171,8 @@ export function useCacheSystem() {
     const level = CACHE_LEVELS[config.level];
     
     // Always set in L1 for immediate access
-    setCache(key, data, CACHE_LEVELS.L1_MEMORY.maxAge, {
+    const l1Cache = CACHE_LEVELS['L1_MEMORY'];
+    setCache(key, data, l1Cache?.maxAge || 300000, {
       level: 'L1_MEMORY',
       dependencies: config.dependencies,
       tags: config.tags,
@@ -141,17 +181,21 @@ export function useCacheSystem() {
 
     // Set in appropriate levels based on config
     if (config.level === 'L2_SESSION' || config.level === 'L3_LOCAL') {
-      persistentStorage.cacheData(`session_${key}`,
-        config.serialize ? config.serialize(data) : data,
-        level.maxAge
-      );
+      if (level) {
+        persistentStorage.cacheData(`session_${key}`,
+          config.serialize ? config.serialize(data) : String(data),
+          level.maxAge
+        );
+      }
     }
 
     if (config.level === 'L3_LOCAL') {
-      persistentStorage.cacheData(`local_${key}`,
-        config.serialize ? config.serialize(data) : data,
-        level.maxAge
-      );
+      if (level) {
+        persistentStorage.cacheData(`local_${key}`,
+          config.serialize ? config.serialize(data) : String(data),
+          level.maxAge
+        );
+      }
     }
   }, [setCache]);
 
@@ -178,41 +222,6 @@ export function useCacheSystem() {
     });
   }, [clearCache, invalidateByTags]);
 
-  // Tag-based invalidation for related data
-  const invalidateByTags = useCallback((tags: string[]): void => {
-    // This would need to be implemented in the AppStateContext
-    // to track cache entries by tags and invalidate them
-    tags.forEach(tag => {
-      clearCache(`tag:${tag}`);
-    });
-  }, [clearCache]);
-
-  // Update cache statistics
-  const updateCacheStats = useCallback((key: string, hit: boolean, responseTime: number): void => {
-    const currentStats = statsRef.current.get(key) || {
-      hits: 0,
-      misses: 0,
-      hitRate: 0,
-      size: 0,
-      totalRequests: 0,
-      averageResponseTime: 0,
-    };
-
-    const newStats: CacheStats = {
-      hits: currentStats.hits + (hit ? 1 : 0),
-      misses: currentStats.misses + (hit ? 0 : 1),
-      hitRate: 0,
-      size: currentStats.size,
-      totalRequests: currentStats.totalRequests + 1,
-      averageResponseTime: (currentStats.averageResponseTime * currentStats.totalRequests + responseTime) / (currentStats.totalRequests + 1),
-    };
-
-    newStats.hitRate = newStats.totalRequests > 0 
-      ? (newStats.hits / newStats.totalRequests) * 100 
-      : 0;
-
-    statsRef.current.set(key, newStats);
-  }, []);
 
   // Get cache statistics for monitoring
   const getCacheStats = useCallback((key?: string): CacheStats | Map<string, CacheStats> => {
@@ -252,7 +261,6 @@ export function useCacheSystem() {
 
   // Automatic cache cleanup based on usage patterns
   const cleanupCache = useCallback((): void => {
-    const now = Date.now();
     const stats = getCacheStats() as Map<string, CacheStats>;
     
     // Identify low-usage cache entries for cleanup
@@ -267,7 +275,8 @@ export function useCacheSystem() {
     // Clean up low-usage entries
     lowUsageKeys.forEach(key => {
       clearCache(key);
-      persistentStorage.removeSession(`session_${key}`);
+      // Remove from session storage (assuming it exists)
+      sessionStorage.removeItem(`session_${key}`);
       statsRef.current.delete(key);
     });
 

@@ -80,10 +80,10 @@ export function getCompetitorColorIndex(
   if (competitorId || competitorName) {
     // Hash-based assignment for stable colors across sessions
     const hash = simpleHash(key);
-    colorIndex = AVAILABLE_CHART_COLORS[hash % AVAILABLE_CHART_COLORS.length];
+    colorIndex = AVAILABLE_CHART_COLORS[hash % AVAILABLE_CHART_COLORS.length] ?? 0;
   } else {
     // Fallback to index-based assignment
-    colorIndex = AVAILABLE_CHART_COLORS[fallbackIndex % AVAILABLE_CHART_COLORS.length];
+    colorIndex = AVAILABLE_CHART_COLORS[fallbackIndex % AVAILABLE_CHART_COLORS.length] ?? 0;
   }
   
   // Cache the assignment
@@ -237,7 +237,6 @@ export function reassignColorsToEliminateDuplicates(competitorKeys: string[]): M
   // Clear existing assignments for the provided keys
   competitorKeys.forEach(key => {
     if (competitorColorCache.has(key)) {
-      const oldColor = competitorColorCache.get(key)!;
       competitorColorCache.delete(key);
     }
   });
@@ -245,15 +244,15 @@ export function reassignColorsToEliminateDuplicates(competitorKeys: string[]): M
   // Reassign colors sequentially to avoid conflicts
   competitorKeys.forEach((key, index) => {
     const oldColor = competitorColorCache.get(key);
-    let newColorIndex = AVAILABLE_CHART_COLORS[index % AVAILABLE_CHART_COLORS.length];
+    let newColorIndex = AVAILABLE_CHART_COLORS[index % AVAILABLE_CHART_COLORS.length] ?? 0;
     
     // Find next available color if this one is taken
     while (usedColors.has(newColorIndex) && usedColors.size < AVAILABLE_CHART_COLORS.length) {
-      newColorIndex = AVAILABLE_CHART_COLORS[(AVAILABLE_CHART_COLORS.indexOf(newColorIndex) + 1) % AVAILABLE_CHART_COLORS.length];
+      newColorIndex = AVAILABLE_CHART_COLORS[(AVAILABLE_CHART_COLORS.indexOf(newColorIndex ?? 0) + 1) % AVAILABLE_CHART_COLORS.length] ?? 0;
     }
     
-    usedColors.add(newColorIndex);
-    competitorColorCache.set(key, newColorIndex);
+    usedColors.add(newColorIndex ?? 0);
+    competitorColorCache.set(key, newColorIndex ?? 0);
     
     if (oldColor !== undefined) {
       changes.set(key, { old: oldColor, new: newColorIndex });
@@ -353,9 +352,8 @@ export function validateAllColorAssignments(): {
  * Debug logging utility for color assignments
  * @param context - Context string for logging
  */
-export function debugLogColorAssignments(context: string = 'Color Assignment Debug'): void {
+export function debugLogColorAssignments(_: string = 'Color Assignment Debug'): void {
   const validation = validateAllColorAssignments();
-  const stats = getColorAssignmentStats();
   
   // Color validation diagnostics completed
   
@@ -389,7 +387,7 @@ export function autoFixColorConflicts(options: {
   changes: Map<string, { old: number; new: number }>;
   remainingConflicts: number;
 } {
-  const { logResults = false, preferStableColors = true } = options;
+  const { logResults = false } = options;
   
   if (logResults) {
     debugLogColorAssignments('Before Auto-Fix');
