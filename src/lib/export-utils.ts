@@ -841,7 +841,7 @@ export function transformExportData(data: Record<string, unknown>[]): Record<str
       
       // Add Website ID column if present
       if (item.websiteId) {
-        baseData['Website ID'] = String(item.websiteId);
+        (baseData as Record<string, string>)['Website ID'] = String(item.websiteId);
       }
       
       return baseData;
@@ -868,9 +868,9 @@ function createCsvSection(title: string, data: Record<string, unknown>[], includ
   
   if (transformedData !== data) {
     // Use standardized column format from transformation
-    const headers = Object.keys(transformedData[0]);
+    const headers = transformedData.length > 0 && transformedData[0] ? Object.keys(transformedData[0]) : [];
     if (includeHeaders) {
-      section += headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+      section += headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(',') + '\n';
     }
     
     transformedData.forEach(row => {
@@ -882,9 +882,9 @@ function createCsvSection(title: string, data: Record<string, unknown>[], includ
     });
   } else {
     // Standard table format for other data
-    const headers = Object.keys(data[0]);
+    const headers = data.length > 0 && data[0] ? Object.keys(data[0]) : [];
     if (includeHeaders) {
-      section += headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+      section += headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(',') + '\n';
     }
     
     data.forEach(row => {
@@ -973,8 +973,9 @@ export function formatCsvExport(data: ExportData, dataType?: string): Blob {
       
       // Add remaining categories
       Object.keys(groupedData).forEach(category => {
-        if (!sectionOrder.includes(category) && groupedData[category].length > 0) {
-          csvContent += createCsvSection(category, groupedData[category]);
+        const categoryData = groupedData[category];
+        if (!sectionOrder.includes(category) && categoryData && categoryData.length > 0) {
+          csvContent += createCsvSection(category, categoryData);
         }
       });
       
@@ -1057,13 +1058,13 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
   
   // Document title
   doc.setFontSize(20);
-  doc.setFont(undefined, 'bold');
+  doc.setFont('helvetica', 'bold');
   doc.text(data.title.toUpperCase(), 20, yPosition);
   yPosition += 15;
   
   // Subtitle
   doc.setFontSize(12);
-  doc.setFont(undefined, 'normal');
+  doc.setFont('helvetica', 'normal');
   doc.text('BEEKON AI REPORT', 20, yPosition);
   yPosition += 15;
   
@@ -1088,12 +1089,12 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
   if (data.filters && Object.keys(data.filters).length > 0) {
     checkPageBreak(20);
     doc.setFontSize(12);
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.text('APPLIED FILTERS', 20, yPosition);
     yPosition += 8;
     
     doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     Object.entries(data.filters).forEach(([key, value]) => {
       checkPageBreak();
       const cleanKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -1124,12 +1125,12 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
   // Add the main data
   checkPageBreak(20);
   doc.setFontSize(12);
-  doc.setFont(undefined, 'bold');
+  doc.setFont('helvetica', 'bold');
   doc.text('DATA', 20, yPosition);
   yPosition += 10;
   
   doc.setFontSize(9);
-  doc.setFont(undefined, 'normal');
+  doc.setFont('helvetica', 'normal');
   
   if (Array.isArray(data.data)) {
     const processedData = dataType ? applyFieldMapping(data.data, dataType) : data.data;
@@ -1140,15 +1141,16 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
       
       if (hasCategoryField) {
         // Group data by category for organized sections
-        const categoryKey = 'category' in processedData[0] ? 'category' : 'Category';
+        const categoryKey = processedData[0] && 'category' in processedData[0] ? 'category' : 'Category';
         const groupedData = processedData.reduce((groups, item) => {
-          const category = String(item[categoryKey] || 'Uncategorized');
+          const itemObj = item as Record<string, unknown>;
+          const category = String(itemObj[categoryKey] || 'Uncategorized');
           if (!groups[category]) {
             groups[category] = [];
           }
-          groups[category].push(item);
+          (groups[category] as Record<string, unknown>[]).push(itemObj);
           return groups;
-        }, {} as Record<string, typeof processedData>);
+        }, {} as Record<string, Record<string, unknown>[]>);
         
         // Define category display order for better organization
         const categoryOrder = [
@@ -1175,7 +1177,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
           
           // Category header
           doc.setFontSize(12);
-          doc.setFont(undefined, 'bold');
+          doc.setFont('helvetica', 'bold');
           doc.text(category.toUpperCase(), 20, yPosition);
           yPosition += 8;
           
@@ -1186,12 +1188,12 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
           
           // Create two-column layout for better readability
           doc.setFontSize(9);
-          doc.setFont(undefined, 'normal');
+          doc.setFont('helvetica', 'normal');
           
           // Filter and process valid items only
-          const validCategoryData = categoryData.filter(item => isValidExportItem(item));
+          const validCategoryData = (categoryData as Record<string, unknown>[]).filter(item => isValidExportItem(item));
           
-          validCategoryData.slice(0, 20).forEach((item, _) => { // Limit items per category
+          validCategoryData.slice(0, 20).forEach((item: Record<string, unknown>, _: number) => { // Limit items per category
             checkPageBreak(8);
             
             // Extract metric and value (skip category field)
@@ -1204,11 +1206,11 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
               // Use metric and value format for cleaner display
               const metric = itemEntries.find(([key]) => 
                 key.toLowerCase().includes('metric') || key.toLowerCase().includes('name')
-              )?.[1] || itemEntries[0][1];
+              )?.[1] || itemEntries[0]?.[1];
               
               const value = itemEntries.find(([key]) => 
                 key.toLowerCase().includes('value') || key.toLowerCase().includes('amount')
-              )?.[1] || itemEntries[1][1];
+              )?.[1] || itemEntries[1]?.[1];
               
               const unit = itemEntries.find(([key]) => 
                 key.toLowerCase().includes('unit') || key.toLowerCase().includes('status')
@@ -1230,12 +1232,12 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
               }
               
               // Metric name (left-aligned)
-              doc.setFont(undefined, 'bold');
+              doc.setFont('helvetica', 'bold');
               const truncatedMetric = metricText.length > 35 ? metricText.substring(0, 32) + '...' : metricText;
               doc.text(truncatedMetric, 25, yPosition);
               
               // Value and unit (right-aligned area)
-              doc.setFont(undefined, 'normal');
+              doc.setFont('helvetica', 'normal');
               const displayValue = `${valueText}${unitText}`;
               const truncatedValue = displayValue.length > 40 ? displayValue.substring(0, 37) + '...' : displayValue;
               doc.text(truncatedValue, 110, yPosition);
@@ -1263,7 +1265,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
           // Add note if category has more valid items
           if (remainingValidItems > 0) {
             checkPageBreak();
-            doc.setFont(undefined, 'italic');
+            doc.setFont('helvetica', 'italic');
             doc.setFontSize(8);
             doc.text(`... and ${remainingValidItems} more ${category.toLowerCase()} items`, 25, yPosition);
             yPosition += 5;
@@ -1277,12 +1279,12 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
         
       } else {
         // Fallback to original table format for non-categorized data
-        const headers = Object.keys(processedData[0]);
+        const headers = processedData.length > 0 && processedData[0] ? Object.keys(processedData[0]) : [];
         const maxCharsPerColumn = Math.floor(170 / headers.length);
         
         // Headers
         checkPageBreak(15);
-        doc.setFont(undefined, 'bold');
+        doc.setFont('helvetica', 'bold');
         let xPosition = 20;
         headers.forEach(header => {
           const truncatedHeader = header.length > maxCharsPerColumn ? 
@@ -1296,7 +1298,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
         doc.line(20, yPosition - 3, 190, yPosition - 3);
         
         // Data rows
-        doc.setFont(undefined, 'normal');
+        doc.setFont('helvetica', 'normal');
         processedData.slice(0, 50).forEach((row, _) => { // Limit to 50 rows for PDF readability
           checkPageBreak();
           xPosition = 20;
@@ -1317,7 +1319,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
         
         if (processedData.length > 50) {
           yPosition += 5;
-          doc.setFont(undefined, 'italic');
+          doc.setFont('helvetica', 'italic');
           doc.text(`... and ${processedData.length - 50} more records`, 20, yPosition);
         }
       }
@@ -1334,9 +1336,9 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
       const formattedValue = mapping ? formatValue(value, mapping) : 
         (typeof value === 'object' && value !== null ? serializeForExport(value, 400) : String(value ?? ''));
       
-      doc.setFont(undefined, 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.text(`${displayName}:`, 20, yPosition);
-      doc.setFont(undefined, 'normal');
+      doc.setFont('helvetica', 'normal');
       
       // Handle long values by wrapping text
       const maxWidth = 170;
@@ -1366,7 +1368,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
     
     // Charts section header
     doc.setFontSize(16);
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.text('DASHBOARD CHARTS', 20, yPosition);
     yPosition += 15;
     
@@ -1381,7 +1383,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
       
       // Chart title
       doc.setFontSize(12);
-      doc.setFont(undefined, 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.text(chart.title, 20, yPosition);
       yPosition += 8;
       
@@ -1421,7 +1423,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
         
         // Add error message instead of chart
         doc.setFontSize(10);
-        doc.setFont(undefined, 'italic');
+        doc.setFont('helvetica', 'italic');
         doc.text(`[Chart could not be rendered: ${chart.title}]`, 20, yPosition);
         yPosition += 10;
       }
@@ -1440,7 +1442,7 @@ export function formatPdfExport(data: ExportData, dataType?: string, charts?: Ch
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.text(
       `Generated by Beekon AI - ${new Date().toLocaleDateString()} | Page ${i} of ${totalPages}`, 
       20, 
@@ -1685,6 +1687,7 @@ export function getExportFormatDisplayName(format: ExportFormat): string {
     pdf: "PDF Document",
     csv: "CSV Spreadsheet",
     json: "JSON Data",
+    word: "Word Document",
   };
   
   return displayNames[format] || format.toUpperCase();
@@ -1699,6 +1702,7 @@ export function estimateExportSize(data: unknown, format: ExportFormat): string 
     json: 1,
     csv: 0.7,
     pdf: 1.5,
+    word: 1.3,
   };
   
   const estimatedBytes = dataSize * sizeMultipliers[format];

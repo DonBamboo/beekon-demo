@@ -376,7 +376,7 @@ export function ExportHistoryModal({
                     </div>
                     <div className="text-sm text-gray-600 grid grid-cols-2 gap-4">
                       <div>
-                        <span className="font-medium">Created:</span> {formatDistanceToNow(new Date(record.created_at), { addSuffix: true })}
+                        <span className="font-medium">Created:</span> {record.created_at ? formatDistanceToNow(new Date(record.created_at), { addSuffix: true }) : 'Unknown'}
                       </div>
                       <div>
                         <span className="font-medium">Size:</span> {formatFileSize(record.file_size)}

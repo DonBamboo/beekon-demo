@@ -144,12 +144,12 @@ export const generateGapSummary = (gapClassification: GapClassification[]) => {
   const highPriorityGaps = gapClassification.filter(gap => gap.priority === 'high');
   
   const biggestOpportunity = opportunities.reduce((prev, current) => 
-    Math.abs(prev.gapSize) > Math.abs(current.gapSize) ? prev : current, 
+    prev && Math.abs(prev.gapSize) > Math.abs(current.gapSize) ? prev : current, 
     opportunities[0]
   );
   
   const strongestAdvantage = advantages.reduce((prev, current) => 
-    prev.gapSize > current.gapSize ? prev : current, 
+    prev && prev.gapSize > current.gapSize ? prev : current, 
     advantages[0]
   );
 

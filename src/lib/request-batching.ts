@@ -86,7 +86,7 @@ export class RequestBatcher<T> {
     }, this.config.maxWaitTime);
   }
 
-  private async executeBatch(): void {
+  private async executeBatch(): Promise<void> {
     if (this.pending.size === 0) return;
 
     // Clear timeout
@@ -118,7 +118,7 @@ export class RequestBatcher<T> {
     } catch (error) {
       // Reject all pending requests
       batch.forEach(request => {
-        request.reject(error);
+        request.reject(error instanceof Error ? error : new Error(String(error)));
       });
     }
   }
@@ -228,7 +228,7 @@ export class DataLoader<K, V> {
       {
         maxBatchSize,
         maxWaitTime,
-        keyGenerator: (key: K) => JSON.stringify(key),
+        keyGenerator: (...args: unknown[]) => JSON.stringify(args[0]),
       }
     );
   }

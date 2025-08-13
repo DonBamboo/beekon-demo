@@ -315,8 +315,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           description: `Workspace "${name}" created successfully`,
         });
 
-        // Return the created workspace for external use
-        return newWorkspace;
+        // Return void to match interface expectation
+        return;
       } catch (error) {
         // Error creating workspace
         const errorMessage =
@@ -567,7 +567,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
     // Ensure we have a current workspace if workspaces exist
     if (workspaces.length > 0 && !currentWorkspace) {
-      setCurrentWorkspaceWithNotification(workspaces[0]);
+      const firstWorkspace = workspaces[0];
+      if (firstWorkspace) {
+        setCurrentWorkspaceWithNotification(firstWorkspace);
+      }
       return false;
     }
 
@@ -631,6 +634,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
       return () => clearTimeout(timeoutId);
     }
+    return undefined;
   }, [workspaces, currentWorkspace, loading, validateWorkspaceState]);
 
   const refetchWebsites = useCallback(async () => {

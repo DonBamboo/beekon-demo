@@ -26,6 +26,13 @@ const subscriptionLimits: Record<SubscriptionTier, SubscriptionLimits> = {
     supportLevel: "priority",
     reports: "weekly",
   },
+  pro: {
+    websiteAnalyses: 200,
+    competitorTracking: 10,
+    apiAccess: true,
+    supportLevel: "priority",
+    reports: "weekly",
+  },
   professional: {
     websiteAnalyses: 1000,
     competitorTracking: -1, // unlimited
@@ -134,12 +141,15 @@ export function useSubscriptionEnforcement() {
           : "Feature Limit Reached",
         description: message,
         variant: "destructive",
-        action: {
-          label: upgradeAction,
-          onClick: () => {
-            // Here you would typically navigate to upgrade page or open upgrade modal
-          },
-        },
+        action: (
+          <button
+            onClick={() => {
+              // Here you would typically navigate to upgrade page or open upgrade modal
+            }}
+          >
+            {upgradeAction}
+          </button>
+        ),
       });
       return false;
     }

@@ -115,7 +115,8 @@ export function useQueryOptimization() {
     const staleThreshold = 30 * 60 * 1000; // 30 minutes
 
     queryClient.getQueryCache().getAll().forEach(query => {
-      if (now - query.dataUpdatedAt > staleThreshold && query.getObserversCount() === 0) {
+      const lastUpdate = query.state.dataUpdatedAt || 0;
+      if (now - lastUpdate > staleThreshold && query.getObserversCount() === 0) {
         queryClient.removeQueries({ queryKey: query.queryKey });
       }
     });
@@ -123,10 +124,9 @@ export function useQueryOptimization() {
 
   // Batch multiple cache invalidations to reduce re-renders
   const batchInvalidate = useCallback((patterns: string[][]) => {
-    queryClient.getQueryCache().batch(() => {
-      patterns.forEach(pattern => {
-        queryClient.invalidateQueries({ queryKey: pattern });
-      });
+    // Use manual batching for React Query v5
+    patterns.forEach(pattern => {
+      queryClient.invalidateQueries({ queryKey: pattern });
     });
   }, [queryClient]);
 
@@ -141,7 +141,7 @@ export function useQueryOptimization() {
       staleQueries: queries.filter(q => q.isStale()).length,
       errorQueries: queries.filter(q => q.state.status === 'error').length,
       successQueries: queries.filter(q => q.state.status === 'success').length,
-      loadingQueries: queries.filter(q => q.state.status === 'loading').length,
+      loadingQueries: queries.filter(q => q.state.status === 'pending').length,
     };
 
     return stats;

@@ -72,9 +72,17 @@ export function useOptimizedProfile() {
       setIsLoading(true);
       setError(null);
       try {
+        // Convert UserProfile partial to ProfileUpdateData by filtering out nulls
+        const profileUpdates: Partial<UserProfile> & Record<string, unknown> = {};
+        Object.entries(updates).forEach(([key, value]) => {
+          if (value !== null) {
+            profileUpdates[key] = value;
+          }
+        });
+        
         const updatedProfile = await profileService.updateProfile(
           user.id,
-          updates
+          profileUpdates as any
         );
         setProfile(updatedProfile);
 

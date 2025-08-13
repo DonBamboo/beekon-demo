@@ -185,7 +185,22 @@ export class DashboardService {
             .single(),
         ]);
 
-        const metrics = this.calculateMetricsForResults(results);
+        // Convert UIAnalysisResult to AnalysisResult format for metrics calculation
+        const analysisResults = results.map(result => ({
+          id: result.id,
+          topic_name: result.topic,
+          topic: result.topic,
+          topic_keywords: [],
+          llm_results: result.llm_results,
+          total_mentions: result.llm_results.filter(r => r.is_mentioned).length,
+          avg_rank: result.llm_results.reduce((acc, r) => acc + (r.rank_position || 0), 0) / result.llm_results.length,
+          avg_confidence: result.confidence,
+          avg_sentiment: result.llm_results.reduce((acc, r) => acc + (r.sentiment_score || 0), 0) / result.llm_results.length,
+          created_at: result.created_at,
+          website_id: result.website_id,
+        }));
+        
+        const metrics = this.calculateMetricsForResults(analysisResults);
 
         return {
           websiteId,
@@ -194,7 +209,7 @@ export class DashboardService {
           visibility: metrics.overallVisibilityScore,
           mentions: metrics.totalMentions,
           sentiment: metrics.sentimentScore,
-          lastAnalyzed: results.length > 0 ? results[0]!.analyzed_at : "",
+          lastAnalyzed: results.length > 0 ? results[0]!.created_at : "",
         };
       });
 
@@ -222,8 +237,21 @@ export class DashboardService {
 
       const allResultsArrays = await Promise.all(allResultsPromises);
 
-      // Flatten all results into a single array
-      return allResultsArrays.flat();
+      // Flatten all results into a single array and convert to AnalysisResult format
+      const flatResults = allResultsArrays.flat();
+      return flatResults.map(result => ({
+        id: result.id,
+        topic_name: result.topic,
+        topic: result.topic,
+        topic_keywords: [],
+        llm_results: result.llm_results,
+        total_mentions: result.llm_results.filter(r => r.is_mentioned).length,
+        avg_rank: result.llm_results.reduce((acc, r) => acc + (r.rank_position || 0), 0) / result.llm_results.length || null,
+        avg_confidence: result.confidence,
+        avg_sentiment: result.llm_results.reduce((acc, r) => acc + (r.sentiment_score || 0), 0) / result.llm_results.length || null,
+        created_at: result.created_at,
+        website_id: result.website_id,
+      }));
     } catch (error) {
       // Failed to get analysis results
       return [];
@@ -569,7 +597,7 @@ export class DashboardService {
           websiteCount: websiteIds.length,
           totalTopics: topicPerformance.length,
           analysisPoints: timeSeriesData.length,
-          avgVisibilityScore: metrics.visibilityScore,
+          avgVisibilityScore: metrics.overallVisibilityScore,
           avgSentimentScore: metrics.sentimentScore,
         },
       },

@@ -8,7 +8,7 @@ export function withLazyLoading<T extends React.ComponentType<any>>(
 ) {
   type Props = React.ComponentProps<T>;
 
-  const LazyComponent: React.ComponentType<Props> = React.lazy(async () => ({
+  const LazyComponent = React.lazy(async () => ({
     default: Component,
   }));
 

@@ -78,8 +78,8 @@ export class ExportHistoryService {
       filters: data.filters ? (data.filters as Record<string, unknown>) : null,
       date_range: data.date_range ? (data.date_range as { start: string; end: string }) : null,
       metadata: data.metadata ? (data.metadata as Record<string, unknown>) : null,
-      created_at: data.created_at || new Date().toISOString(),
-      updated_at: data.updated_at || new Date().toISOString(),
+      created_at: data.created_at,
+      updated_at: data.updated_at,
     };
   }
 
@@ -130,8 +130,8 @@ export class ExportHistoryService {
       filters: data.filters ? (data.filters as Record<string, unknown>) : null,
       date_range: data.date_range ? (data.date_range as { start: string; end: string }) : null,
       metadata: data.metadata ? (data.metadata as Record<string, unknown>) : null,
-      created_at: data.created_at || new Date().toISOString(),
-      updated_at: data.updated_at || new Date().toISOString(),
+      created_at: data.created_at,
+      updated_at: data.updated_at,
     };
   }
 
@@ -214,7 +214,8 @@ export class ExportHistoryService {
       filters: record.filters ? (record.filters as Record<string, unknown>) : null,
       date_range: record.date_range ? (record.date_range as { start: string; end: string }) : null,
       metadata: record.metadata ? (record.metadata as Record<string, unknown>) : null,
-      created_at: record.created_at || new Date().toISOString(),
+      created_at: record.created_at,
+      updated_at: record.updated_at,
     }));
 
     return {
@@ -251,7 +252,7 @@ export class ExportHistoryService {
     // Cast database rows to ExportStatistics with proper types
     return (data || []).map(record => ({
       ...record,
-      user_id: record.user_id || '',
+      user_id: record.user_id,
       export_type: record.export_type as ExportType | null,
       format: record.format as ExportFormat | null,
       status: record.status as ExportStatus | null,
@@ -409,6 +410,8 @@ export class ExportHistoryService {
       filters: data.filters ? (data.filters as Record<string, unknown>) : null,
       date_range: data.date_range ? (data.date_range as { start: string; end: string }) : null,
       metadata: data.metadata ? (data.metadata as Record<string, unknown>) : null,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
     };
   }
 
@@ -483,6 +486,8 @@ export class ExportHistoryService {
       filters: record.filters ? (record.filters as Record<string, unknown>) : null,
       date_range: record.date_range ? (record.date_range as { start: string; end: string }) : null,
       metadata: record.metadata ? (record.metadata as Record<string, unknown>) : null,
+      created_at: record.created_at,
+      updated_at: record.updated_at,
     }));
   }
 

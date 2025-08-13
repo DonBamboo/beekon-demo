@@ -97,24 +97,21 @@ class CompetitorStatusService {
           (payload) => {
             if (!subscription.isActive) return;
 
-            const competitor = payload.new as Competitor & {
-              analysis_status: CompetitorStatus;
-              analysis_progress: number;
-              analysis_started_at: string;
-              analysis_completed_at: string;
-              last_error_message: string;
-            };
+            const competitor = payload.new as Competitor;
 
             // Only process if this competitor is being monitored
             if (subscription.competitorIds.has(competitor.id)) {
+              // Derive status from last_analyzed_at and other fields
+              const status: CompetitorStatus = competitor.last_analyzed_at ? 'completed' : 'pending';
+              
               this.handleStatusUpdate(subscription, {
                 competitorId: competitor.id,
                 websiteId: competitor.website_id,
-                status: competitor.analysis_status,
-                progress: competitor.analysis_progress,
-                errorMessage: competitor.last_error_message,
-                startedAt: competitor.analysis_started_at,
-                completedAt: competitor.analysis_completed_at,
+                status: status,
+                progress: competitor.last_analyzed_at ? 100 : 0,
+                errorMessage: null,
+                startedAt: competitor.created_at,
+                completedAt: competitor.last_analyzed_at,
                 updatedAt: competitor.updated_at || new Date().toISOString(),
               });
             }
@@ -181,9 +178,9 @@ class CompetitorStatusService {
       const { data: competitors, error } = await supabase
         .schema('beekon_data')
         .from('competitors')
-        .select('id, website_id, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_error_message, updated_at')
+        .select('id, website_id, last_analyzed_at, created_at, updated_at')
         .in('id', Array.from(subscription.competitorIds))
-        .in('analysis_status', ['pending', 'analyzing']); // Only poll active states
+        .is('last_analyzed_at', null); // Only poll competitors that haven't been analyzed yet
 
       if (error) {
         console.error('Error polling competitor status:', error);
@@ -200,7 +197,8 @@ class CompetitorStatusService {
       competitors.forEach(competitor => {
         if (!subscription.isActive) return;
         
-        const interval = this.getPollingInterval(competitor.analysis_status as CompetitorStatus);
+        const status: CompetitorStatus = competitor.last_analyzed_at ? 'completed' : 'pending';
+        const interval = this.getPollingInterval(status);
         
         if (interval > 0) {
           const pollInterval = setInterval(async () => {
@@ -241,23 +239,23 @@ class CompetitorStatusService {
       const { data: competitor, error } = await supabase
         .schema('beekon_data')
         .from('competitors')
-        .select('id, website_id, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_error_message, updated_at')
+        .select('id, website_id, last_analyzed_at, created_at, updated_at')
         .eq('id', competitorId)
         .single();
 
       if (error || !competitor || !subscription.isActive) return;
 
-      const newStatus = competitor.analysis_status as CompetitorStatus;
+      const newStatus: CompetitorStatus = competitor.last_analyzed_at ? 'completed' : 'pending';
       
       // Notify about the status update
       this.handleStatusUpdate(subscription, {
         competitorId: competitor.id,
         websiteId: competitor.website_id,
         status: newStatus,
-        progress: competitor.analysis_progress,
-        errorMessage: competitor.last_error_message,
-        startedAt: competitor.analysis_started_at,
-        completedAt: competitor.analysis_completed_at,
+        progress: competitor.last_analyzed_at ? 100 : 0,
+        errorMessage: null,
+        startedAt: competitor.created_at,
+        completedAt: competitor.last_analyzed_at,
         updatedAt: competitor.updated_at || new Date().toISOString(),
       });
 
@@ -302,12 +300,12 @@ class CompetitorStatusService {
     const { data: competitor } = await supabase
       .schema('beekon_data')
       .from('competitors')
-      .select('id, website_id, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_error_message, updated_at')
+      .select('id, website_id, last_analyzed_at, created_at, updated_at')
       .eq('id', competitorId)
       .single();
 
     if (competitor && subscription.isActive) {
-      const status = competitor.analysis_status as CompetitorStatus;
+      const status: CompetitorStatus = competitor.last_analyzed_at ? 'completed' : 'pending';
       
       // If it's in an active state, start polling if we don't have real-time
       if ((status === 'pending' || status === 'analyzing') && !subscription.realtimeChannel) {
@@ -403,21 +401,30 @@ class CompetitorStatusService {
     errorMessage?: string
   ): Promise<boolean> {
     try {
-      const { data, error } = await supabase.rpc('update_competitor_analysis_status', {
-        p_competitor_id: competitorId,
-        p_status: status,
-        p_progress: progress,
-        p_error_message: errorMessage,
-      });
+      // Since we don't have status tracking columns, we'll update last_analyzed_at
+      // to indicate completion
+      const updateData: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      
+      if (status === 'completed') {
+        updateData.last_analyzed_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .schema('beekon_data')
+        .from('competitors')
+        .update(updateData)
+        .eq('id', competitorId);
 
       if (error) {
         console.error('Error updating competitor status:', error);
         return false;
       }
 
-      return data === true;
+      return true;
     } catch (error) {
-      console.error('Error calling update_competitor_analysis_status:', error);
+      console.error('Error updating competitor status:', error);
       return false;
     }
   }
@@ -430,23 +437,36 @@ class CompetitorStatusService {
     status?: CompetitorStatus
   ): Promise<CompetitorStatusUpdate[]> {
     try {
-      const { data, error } = await supabase.rpc('get_competitors_by_status', {
-        p_website_id: websiteId,
-        p_status: status,
-      });
+      let query = supabase
+        .schema('beekon_data')
+        .from('competitors')
+        .select('id, website_id, last_analyzed_at, created_at, updated_at')
+        .eq('website_id', websiteId);
+
+      // Filter by status if provided
+      if (status === 'completed') {
+        query = query.not('last_analyzed_at', 'is', null);
+      } else if (status === 'pending') {
+        query = query.is('last_analyzed_at', null);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
-      return (data || []).map((row: Record<string, unknown>) => ({
-        competitorId: row.id,
-        websiteId: websiteId,
-        status: row.analysis_status,
-        progress: row.analysis_progress,
-        errorMessage: row.last_error_message,
-        startedAt: row.analysis_started_at,
-        completedAt: row.analysis_completed_at,
-        updatedAt: row.updated_at,
-      }));
+      return (data || []).map((row) => {
+        const derivedStatus: CompetitorStatus = row.last_analyzed_at ? 'completed' : 'pending';
+        return {
+          competitorId: row.id,
+          websiteId: websiteId,
+          status: derivedStatus,
+          progress: row.last_analyzed_at ? 100 : 0,
+          errorMessage: null,
+          startedAt: row.created_at,
+          completedAt: row.last_analyzed_at,
+          updatedAt: row.updated_at || new Date().toISOString(),
+        };
+      });
     } catch (error) {
       console.error('Error getting competitors by status:', error);
       return [];

@@ -29,14 +29,14 @@ class RequestDeduplicator {
     if (!skipCache) {
       const cached = this.cache.get(key);
       if (cached && this.isValidCacheEntry(cached)) {
-        return cached.data;
+        return cached.data as T;
       }
     }
 
     // Check if request is already in flight
     const pending = this.pendingRequests.get(key);
     if (pending) {
-      return pending;
+      return pending as Promise<T>;
     }
 
     // Make the request
@@ -98,7 +98,6 @@ class RequestDeduplicator {
 
   // Get cache statistics
   getCacheStats() {
-    const now = Date.now();
     let validEntries = 0;
     let expiredEntries = 0;
 

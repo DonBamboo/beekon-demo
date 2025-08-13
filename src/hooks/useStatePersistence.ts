@@ -12,6 +12,13 @@ interface NavigationContext {
   userAction: 'direct' | 'navigation' | 'back' | 'forward';
 }
 
+// Navigation state structure
+interface NavigationState {
+  scrollPositions?: Record<string, { x: number; y: number; timestamp: number }>;
+  history?: NavigationContext[];
+  selectedWebsiteId?: string;
+}
+
 // State persistence configuration per page
 interface PageConfig {
   persistFilters: boolean;
@@ -79,7 +86,8 @@ export function useStatePersistence() {
   const restoreFiltersForPage = useCallback((page: string): Record<string, unknown> | null => {
     if (!PAGE_CONFIGS[page]?.restoreOnNavigate) return null;
 
-    return persistentStorage.loadPageFilters(page.replace('/', ''));
+    const savedFilters = persistentStorage.loadPageFilters(page.replace('/', ''));
+    return savedFilters as Record<string, unknown> | null;
   }, []);
 
   // Save scroll position before navigation
@@ -92,10 +100,11 @@ export function useStatePersistence() {
       timestamp: Date.now(),
     };
 
+    const currentState = persistentStorage.loadNavigationState() as NavigationState | null;
     persistentStorage.saveNavigationState({
-      ...persistentStorage.loadNavigationState(),
+      ...currentState,
       scrollPositions: {
-        ...persistentStorage.loadNavigationState()?.scrollPositions,
+        ...(currentState?.scrollPositions || {}),
         [currentPage]: scrollData,
       },
     });
@@ -105,7 +114,7 @@ export function useStatePersistence() {
   const restoreScrollPosition = useCallback(() => {
     if (!config?.persistScrollPosition) return;
 
-    const navState = persistentStorage.loadNavigationState();
+    const navState = persistentStorage.loadNavigationState() as NavigationState | null;
     const scrollData = navState?.scrollPositions?.[currentPage];
 
     if (scrollData) {
@@ -125,7 +134,7 @@ export function useStatePersistence() {
       userAction: action,
     };
 
-    const navState = persistentStorage.loadNavigationState() || { history: [] };
+    const navState = (persistentStorage.loadNavigationState() as NavigationState | null) || { history: [] };
     const updatedHistory = [...(navState.history || []), navigationContext].slice(-20); // Keep last 20
 
     persistentStorage.saveNavigationState({
@@ -138,13 +147,13 @@ export function useStatePersistence() {
 
   // Get navigation patterns for prefetching predictions
   const getNavigationPatterns = useCallback((): Array<{ to: string; probability: number }> => {
-    const navState = persistentStorage.loadNavigationState();
+    const navState = persistentStorage.loadNavigationState() as NavigationState | null;
     if (!navState?.history) return [];
 
     const patterns = new Map<string, number>();
-    const fromCurrent = navState.history.filter(h => h.from === currentPage);
+    const fromCurrent = navState.history.filter((h: NavigationContext) => h.from === currentPage);
     
-    fromCurrent.forEach(nav => {
+    fromCurrent.forEach((nav: NavigationContext) => {
       const count = patterns.get(nav.to) || 0;
       patterns.set(nav.to, count + 1);
     });
@@ -219,11 +228,11 @@ export function useStatePersistence() {
 
     // Update navigation state
     navigateToPage(currentPage);
-  }, [currentPage]);
+  }, [currentPage, restoreFiltersForPage, restoreScrollPosition, navigateToPage]);
 
   // Intelligent prefetching based on patterns
   useEffect(() => {
-    if (!config.prefetchData) return;
+    if (!config?.prefetchData) return;
 
     const patterns = getNavigationPatterns();
     patterns.forEach(({ to, probability }) => {
@@ -231,7 +240,7 @@ export function useStatePersistence() {
         prefetchDataForPage(to);
       }
     });
-  }, [currentPage, config.prefetchData]);
+  }, [currentPage, config?.prefetchData, getNavigationPatterns, prefetchDataForPage]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -283,9 +292,9 @@ export function useAnalysisFilterPersistence() {
   useEffect(() => {
     const savedFilters = restoreFilters('/analysis');
     if (savedFilters) {
-      setFilters(savedFilters);
+      setFilters(savedFilters as AnalysisFilters);
     }
-  }, []);
+  }, [restoreFilters, setFilters]);
 
   return {
     filters,
@@ -309,9 +318,9 @@ export function useCompetitorFilterPersistence() {
   useEffect(() => {
     const savedFilters = restoreFilters('/competitors');
     if (savedFilters) {
-      setFilters(savedFilters);
+      setFilters(savedFilters as CompetitorFilters);
     }
-  }, []);
+  }, [restoreFilters, setFilters]);
 
   return {
     filters,
@@ -335,9 +344,9 @@ export function useDashboardFilterPersistence() {
   useEffect(() => {
     const savedFilters = restoreFilters('/dashboard');
     if (savedFilters) {
-      setFilters(savedFilters);
+      setFilters(savedFilters as DashboardFilters);
     }
-  }, []);
+  }, [restoreFilters, setFilters]);
 
   return {
     filters,
@@ -354,15 +363,16 @@ export function useWebsitePersistence() {
   // Persist selected website
   const persistSelectedWebsite = useCallback((websiteId: string) => {
     setSelectedWebsite(websiteId);
+    const currentPrefs = persistentStorage.loadUserPreferences() || {};
     persistentStorage.saveUserPreferences({
-      ...persistentStorage.loadUserPreferences(),
+      ...currentPrefs,
       selectedWebsiteId: websiteId,
     });
   }, [setSelectedWebsite]);
 
   // Restore selected website on app load
   useEffect(() => {
-    const preferences = persistentStorage.loadUserPreferences();
+    const preferences = persistentStorage.loadUserPreferences() as { selectedWebsiteId?: string } | null;
     const savedWebsiteId = preferences?.selectedWebsiteId;
     
     if (savedWebsiteId && state.workspace.websites.length > 0) {

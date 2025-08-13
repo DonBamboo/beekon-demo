@@ -106,31 +106,32 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
 
   // Load navigation patterns from storage
   const loadNavigationPatterns = useCallback(() => {
-    const navState = persistentStorage.loadNavigationState();
+    const navState = persistentStorage.loadNavigationState() as { history?: unknown[] } | null;
     const history = navState?.history || [];
 
     // Analyze navigation patterns
     const patterns = new Map<string, NavigationPattern>();
 
-    history.forEach((nav: Record<string, unknown>) => {
-      const key = `${nav.from}->${nav.to}`;
+    history.forEach((nav) => {
+      const navRecord = nav as Record<string, unknown>;
+      const key = `${navRecord.from}->${navRecord.to}`;
       const existing = patterns.get(key);
 
       if (existing) {
         existing.frequency += 1;
         existing.lastSeen = Math.max(
           existing.lastSeen,
-          nav.timestamp as unknown as number
+          navRecord.timestamp as unknown as number
         );
       } else {
         patterns.set(key, {
-          from: nav.from as unknown as string,
-          to: nav.to as unknown as string,
+          from: navRecord.from as unknown as string,
+          to: navRecord.to as unknown as string,
           frequency: 1,
           avgTimeSpent: 0, // Would need to calculate from session data
-          lastSeen: nav.timestamp as unknown as number,
+          lastSeen: navRecord.timestamp as unknown as number,
           userAction:
-            (nav.userAction as unknown as
+            (navRecord.userAction as unknown as
               | "click"
               | "back"
               | "forward"

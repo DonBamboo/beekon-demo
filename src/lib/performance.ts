@@ -420,7 +420,7 @@ export function withPerformanceMonitoring<P extends object>(
     componentName || Component.displayName || Component.name || "Component";
 
   return React.memo(
-    React.forwardRef<HTMLElement, P>((props, ref) => {
+    React.forwardRef<HTMLElement, P>((props, _ref) => {
       const renderStart = React.useRef<number>(0);
 
       // Measure render time
@@ -438,7 +438,7 @@ export function withPerformanceMonitoring<P extends object>(
         });
       });
 
-      return React.createElement(Component, { ...props, ref });
+      return React.createElement(Component, props as P);
     })
   );
 }

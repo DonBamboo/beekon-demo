@@ -282,9 +282,11 @@ export default function Analysis() {
       dateRange,
       confidenceRange:
         typedFilters.confidenceRange &&
-        (typedFilters.confidenceRange[0] > 0 ||
-          typedFilters.confidenceRange[1] < 100)
-          ? typedFilters.confidenceRange
+        Array.isArray(typedFilters.confidenceRange) &&
+        typedFilters.confidenceRange.length >= 2 &&
+        (((typedFilters.confidenceRange as number[])[0] ?? 0) > 0 ||
+          ((typedFilters.confidenceRange as number[])[1] ?? 100) < 100)
+          ? (typedFilters.confidenceRange as number[])
           : undefined,
       sentiment:
         typedFilters.sentiment !== "all" ? typedFilters.sentiment : undefined,
@@ -366,9 +368,13 @@ export default function Analysis() {
         {
           id: "all",
           name: "All Sessions",
-          resultCount: sessions.reduce((sum, s) => sum + s.resultCount, 0),
+          resultCount: sessions.length, // Use session count as placeholder
         },
-        ...sessions,
+        ...sessions.map(session => ({
+          id: session.id,
+          name: session.analysis_name,
+          resultCount: 0, // TODO: Calculate actual result count
+        })),
       ];
       setAvailableAnalysisSessions(sessionsWithAll);
     } catch (error) {
@@ -394,23 +400,25 @@ export default function Analysis() {
       );
       if (!topicExists) {
         const timeoutId = setTimeout(() => {
-          setFilters({ ...filters, topic: "all" });
+          setFilters({ ...(filters || {}), topic: "all" });
         }, 100);
         return () => clearTimeout(timeoutId);
       }
     }
-  }, [topics, filters, setFilters]);
+    return undefined;
+  }, [topics, filters, setFilters, typedFilters.topic]);
 
   useEffect(() => {
     if (llmProviders.length > 0 && typedFilters.llm !== "all") {
       const llmExists = llmProviders.some((llm) => llm.id === typedFilters.llm);
       if (!llmExists) {
         const timeoutId = setTimeout(() => {
-          setFilters({ ...filters, llm: "all" });
+          setFilters({ ...(filters || {}), llm: "all" });
         }, 100);
         return () => clearTimeout(timeoutId);
       }
     }
+    return undefined;
   }, [llmProviders, filters, setFilters]);
 
   // No need for legacy format transformation - work directly with modern format
@@ -440,8 +448,8 @@ export default function Analysis() {
     return { groups, ungrouped };
   }, [analysisResults, groupBySession]);
 
-  // Memoize expensive statistics calculations
-  const resultStats = useMemo(() => {
+  // Memoize expensive statistics calculations - currently unused
+  useMemo(() => {
     const mentionedCount = analysisResults.filter((r) =>
       r.llm_results.some((llm) => llm.is_mentioned)
     ).length;
@@ -457,39 +465,6 @@ export default function Analysis() {
     };
   }, [analysisResults]);
 
-  // Performance monitoring and optimization
-  const performanceStats = useMemo(() => {
-    const startTime = performance.now();
-
-    const totalResults = analysisResults.length;
-    const totalLLMResults = analysisResults.reduce(
-      (sum, r) => sum + r.llm_results.length,
-      0
-    );
-    const uniqueTopics = new Set(analysisResults.map((r) => r.topic)).size;
-    const uniqueSessions = new Set(
-      analysisResults.map((r) => r.analysis_session_id).filter(Boolean)
-    ).size;
-
-    const endTime = performance.now();
-    const calculationTime = endTime - startTime;
-
-    return {
-      totalResults,
-      totalLLMResults,
-      uniqueTopics,
-      uniqueSessions,
-      calculationTime: Math.round(calculationTime * 100) / 100,
-      averageConfidence:
-        resultStats.mentionedCount > 0
-          ? (
-              (analysisResults.reduce((sum, r) => sum + r.confidence, 0) /
-                analysisResults.length) *
-              100
-            ).toFixed(1)
-          : "0",
-    };
-  }, [analysisResults, resultStats]);
 
   // Use dynamic LLM filters from optimized data
   const llmFilters =
@@ -548,9 +523,9 @@ export default function Analysis() {
     setIsFiltering(true);
     try {
       if (filterType === "topic") {
-        setSelectedTopic(value);
+        setFilters({ ...(filters || {}), topic: value });
       } else if (filterType === "llm") {
-        setSelectedLLM(value);
+        setFilters({ ...(filters || {}), llm: value });
       }
       // Data will be reloaded automatically via useEffect
     } catch (error) {
@@ -572,15 +547,17 @@ export default function Analysis() {
   // getSentimentFromScore function removed - now handled in DetailedAnalysisModal
 
   const handleClearFilters = () => {
-    setSelectedTopic("all");
-    setSelectedLLM("all");
-    setSearchQuery("");
-    setSelectedMentionStatus("all");
-    setSelectedDateRange("all");
+    setFilters({
+      topic: "all",
+      llm: "all",
+      searchQuery: "",
+      mentionStatus: "all",
+      dateRange: "all",
+      confidenceRange: [0, 100],
+      sentiment: "all",
+      analysisSession: "all"
+    });
     setCustomDateRange(null);
-    setSelectedConfidenceRange([0, 100]);
-    setSelectedSentiment("all");
-    setSelectedAnalysisSession("all");
   };
 
   const getTopicName = (id: string): string => {
@@ -599,15 +576,15 @@ export default function Analysis() {
         id: Date.now().toString(),
         name,
         filters: {
-          selectedTopic,
-          selectedLLM,
-          selectedMentionStatus,
-          selectedDateRange,
+          topic: typedFilters.topic,
+          llm: typedFilters.llm,
+          mentionStatus: typedFilters.mentionStatus,
+          dateRange: typedFilters.dateRange,
           customDateRange,
-          selectedConfidenceRange,
-          selectedSentiment,
-          selectedAnalysisSession,
-          searchQuery,
+          confidenceRange: typedFilters.confidenceRange,
+          sentiment: typedFilters.sentiment,
+          analysisSession: typedFilters.analysisSession,
+          searchQuery: typedFilters.searchQuery,
           sortBy,
           sortOrder,
         },
@@ -629,24 +606,20 @@ export default function Analysis() {
   );
 
   const loadFilterPreset = useCallback(
-    (preset: { filters: Record<string, unknown> }) => {
-      setSelectedTopic(preset.typedFilters.selectedTopic || "all");
-      setSelectedLLM(preset.typedFilters.selectedLLM || "all");
-      setSelectedMentionStatus(
-        preset.typedFilters.selectedMentionStatus || "all"
-      );
-      setSelectedDateRange(preset.typedFilters.selectedDateRange || "all");
-      setCustomDateRange(preset.typedFilters.customDateRange || null);
-      setSelectedConfidenceRange(
-        preset.typedFilters.selectedConfidenceRange || [0, 100]
-      );
-      setSelectedSentiment(preset.typedFilters.selectedSentiment || "all");
-      setSelectedAnalysisSession(
-        preset.typedFilters.selectedAnalysisSession || "all"
-      );
-      setSearchQuery(preset.typedFilters.searchQuery || "");
-      setSortBy(preset.typedFilters.sortBy || "date");
-      setSortOrder(preset.typedFilters.sortOrder || "desc");
+    (preset: { name: string; filters: Record<string, unknown> }) => {
+      setFilters({
+        topic: preset.filters.topic || "all",
+        llm: preset.filters.llm || "all",
+        mentionStatus: preset.filters.mentionStatus || "all",
+        dateRange: preset.filters.dateRange || "all",
+        confidenceRange: preset.filters.confidenceRange || [0, 100],
+        sentiment: preset.filters.sentiment || "all",
+        analysisSession: preset.filters.analysisSession || "all",
+        searchQuery: preset.filters.searchQuery || "",
+      });
+      setCustomDateRange(preset.filters.customDateRange as any || null);
+      setSortBy((preset.filters.sortBy as "date" | "confidence" | "mentions" | "rank") || "date");
+      setSortOrder((preset.filters.sortOrder as "asc" | "desc") || "desc");
 
       toast({
         title: "Filter Preset Loaded",
@@ -707,23 +680,28 @@ export default function Analysis() {
 
   const applyQuickPreset = useCallback(
     (preset: (typeof quickPresets)[0]) => {
-      if (preset.typedFilters.selectedConfidenceRange) {
-        setSelectedConfidenceRange(preset.typedFilters.selectedConfidenceRange);
+      const newFilters = { ...(filters || {}) };
+      
+      if (preset.filters.selectedConfidenceRange) {
+        newFilters.confidenceRange = preset.filters.selectedConfidenceRange;
       }
-      if (preset.typedFilters.selectedMentionStatus) {
-        setSelectedMentionStatus(preset.typedFilters.selectedMentionStatus);
+      if (preset.filters.selectedMentionStatus) {
+        newFilters.mentionStatus = preset.filters.selectedMentionStatus;
       }
-      if (preset.typedFilters.selectedDateRange) {
-        setSelectedDateRange(preset.typedFilters.selectedDateRange);
+      if (preset.filters.selectedDateRange) {
+        newFilters.dateRange = preset.filters.selectedDateRange;
       }
-      if (preset.typedFilters.selectedSentiment) {
-        setSelectedSentiment(preset.typedFilters.selectedSentiment);
+      if (preset.filters.selectedSentiment) {
+        newFilters.sentiment = preset.filters.selectedSentiment;
       }
-      if (preset.typedFilters.sortBy) {
-        setSortBy(preset.typedFilters.sortBy);
+      
+      setFilters(newFilters);
+      
+      if (preset.filters.sortBy) {
+        setSortBy(preset.filters.sortBy as "date" | "confidence" | "mentions" | "rank");
       }
-      if (preset.typedFilters.sortOrder) {
-        setSortOrder(preset.typedFilters.sortOrder);
+      if (preset.filters.sortOrder) {
+        setSortOrder(preset.filters.sortOrder as "asc" | "desc");
       }
 
       toast({
@@ -736,15 +714,17 @@ export default function Analysis() {
 
   // Clear all filters function
   const clearAllFilters = useCallback(() => {
-    setSelectedTopic("all");
-    setSelectedLLM("all");
-    setSelectedMentionStatus("all");
-    setSelectedDateRange("all");
+    setFilters({
+      topic: "all",
+      llm: "all",
+      mentionStatus: "all",
+      dateRange: "all",
+      confidenceRange: [0, 100],
+      sentiment: "all",
+      analysisSession: "all",
+      searchQuery: "",
+    });
     setCustomDateRange(null);
-    setSelectedConfidenceRange([0, 100]);
-    setSelectedSentiment("all");
-    setSelectedAnalysisSession("all");
-    setSearchQuery("");
     setAdvancedSearchQuery("");
     setSearchInResponses(false);
     setSearchInInsights(false);
@@ -2003,7 +1983,7 @@ export default function Analysis() {
           isOpen={isHistoryModalOpen}
           onClose={() => setIsHistoryModalOpen(false)}
           websiteId={selectedWebsiteId}
-          onSelectSession={(sessionId) => {
+          onSelectSession={(_) => {
             // Future: Navigate to session details or filter by session
           }}
         />

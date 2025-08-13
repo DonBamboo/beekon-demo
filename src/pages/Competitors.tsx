@@ -39,7 +39,7 @@ export default function Competitors() {
   const [isWebhookProcessing, setIsWebhookProcessing] = useState(false);
   
   // Use global website selection state
-  const { selectedWebsiteId, setSelectedWebsite, websites: globalWebsites } = useSelectedWebsite();
+  const { selectedWebsiteId, websites: globalWebsites } = useSelectedWebsite();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [competitorToDelete, setCompetitorToDelete] = useState<string | null>(
     null
@@ -52,24 +52,12 @@ export default function Competitors() {
   // Get first website ID for competitor tracking (fallback) - use global websites
   const websiteId = globalWebsites?.[0]?.id;
 
-  // Calculate date range using global filters (memoized to prevent infinite re-renders)
-  const dateRange = useMemo(() => {
-    const end = new Date();
-    const start = new Date();
-    const days = filters.dateFilter === "7d" ? 7 : filters.dateFilter === "30d" ? 30 : 90;
-    start.setDate(end.getDate() - days);
-    return {
-      start: start.toISOString(),
-      end: end.toISOString(),
-    };
-  }, [filters.dateFilter]);
 
   // Use optimized competitors data loading with instant cache rendering
   const {
     competitors,
     performance,
     analytics, 
-    topics,
     isLoading,
     error,
     refresh,

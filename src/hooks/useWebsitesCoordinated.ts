@@ -77,7 +77,7 @@ export function useWebsitesCoordinated() {
         totalTopics,
         avgVisibility,
         totalAnalyses,
-        lastAnalysisDate,
+        lastAnalysisDate: lastAnalysisDate || undefined,
       };
     } catch (error) {
       console.warn(`Failed to load metrics for website ${websiteId}:`, error);
@@ -107,8 +107,18 @@ export function useWebsitesCoordinated() {
       // Load metrics for all websites in parallel
       const metricsPromises = websites.map(website => 
         loadWebsiteMetrics(website.id).then(metrics => ({
-          ...website,
-          metrics,
+          id: website.id,
+          domain: website.domain,
+          display_name: website.display_name,
+          is_active: website.is_active,
+          monitoring_enabled: true, // Default monitoring enabled
+          created_at: website.created_at,
+          metrics: {
+            totalTopics: metrics.totalTopics,
+            avgVisibility: metrics.avgVisibility,
+            totalAnalyses: metrics.totalAnalyses,
+            lastAnalysisDate: metrics.lastAnalysisDate,
+          },
         }))
       );
 

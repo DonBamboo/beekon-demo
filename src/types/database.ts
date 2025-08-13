@@ -285,23 +285,23 @@ export interface ExportHistoryRecord {
   date_range: { start: string; end: string } | null;
   metadata: Record<string, unknown> | null;
   error_message: string | null;
-  created_at: string;
+  created_at: string | null;
   started_at: string | null;
   completed_at: string | null;
-  updated_at: string;
+  updated_at: string | null;
 }
 
 export interface ExportStatistics {
   user_id: string;
-  export_type: ExportType;
-  format: ExportFormat;
-  status: ExportStatus;
-  total_exports: number;
+  export_type: ExportType | null;
+  format: ExportFormat | null;
+  status: ExportStatus | null;
+  total_exports: number | null;
   total_size: number | null;
   avg_size: number | null;
   last_export: string | null;
-  successful_exports: number;
-  failed_exports: number;
+  successful_exports: number | null;
+  failed_exports: number | null;
   avg_duration_seconds: number | null;
 }
 
