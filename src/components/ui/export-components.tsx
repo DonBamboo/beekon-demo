@@ -1,7 +1,7 @@
 // Reusable export UI components for consistent user interface patterns
 
 import React, { useState } from "react";
-import { Download, FileText, Table, Code, File, FileSpreadsheet, Settings } from "lucide-react";
+import { Download, FileText, Table, Code, File, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ExportFormat, getExportFormatDisplayName, estimateExportSize } from "@/lib/export-utils";
+import { ExportFormat, estimateExportSize } from "@/lib/export-utils";
 import { ExportPreviewModal, ExportOptions } from "@/components/ExportPreviewModal";
 
 // Export button props

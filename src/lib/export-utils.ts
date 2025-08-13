@@ -8,6 +8,9 @@ import html2canvas from "html2canvas";
 // Export format types - import from database types for consistency
 import type { ExportFormat } from "@/types/database";
 
+// Re-export for external use
+export type { ExportFormat };
+
 // Export configuration interface
 export interface ExportConfig {
   filename: string;

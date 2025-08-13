@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAppState } from './AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 import { useWorkspace } from '@/hooks/useWorkspace';
 
 // Error boundary for context-related errors
@@ -7,7 +7,7 @@ class ContextErrorBoundary extends React.Component<
   { children: React.ReactNode; fallback?: React.ReactNode },
   { hasError: boolean; error?: Error }
 > {
-  constructor(props: any) {
+  constructor(props: { children: React.ReactNode; fallback?: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
@@ -16,11 +16,11 @@ class ContextErrorBoundary extends React.Component<
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Context Error Boundary caught an error:', error, errorInfo);
   }
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       return this.props.fallback || (
         <div style={{ padding: '20px', border: '1px solid red', borderRadius: '4px' }}>
@@ -115,9 +115,8 @@ function WorkspaceStateSync({ children }: { children: React.ReactNode }) {
             
             // Debug logging for website selection
             if (process.env.NODE_ENV === 'development' && websiteList.length > 0) {
-              const selectedWebsiteId = state.workspace.selectedWebsiteId || websiteList[0]?.id;
               console.log('WorkspaceStateSync: Debounced sync completed', {
-                selectedWebsiteId,
+                selectedWebsiteId: state.workspace.selectedWebsiteId || websiteList[0]?.id,
                 availableWebsites: websiteList.length,
                 workspaceName: currentWorkspace?.name,
                 hasWorkspaceChanged,
@@ -155,7 +154,6 @@ function CacheWarmer({ children }: { children: React.ReactNode }) {
     try {
       // Cache warming logic here (removed console logs for cleaner output)
       if (state && state.workspace.websites.length > 0 && !state.workspace.loading) {
-        const selectedWebsiteId = state.workspace.selectedWebsiteId;
         // Cache warming happens silently
       }
     } catch (error) {
@@ -186,11 +184,11 @@ export function OptimizedAppProvider({ children }: { children: React.ReactNode }
 // Development tools for monitoring state management
 export function StateManagementDevTools() {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [stats, setStats] = React.useState<any>(null);
+  const [stats, setStats] = React.useState<Record<string, unknown> | null>(null);
   
   // Safe context usage with error handling
   let contextAvailable = false;
-  let state: any = null;
+  let state: Record<string, unknown> | null = null;
   
   try {
     const appState = useAppState();

@@ -1,5 +1,4 @@
 import { HeaderSkeleton } from "../common/HeaderSkeleton"
-import { ListSkeleton } from "../common/ListSkeleton"
 import { DataTableSkeleton } from "../components/DataTableSkeleton"
 
 interface WebsitesSkeletonProps {

@@ -1,5 +1,4 @@
 import { HeaderSkeleton } from "../common/HeaderSkeleton"
-import { ListSkeleton } from "../common/ListSkeleton"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 

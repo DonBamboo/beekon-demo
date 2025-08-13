@@ -28,7 +28,9 @@
       "Bash(npx eslint:*)",
       "Bash(timeout 10s npm run dev:*)",
       "Bash(curl:*)",
-      "Bash(timeout 15s npm run dev)"
+      "Bash(timeout 15s npm run dev)",
+      "Bash(time npm run type-check)",
+      "Bash(true)"
     ],
     "deny": []
   },

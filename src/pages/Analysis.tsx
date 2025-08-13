@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAnalysisErrorHandler } from "@/hooks/useAnalysisError";
 import { useSubscriptionEnforcement } from "@/hooks/useSubscriptionEnforcement";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { useSelectedWebsite, usePageFilters } from "@/contexts/AppStateContext";
+import { useSelectedWebsite, usePageFilters } from "@/hooks/appStateHooks";
 import { capitalizeFirstLetters } from "@/lib/utils";
 import { analysisService, LLMResult } from "@/services/analysisService";
 import { UIAnalysisResult, ExportFormat } from "@/types/database";
@@ -609,12 +609,11 @@ export default function Analysis() {
       });
     },
     [
-      filters,
+      filterPresets,
+      toast,
       customDateRange,
       sortBy,
       sortOrder,
-      filterPresets,
-      toast,
     ]
   );
 
@@ -641,7 +640,9 @@ export default function Analysis() {
         description: `"${preset.name}" filters have been applied.`,
       });
     },
-    [filters, setFilters, toast]
+    [
+      toast,
+    ]
   );
 
   // Load filter presets from localStorage on mount
@@ -719,7 +720,9 @@ export default function Analysis() {
         description: `"${preset.name}" filter has been applied.`,
       });
     },
-    [filters, setFilters, toast]
+    [
+      toast,
+    ]
   );
 
   // Clear all filters function
@@ -743,7 +746,7 @@ export default function Analysis() {
       title: "Filters Cleared",
       description: "All filters have been reset to default values.",
     });
-  }, [setFilters, toast]);
+  }, [toast]);
 
   const handleRemoveFilter = (
     filterType:

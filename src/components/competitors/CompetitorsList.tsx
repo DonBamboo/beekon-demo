@@ -157,7 +157,7 @@ export default function CompetitorsList({
                     )}
                     {!isAnalyzed && (
                       <p className="text-xs text-muted-foreground">
-                        Added: {new Date(competitor.addedAt).toLocaleDateString()}
+                        Added: {new Date(competitor.created_at || Date.now()).toLocaleDateString()}
                       </p>
                     )}
                     {/* Progress bar for analyzing competitors */}

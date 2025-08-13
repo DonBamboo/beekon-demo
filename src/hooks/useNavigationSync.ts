@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAppState } from '@/contexts/AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 
 /**
  * Synchronizes URL changes with global navigation state.

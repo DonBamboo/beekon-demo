@@ -5,7 +5,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   BarChart,
@@ -208,13 +207,16 @@ export default function ShareOfVoiceChart({
     label,
   }: {
     active?: boolean;
-    payload?: Array<{ payload: Record<string, unknown>; value: number }>;
+    payload?: Array<{ payload: ShareOfVoiceData; value: number }>;
     label?: string;
-  }) => {
+  }): React.ReactElement | null => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload;
+      const data = payload[0]?.payload;
+      if (!data) return null;
+      
       const isMarketShare = chartType === "market_share";
-      const displayValue = payload[0].value;
+      const displayValue = payload[0]?.value;
+      if (displayValue === undefined) return null;
 
       return (
         <div className="bg-background border rounded-lg p-3 shadow-md">
@@ -223,9 +225,9 @@ export default function ShareOfVoiceChart({
             {isMarketShare ? "Market Share" : "Share of Voice"}:{" "}
             <span className="font-bold">{displayValue}%</span>
           </p>
-          {isMarketShare && data.rawValue !== undefined && (
+          {isMarketShare && typeof data.rawValue === 'number' && (
             <p className="text-sm text-muted-foreground">
-              Raw Share: {data.rawValue?.toFixed(1)}%
+              Raw Share: {data.rawValue.toFixed(1)}%
             </p>
           )}
           {(data.mentions || data.totalMentions) && (
@@ -238,7 +240,7 @@ export default function ShareOfVoiceChart({
               Total Analyses: {data.totalAnalyses}
             </p>
           )}
-          {data.avgRank && (
+          {typeof data.avgRank === 'number' && (
             <p className="text-sm text-muted-foreground">
               Avg. Rank: #{data.avgRank.toFixed(1)}
             </p>
@@ -707,7 +709,7 @@ export default function ShareOfVoiceChart({
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, value, index }) => {
+                  label={({ name, value }: { name: string; value: number; index?: number }) => {
                     // Only show labels for segments > 5% to avoid clutter
                     if (value < 5) return "";
                     const shortName =

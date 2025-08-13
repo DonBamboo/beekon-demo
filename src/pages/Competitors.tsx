@@ -9,7 +9,7 @@ import {
 } from "@/hooks/useCompetitorsQuery";
 import { useOptimizedCompetitorsData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { useSelectedWebsite, usePageFilters } from "@/contexts/AppStateContext";
+import { useSelectedWebsite, usePageFilters } from "@/hooks/appStateHooks";
 import CompetitorsHeader from "@/components/competitors/CompetitorsHeader";
 import CompetitorsLoadingState from "@/components/competitors/CompetitorsLoadingState";
 import { CompetitorsSkeleton } from "@/components/skeletons";

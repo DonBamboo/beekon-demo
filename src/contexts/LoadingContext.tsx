@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { createContext, useState, useCallback, ReactNode } from 'react';
 
 interface LoadingState {
   [key: string]: {
@@ -161,55 +161,5 @@ export function LoadingProvider({ children }: LoadingProviderProps) {
   );
 }
 
-// Hook utilities
-export function useLoadingContext() {
-  const context = useContext(LoadingContext);
-  if (context === undefined) {
-    throw new Error('useLoadingContext must be used within a LoadingProvider');
-  }
-  return context;
-}
-
-// Hook for managing a specific resource's loading state
-export function useResourceLoading(resourceId: string) {
-  const { getLoadingState, setLoadingState, clearLoadingState } = useLoadingContext();
-  
-  const state = getLoadingState(resourceId);
-  
-  const startLoading = useCallback((error?: Error | null) => {
-    setLoadingState(resourceId, { isLoading: true, error });
-  }, [resourceId, setLoadingState]);
-  
-  const finishLoading = useCallback((error?: Error | null) => {
-    setLoadingState(resourceId, { isLoading: false, error });
-  }, [resourceId, setLoadingState]);
-  
-  const clear = useCallback(() => {
-    clearLoadingState(resourceId);
-  }, [resourceId, clearLoadingState]);
-  
-  return {
-    ...state,
-    startLoading,
-    finishLoading,
-    clear,
-  };
-}
-
-// Hook for coordinated loading of multiple resources
-export function useCoordinatedLoading(resourceIds: string[]) {
-  const { areResourcesLoading, waitForResources, hasInitialLoading } = useLoadingContext();
-  
-  const isAnyLoading = areResourcesLoading(resourceIds);
-  const hasAnyInitialLoading = hasInitialLoading();
-  
-  const waitForAll = useCallback(() => {
-    return waitForResources(resourceIds);
-  }, [resourceIds, waitForResources]);
-  
-  return {
-    isAnyLoading,
-    hasAnyInitialLoading,
-    waitForAll,
-  };
-}
+// Export the context for the separate hooks file
+export { LoadingContext };

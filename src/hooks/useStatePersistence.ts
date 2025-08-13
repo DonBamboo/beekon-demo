@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAppState, usePageFilters } from '@/contexts/AppStateContext';
+import { useAppState, usePageFilters } from '@/hooks/appStateHooks';
 import { persistentStorage, STORAGE_KEYS } from '@/lib/storage';
 import type { AnalysisFilters, CompetitorFilters, DashboardFilters } from '@/contexts/AppStateContext';
 
@@ -66,7 +66,7 @@ export function useStatePersistence() {
   const config = PAGE_CONFIGS[currentPage] || PAGE_CONFIGS['/'];
 
   // Persist filter states when they change
-  const persistFiltersForPage = useCallback((page: string, filters: any) => {
+  const persistFiltersForPage = useCallback((page: string, filters: Record<string, unknown>) => {
     if (!PAGE_CONFIGS[page]?.persistFilters) return;
 
     const success = persistentStorage.savePageFilters(page.replace('/', ''), filters);
@@ -76,7 +76,7 @@ export function useStatePersistence() {
   }, []);
 
   // Restore filter states when navigating to a page
-  const restoreFiltersForPage = useCallback((page: string): any => {
+  const restoreFiltersForPage = useCallback((page: string): Record<string, unknown> | null => {
     if (!PAGE_CONFIGS[page]?.restoreOnNavigate) return null;
 
     return persistentStorage.loadPageFilters(page.replace('/', ''));

@@ -8,7 +8,7 @@ interface CompetitorsLoadingStateProps {
 
 export default function CompetitorsLoadingState({
   workspaceLoading,
-  isLoading,
+  isLoading: _,
 }: CompetitorsLoadingStateProps) {
   return (
     <div className="space-y-6">

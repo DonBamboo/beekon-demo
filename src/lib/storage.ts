@@ -8,7 +8,7 @@ export interface StorageConfig {
   expiration?: number; // Optional expiration time in milliseconds
 }
 
-export interface StoredData<T = any> {
+export interface StoredData<T = unknown> {
   data: T;
   timestamp: number;
   version: number;
@@ -282,7 +282,7 @@ export const persistentStorage = {
   /**
    * Save user preferences with automatic versioning
    */
-  saveUserPreferences: (preferences: any) => {
+  saveUserPreferences: (preferences: Record<string, unknown>) => {
     return storage.setLocal(STORAGE_KEYS.USER_PREFERENCES, preferences, { 
       version: STORAGE_VERSION 
     });
@@ -298,7 +298,7 @@ export const persistentStorage = {
   /**
    * Save page filters with expiration (7 days)
    */
-  savePageFilters: (page: string, filters: any) => {
+  savePageFilters: (page: string, filters: Record<string, unknown>) => {
     const key = `beekon_${page}_filters`;
     return storage.setLocal(key, filters, { 
       version: STORAGE_VERSION,
@@ -317,7 +317,7 @@ export const persistentStorage = {
   /**
    * Save navigation state to session storage
    */
-  saveNavigationState: (state: any) => {
+  saveNavigationState: (state: Record<string, unknown>) => {
     return storage.setSession(STORAGE_KEYS.NAVIGATION_STATE, state, {
       version: STORAGE_VERSION
     });
@@ -333,7 +333,7 @@ export const persistentStorage = {
   /**
    * Cache data with expiration
    */
-  cacheData: (key: string, data: any, expirationMs: number = 30 * 60 * 1000) => {
+  cacheData: <T>(key: string, data: T, expirationMs: number = 30 * 60 * 1000) => {
     return storage.setSession(key, data, {
       version: STORAGE_VERSION,
       expiration: expirationMs,

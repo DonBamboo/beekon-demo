@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useAppState } from '@/contexts/AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 import { competitorStatusService, CompetitorStatusUpdate } from '@/services/competitorStatusService';
-import { useSelectedWebsite } from '@/contexts/AppStateContext';
+import { useSelectedWebsite } from '@/hooks/appStateHooks';
 
 /**
  * Hook for real-time competitor status monitoring

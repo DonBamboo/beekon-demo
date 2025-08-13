@@ -14,6 +14,10 @@ import {
   type CompetitorInsight,
 } from "./competitorAnalysisService";
 
+// Re-export types for external use
+export type { CompetitiveGapAnalysis, CompetitorShareOfVoice, CompetitorInsight };
+export type { Competitor };
+
 export interface CompetitorPerformance {
   competitorId: string;
   domain: string;

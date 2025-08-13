@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AdvancedExportDropdown } from "@/components/ui/export-components";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionEnforcement } from "@/hooks/useSubscriptionEnforcement";
-import { useGlobalCache } from "@/contexts/AppStateContext";
+import { useGlobalCache } from "@/hooks/appStateHooks";
 import {
   analysisService,
   type AnalysisProgress,

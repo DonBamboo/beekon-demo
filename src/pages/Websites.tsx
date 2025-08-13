@@ -34,7 +34,7 @@ import { WorkspaceGuard } from "@/components/WorkspaceGuard";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace, Website } from "@/hooks/useWorkspace";
 import { useWebsitesCoordinated } from "@/hooks/useWebsitesCoordinated";
-import { useSelectedWebsite } from "@/contexts/AppStateContext";
+import { useSelectedWebsite } from "@/hooks/appStateHooks";
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { useExportHandler } from "@/lib/export-utils";

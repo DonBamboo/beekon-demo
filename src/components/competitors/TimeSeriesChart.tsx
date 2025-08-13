@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CompetitorTimeSeriesData } from '@/services/competitorService';
-import { getCompetitorColor, getYourBrandColor, getColorInfo, getCompetitorColorIndex } from '@/lib/color-utils';
+import { getCompetitorColor, getColorInfo, getCompetitorColorIndex } from '@/lib/color-utils';
 import { ColorLegend } from '@/components/ui/color-indicator';
 import { Info } from 'lucide-react';
 

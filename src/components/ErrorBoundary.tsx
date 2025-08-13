@@ -27,7 +27,6 @@ interface ErrorFallbackProps {
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  private resetTimeoutId: number | null = null;
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -86,16 +85,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     // In production, you would send this to your error tracking service
     // Example: Sentry, LogRocket, etc.
     try {
-      const errorData = {
-        message: error.message,
-        stack: error.stack,
-        componentStack: errorInfo.componentStack,
-        errorId: this.state.errorId,
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent,
-        url: window.location.href,
-      };
-
       // Send to error tracking service
       // errorTrackingService.captureException(errorData);
     } catch (loggingError) {

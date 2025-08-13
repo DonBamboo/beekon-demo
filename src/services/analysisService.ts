@@ -94,9 +94,8 @@ export class AnalysisService {
     userId?: string,
     workspaceId?: string
   ): Promise<string> {
-    try {
-      // Get current user if not provided
-      if (!userId) {
+    // Get current user if not provided
+    if (!userId) {
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -156,10 +155,6 @@ export class AnalysisService {
       );
 
       return analysisSession.id;
-    } catch (error) {
-      // Failed to create analysis
-      throw error;
-    }
   }
 
   private async ensureTopicsExist(

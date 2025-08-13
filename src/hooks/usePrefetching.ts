@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useAppState } from '@/contexts/AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 import { useRequestManager } from './useRequestManager';
 import { batchAPI } from '@/services/batchService';
 import { persistentStorage } from '@/lib/storage';
@@ -29,7 +29,7 @@ interface PrefetchTarget {
   page: string;
   websiteId?: string;
   probability: number;
-  data: any;
+  data: unknown;
   lastPrefetch: number;
   priority: 'low' | 'medium' | 'high';
 }
@@ -52,14 +52,44 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
   const { state } = useAppState();
   const { executeRequest, getSystemHealth } = useRequestManager();
   
-  const finalConfig = { ...DEFAULT_CONFIG, ...config };
+  const finalConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
   const patternsRef = useRef<Map<string, NavigationPattern>>(new Map());
   const prefetchCacheRef = useRef<Map<string, PrefetchTarget>>(new Map());
-  const activePrefetches = useRef<Map<string, Promise<any>>>(new Map());
+  const activePrefetches = useRef<Map<string, Promise<unknown>>>(new Map());
   const idleCallbackRef = useRef<number | null>(null);
   
   const currentPage = location.pathname;
   const selectedWebsiteId = state.workspace.selectedWebsiteId;
+
+  // Helper function to determine priority based on probability
+  const getPrefetchPriority = (probability: number): PrefetchTarget['priority'] => {
+    if (probability >= 0.7) return 'high';
+    if (probability >= 0.4) return 'medium';
+    return 'low';
+  };
+
+  // Get default predictions when no historical data exists
+  const getDefaultPredictions = useCallback((): PrefetchTarget[] => {
+    const commonPatterns: Array<{ from: string; to: string; probability: number }> = [
+      { from: '/dashboard', to: '/analysis', probability: 0.6 },
+      { from: '/dashboard', to: '/competitors', probability: 0.4 },
+      { from: '/analysis', to: '/competitors', probability: 0.5 },
+      { from: '/analysis', to: '/dashboard', probability: 0.3 },
+      { from: '/competitors', to: '/analysis', probability: 0.5 },
+      { from: '/competitors', to: '/dashboard', probability: 0.3 },
+    ];
+
+    return commonPatterns
+      .filter(pattern => pattern.from === currentPage && pattern.probability >= finalConfig.minProbability)
+      .map(pattern => ({
+        page: pattern.to,
+        websiteId: selectedWebsiteId || undefined,
+        probability: pattern.probability,
+        data: null,
+        lastPrefetch: 0,
+        priority: getPrefetchPriority(pattern.probability),
+      }));
+  }, [currentPage, finalConfig.minProbability, selectedWebsiteId]);
 
   // Load navigation patterns from storage
   const loadNavigationPatterns = useCallback(() => {
@@ -69,7 +99,7 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
     // Analyze navigation patterns
     const patterns = new Map<string, NavigationPattern>();
     
-    history.forEach((nav: any) => {
+    history.forEach((nav: Record<string, unknown>) => {
       const key = `${nav.from}->${nav.to}`;
       const existing = patterns.get(key);
       
@@ -130,7 +160,7 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
     });
 
     return predictions.sort((a, b) => b.probability - a.probability).slice(0, 3);
-  }, [currentPage, finalConfig, selectedWebsiteId]);
+  }, [currentPage, finalConfig, selectedWebsiteId, getDefaultPredictions]);
 
   // Get default predictions when no historical data exists
   const getDefaultPredictions = useCallback((): PrefetchTarget[] => {
@@ -155,13 +185,6 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
       }));
   }, [currentPage, finalConfig, selectedWebsiteId]);
 
-  // Determine prefetch priority based on probability
-  const getPrefetchPriority = (probability: number): PrefetchTarget['priority'] => {
-    if (probability >= 0.7) return 'high';
-    if (probability >= 0.5) return 'medium';
-    return 'low';
-  };
-
   // Execute prefetch for a specific target
   const executePrefetch = useCallback(async (target: PrefetchTarget): Promise<void> => {
     const prefetchKey = `${target.page}_${target.websiteId || 'global'}`;
@@ -177,7 +200,7 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
     console.log(`🚀 Prefetching data for ${target.page} (probability: ${(target.probability * 100).toFixed(1)}%)`);
 
     try {
-      let prefetchPromise: Promise<any>;
+      let prefetchPromise: Promise<unknown>;
 
       // Select appropriate prefetch strategy based on page
       switch (target.page) {
@@ -191,11 +214,12 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
           prefetchPromise = batchAPI.loadCompetitorsPage(target.websiteId);
           break;
           
-        case '/dashboard':
+        case '/dashboard': {
           const websiteIds = state.workspace.websites.map(w => w.id);
           if (websiteIds.length === 0) return;
           prefetchPromise = batchAPI.loadDashboardPage(websiteIds);
           break;
+        }
           
         default:
           return; // No prefetch strategy for this page
@@ -260,7 +284,7 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
         }, { timeout: 5000 });
         break;
         
-      case 'predictive':
+      case 'predictive': {
         // Immediate for high priority, idle for others
         const highPriority = targetsToPrefetch.filter(t => t.priority === 'high');
         const others = targetsToPrefetch.filter(t => t.priority !== 'high');
@@ -277,11 +301,12 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
           }, { timeout: 3000 });
         }
         break;
+      }
     }
   }, [finalConfig, executePrefetch, getSystemHealth]);
 
   // Get prefetched data if available
-  const getPrefetchedData = useCallback((page: string, websiteId?: string): any => {
+  const getPrefetchedData = useCallback((page: string, websiteId?: string): unknown => {
     const key = `${page}_${websiteId || 'global'}`;
     const cached = prefetchCacheRef.current.get(key);
     

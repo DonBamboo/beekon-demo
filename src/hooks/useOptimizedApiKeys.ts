@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppState } from '@/contexts/AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 import { ApiKey, apiKeyService } from '@/services/apiKeyService';
 
 export function useOptimizedApiKeys() {
@@ -65,7 +65,7 @@ export function useOptimizedApiKeys() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, cachedApiKeys, getFromCache, setCache, apiKeysCacheKey]);
+  }, [user?.id, cachedApiKeys, setCache, apiKeysCacheKey]);
 
   // Load API keys when user changes
   useEffect(() => {

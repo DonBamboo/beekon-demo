@@ -102,8 +102,8 @@ export default function Dashboard() {
   const isRefreshing = isDashboardLoading && hasCachedData;
   const isInitialLoad = isDashboardLoading && !hasCachedData;
   const clearError = () => {}; // Not needed with optimized hook
-  const llmPerformance: any[] = []; // To be implemented
-  const websitePerformance: any[] = []; // To be implemented
+  const llmPerformance: Array<Record<string, unknown>> = []; // To be implemented
+  const websitePerformance: Array<Record<string, unknown>> = []; // To be implemented
 
   const websiteIds = useMemo(() => websites?.map((w) => w.id) || [], [websites]);
 

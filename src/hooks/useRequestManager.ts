@@ -1,5 +1,5 @@
 import { useCallback, useRef, useEffect } from 'react';
-import { useAppState } from '@/contexts/AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 
 // Request metadata for tracking and optimization
 interface RequestMetadata {
@@ -47,7 +47,7 @@ export function useRequestManager() {
   // Generate request key from parameters
   const generateRequestKey = useCallback((
     endpoint: string,
-    params?: Record<string, any>,
+    params?: Record<string, unknown>,
     method: string = 'GET'
   ): string => {
     const paramString = params ? JSON.stringify(params, Object.keys(params).sort()) : '';
@@ -60,7 +60,7 @@ export function useRequestManager() {
     options: {
       key?: string;
       endpoint: string;
-      params?: Record<string, any>;
+      params?: Record<string, unknown>;
       method?: string;
       component?: string;
       priority?: RequestMetadata['priority'];
@@ -405,7 +405,7 @@ export function useDedupedRequest() {
   return useCallback(<T>(
     requestFn: () => Promise<T>,
     endpoint: string,
-    params?: Record<string, any>,
+    params?: Record<string, unknown>,
     options?: {
       priority?: RequestMetadata['priority'];
       timeout?: number;

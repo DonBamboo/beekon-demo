@@ -32,11 +32,6 @@ interface LLMPerformanceChartProps {
 }
 
 export const LLMPerformanceChart = React.memo(forwardRef<HTMLDivElement, LLMPerformanceChartProps>(({ llmData }, ref) => {
-  const colors = {
-    ChatGPT: "#10B981", // green
-    Claude: "#F59E0B", // orange  
-    Gemini: "#3B82F6", // blue
-  };
 
   return (
     <Card ref={ref}>
@@ -96,7 +91,7 @@ export const WebsitePerformanceChart = React.memo(forwardRef<HTMLDivElement, Web
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {topWebsites.map((website, index) => (
+          {topWebsites.map((website) => (
             <div key={website.websiteId} className="space-y-2">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-2">
@@ -152,7 +147,7 @@ export const SentimentDistributionChart = React.memo(forwardRef<HTMLDivElement, 
               fill="#8884d8"
               dataKey="value"
             >
-              {sentimentData.map((entry, index) => (
+              {sentimentData.map((_, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Pie>

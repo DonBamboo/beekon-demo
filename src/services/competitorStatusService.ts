@@ -437,7 +437,7 @@ class CompetitorStatusService {
 
       if (error) throw error;
 
-      return (data || []).map((row: any) => ({
+      return (data || []).map((row: Record<string, unknown>) => ({
         competitorId: row.id,
         websiteId: websiteId,
         status: row.analysis_status,

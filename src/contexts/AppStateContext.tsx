@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useReducer, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { Website, Workspace } from '@/hooks/useWorkspace';
 
 // Cache entry with expiration and metadata
-interface CacheEntry<T = any> {
+interface CacheEntry<T = unknown> {
   data: T;
   timestamp: number;
   expiresAt: number;
@@ -130,10 +130,10 @@ export interface AppState {
   // Request management
   requests: {
     // Active requests for deduplication
-    active: Map<string, Promise<any>>;
+    active: Map<string, Promise<unknown>>;
     
     // Request queue for batching
-    queue: Map<string, { resolve: Function; reject: Function; timestamp: number }[]>;
+    queue: Map<string, { resolve: (value?: unknown) => void; reject: (reason?: unknown) => void; timestamp: number }[]>;
     
     // Network optimization settings
     settings: {
@@ -150,13 +150,13 @@ export type AppStateAction =
   | { type: 'SET_SELECTED_WEBSITE'; payload: { websiteId: string } }
   | { type: 'UPDATE_WEBSITE_STATUS'; payload: { websiteId: string; status: string; lastCrawledAt?: string | null; updatedAt: string } }
   | { type: 'UPDATE_COMPETITOR_STATUS'; payload: { competitorId: string; websiteId: string; status: string; progress?: number; errorMessage?: string | null; startedAt?: string | null; completedAt?: string | null; updatedAt: string } }
-  | { type: 'CACHE_SET'; payload: { key: string; data: any; expiresIn: number; metadata?: any } }
+  | { type: 'CACHE_SET'; payload: { key: string; data: unknown; expiresIn: number; metadata?: Record<string, unknown> } }
   | { type: 'CACHE_DELETE'; payload: { key: string } }
   | { type: 'CACHE_CLEAR'; payload: { pattern?: string; websiteId?: string } }
-  | { type: 'SET_FILTERS'; payload: { page: keyof AppState['ui']['filters']; filters: any } }
+  | { type: 'SET_FILTERS'; payload: { page: keyof AppState['ui']['filters']; filters: unknown } }
   | { type: 'SET_NAVIGATION'; payload: { page: string } }
   | { type: 'SET_LOADING'; payload: { scope: string; loading: boolean } }
-  | { type: 'REQUEST_START'; payload: { key: string; promise: Promise<any> } }
+  | { type: 'REQUEST_START'; payload: { key: string; promise: Promise<unknown> } }
   | { type: 'REQUEST_END'; payload: { key: string } };
 
 // Default state
@@ -221,7 +221,7 @@ const initialState: AppState = {
 // State reducer
 function appStateReducer(state: AppState, action: AppStateAction): AppState {
   switch (action.type) {
-    case 'SET_WORKSPACE':
+    case 'SET_WORKSPACE': {
       const newWebsites = action.payload.websites;
       let selectedWebsiteId = state.workspace.selectedWebsiteId;
       
@@ -250,6 +250,7 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           loading: action.payload.loading,
         },
       };
+    }
       
     case 'SET_SELECTED_WEBSITE':
       return {
@@ -260,7 +261,7 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         },
       };
 
-    case 'UPDATE_WEBSITE_STATUS':
+    case 'UPDATE_WEBSITE_STATUS': {
       const { websiteId, status, lastCrawledAt, updatedAt } = action.payload;
       const updatedWebsites = state.workspace.websites.map(website =>
         website.id === websiteId
@@ -280,6 +281,7 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           websites: updatedWebsites,
         },
       };
+    }
 
     case 'UPDATE_COMPETITOR_STATUS': {
       const { competitorId, websiteId, status, progress, errorMessage, startedAt, completedAt, updatedAt } = action.payload;
@@ -507,7 +509,7 @@ const AppStateContext = createContext<{
   getMonitoredCompetitors: () => string[];
   clearCompetitorStatus: (competitorId?: string) => void;
   getFromCache: <T>(key: string) => T | null;
-  setCache: <T>(key: string, data: T, expiresIn: number, metadata?: any) => void;
+  setCache: <T>(key: string, data: T, expiresIn: number, metadata?: Record<string, unknown>) => void;
   clearCache: (pattern?: string, websiteId?: string) => void;
   invalidateDependentCaches: (dependency: string) => void;
   setPageFilters: <T>(page: keyof AppState['ui']['filters'], filters: T) => void;
@@ -545,7 +547,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return entry.data as T;
   }, []);
   
-  const setCache = useCallback(<T,>(key: string, data: T, expiresIn: number, metadata?: any) => {
+  const setCache = useCallback(<T,>(key: string, data: T, expiresIn: number, metadata?: Record<string, unknown>) => {
     dispatch({ type: 'CACHE_SET', payload: { key, data, expiresIn, metadata } });
   }, []);
   
@@ -731,56 +733,5 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Custom hook to use app state
-export function useAppState() {
-  const context = useContext(AppStateContext);
-  if (!context) {
-    throw new Error('useAppState must be used within an AppStateProvider');
-  }
-  return context;
-}
-
-// Convenience hooks for specific state slices
-export function useGlobalCache() {
-  const { getFromCache, setCache, clearCache, invalidateDependentCaches } = useAppState();
-  return { getFromCache, setCache, clearCache, invalidateDependentCaches };
-}
-
-export function usePageFilters<T>(page: keyof AppState['ui']['filters']) {
-  const { state, setPageFilters } = useAppState();
-  return {
-    filters: state.ui.filters[page] as T,
-    setFilters: (filters: T) => setPageFilters(page, filters),
-  };
-}
-
-export function useSelectedWebsite() {
-  const { state, setSelectedWebsite } = useAppState();
-  return {
-    selectedWebsiteId: state.workspace.selectedWebsiteId,
-    websites: state.workspace.websites,
-    setSelectedWebsite,
-    selectedWebsite: state.workspace.websites.find(w => w.id === state.workspace.selectedWebsiteId),
-  };
-}
-
-export function useCompetitorStatus() {
-  const { 
-    state,
-    updateCompetitorStatus,
-    getCompetitorStatus,
-    isCompetitorMonitored,
-    getMonitoredCompetitors,
-    clearCompetitorStatus 
-  } = useAppState();
-  
-  return {
-    competitorStatusMap: state.competitors.statusMap,
-    monitoredCompetitors: state.competitors.monitoredCompetitors,
-    updateCompetitorStatus,
-    getCompetitorStatus,
-    isCompetitorMonitored,
-    getMonitoredCompetitors,
-    clearCompetitorStatus,
-  };
-}
+// Export the context for the separate hooks file
+export { AppStateContext };

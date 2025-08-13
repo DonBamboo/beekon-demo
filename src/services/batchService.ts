@@ -6,21 +6,34 @@
 import { analysisService } from './analysisService';
 import { competitorService } from './competitorService';
 import { dashboardService } from './dashboardService';
-import type { Topic, LLMProvider, WebsiteMetadata } from '@/contexts/AppStateContext';
+import type { Topic, LLMProvider, WebsiteMetadata, AnalysisFilters, CompetitorFilters, DashboardFilters } from '@/contexts/AppStateContext';
 
 // Batch request types
 export interface BatchRequest {
   id: string;
   type: string;
-  payload: any;
+  payload: Record<string, unknown>;
   timestamp: number;
+  _resolve?: (value: unknown) => void;
+  _reject?: (error: unknown) => void;
 }
 
-export interface BatchResponse<T = any> {
+export interface BatchResponse<T = unknown> {
   id: string;
   data: T;
   error?: string;
   timestamp: number;
+}
+
+// Define analysis result type for better type safety
+export interface AnalysisResult {
+  id: string;
+  topic: string;
+  llmProvider: string;
+  score: number;
+  createdAt: string;
+  isMentioned: boolean;
+  summary?: string;
 }
 
 // Website initialization data (everything needed for website switching)
@@ -28,7 +41,7 @@ export interface WebsiteInitData {
   metadata: WebsiteMetadata;
   topics: Topic[];
   llmProviders: LLMProvider[];
-  recentAnalyses: any[];
+  recentAnalyses: AnalysisResult[];
   basicMetrics: {
     totalAnalyses: number;
     lastAnalysisDate: string | null;
@@ -36,28 +49,74 @@ export interface WebsiteInitData {
   };
 }
 
+// Define competitor types for better type safety
+export interface CompetitorData {
+  id: string;
+  name: string;
+  domain: string;
+  isActive: boolean;
+  lastAnalyzed?: string;
+  addedAt: string;
+}
+
+export interface CompetitorPerformance {
+  competitorId: string;
+  shareOfVoice: number;
+  mentionCount: number;
+  averageRank: number;
+  sentimentScore: number;
+  trend: 'up' | 'down' | 'stable';
+}
+
+export interface DashboardMetrics {
+  totalAnalyses: number;
+  averageVisibility: number;
+  competitorCount: number;
+  lastAnalysisDate?: string;
+  growthRate: number;
+}
+
+export interface TimeSeriesData {
+  date: string;
+  value: number;
+  label: string;
+}
+
+export interface PerformanceMetrics {
+  id: string;
+  name: string;
+  value: number;
+  change: number;
+  trend: 'up' | 'down' | 'stable';
+}
+
 // Page-specific batch data structures
 export interface AnalysisPageData {
   topics: Topic[];
   llmProviders: LLMProvider[];
   analysisSessions: Array<{ id: string; name: string; resultCount: number }>;
-  recentResults: any[];
+  recentResults: AnalysisResult[];
   metadata: WebsiteMetadata;
 }
 
 export interface CompetitorsPageData {
-  competitors: any[];
-  performance: any[];
-  analytics: any;
+  competitors: CompetitorData[];
+  performance: CompetitorPerformance[];
+  analytics: {
+    totalCompetitors: number;
+    averageShareOfVoice: number;
+    topCompetitor: string;
+    competitiveGaps: Array<{ topic: string; gap: number }>;
+  };
   topics: Topic[]; // Shared with analysis page
 }
 
 export interface DashboardPageData {
-  metrics: any;
-  timeSeriesData: any[];
-  topicPerformance: any[];
-  llmPerformance: any[];
-  websitePerformance: any[];
+  metrics: DashboardMetrics;
+  timeSeriesData: TimeSeriesData[];
+  topicPerformance: PerformanceMetrics[];
+  llmPerformance: PerformanceMetrics[];
+  websitePerformance: PerformanceMetrics[];
 }
 
 class BatchService {
@@ -124,7 +183,7 @@ class BatchService {
   /**
    * Get all data needed for the Analysis page
    */
-  async getAnalysisPageData(websiteId: string, filters?: any): Promise<AnalysisPageData> {
+  async getAnalysisPageData(websiteId: string, filters?: Partial<AnalysisFilters>): Promise<AnalysisPageData> {
     try {
       const [
         topics,
@@ -170,7 +229,7 @@ class BatchService {
   /**
    * Get all data needed for the Competitors page
    */
-  async getCompetitorsPageData(websiteId: string, filters?: any): Promise<CompetitorsPageData> {
+  async getCompetitorsPageData(websiteId: string, filters?: Partial<CompetitorFilters>): Promise<CompetitorsPageData> {
     try {
       const [
         competitors,
@@ -199,7 +258,7 @@ class BatchService {
   /**
    * Get all data needed for the Dashboard page
    */
-  async getDashboardPageData(websiteIds: string[], filters?: any): Promise<DashboardPageData> {
+  async getDashboardPageData(websiteIds: string[], filters?: Partial<DashboardFilters>): Promise<DashboardPageData> {
     try {
       const [
         metrics,
@@ -307,8 +366,8 @@ class BatchService {
       this.batchQueue.get(queueKey)!.push(request);
 
       // Store resolve/reject for this specific request
-      (request as any)._resolve = resolve;
-      (request as any)._reject = reject;
+      request._resolve = resolve;
+      request._reject = reject;
 
       // Start batch timer if not already running
       this.scheduleBatch();
@@ -354,23 +413,23 @@ class BatchService {
           const originalRequest = requests.find(req => req.id === response.id);
           if (originalRequest) {
             if (response.error) {
-              (originalRequest as any)._reject(new Error(response.error));
+              originalRequest._reject?.(new Error(response.error));
             } else {
-              (originalRequest as any)._resolve(response);
+              originalRequest._resolve?.(response);
             }
           }
         });
       } catch (error) {
         // Reject all requests in this batch
         requests.forEach((request) => {
-          (request as any)._reject(error);
+          request._reject?.(error);
         });
       }
     }
   }
 
   // Helper methods
-  private async getRecentAnalyses(websiteId: string, limit: number = 5): Promise<any[]> {
+  private async getRecentAnalyses(websiteId: string, limit: number = 5): Promise<AnalysisResult[]> {
     try {
       const result = await analysisService.getAnalysisResultsPaginated(websiteId, {
         limit,
@@ -437,7 +496,7 @@ export const batchAPI = {
   /**
    * Load complete analysis page data
    */
-  loadAnalysisPage: (websiteId: string, filters?: any) =>
+  loadAnalysisPage: (websiteId: string, filters?: Partial<AnalysisFilters>) =>
     batchService.queueRequest({
       id: `analysis_${websiteId}_${Date.now()}`,
       type: 'analysis_page',
@@ -448,7 +507,7 @@ export const batchAPI = {
   /**
    * Load complete competitors page data
    */
-  loadCompetitorsPage: (websiteId: string, filters?: any) =>
+  loadCompetitorsPage: (websiteId: string, filters?: Partial<CompetitorFilters>) =>
     batchService.queueRequest({
       id: `competitors_${websiteId}_${Date.now()}`,
       type: 'competitors_page',
@@ -459,7 +518,7 @@ export const batchAPI = {
   /**
    * Load complete dashboard page data
    */
-  loadDashboardPage: (websiteIds: string[], filters?: any) =>
+  loadDashboardPage: (websiteIds: string[], filters?: Partial<DashboardFilters>) =>
     batchService.queueRequest({
       id: `dashboard_${websiteIds.join(',')}_${Date.now()}`,
       type: 'dashboard_page',

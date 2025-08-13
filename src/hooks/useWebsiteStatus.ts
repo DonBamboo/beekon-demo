@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { useAppState } from '@/contexts/AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 import { websiteStatusService, WebsiteStatusUpdate, WebsiteStatus } from '@/services/websiteStatusService';
 import { useToast } from '@/hooks/use-toast';
 

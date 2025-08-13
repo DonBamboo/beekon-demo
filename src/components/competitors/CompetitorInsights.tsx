@@ -10,8 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import {
-  TrendingUp,
-  TrendingDown,
   AlertTriangle,
   Lightbulb,
   Target,

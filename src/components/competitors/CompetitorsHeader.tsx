@@ -21,9 +21,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Plus, RefreshCw, Filter, Globe } from "lucide-react";
-import { Website } from "@/hooks/useWorkspace";
 import { ExportFormat } from "@/types/database";
-import { useSelectedWebsite } from "@/contexts/AppStateContext";
+import { useSelectedWebsite } from "@/hooks/appStateHooks";
 
 interface CompetitorsHeaderProps {
   totalCompetitors: number;
@@ -48,7 +47,7 @@ interface CompetitorsHeaderProps {
   handleAddCompetitor: () => void;
   isExporting: boolean;
   competitorsData: unknown[];
-  handleExportData: (format: ExportFormat) => void;
+  handleExportData: (format: ExportFormat) => Promise<void>;
 }
 
 export default function CompetitorsHeader({
@@ -217,7 +216,7 @@ export default function CompetitorsHeader({
               isLoading={isExporting}
               disabled={!hasData || !competitorsData || competitorsData.length === 0}
               formats={["csv", "json", "pdf"]}
-              data={competitorsData}
+              data={competitorsData as Record<string, unknown>[]}
               showEstimatedSize={true}
             />
           )}

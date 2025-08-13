@@ -21,7 +21,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOptimizedProfile } from "@/hooks/useOptimizedProfile";
 import { useOptimizedApiKeys } from "@/hooks/useOptimizedApiKeys";
 import { useExportHistory } from "@/hooks/useExportHistory";
-import { useSelectedWebsite } from "@/contexts/AppStateContext";
+import { useSelectedWebsite } from "@/hooks/appStateHooks";
 import { ApiKey, apiKeyService } from "@/services/apiKeyService";
 import { profileService, UserProfile } from "@/services/profileService";
 import {

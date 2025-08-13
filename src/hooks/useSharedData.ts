@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useAppState } from '@/contexts/AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 import type { Topic, LLMProvider, WebsiteMetadata } from '@/contexts/AppStateContext';
 import { analysisService } from '@/services/analysisService';
 import { useToast } from './use-toast';

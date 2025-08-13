@@ -1,15 +1,15 @@
 // Centralized type guards for better type safety and code organization
 
-import { AnalysisResult, UIAnalysisResult } from "@/types/database";
+import { AnalysisResult, UIAnalysisResult, SubscriptionTier } from "@/types/database";
 
-// Subscription tier types
-export type SubscriptionTier = "free" | "starter" | "professional" | "enterprise";
+// Export SubscriptionTier type for use in other modules
+export type { SubscriptionTier };
 
 // Type guard for SubscriptionTier
 export function isValidSubscriptionTier(value: unknown): value is SubscriptionTier {
   return (
     typeof value === "string" &&
-    ["free", "starter", "professional", "enterprise"].includes(value)
+    ["free", "pro", "enterprise"].includes(value)
   );
 }
 
@@ -21,8 +21,8 @@ export interface AnalysisSession {
   user_id: string;
   workspace_id: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
-  configuration: any;
-  progress_data: any;
+  configuration: Record<string, unknown>;
+  progress_data: Record<string, unknown> | null;
   error_message: string | null;
   started_at: string | null;
   completed_at: string | null;

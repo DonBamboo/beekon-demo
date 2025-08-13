@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useAppState } from '@/contexts/AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 import { persistentStorage } from '@/lib/storage';
 
 // Cache levels and their configurations
@@ -47,8 +47,8 @@ export interface CacheConfig {
   strategy: InvalidationStrategy;
   dependencies?: string[];
   tags?: string[]; // For bulk invalidation
-  serialize?: (data: any) => string;
-  deserialize?: (data: string) => any;
+  serialize?: (data: unknown) => string;
+  deserialize?: (data: string) => unknown;
 }
 
 // Cache statistics for monitoring
@@ -121,7 +121,7 @@ export function useCacheSystem() {
     updateCacheStats(key, result !== null, responseTime);
 
     return result;
-  }, [getFromCache, setCache]);
+  }, [getFromCache, setCache, updateCacheStats]);
 
   // Set data in multi-level cache with automatic level selection
   const setMultiLevel = useCallback(<T,>(
@@ -176,7 +176,7 @@ export function useCacheSystem() {
         invalidateByTags([pat]);
       }
     });
-  }, [clearCache]);
+  }, [clearCache, invalidateByTags]);
 
   // Tag-based invalidation for related data
   const invalidateByTags = useCallback((tags: string[]): void => {
@@ -231,7 +231,7 @@ export function useCacheSystem() {
 
   // Cache warm-up for predictive loading
   const warmUpCache = useCallback(async (
-    entries: Array<{ key: string; loader: () => Promise<any>; config: CacheConfig }>
+    entries: Array<{ key: string; loader: () => Promise<unknown>; config: CacheConfig }>
   ): Promise<void> => {
     const warmupPromises = entries.map(async ({ key, loader, config }) => {
       try {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useResourceLoading, useCoordinatedLoading } from '@/contexts/LoadingContext';
+import { useResourceLoading, useLoadingContext } from '@/hooks/loadingHooks';
 
 // Generic hook for coordinating multiple async operations
 interface CoordinatedDataOptions {
@@ -39,7 +39,10 @@ export function useCoordinatedData<T = unknown>({
 
   const loaderIds = loaders.map(l => `${resourceId}-${l.id}`);
   const mainResource = useResourceLoading(resourceId);
-  const coordinated = useCoordinatedLoading(loaderIds);
+  const { areResourcesLoading } = useLoadingContext();
+  const coordinated = useMemo(() => ({
+    isLoading: areResourcesLoading(loaderIds)
+  }), [areResourcesLoading, loaderIds]);
 
   // Debounced dependency change handler
   const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);

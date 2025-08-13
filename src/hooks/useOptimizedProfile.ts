@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppState } from '@/contexts/AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 import { profileService, UserProfile } from '@/services/profileService';
 
 export function useOptimizedProfile() {
@@ -55,7 +55,7 @@ export function useOptimizedProfile() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, cachedProfile, getFromCache, setCache, profileCacheKey]);
+  }, [user?.id, cachedProfile, setCache, profileCacheKey]);
 
   // Load profile when user changes
   useEffect(() => {

@@ -130,6 +130,11 @@ export function AnalysisErrorFallback({
         We encountered an error while processing your analysis. This could be due to a temporary
         issue with our AI analysis service.
       </p>
+      {process.env.NODE_ENV === 'development' && (
+        <p className="text-xs text-muted-foreground bg-muted p-2 rounded font-mono">
+          {error.message}
+        </p>
+      )}
       
       <div className="flex space-x-2">
         <Button onClick={resetError} variant="outline">

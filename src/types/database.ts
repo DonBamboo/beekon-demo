@@ -66,12 +66,14 @@ export type ExportHistoryInsert =
 export type ExportHistoryUpdate =
   Database["beekon_data"]["Tables"]["export_history"]["Update"];
 
-// Common notification settings type
+// Common notification settings type (compatible with Supabase Json type)
 export interface NotificationSettings {
   email_notifications: boolean;
   weekly_reports: boolean;
   competitor_alerts: boolean;
   analysis_complete: boolean;
+  // Index signature to make it compatible with Supabase Json type
+  [key: string]: boolean | string | number | null | undefined;
 }
 
 // Extended user profile with notification settings
@@ -207,10 +209,13 @@ export interface DashboardMetrics {
   sentiment_trend: number;
 }
 
+// Subscription tier types
+export type SubscriptionTier = "free" | "pro" | "enterprise";
+
 // Export history types
 export type ExportStatus = "pending" | "processing" | "completed" | "failed";
 export type ExportType = "analysis" | "dashboard" | "website" | "competitor" | "configuration" | "filtered_data";
-export type ExportFormat = "pdf" | "csv" | "json";
+export type ExportFormat = "pdf" | "csv" | "json" | "word";
 
 export interface ExportHistoryRecord {
   id: string;

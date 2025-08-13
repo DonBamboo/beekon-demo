@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "./use-toast";
-import { useGlobalCache } from "@/contexts/AppStateContext";
+import { useGlobalCache } from "@/hooks/appStateHooks";
 import {
   analysisService,
   type AnalysisStatus,

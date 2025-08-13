@@ -10,6 +10,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "./use-toast";
 import { useWorkspace } from "./useWorkspace";
 
+// Re-export types for external use
+export type { DashboardMetrics };
+
 export interface DashboardError {
   message: string;
   type: "metrics" | "charts" | "topics" | "llm" | "websites";

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';

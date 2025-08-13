@@ -69,7 +69,13 @@ export class ExportHistoryService {
       throw error;
     }
 
-    return data;
+    // Cast database row to ExportHistoryRecord with proper types
+    return {
+      ...data,
+      export_type: data.export_type as ExportType,
+      format: data.format as ExportFormat,
+      status: data.status as ExportStatus,
+    };
   }
 
   /**
@@ -110,7 +116,13 @@ export class ExportHistoryService {
       throw error;
     }
 
-    return data;
+    // Cast database row to ExportHistoryRecord with proper types
+    return {
+      ...data,
+      export_type: data.export_type as ExportType,
+      format: data.format as ExportFormat,
+      status: data.status as ExportStatus,
+    };
   }
 
   /**
@@ -272,10 +284,10 @@ export class ExportHistoryService {
 
     // Calculate export frequency (exports per day)
     const oldestExport = exports.reduce((oldest, exp) =>
-      exp.created_at < oldest.created_at ? exp : oldest
+      (exp.created_at && oldest.created_at && exp.created_at < oldest.created_at) ? exp : oldest
     );
 
-    const daysSinceFirstExport = oldestExport
+    const daysSinceFirstExport = oldestExport && oldestExport.created_at
       ? Math.max(
           1,
           Math.ceil(
@@ -353,7 +365,13 @@ export class ExportHistoryService {
       throw error;
     }
 
-    return data;
+    // Cast database row to ExportHistoryRecord with proper types
+    return {
+      ...data,
+      export_type: data.export_type as ExportType,
+      format: data.format as ExportFormat,  
+      status: data.status as ExportStatus,
+    };
   }
 
   /**
@@ -418,7 +436,13 @@ export class ExportHistoryService {
       throw error;
     }
 
-    return data || [];
+    // Cast database rows to ExportHistoryRecord with proper types
+    return (data || []).map(record => ({
+      ...record,
+      export_type: record.export_type as ExportType,
+      format: record.format as ExportFormat,
+      status: record.status as ExportStatus,
+    }));
   }
 
   /**
@@ -442,9 +466,9 @@ export class ExportHistoryService {
       filters: originalRecord.filters,
       date_range: originalRecord.date_range,
       metadata: {
-        ...originalRecord.metadata,
+        ...(originalRecord.metadata as Record<string, unknown> || {}),
         retry_of: originalId,
-        retry_count: (originalRecord.metadata?.retry_count || 0) + 1,
+        retry_count: ((originalRecord.metadata as Record<string, unknown>)?.retry_count as number || 0) + 1,
       },
     };
 
@@ -461,7 +485,7 @@ export class ExportHistoryService {
     return this.updateExportRecord(id, {
       status: "processing",
       started_at: new Date().toISOString(),
-      metadata,
+      metadata: metadata as Record<string, unknown>, // Cast to Json type for database compatibility
     });
   }
 
@@ -477,7 +501,7 @@ export class ExportHistoryService {
       status: "completed",
       file_size,
       completed_at: new Date().toISOString(),
-      metadata,
+      metadata: metadata as Record<string, unknown>, // Cast to Json type for database compatibility
     });
   }
 
@@ -493,7 +517,7 @@ export class ExportHistoryService {
       status: "failed",
       error_message,
       completed_at: new Date().toISOString(),
-      metadata,
+      metadata: metadata as Record<string, unknown>, // Cast to Json type for database compatibility
     });
   }
 }

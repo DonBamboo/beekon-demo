@@ -9,7 +9,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useAppState } from "@/contexts/AppStateContext";
 import { useTrueNavigation } from "@/hooks/useTrueNavigation";
 import { BarChart3, Globe, Search, Settings, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";

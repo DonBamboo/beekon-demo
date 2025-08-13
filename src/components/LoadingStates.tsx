@@ -202,7 +202,7 @@ export const LoadingOverlay = ({
 // Inline loading component with skeleton support
 export const InlineLoading = ({ 
   message = 'Loading...',
-  size = 'default' 
+  size: _ = 'default' 
 }: { 
   message?: string; 
   size?: 'sm' | 'default' | 'lg'; 

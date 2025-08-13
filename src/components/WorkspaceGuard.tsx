@@ -1,6 +1,5 @@
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useAuth } from "@/hooks/useAuth";
-import { Spinner } from "./LoadingStates";
 import { Skeleton } from "./ui/skeleton";
 import { WorkspaceDropdown } from "./WorkspaceDropdown";
 

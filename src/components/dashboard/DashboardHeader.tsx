@@ -17,7 +17,7 @@ interface DashboardHeaderProps {
   isExporting: boolean;
   hasData: boolean;
   refreshData: () => void;
-  handleExportData: (format: ExportFormat) => void;
+  handleExportData: (format: ExportFormat) => Promise<void>;
 }
 
 export function DashboardHeader({
@@ -92,7 +92,7 @@ export function DashboardHeader({
           isLoading={isExporting}
           disabled={!hasData}
           formats={["pdf", "csv", "json", "word"]}
-          data={metrics}
+          data={metrics ? [metrics] as Record<string, unknown>[] : []}
           showEstimatedSize={true}
         />
       </div>

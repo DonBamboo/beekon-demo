@@ -1,5 +1,5 @@
 import { Suspense, useEffect } from 'react';
-import { useAppState } from '@/contexts/AppStateContext';
+import { useAppState } from '@/hooks/appStateHooks';
 import { useTrueNavigation } from '@/hooks/useTrueNavigation';
 import { InlineLoading } from '@/components/LoadingStates';
 
