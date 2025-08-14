@@ -10,7 +10,7 @@ import {
   useSelectedWebsite,
   usePageFilters,
 } from "@/hooks/appStateHooks";
-import type { CompetitorFilters } from "@/contexts/AppStateContext";
+import type { CompetitorFilters, AnalysisFilters, DashboardFilters } from "@/contexts/AppStateContext";
 import { useWebsiteData } from "./useSharedData";
 import { batchAPI } from "@/services/batchService";
 import { analysisService } from "@/services/analysisService";
@@ -66,7 +66,7 @@ export function useOptimizedAnalysisData() {
 
   // Transform filters from global state format to service-expected format
   const transformedFilters = useMemo(() => {
-    const typedFilters = filters as Record<string, any>;
+    const typedFilters = filters as AnalysisFilters;
     const baseFilters = { ...typedFilters };
 
     // Transform dateRange from string to object format expected by services
@@ -384,7 +384,7 @@ export function useOptimizedDashboardData() {
 
   // Transform dashboard filters if needed
   const transformedFilters = useMemo(() => {
-    const typedFilters = filters as Record<string, any>;
+    const typedFilters = filters as DashboardFilters;
     const baseFilters = { ...typedFilters };
     // Dashboard filters are simpler, just ensure period is handled correctly
     return baseFilters;
@@ -399,7 +399,7 @@ export function useOptimizedDashboardData() {
   const hasSyncCache = useCallback(() => {
     if (!selectedWebsiteId) return false;
     const cached = getFromCache<Record<string, unknown>>(cacheKey);
-    return !!(cached && (cached.metrics || (cached.timeSeriesData as any[])?.length > 0 || (cached.topicPerformance as any[])?.length > 0));
+    return !!(cached && (cached.metrics || Array.isArray(cached.timeSeriesData) && cached.timeSeriesData.length > 0 || Array.isArray(cached.topicPerformance) && cached.topicPerformance.length > 0));
   }, [selectedWebsiteId, cacheKey, getFromCache]);
 
   // Check cached data - remove unstable getFromCache dependency  
@@ -417,9 +417,9 @@ export function useOptimizedDashboardData() {
 
       // Instant render from cache
       if (!forceRefresh && currentCachedData) {
-        setMetrics(currentCachedData.metrics as any);
-        setTimeSeriesData(currentCachedData.timeSeriesData as any);
-        setTopicPerformance(currentCachedData.topicPerformance as any);
+        setMetrics(currentCachedData.metrics as ServiceDashboardMetrics);
+        setTimeSeriesData(currentCachedData.timeSeriesData as unknown[]);
+        setTopicPerformance(currentCachedData.topicPerformance as TopicPerformanceData[]);
         setIsLoading(false);
         return;
       }
@@ -571,7 +571,7 @@ export function useOptimizedCompetitorsData() {
 
   // Transform competitors filters from global state format to service format
   const transformedFilters = useMemo(() => {
-    const typedFilters = filters as Record<string, any>;
+    const typedFilters = filters as CompetitorFilters;
     const baseFilters = { ...typedFilters };
 
     // Transform dateFilter to dateRange if needed

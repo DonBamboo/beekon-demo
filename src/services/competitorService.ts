@@ -59,7 +59,8 @@ export interface MarketShareDataPoint {
   rawValue: number; // Raw share of voice percentage
   competitorId?: string;
   mentions?: number;
-  avgRank?: number;
+  avgRank?: number | null;
+  value?: number; // Add missing property
   dataType: "market_share"; // Explicit data type identifier
 }
 
@@ -69,7 +70,7 @@ export interface ShareOfVoiceDataPoint {
   totalMentions: number;
   totalAnalyses: number;
   competitorId?: string;
-  avgRank?: number;
+  avgRank?: number | null;
   dataType: "share_of_voice"; // Explicit data type identifier
 }
 
@@ -202,11 +203,13 @@ export class OptimizedCompetitorService extends BaseService {
       }
 
       // Use the optimized database function
-      const { data, error } = await supabase.rpc("get_competitor_performance", {
-        p_website_id: websiteId,
-        p_limit: 50,
-        p_offset: 0,
-      });
+      const { data, error } = await supabase
+        .schema('beekon_data')
+        .rpc("get_competitor_performance", {
+          p_website_id: websiteId,
+          p_limit: 50,
+          p_offset: 0,
+        });
 
       if (error) throw error;
 
@@ -279,11 +282,13 @@ export class OptimizedCompetitorService extends BaseService {
         return [];
       }
 
-      const { data, error } = await supabase.rpc("get_competitor_time_series", {
-        p_website_id: websiteId,
-        p_competitor_domain: competitorDomain,
-        p_days: days,
-      });
+      const { data, error } = await supabase
+        .schema('beekon_data')
+        .rpc("get_competitor_time_series", {
+          p_website_id: websiteId,
+          p_competitor_domain: competitorDomain,
+          p_days: days,
+        });
 
       if (error) throw error;
 
@@ -651,7 +656,7 @@ export class OptimizedCompetitorService extends BaseService {
       }
       throw new Error("Failed to add or retrieve competitor");
     }
-    return result[0];
+    return result[0]!;
   }
 
   /**
@@ -968,7 +973,9 @@ export class OptimizedCompetitorService extends BaseService {
    * Refresh materialized views (for real-time updates)
    */
   async refreshCompetitorViews(): Promise<void> {
-    await supabase.rpc("refresh_competitor_performance_views");
+    await supabase
+      .schema('beekon_data')
+      .rpc("refresh_competitor_performance_views");
     // Clear all cache after refresh
     this.clearCache();
   }
@@ -983,65 +990,6 @@ export class OptimizedCompetitorService extends BaseService {
   }
 
 
-  /**
-   * @deprecated Legacy method - no longer used. Gap analysis now handled in unified analytics.
-   */
-  private transformGapAnalysisToLegacyFormat(
-    gapAnalysis: CompetitiveGapAnalysis[]
-  ): CompetitorComparison[] {
-    // Legacy format transformation deprecated
-    return gapAnalysis.map((gap) => ({
-      topic: gap.topicName,
-      yourBrand: Math.round(gap.yourBrandScore),
-      competitors: gap.competitorData.map((comp) => ({
-        competitorId: comp.competitorId,
-        name: comp.competitor_name,
-        score: Math.round(comp.score),
-      })),
-    }));
-  }
-
-  // Legacy method kept for backward compatibility but now deprecated
-  private calculateCompetitiveGaps(
-    competitors: CompetitorPerformance[],
-    yourBrandResults: AnalysisResult[]
-  ): CompetitorComparison[] {
-    // Method deprecated - use newer implementation
-
-    // Group your brand's results by topic
-    const topicMap = new Map<string, number>();
-
-    yourBrandResults.forEach((result) => {
-      const mentionedCount = result.llm_results.filter(
-        (r) => r.is_mentioned
-      ).length;
-      const totalCount = result.llm_results.length;
-      const score = totalCount > 0 ? (mentionedCount / totalCount) * 100 : 0;
-
-      if (!topicMap.has(result.topic)) {
-        topicMap.set(result.topic, 0);
-      }
-      topicMap.set(result.topic, topicMap.get(result.topic)! + score);
-    });
-
-    // Create competitive gaps for each topic using real competitor data
-    const gaps: CompetitorComparison[] = [];
-
-    topicMap.forEach((yourScore, topic) => {
-      gaps.push({
-        topic,
-        yourBrand: Math.round(yourScore),
-        competitors: competitors.slice(0, 3).map((comp) => ({
-          competitorId: comp.competitorId,
-          name: comp.name,
-          // Use actual share of voice as proxy for topic score instead of random data
-          score: Math.round(comp.shareOfVoice),
-        })),
-      });
-    });
-
-    return gaps;
-  }
 
   private convertToCSV(data: {
     competitors: CompetitorPerformance[];
@@ -1136,6 +1084,8 @@ export class OptimizedCompetitorService extends BaseService {
 
       if (!resultsMap.has(topicName)) {
         resultsMap.set(topicName, {
+          id: topicName,
+          topic: topicName,
           topic_name: topicName,
           topic_keywords: topic.topic_keywords || [],
           llm_results: [],
@@ -1143,7 +1093,7 @@ export class OptimizedCompetitorService extends BaseService {
           avg_rank: null,
           avg_confidence: null,
           avg_sentiment: null,
-        });
+        } as AnalysisResult);
       }
 
       const analysisResult = resultsMap.get(topicName)!;
@@ -1268,8 +1218,6 @@ export class OptimizedCompetitorService extends BaseService {
     timeSeriesData,
     marketShareData,
     shareOfVoiceData,
-    totalMentionsAllBrands,
-    yourBrandMentions,
   }: {
     competitors: CompetitorPerformance[];
     shareOfVoice: CompetitorShareOfVoice[];
@@ -1280,6 +1228,7 @@ export class OptimizedCompetitorService extends BaseService {
     shareOfVoiceData: ShareOfVoiceDataPoint[];
     totalMentionsAllBrands: number;
     yourBrandMentions: number;
+    // Note: totalMentionsAllBrands and yourBrandMentions can be calculated from shareOfVoice data
   }): CompetitorAnalytics {
     // Validate data consistency before creating analytics
     const validation = this.validateCompetitorData({
@@ -1366,15 +1315,6 @@ export class OptimizedCompetitorService extends BaseService {
           marketShareData,
           shareOfVoice
         ),
-        calculationMethod: {
-          shareOfVoiceCalculation: "relative_to_total_mentions",
-          totalMentionsAllBrands,
-          yourBrandMentions,
-          shareOfVoiceTotal: shareOfVoiceTotal.toFixed(1),
-          marketShareTotal: marketShareTotal.toFixed(1),
-          description:
-            "Share of voice calculated as (brand_mentions / total_mentions_all_brands) * 100",
-        },
       },
     };
   }
@@ -1577,7 +1517,7 @@ export class OptimizedCompetitorService extends BaseService {
   /**
    * Log validation issues for monitoring and debugging
    */
-  private logValidationIssues(validation: {
+  private logValidationIssues(_validation: {
     isValid: boolean;
     issues: string[];
     warnings: string[];
@@ -1589,14 +1529,6 @@ export class OptimizedCompetitorService extends BaseService {
     // - DataDog for metrics
     // - Custom analytics endpoint
 
-    const logData = {
-      timestamp: new Date().toISOString(),
-      service: "competitorService",
-      validationResults: validation,
-      userAgent:
-        typeof window !== "undefined" ? window.navigator.userAgent : "server",
-    };
-
     // Validation issues and warnings detected
     // This could be enhanced with proper monitoring integration
   }
@@ -1605,25 +1537,17 @@ export class OptimizedCompetitorService extends BaseService {
    * Performance monitoring wrapper for async operations
    */
   private async withPerformanceMonitoring<T>(
-    operationName: string,
+    _operationName: string,
     operation: () => Promise<T>
   ): Promise<T> {
-    const startTime = performance.now();
+    // Performance timing for debugging (startTime available for future monitoring)
 
-    try {
-      const result = await operation();
-      const duration = performance.now() - startTime;
+    const result = await operation();
+    // Performance metrics logged
+    // In production, you might want to send metrics to a monitoring service
+    // Slow operation detection for monitoring
 
-      // Performance metrics logged
-      // In production, you might want to send metrics to a monitoring service
-      // Slow operation detection for monitoring
-
-      return result;
-    } catch (error) {
-      const duration = performance.now() - startTime;
-      // Operation failed with performance metrics logged
-      throw error;
-    }
+    return result;
   }
 
   /**

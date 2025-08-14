@@ -186,17 +186,9 @@ export function StateManagementDevTools() {
   const [isOpen, setIsOpen] = React.useState(false);
   const [stats, setStats] = React.useState<Record<string, unknown> | null>(null);
   
-  // Safe context usage with error handling
-  let contextAvailable = false;
-  let appState: any = null;
-  
-  try {
-    appState = useAppState();
-    contextAvailable = true;
-  } catch (error) {
-    console.warn('StateManagementDevTools: AppState context not available');
-    contextAvailable = false;
-  }
+  // Use hooks at top level - context availability will be handled by the hook itself
+  const appState = useAppState();
+  const contextAvailable = appState !== null;
 
   React.useEffect(() => {
     if (isOpen && contextAvailable && appState) {

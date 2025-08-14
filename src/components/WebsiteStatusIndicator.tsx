@@ -310,5 +310,4 @@ export function StatusHistory({
   );
 }
 
-// Export status configuration for external use
-export { statusConfig, sizeConfig };
+// Configuration is now available via import from @/lib/website-status-config

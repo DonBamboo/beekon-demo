@@ -219,7 +219,7 @@ export class AnalysisService {
           is_active: true,
           priority: 1,
           prompt_type: "custom",
-        } as any)
+        } as Record<string, unknown>)
         .select("id")
         .single();
 
@@ -244,7 +244,7 @@ export class AnalysisService {
         user_id: userId,
         workspace_id: workspaceId,
         status: "pending" as const,
-        configuration: config as any,
+        configuration: config as Record<string, unknown>,
         progress_data: {
           analysisId: "", // Will be set to session ID
           status: "pending",
@@ -252,7 +252,7 @@ export class AnalysisService {
           currentStep: "Initializing analysis...",
           completedSteps: 0,
           totalSteps: config.customPrompts.length * config.llmModels.length,
-        } as any,
+        } as Record<string, unknown>,
       })
       .select()
       .single();
@@ -267,7 +267,7 @@ export class AnalysisService {
       user_id: data.user_id,
       workspace_id: data.workspace_id,
       status: data.status as AnalysisStatus,
-      configuration: data.configuration as AnalysisConfig,
+      configuration: data.configuration as unknown as AnalysisConfig,
       progress_data: data.progress_data as AnalysisProgress | null,
       error_message: data.error_message,
       started_at: data.started_at,
@@ -417,7 +417,7 @@ export class AnalysisService {
   ): UIAnalysisResult[] {
     const resultsMap = new Map<string, UIAnalysisResult>();
 
-    data?.forEach((row, index) => {
+    data?.forEach((row, _index) => {
       const promptId = safeString(row.prompt_id);
       if (!promptId) {
         // Skip rows with null prompt_id
@@ -731,7 +731,7 @@ export class AnalysisService {
     // Get the next cursor from the last selected prompt
     const nextCursor =
       selectedPrompts.length > 0
-        ? selectedPrompts[selectedPrompts.length - 1]?.created_at
+        ? selectedPrompts[selectedPrompts.length - 1]?.created_at || null
         : null;
 
     return {
@@ -1176,7 +1176,7 @@ export class AnalysisService {
       user_id: data.user_id,
       workspace_id: data.workspace_id,
       status: data.status as AnalysisStatus,
-      configuration: data.configuration as AnalysisConfig,
+      configuration: data.configuration as unknown as AnalysisConfig,
       progress_data: data.progress_data as AnalysisProgress | null,
       error_message: data.error_message,
       started_at: data.started_at,
@@ -1208,7 +1208,7 @@ export class AnalysisService {
       user_id: item.user_id,
       workspace_id: item.workspace_id,
       status: item.status as AnalysisStatus,
-      configuration: item.configuration as AnalysisConfig,
+      configuration: item.configuration as unknown as AnalysisConfig,
       progress_data: item.progress_data as AnalysisProgress | null,
       error_message: item.error_message,
       started_at: item.started_at,
@@ -1413,7 +1413,7 @@ export class AnalysisService {
       );
 
       // LLM Results Section
-      result.llm_results.forEach((llmResult, index) => {
+      result.llm_results.forEach((llmResult, _index) => {
         const mentionStatus = llmResult.is_mentioned
           ? "Mentioned"
           : "Not Mentioned";
@@ -1564,23 +1564,13 @@ export class AnalysisService {
     });
   }
 
-  private generateJsonExport(results: UIAnalysisResult[]): Blob {
-    const exportData = {
-      analysisResults: results,
-      exportedAt: new Date().toISOString(),
-      totalResults: results.length,
-      totalLLMResults: results.reduce(
-        (sum, r) => sum + r.llm_results.length,
-        0
-      ),
-    };
+  // JSON export functionality (reserved for future implementation)
+  // This would generate a structured JSON export of analysis results
 
-    return new Blob([JSON.stringify(exportData, null, 2)], {
-      type: "application/json",
-    });
-  }
-
-  private generateCsvExport(results: UIAnalysisResult[]): Blob {
+  // CSV export functionality (reserved for future implementation)
+  // This would generate a CSV export of analysis results
+  
+  /*
     const headers = [
       "Analysis ID",
       "Prompt",
@@ -1625,7 +1615,12 @@ export class AnalysisService {
     return new Blob([csvContent], { type: "text/csv" });
   }
 
-  private generatePdfExport(results: UIAnalysisResult[]): Blob {
+  */
+  
+  // PDF export functionality (reserved for future implementation)
+  // This would generate a PDF export of analysis results
+  
+  /*
     // For now, generate a structured text document that can be saved as PDF
     // In a production environment, you would use a PDF library like jsPDF or Puppeteer
 
@@ -1674,8 +1669,7 @@ export class AnalysisService {
       pdfContent += "\n";
     });
 
-    return new Blob([pdfContent], { type: "text/plain" });
-  }
+  */
 }
 
 export const analysisService = AnalysisService.getInstance();

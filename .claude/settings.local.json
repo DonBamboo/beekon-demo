@@ -30,9 +30,12 @@
       "Bash(curl:*)",
       "Bash(timeout 15s npm run dev)",
       "Bash(time npm run type-check)",
-      "Bash(true)"
+      "Bash(true)",
+      "WebSearch",
+      "WebFetch(domain:supabase.com)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [

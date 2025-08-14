@@ -180,7 +180,7 @@ export default function CompetitiveGapChart({
   useMemo(() => {
     if (
       process.env.NODE_ENV === "development" &&
-      processedData!.competitorInfo.length > 0
+      (processedData?.competitorInfo?.length ?? 0) > 0
     ) {
       const validation = validateAllColorAssignments();
       if (!validation.isValid) {

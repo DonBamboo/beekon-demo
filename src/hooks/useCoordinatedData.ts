@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useResourceLoading, useLoadingContext } from '@/hooks/loadingHooks';
+import type { DashboardFilters } from '@/contexts/AppStateContext';
+
+// Enhanced filters interface with proper typing
+interface DashboardCoordinatedFilters extends DashboardFilters {
+  websiteIds: string[];
+  limit?: number;
+}
 
 // Generic hook for coordinating multiple async operations
 interface CoordinatedDataOptions {
@@ -161,8 +168,7 @@ export function useDashboardCoordinatedData(filters: Record<string, unknown>) {
         id: 'metrics',
         loader: async () => {
           const { dashboardService } = await import('@/services/dashboardService');
-          const websiteIds = (filters as any).websiteIds as string[];
-          const dateRange = (filters as any).dateRange as { start: string; end: string } | undefined;
+          const { websiteIds, dateRange } = filters as DashboardCoordinatedFilters;
           return dashboardService.getDashboardMetrics(websiteIds, dateRange);
         },
         dependencies: [filters],
@@ -171,8 +177,7 @@ export function useDashboardCoordinatedData(filters: Record<string, unknown>) {
         id: 'timeSeriesData',
         loader: async () => {
           const { dashboardService } = await import('@/services/dashboardService');
-          const websiteIds = (filters as any).websiteIds as string[];
-          const period = (filters as any).period as '7d' | '30d' | '90d' | undefined;
+          const { websiteIds, period } = filters as DashboardCoordinatedFilters;
           return dashboardService.getTimeSeriesData(websiteIds, period);
         },
         dependencies: [filters],
@@ -181,8 +186,7 @@ export function useDashboardCoordinatedData(filters: Record<string, unknown>) {
         id: 'topicPerformance',
         loader: async () => {
           const { dashboardService } = await import('@/services/dashboardService');
-          const websiteIds = (filters as any).websiteIds as string[];
-          const limit = (filters as any).limit as number | undefined;
+          const { websiteIds, limit } = filters as DashboardCoordinatedFilters;
           return dashboardService.getTopicPerformance(websiteIds, limit);
         },
         dependencies: [filters],
@@ -191,7 +195,7 @@ export function useDashboardCoordinatedData(filters: Record<string, unknown>) {
         id: 'llmPerformance',
         loader: async () => {
           const { dashboardService } = await import('@/services/dashboardService');
-          const websiteIds = (filters as any).websiteIds as string[];
+          const { websiteIds } = filters as DashboardCoordinatedFilters;
           return dashboardService.getLLMPerformance(websiteIds);
         },
         dependencies: [filters],
@@ -200,7 +204,7 @@ export function useDashboardCoordinatedData(filters: Record<string, unknown>) {
         id: 'websitePerformance',
         loader: async () => {
           const { dashboardService } = await import('@/services/dashboardService');
-          const websiteIds = (filters as any).websiteIds as string[];
+          const { websiteIds } = filters as DashboardCoordinatedFilters;
           return dashboardService.getWebsitePerformance(websiteIds);
         },
         dependencies: [filters],

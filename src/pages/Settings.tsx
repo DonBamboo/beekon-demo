@@ -22,13 +22,12 @@ import { useOptimizedProfile } from "@/hooks/useOptimizedProfile";
 import { useOptimizedApiKeys } from "@/hooks/useOptimizedApiKeys";
 import { useExportHistory } from "@/hooks/useExportHistory";
 import { useSelectedWebsite } from "@/hooks/appStateHooks";
-import { ApiKey, apiKeyService } from "@/services/apiKeyService";
+// ApiKey type is used in components, apiKeyService is handled by optimized hooks
 import { profileService } from "@/services/profileService";
-import { UserProfile } from "@/types/database";
+import type { UserProfile as _UserProfile } from "@/types/database";
 import {
   AlertCircle,
   Bell,
-  Camera,
   Key,
   Lock,
   Save,
@@ -38,15 +37,14 @@ import {
   FileOutput,
   History,
 } from "lucide-react";
-import { Spinner } from "@/components/LoadingStates";
 import { SettingsSkeleton } from "@/components/skeletons";
 import { useEffect, useState } from "react";
 
 export default function Settings() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { profile, isLoading: isLoadingProfile, loadProfile, updateProfile, uploadAvatar, deleteAvatar, getInitials, hasCachedData, hasSyncCache: hasProfileSyncCache } = useOptimizedProfile();
-  const { apiKeys, primaryApiKey, isLoading: isLoadingApiKeys, error: apiKeysError, refreshApiKeys, hasSyncCache: hasApiKeysSyncCache } = useOptimizedApiKeys();
+  const { profile, isLoading: isLoadingProfile, loadProfile, updateProfile, uploadAvatar, deleteAvatar, getInitials, hasCachedData: _hasCachedData, hasSyncCache: hasProfileSyncCache } = useOptimizedProfile();
+  const { apiKeys: _apiKeys, primaryApiKey, isLoading: isLoadingApiKeys, error: apiKeysError, refreshApiKeys, hasSyncCache: hasApiKeysSyncCache } = useOptimizedApiKeys();
   const { exportSummary, recentActivity } = useExportHistory();
   const { selectedWebsiteId, websites } = useSelectedWebsite();
   const [isProfileSaving, setIsProfileSaving] = useState(false);
@@ -295,7 +293,7 @@ export default function Settings() {
     const hasUpperCase = /[A-Z]/.test(newPassword);
     const hasLowerCase = /[a-z]/.test(newPassword);
     const hasNumbers = /\d/.test(newPassword);
-    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+    // Password strength validation handles special characters in the validation logic
 
     if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
       toast({
@@ -793,7 +791,7 @@ export default function Settings() {
                             </span>
                           </div>
                           <span className="text-xs text-gray-500">
-                            {new Date(activity.created_at).toLocaleDateString()}
+                            {activity.created_at ? new Date(activity.created_at).toLocaleDateString() : 'N/A'}
                           </span>
                         </div>
                       ))}

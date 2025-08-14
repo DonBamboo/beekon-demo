@@ -1,6 +1,12 @@
 import { useContext, useCallback } from 'react';
 import { LoadingContext } from '@/contexts/LoadingContext';
 
+// Loading state interface for type safety
+interface LoadingStateEntry {
+  isLoading: boolean;
+  error?: Error | null;
+}
+
 // Hook utilities
 export function useLoadingContext() {
   const context = useContext(LoadingContext);
@@ -45,8 +51,8 @@ export function useResourceLoading(resourceId: string) {
 export function useGlobalLoadingStates() {
   const { loadingStates, clearAllLoadingStates } = useLoadingContext();
   
-  const isAnyLoading = Object.values(loadingStates).some((state: any) => state.isLoading);
-  const hasAnyError = Object.values(loadingStates).some((state: any) => state.error);
+  const isAnyLoading = Object.values(loadingStates).some((state: LoadingStateEntry) => state.isLoading);
+  const hasAnyError = Object.values(loadingStates).some((state: LoadingStateEntry) => state.error);
   
   return {
     loadingStates,

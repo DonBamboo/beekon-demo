@@ -48,7 +48,7 @@ export function useProfile() {
         }
       });
       
-      const updatedProfile = await profileService.updateProfile(user.id, profileUpdates as any);
+      const updatedProfile = await profileService.updateProfile(user.id, profileUpdates as Record<string, unknown>);
       setProfile(updatedProfile);
       return updatedProfile;
     } catch (error) {

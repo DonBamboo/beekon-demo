@@ -252,11 +252,11 @@ export class ExportHistoryService {
     // Cast database rows to ExportStatistics with proper types
     return (data || []).map(record => ({
       ...record,
-      user_id: record.user_id,
+      user_id: record.user_id || '',
       export_type: record.export_type as ExportType | null,
       format: record.format as ExportFormat | null,
       status: record.status as ExportStatus | null,
-    }));
+    })) as ExportStatistics[];
   }
 
   /**
@@ -509,13 +509,13 @@ export class ExportHistoryService {
       export_type: originalRecord.export_type,
       format: originalRecord.format,
       filename: originalRecord.filename.replace(/(_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})?(\.\w+)$/, `_retry_${Date.now()}$2`),
-      filters: originalRecord.filters ? (originalRecord.filters as any) : null,
-      date_range: originalRecord.date_range ? (originalRecord.date_range as any) : null,
+      filters: originalRecord.filters ? (originalRecord.filters as Record<string, unknown>) : null,
+      date_range: originalRecord.date_range ? (originalRecord.date_range as { start: string; end: string }) : null,
       metadata: {
         ...(originalRecord.metadata as Record<string, unknown> || {}),
         retry_of: originalId,
         retry_count: ((originalRecord.metadata as Record<string, unknown>)?.retry_count as number || 0) + 1,
-      } as any,
+      } as Record<string, unknown>,
     };
 
     return this.createExportRecord(retryData);
@@ -531,7 +531,7 @@ export class ExportHistoryService {
     return this.updateExportRecord(id, {
       status: "processing",
       started_at: new Date().toISOString(),
-      metadata: metadata ? (metadata as any) : null, // Cast to Json type for database compatibility
+      metadata: metadata ? (metadata as Record<string, unknown>) : null, // Cast to Json type for database compatibility
     });
   }
 
@@ -547,7 +547,7 @@ export class ExportHistoryService {
       status: "completed",
       file_size,
       completed_at: new Date().toISOString(),
-      metadata: metadata ? (metadata as any) : null, // Cast to Json type for database compatibility
+      metadata: metadata ? (metadata as Record<string, unknown>) : null, // Cast to Json type for database compatibility
     });
   }
 
@@ -563,7 +563,7 @@ export class ExportHistoryService {
       status: "failed",
       error_message,
       completed_at: new Date().toISOString(),
-      metadata: metadata ? (metadata as any) : null, // Cast to Json type for database compatibility
+      metadata: metadata ? (metadata as Record<string, unknown>) : null, // Cast to Json type for database compatibility
     });
   }
 }

@@ -10,6 +10,7 @@ import {
 import { useOptimizedCompetitorsData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useSelectedWebsite, usePageFilters } from "@/hooks/appStateHooks";
+import type { CompetitorFilters } from "@/contexts/AppStateContext";
 import CompetitorsHeader from "@/components/competitors/CompetitorsHeader";
 import { CompetitorsSkeleton } from "@/components/skeletons";
 import WorkspaceRequiredState from "@/components/competitors/WorkspaceRequiredState";
@@ -69,9 +70,7 @@ export default function Competitors() {
   const competitorsWithStatus = competitors; // Status already included
   const hasData = !!(competitors.length > 0 || analytics);
   const isRefreshing = isLoading && hasCachedData;
-  const isInitialLoad = isLoading && !hasCachedData;
   const refetch = refresh;
-  const targetWebsiteId = selectedWebsiteId;
 
   // Mutations for competitor operations
   const addCompetitorMutation = useAddCompetitor();
@@ -82,30 +81,11 @@ export default function Competitors() {
   const clearError = () => {}; // Errors clear automatically in React Query
 
   // Prepare chart data from analytics (memoized to prevent unnecessary recalculations)
-  // Market Share Data (normalized percentages)
-  const marketShareChartData = useMemo(() => {
-    return (
-      analytics?.marketShareData.map((item, index) => ({
-        name: item.name,
-        value: item.normalizedValue, // Use normalized value for display
-        normalizedValue: item.normalizedValue,
-        rawValue: item.rawValue,
-        mentions: item.mentions,
-        avgRank: item.avgRank,
-        competitorId: item.competitorId,
-        dataType: item.dataType,
-        fill:
-          item.name === "Your Brand"
-            ? getYourBrandColor()
-            : getCompetitorColor(item.competitorId, item.name, index),
-      })) || []
-    );
-  }, [analytics?.marketShareData]);
-
+  // Market Share Data is handled by ShareOfVoiceChart component directly
   // Share of Voice Data (raw percentages)
   const shareOfVoiceChartData = useMemo(() => {
     return (
-      analytics?.shareOfVoiceData.map((item, index) => ({
+      (analytics?.shareOfVoiceData as Record<string, unknown>[])?.map((item: Record<string, unknown>, index: number) => ({
         name: item.name,
         value: item.shareOfVoice, // Use raw share of voice percentage
         shareOfVoice: item.shareOfVoice,
@@ -122,22 +102,7 @@ export default function Competitors() {
     );
   }, [analytics?.shareOfVoiceData]);
 
-  // Use gapAnalysis as the single source of truth for competitive gap data
-  const competitiveGapData = useMemo(() => {
-    return (
-      analytics?.gapAnalysis.map((gap) => {
-        const data: Record<string, number | string> = {
-          topic: gap.topicName,
-          yourBrand: gap.yourBrandScore,
-        };
-        gap.competitorData.forEach((comp, index) => {
-          data[`competitor${index + 1}`] = comp.score;
-          data[`competitor${index + 1}_name`] = comp.competitor_name;
-        });
-        return data;
-      }) || []
-    );
-  }, [analytics?.gapAnalysis]);
+  // Gap analysis data is handled by CompetitiveGapChart component directly
 
   // Competitor insights refresh handler
   const handleInsightsRefresh = () => {
@@ -298,7 +263,7 @@ export default function Competitors() {
       const exportDateRange = (() => {
         const end = new Date();
         const start = new Date();
-        switch (filters.dateFilter) {
+        switch ((filters as CompetitorFilters).dateFilter) {
           case "7d":
             start.setDate(end.getDate() - 7);
             break;
@@ -327,8 +292,8 @@ export default function Competitors() {
           metadata: {
             competitorCount: competitors?.length || 0,
             exportType: "competitor_analysis",
-            dateFilter: filters.dateFilter,
-            sortBy: filters.sortBy,
+            dateFilter: (filters as CompetitorFilters).dateFilter,
+            sortBy: (filters as CompetitorFilters).sortBy,
           },
         }
       );
@@ -370,8 +335,8 @@ export default function Competitors() {
         <CompetitorsHeader
           totalCompetitors={competitorsWithStatus.length}
           activeCompetitors={competitorsWithStatus.filter(c => c.analysisStatus === 'completed').length}
-          dateFilter={filters.dateFilter}
-          sortBy={filters.sortBy}
+          dateFilter={(filters as CompetitorFilters).dateFilter}
+          sortBy={(filters as CompetitorFilters).sortBy}
           isRefreshing={isRefreshing}
           hasData={hasData}
           isAddDialogOpen={isAddDialogOpen}
@@ -381,8 +346,8 @@ export default function Competitors() {
           websitesLoading={workspaceLoading || isLoading}
           isExporting={isExporting}
           competitorsData={competitors}
-          setDateFilter={(value) => setFilters({ ...filters, dateFilter: value })}
-          setSortBy={(value) => setFilters({ ...filters, sortBy: value })}
+          setDateFilter={(value) => setFilters({ ...(filters as CompetitorFilters), dateFilter: value })}
+          setSortBy={(value) => setFilters({ ...(filters as CompetitorFilters), sortBy: value })}
           setIsAddDialogOpen={setIsAddDialogOpen}
           setCompetitorDomain={setCompetitorDomain}
           setCompetitorName={setCompetitorName}
@@ -404,36 +369,36 @@ export default function Competitors() {
         {/* Share of Voice Chart */}
         <ShareOfVoiceChart
           data={shareOfVoiceChartData}
-          dateFilter={filters.dateFilter}
+          dateFilter={(filters as CompetitorFilters).dateFilter}
           chartType="share_of_voice"
         />
 
         {/* Competitors List */}
         <CompetitorsList
-          competitorsWithStatus={competitorsWithStatus}
-          marketShareData={analytics?.marketShareData || []}
-          performance={performance}
-          sortBy={filters.sortBy}
+          competitorsWithStatus={competitorsWithStatus as Record<string, unknown>[]}
+          marketShareData={(analytics?.marketShareData || []) as Record<string, unknown>[]}
+          performance={performance as Record<string, unknown>[]}
+          sortBy={(filters as CompetitorFilters).sortBy}
           confirmDelete={confirmDelete}
           isDeleting={deleteCompetitorMutation.isPending}
         />
 
         {/* Competitive Gap Analysis */}
         <CompetitiveGapChart
-          gapAnalysis={analytics?.gapAnalysis || []}
-          analytics={analytics}
-          dateFilter={filters.dateFilter}
+          gapAnalysis={(analytics?.gapAnalysis as Record<string, unknown>[]) || []}
+          analytics={analytics as Record<string, unknown>}
+          dateFilter={(filters as CompetitorFilters).dateFilter}
         />
 
         {/* Competitive Intelligence */}
         <CompetitorInsights
-          insights={analytics?.insights || []}
+          insights={(analytics?.insights as Record<string, unknown>[]) || []}
           isLoading={isLoading}
           onRefresh={handleInsightsRefresh}
         />
 
         {/* Time Series Chart */}
-        <TimeSeriesChart data={analytics?.timeSeriesData || []} />
+        <TimeSeriesChart data={(analytics?.timeSeriesData as Record<string, unknown>[]) || []} />
 
         {/* Main Empty State */}
         {!hasData && !isLoading && (

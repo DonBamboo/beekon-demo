@@ -617,7 +617,7 @@ export default function Analysis() {
         analysisSession: preset.filters.analysisSession || "all",
         searchQuery: preset.filters.searchQuery || "",
       });
-      setCustomDateRange(preset.filters.customDateRange as any || null);
+      setCustomDateRange(preset.filters.customDateRange as { start: Date; end: Date } | null || null);
       setSortBy((preset.filters.sortBy as "date" | "confidence" | "mentions" | "rank") || "date");
       setSortOrder((preset.filters.sortOrder as "asc" | "desc") || "desc");
 
@@ -680,7 +680,7 @@ export default function Analysis() {
 
   const applyQuickPreset = useCallback(
     (preset: (typeof quickPresets)[0]) => {
-      const newFilters = { ...(filters || {}) };
+      const newFilters = { ...(filters || {}) } as Record<string, unknown>;
       
       if (preset.filters.selectedConfidenceRange) {
         newFilters.confidenceRange = preset.filters.selectedConfidenceRange;
@@ -725,7 +725,7 @@ export default function Analysis() {
       searchQuery: "",
     });
     setCustomDateRange(null);
-    setAdvancedSearchQuery("");
+    setDebouncedSearchQuery("");
     setSearchInResponses(false);
     setSearchInInsights(false);
     setSortBy("date");
@@ -750,29 +750,29 @@ export default function Analysis() {
   ) => {
     switch (filterType) {
       case "topic":
-        setFilters({ ...filters, topic: "all" });
+        setFilters({ ...(filters || {}), topic: "all" });
         break;
       case "llm":
-        setFilters({ ...filters, llm: "all" });
+        setFilters({ ...(filters || {}), llm: "all" });
         break;
       case "search":
-        setFilters({ ...filters, searchQuery: "" });
+        setFilters({ ...(filters || {}), searchQuery: "" });
         break;
       case "mentionStatus":
-        setFilters({ ...filters, mentionStatus: "all" });
+        setFilters({ ...(filters || {}), mentionStatus: "all" });
         break;
       case "dateRange":
-        setFilters({ ...filters, dateRange: "all" });
+        setFilters({ ...(filters || {}), dateRange: "all" });
         setCustomDateRange(null);
         break;
       case "confidence":
         // Confidence range is not part of global filters yet - skip for now
         break;
       case "sentiment":
-        setFilters({ ...filters, sentiment: "all" });
+        setFilters({ ...(filters || {}), sentiment: "all" });
         break;
       case "analysisSession":
-        setFilters({ ...filters, analysisSession: "all" });
+        setFilters({ ...(filters || {}), analysisSession: "all" });
         break;
     }
   };
@@ -810,7 +810,7 @@ export default function Analysis() {
           filters: {
             topic:
               typedFilters.topic !== "all"
-                ? getTopicName(typedFilters.topic)
+                ? getTopicName(typedFilters.topic as string)
                 : null,
             llm: typedFilters.llm !== "all" ? typedFilters.llm : null,
             search: typedFilters.searchQuery || null,
@@ -835,7 +835,7 @@ export default function Analysis() {
   const hasActiveFilters =
     typedFilters.topic !== "all" ||
     typedFilters.llm !== "all" ||
-    typedFilters.searchQuery.trim() !== "" ||
+    (typedFilters.searchQuery as string || "").trim() !== "" ||
     typedFilters.mentionStatus !== "all" ||
     typedFilters.dateRange !== "all" ||
     typedFilters.sentiment !== "all" ||
@@ -933,7 +933,7 @@ export default function Analysis() {
                 isLoading={isExporting}
                 disabled={!analysisResults || analysisResults.length === 0}
                 formats={["pdf", "csv", "json", "word"]}
-                data={analysisResults}
+                data={analysisResults as unknown as Record<string, unknown>[]}
                 showEstimatedSize={true}
               />
             )}
@@ -995,7 +995,7 @@ export default function Analysis() {
 
                       // Reset filters that are specific to the previous website
                       setFilters({
-                        ...filters,
+                        ...(filters || {}),
                         topic: "all",
                         llm: "all",
                         searchQuery: "",
@@ -1053,7 +1053,7 @@ export default function Analysis() {
                         isFiltering && typedFilters.dateRange !== filter.id
                       }
                       onClick={() =>
-                        setFilters({ ...filters, dateRange: filter.id })
+                        setFilters({ ...(filters || {}), dateRange: filter.id })
                       }
                       disabled={isLoadingResults}
                       className="shrink-0"
@@ -1070,9 +1070,9 @@ export default function Analysis() {
                     <Search className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Input
                       placeholder="Search by analysis name, topic, or prompt..."
-                      value={typedFilters.searchQuery}
+                      value={(typedFilters.searchQuery as string) || ""}
                       onChange={(e) =>
-                        setFilters({ ...filters, searchQuery: e.target.value })
+                        setFilters({ ...(filters || {}), searchQuery: e.target.value })
                       }
                       className="w-full min-w-0"
                       disabled={isLoadingResults}
@@ -1083,9 +1083,9 @@ export default function Analysis() {
                   <div className="flex items-center space-x-2 shrink-0">
                     <Filter className="h-4 w-4 text-muted-foreground" />
                     <Select
-                      value={typedFilters.topic}
+                      value={(typedFilters.topic as string) || "all"}
                       onValueChange={(value) =>
-                        setFilters({ ...filters, topic: value })
+                        setFilters({ ...(filters || {}), topic: value })
                       }
                       disabled={isFiltering || isLoadingResults}
                     >
@@ -1168,7 +1168,7 @@ export default function Analysis() {
                         isFiltering && typedFilters.mentionStatus !== filter.id
                       }
                       onClick={() =>
-                        setFilters({ ...filters, mentionStatus: filter.id })
+                        setFilters({ ...(filters || {}), mentionStatus: filter.id })
                       }
                       disabled={isLoadingResults}
                       className="shrink-0"
@@ -1205,8 +1205,8 @@ export default function Analysis() {
                     typedFilters.dateRange !== "all" ||
                     typedFilters.sentiment !== "all" ||
                     typedFilters.analysisSession !== "all" ||
-                    typedFilters.searchQuery.trim() ||
-                    typedFilters.advancedSearchQuery.trim() ||
+                    (typedFilters.searchQuery as string || "").trim() ||
+                    (typedFilters.advancedSearchQuery as string || "").trim() ||
                     sortBy !== "date" ||
                     sortOrder !== "desc") && (
                     <>
@@ -1283,7 +1283,7 @@ export default function Analysis() {
                             }
                             size="sm"
                             onClick={() =>
-                              setFilters({ ...filters, sentiment: filter.id })
+                              setFilters({ ...(filters || {}), sentiment: filter.id })
                             }
                             disabled={isLoadingResults}
                             className={`shrink-0 ${filter.color || ""}`}
@@ -1302,9 +1302,9 @@ export default function Analysis() {
                         Analysis Session
                       </label>
                       <Select
-                        value={typedFilters.analysisSession}
+                        value={(typedFilters.analysisSession as string) || "all"}
                         onValueChange={(value) =>
-                          setFilters({ ...filters, analysisSession: value })
+                          setFilters({ ...(filters || {}), analysisSession: value })
                         }
                         disabled={isLoadingResults}
                       >
@@ -1352,10 +1352,10 @@ export default function Analysis() {
                         <div className="space-y-3">
                           <Input
                             placeholder="Advanced search in analysis data..."
-                            value={typedFilters.advancedSearchQuery}
+                            value={(typedFilters.advancedSearchQuery as string) || ""}
                             onChange={(e) =>
                               setFilters({
-                                ...filters,
+                                ...(filters || {}),
                                 advancedSearchQuery: e.target.value,
                               })
                             }
@@ -1397,7 +1397,7 @@ export default function Analysis() {
                       <div className="flex gap-2">
                         <Select
                           value={sortBy}
-                          onValueChange={(value: string) => setSortBy(value)}
+                          onValueChange={(value) => setSortBy(value as "date" | "confidence" | "mentions" | "rank")}
                         >
                           <SelectTrigger className="flex-1">
                             <SelectValue />
@@ -1641,10 +1641,10 @@ export default function Analysis() {
               filters={{
                 topic:
                   typedFilters.topic !== "all"
-                    ? capitalizeFirstLetters(getTopicName(typedFilters.topic))
+                    ? capitalizeFirstLetters(getTopicName(typedFilters.topic as string))
                     : undefined,
-                llm: typedFilters.llm !== "all" ? typedFilters.llm : undefined,
-                search: typedFilters.searchQuery.trim() || undefined,
+                llm: typedFilters.llm !== "all" ? (typedFilters.llm as string) : undefined,
+                search: (typedFilters.searchQuery as string || "").trim() || undefined,
               }}
               onRemoveFilter={handleRemoveFilter}
               onClearAll={handleClearFilters}
@@ -1913,9 +1913,9 @@ export default function Analysis() {
               hasFilters={hasActiveFilters}
               activeFilters={{
                 topic:
-                  typedFilters.topic !== "all" ? typedFilters.topic : undefined,
-                llm: typedFilters.llm !== "all" ? typedFilters.llm : undefined,
-                search: typedFilters.searchQuery.trim() || undefined,
+                  typedFilters.topic !== "all" ? (typedFilters.topic as string) : undefined,
+                llm: typedFilters.llm !== "all" ? (typedFilters.llm as string) : undefined,
+                search: (typedFilters.searchQuery as string || "").trim() || undefined,
               }}
               onClearFilters={handleClearFilters}
               onCreateAnalysis={createAnalysis}
@@ -1932,9 +1932,9 @@ export default function Analysis() {
                 <span className="truncate">
                   Loaded {analysisResults.length} results
                   {hasMore && " (more available)"}
-                  {typedFilters.searchQuery && (
+                  {(typedFilters.searchQuery as string) && (
                     <span className="hidden sm:inline">
-                      {` for "${typedFilters.searchQuery}"`}
+                      {` for "${typedFilters.searchQuery as string}"`}
                     </span>
                   )}
                 </span>
@@ -1970,7 +1970,7 @@ export default function Analysis() {
         <AnalysisConfigModal
           isOpen={isConfigModalOpen}
           onClose={() => setIsConfigModalOpen(false)}
-          websiteId={selectedWebsiteId}
+          websiteId={selectedWebsiteId || undefined}
         />
 
         <DetailedAnalysisModal
@@ -1982,7 +1982,7 @@ export default function Analysis() {
         <AnalysisHistoryModal
           isOpen={isHistoryModalOpen}
           onClose={() => setIsHistoryModalOpen(false)}
-          websiteId={selectedWebsiteId}
+          websiteId={selectedWebsiteId || undefined}
           onSelectSession={(_) => {
             // Future: Navigate to session details or filter by session
           }}

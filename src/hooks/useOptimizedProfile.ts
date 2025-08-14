@@ -82,7 +82,7 @@ export function useOptimizedProfile() {
         
         const updatedProfile = await profileService.updateProfile(
           user.id,
-          profileUpdates as any
+          profileUpdates as Record<string, unknown>
         );
         setProfile(updatedProfile);
 

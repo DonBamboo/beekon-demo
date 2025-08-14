@@ -2,7 +2,7 @@ import React, { Suspense } from "react";
 import { ChartSkeleton } from "../components/LoadingStates";
 
 // Higher-order component for creating lazy components
-export function withLazyLoading<T extends React.ComponentType<any>>(
+export function withLazyLoading<T extends React.ComponentType<Record<string, unknown>>>(
   Component: T,
   fallback: React.ComponentType = () => React.createElement(ChartSkeleton)
 ) {

@@ -302,7 +302,7 @@ export function useNetworkStatus() {
     // Listen for connection changes
     const connection = (navigator as NavigatorExtended).connection;
     if (connection) {
-      connection.addEventListener('change', updateNetworkStatus);
+      (connection as EventTarget).addEventListener('change', updateNetworkStatus);
     }
 
     // Initial check
@@ -312,7 +312,7 @@ export function useNetworkStatus() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       if (connection) {
-        connection.removeEventListener('change', updateNetworkStatus);
+        (connection as EventTarget).removeEventListener('change', updateNetworkStatus);
       }
     };
   }, []);
@@ -337,11 +337,11 @@ export function usePWAInstallPrompt() {
       setCanInstall(false);
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);

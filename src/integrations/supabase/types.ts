@@ -7,7 +7,7 @@ export type Json =
   | Json[];
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)";
@@ -244,37 +244,104 @@ export type Database = {
           }
         ];
       };
+      competitor_status_log: {
+        Row: {
+          competitor_id: string;
+          created_at: string | null;
+          error_message: string | null;
+          id: string;
+          new_status: string;
+          old_status: string | null;
+          progress: number | null;
+        };
+        Insert: {
+          competitor_id: string;
+          created_at?: string | null;
+          error_message?: string | null;
+          id?: string;
+          new_status: string;
+          old_status?: string | null;
+          progress?: number | null;
+        };
+        Update: {
+          competitor_id?: string;
+          created_at?: string | null;
+          error_message?: string | null;
+          id?: string;
+          new_status?: string;
+          old_status?: string | null;
+          progress?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "competitor_status_log_competitor_id_fkey";
+            columns: ["competitor_id"];
+            isOneToOne: false;
+            referencedRelation: "competitors";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "competitor_status_log_competitor_id_fkey";
+            columns: ["competitor_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_performance";
+            referencedColumns: ["competitor_id"];
+          },
+          {
+            foreignKeyName: "competitor_status_log_competitor_id_fkey";
+            columns: ["competitor_id"];
+            isOneToOne: false;
+            referencedRelation: "mv_competitor_share_of_voice";
+            referencedColumns: ["competitor_id"];
+          }
+        ];
+      };
       competitors: {
         Row: {
+          analysis_completed_at: string | null;
           analysis_frequency: string | null;
+          analysis_progress: number | null;
+          analysis_started_at: string | null;
+          analysis_status: string | null;
           competitor_domain: string;
           competitor_name: string | null;
           created_at: string | null;
           id: string;
           is_active: boolean | null;
           last_analyzed_at: string | null;
+          last_error_message: string | null;
           updated_at: string | null;
           website_id: string;
         };
         Insert: {
+          analysis_completed_at?: string | null;
           analysis_frequency?: string | null;
+          analysis_progress?: number | null;
+          analysis_started_at?: string | null;
+          analysis_status?: string | null;
           competitor_domain: string;
           competitor_name?: string | null;
           created_at?: string | null;
           id?: string;
           is_active?: boolean | null;
           last_analyzed_at?: string | null;
+          last_error_message?: string | null;
           updated_at?: string | null;
           website_id: string;
         };
         Update: {
+          analysis_completed_at?: string | null;
           analysis_frequency?: string | null;
+          analysis_progress?: number | null;
+          analysis_started_at?: string | null;
+          analysis_status?: string | null;
           competitor_domain?: string;
           competitor_name?: string | null;
           created_at?: string | null;
           id?: string;
           is_active?: boolean | null;
           last_analyzed_at?: string | null;
+          last_error_message?: string | null;
           updated_at?: string | null;
           website_id?: string;
         };
@@ -946,155 +1013,173 @@ export type Database = {
     Functions: {
       analyze_competitor_mentions: {
         Args: {
-          p_website_id: string;
           p_competitor_id: string;
-          p_prompt_id: string;
           p_llm_provider: string;
+          p_prompt_id: string;
           p_response_text: string;
+          p_website_id: string;
         };
         Returns: {
+          confidence_score: number;
           is_mentioned: boolean;
           rank_position: number;
           sentiment_score: number;
-          confidence_score: number;
           summary_text: string;
         }[];
       };
       get_batch_website_metrics: {
         Args: {
-          p_website_ids: string[];
-          p_date_start?: string;
           p_date_end?: string;
+          p_date_start?: string;
+          p_website_ids: string[];
         };
         Returns: {
-          website_id: string;
-          domain: string;
+          avg_rank: number;
+          avg_sentiment: number;
           display_name: string;
+          domain: string;
           total_analyses: number;
           total_mentions: number;
-          avg_sentiment: number;
-          avg_rank: number;
           visibility_score: number;
+          website_id: string;
         }[];
       };
       get_competitive_gap_analysis: {
         Args: {
-          p_website_id: string;
-          p_date_start?: string;
           p_date_end?: string;
+          p_date_start?: string;
+          p_website_id: string;
         };
         Returns: {
+          competitor_data: Json;
           topic_id: string;
           topic_name: string;
           your_brand_score: number;
-          competitor_data: Json;
         }[];
       };
       get_competitor_performance: {
-        Args: { p_website_id: string; p_limit?: number; p_offset?: number };
+        Args: { p_limit?: number; p_offset?: number; p_website_id: string };
         Returns: {
-          competitor_id: string;
-          competitor_domain: string;
-          competitor_name: string;
-          total_mentions: number;
-          positive_mentions: number;
+          avg_confidence_score: number;
           avg_rank_position: number;
           avg_sentiment_score: number;
-          avg_confidence_score: number;
-          llm_providers_count: number;
+          competitor_domain: string;
+          competitor_id: string;
+          competitor_name: string;
           last_analysis_date: string;
-          mentions_last_7_days: number;
-          mentions_last_30_days: number;
+          llm_providers_count: number;
           mention_trend_7d: number;
-          recent_sentiment_score: number;
+          mentions_last_30_days: number;
+          mentions_last_7_days: number;
+          positive_mentions: number;
           recent_avg_rank: number;
+          recent_sentiment_score: number;
+          total_mentions: number;
         }[];
       };
       get_competitor_query_stats: {
         Args: Record<PropertyKey, never>;
         Returns: {
-          query_type: string;
           avg_execution_time: unknown;
-          total_calls: number;
           cache_hit_ratio: number;
+          query_type: string;
+          total_calls: number;
         }[];
       };
       get_competitor_share_of_voice: {
         Args: {
-          p_website_id: string;
-          p_date_start?: string;
           p_date_end?: string;
+          p_date_start?: string;
+          p_website_id: string;
         };
         Returns: {
-          competitor_id: string;
-          competitor_name: string;
-          competitor_domain: string;
-          total_analyses: number;
-          total_voice_mentions: number;
-          share_of_voice: number;
+          avg_confidence_score: number;
           avg_rank_position: number;
           avg_sentiment_score: number;
-          avg_confidence_score: number;
+          competitor_domain: string;
+          competitor_id: string;
+          competitor_name: string;
+          share_of_voice: number;
+          total_analyses: number;
+          total_voice_mentions: number;
         }[];
       };
       get_competitor_time_series: {
         Args: {
-          p_website_id: string;
           p_competitor_domain?: string;
           p_days?: number;
+          p_website_id: string;
         };
         Returns: {
           analysis_date: string;
           competitor_domain: string;
-          daily_mentions: number;
-          daily_positive_mentions: number;
           daily_avg_rank: number;
           daily_avg_sentiment: number;
           daily_llm_providers: number;
+          daily_mentions: number;
+          daily_positive_mentions: number;
+        }[];
+      };
+      get_competitors_by_status: {
+        Args: { p_status?: string; p_website_id: string };
+        Returns: {
+          analysis_completed_at: string;
+          analysis_progress: number;
+          analysis_started_at: string;
+          analysis_status: string;
+          competitor_domain: string;
+          competitor_name: string;
+          id: string;
+          last_error_message: string;
+          updated_at: string;
         }[];
       };
       get_dashboard_time_series: {
         Args: {
-          p_website_ids: string[];
-          p_date_start: string;
           p_date_end: string;
+          p_date_start: string;
           p_interval_type?: string;
+          p_website_ids: string[];
         };
         Returns: {
+          avg_rank: number;
+          avg_sentiment: number;
           period_start: string;
           total_mentions: number;
-          avg_sentiment: number;
-          avg_rank: number;
         }[];
       };
       get_llm_performance: {
         Args: {
-          p_website_ids: string[];
-          p_date_start?: string;
           p_date_end?: string;
+          p_date_start?: string;
+          p_website_ids: string[];
         };
         Returns: {
+          avg_rank: number;
+          avg_sentiment: number;
           llm_provider: string;
           total_analyses: number;
           total_mentions: number;
-          avg_sentiment: number;
-          avg_rank: number;
           visibility_score: number;
         }[];
       };
       get_website_metrics: {
         Args: {
-          p_website_id: string;
-          p_date_start?: string;
           p_date_end?: string;
+          p_date_start?: string;
+          p_website_id: string;
         };
         Returns: {
+          avg_rank: number;
+          avg_sentiment: number;
           total_analyses: number;
           total_mentions: number;
-          avg_sentiment: number;
-          avg_rank: number;
           visibility_score: number;
         }[];
+      };
+      is_valid_status_transition: {
+        Args: { p_from_status: string; p_to_status: string };
+        Returns: boolean;
       };
       refresh_competitor_analysis_views: {
         Args: Record<PropertyKey, never>;
@@ -1104,13 +1189,22 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
       };
+      update_competitor_analysis_status: {
+        Args: {
+          p_competitor_id: string;
+          p_error_message?: string;
+          p_progress?: number;
+          p_status: string;
+        };
+        Returns: boolean;
+      };
       validate_competitor_data_consistency: {
         Args: { p_website_id: string };
         Returns: {
-          check_name: string;
-          status: string;
-          message: string;
           affected_records: number;
+          check_name: string;
+          message: string;
+          status: string;
         }[];
       };
     };
@@ -1131,10 +1225,10 @@ export type Database = {
     Functions: {
       graphql: {
         Args: {
+          extensions?: Json;
           operationName?: string;
           query?: string;
           variables?: Json;
-          extensions?: Json;
         };
         Returns: Json;
       };

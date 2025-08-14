@@ -46,7 +46,9 @@ export interface CompetitorInsight {
   type: "opportunity" | "threat" | "neutral";
   title: string;
   description: string;
+  content?: string; // Add missing property
   impact: "high" | "medium" | "low";
+  impactScore?: number; // Add missing property
   topicId?: string;
   competitorId?: string;
   recommendations: string[];
@@ -90,7 +92,7 @@ export interface CompetitiveIntelligence {
 
 export class CompetitorAnalysisService extends BaseService {
   private static instance: CompetitorAnalysisService;
-  protected serviceName = "competitorAnalysis" as const;
+  protected readonly serviceName = "competitor" as const;
 
   public static getInstance(): CompetitorAnalysisService {
     if (!CompetitorAnalysisService.instance) {
@@ -145,6 +147,7 @@ export class CompetitorAnalysisService extends BaseService {
       competitor_id: competitorId,
       prompt_id: promptId,
       llm_provider: llmProvider,
+      llm_analysis_id: promptId, // Use promptId as a fallback
       is_mentioned: analysisResult.isMentioned,
       rank_position: analysisResult.rankPosition,
       sentiment_score: analysisResult.sentimentScore,
@@ -228,7 +231,14 @@ export class CompetitorAnalysisService extends BaseService {
       topicName: row.topic_name,
       yourBrandScore: Number(row.your_brand_score || 0),
       competitorData: Array.isArray(row.competitor_data)
-        ? row.competitor_data
+        ? (row.competitor_data as Array<{
+            competitorId: string;
+            competitor_name: string;
+            competitorDomain: string;
+            score: number;
+            avgRankPosition: number | null;
+            totalMentions: number;
+          }>)
         : [],
     }));
   }
@@ -290,10 +300,6 @@ export class CompetitorAnalysisService extends BaseService {
     const insights: CompetitorInsight[] = [];
 
     // Analyze share of voice for threats and opportunities
-    const totalMarketVoice = shareOfVoice.reduce(
-      (sum, comp) => sum + comp.shareOfVoice,
-      0
-    );
     const dominantCompetitor = shareOfVoice.find(
       (comp) => comp.shareOfVoice > 40
     );
@@ -457,10 +463,6 @@ export class CompetitorAnalysisService extends BaseService {
     ]);
 
     // Calculate market position
-    const totalShareOfVoice = shareOfVoice.reduce(
-      (sum, comp) => sum + comp.shareOfVoice,
-      0
-    );
     const yourBrandShare =
       shareOfVoice.find((comp) => comp.competitorName === "Your Brand")
         ?.shareOfVoice || 0;
@@ -485,7 +487,7 @@ export class CompetitorAnalysisService extends BaseService {
     // Generate competitive trends
     const keyTrends = this.analyzeCompetitiveTrends(
       shareOfVoice,
-      historicalData
+      historicalData as CompetitorShareOfVoice[][]
     );
 
     // Generate strategic insights
@@ -523,7 +525,7 @@ export class CompetitorAnalysisService extends BaseService {
    */
   private async getHistoricalTrends(
     websiteId: string,
-    dateRange?: { start: string; end: string }
+    _dateRange?: { start: string; end: string }
   ): Promise<unknown[]> {
     try {
       // Get historical share of voice data for trend analysis
@@ -582,10 +584,10 @@ export class CompetitorAnalysisService extends BaseService {
 
     if (!historicalData || historicalData.length < 2) return trends;
 
-    const [current, previous] = historicalData;
+    const [_current, previous] = historicalData;
 
     currentData.forEach((competitor) => {
-      const previousData = previous.find(
+      const previousData = (previous as CompetitorShareOfVoice[])?.find(
         (comp: CompetitorShareOfVoice) =>
           comp.competitorId === competitor.competitorId
       );
@@ -830,12 +832,12 @@ export class CompetitorAnalysisService extends BaseService {
     if (keyTrends.length > 0) {
       const highTrends = keyTrends.filter((t) => t.significance === "high");
       if (highTrends.length > 0) {
-        summary += `Key market movements include ${highTrends[0].description}. `;
+        summary += `Key market movements include ${highTrends[0]?.description}. `;
       }
     }
 
     if (emergingThreats.length > 0) {
-      summary += `Primary competitive concern: ${emergingThreats[0].title}.`;
+      summary += `Primary competitive concern: ${emergingThreats[0]?.title}.`;
     }
 
     return summary;

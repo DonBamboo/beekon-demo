@@ -123,7 +123,6 @@ class BatchService {
   private batchQueue: Map<string, BatchRequest[]> = new Map();
   private batchTimer: NodeJS.Timeout | null = null;
   private readonly BATCH_DELAY = 50; // 50ms batch window
-  private readonly MAX_BATCH_SIZE = 10;
 
   /**
    * Get complete initialization data for a website
@@ -197,7 +196,7 @@ class BatchService {
         this.getAnalysisSessions(websiteId),
         analysisService.getAnalysisResultsPaginated(websiteId, {
           limit: 20,
-          filters: filters || {},
+          filters: (filters || {}) as Partial<AnalysisFilters>,
         }),
         analysisService.getWebsiteMetadata(websiteId),
       ]);
@@ -217,7 +216,7 @@ class BatchService {
         topics: topicsWithAll,
         llmProviders: llmProvidersWithAll,
         analysisSessions,
-        recentResults: recentResults.results,
+        recentResults: recentResults.results as AnalysisResult[],
         metadata,
       };
     } catch (error) {
@@ -238,15 +237,20 @@ class BatchService {
         topics,
       ] = await Promise.all([
         competitorService.getCompetitors(websiteId),
-        competitorService.getCompetitorPerformance(websiteId, filters?.dateRange),
-        competitorService.getCompetitiveAnalysis(websiteId, filters?.dateRange),
+        competitorService.getCompetitorPerformance(websiteId, filters?.dateRange as { start: string; end: string; } | undefined),
+        competitorService.getCompetitiveAnalysis(websiteId, filters?.dateRange as { start: string; end: string; } | undefined),
         analysisService.getTopicsForWebsite(websiteId), // Shared data
       ]);
 
       return {
-        competitors,
-        performance,
-        analytics,
+        competitors: competitors as CompetitorData[],
+        performance: performance as CompetitorPerformance[],
+        analytics: {
+          totalCompetitors: analytics.totalCompetitors,
+          averageShareOfVoice: (analytics as Record<string, unknown>)?.averageShareOfVoice as number || 0,
+          topCompetitor: (analytics as Record<string, unknown>)?.topCompetitor as string || 'N/A',
+          competitiveGaps: (analytics.competitiveGaps || []) as Array<{ topic: string; gap: number }>,
+        },
         topics,
       };
     } catch (error) {
@@ -267,19 +271,47 @@ class BatchService {
         llmPerformance,
         websitePerformance,
       ] = await Promise.all([
-        dashboardService.getDashboardMetrics(websiteIds, filters?.dateRange),
-        dashboardService.getTimeSeriesData(websiteIds, filters?.dateRange),
-        dashboardService.getTopicPerformance(websiteIds, filters?.dateRange),
-        dashboardService.getLLMPerformance(websiteIds, filters?.dateRange),
-        dashboardService.getWebsitePerformance(websiteIds, filters?.dateRange),
+        dashboardService.getDashboardMetrics(websiteIds, filters?.dateRange as { start: string; end: string; } | undefined),
+        dashboardService.getTimeSeriesData(websiteIds, filters?.dateRange as "7d" | "30d" | "90d" | undefined),
+        dashboardService.getTopicPerformance(websiteIds),
+        dashboardService.getLLMPerformance(websiteIds),
+        dashboardService.getWebsitePerformance(websiteIds),
       ]);
 
       return {
-        metrics,
-        timeSeriesData,
-        topicPerformance,
-        llmPerformance,
-        websitePerformance,
+        metrics: {
+          totalAnalyses: metrics.totalAnalyses,
+          averageVisibility: (metrics as Record<string, unknown>)?.averageVisibility as number || 0,
+          competitorCount: (metrics as Record<string, unknown>)?.competitorCount as number || 0,
+          lastAnalysisDate: (metrics as Record<string, unknown>)?.lastAnalysisDate as string,
+          growthRate: (metrics as Record<string, unknown>)?.growthRate as number || 0,
+        },
+        timeSeriesData: timeSeriesData.map((item: Record<string, unknown>) => ({
+          date: item.date as string,
+          value: (item.value as number) || 0,
+          label: (item.label as string) || '',
+        })),
+        topicPerformance: topicPerformance.map((item: Record<string, unknown>) => ({
+          id: (item.id as string) || '',
+          name: (item.name as string) || '',
+          value: (item.value as number) || 0,
+          change: (item.change as number) || 0,
+          trend: (item.trend as 'up' | 'down' | 'stable') || 'stable' as const,
+        })),
+        llmPerformance: llmPerformance.map((item: Record<string, unknown>) => ({
+          id: (item.id as string) || '',
+          name: (item.name as string) || '',
+          value: (item.value as number) || 0,
+          change: (item.change as number) || 0,
+          trend: (item.trend as 'up' | 'down' | 'stable') || 'stable' as const,
+        })),
+        websitePerformance: websitePerformance.map((item: Record<string, unknown>) => ({
+          id: (item.id as string) || '',
+          name: (item.name as string) || '',
+          value: (item.value as number) || 0,
+          change: (item.change as number) || 0,
+          trend: (item.trend as 'up' | 'down' | 'stable') || 'stable' as const,
+        })),
       };
     } catch (error) {
       console.error('Failed to fetch dashboard page data:', error);
@@ -300,19 +332,19 @@ class BatchService {
 
         switch (request.type) {
           case 'website_init':
-            data = await this.getWebsiteInitData(request.payload.websiteId) as T;
+            data = await this.getWebsiteInitData(request.payload.websiteId as string) as T;
             break;
           
           case 'analysis_page':
-            data = await this.getAnalysisPageData(request.payload.websiteId, request.payload.filters) as T;
+            data = await this.getAnalysisPageData(request.payload.websiteId as string, request.payload.filters as Partial<AnalysisFilters>) as T;
             break;
           
           case 'competitors_page':
-            data = await this.getCompetitorsPageData(request.payload.websiteId, request.payload.filters) as T;
+            data = await this.getCompetitorsPageData(request.payload.websiteId as string, request.payload.filters as Partial<CompetitorFilters>) as T;
             break;
           
           case 'dashboard_page':
-            data = await this.getDashboardPageData(request.payload.websiteIds, request.payload.filters) as T;
+            data = await this.getDashboardPageData(request.payload.websiteIds as string[], request.payload.filters as Partial<DashboardFilters>) as T;
             break;
           
           default:
@@ -341,7 +373,7 @@ class BatchService {
         responses.push(result.value);
       } else {
         responses.push({
-          id: requests[index].id,
+          id: requests[index]?.id || '',
           data: null as T,
           error: result.reason?.message || 'Request failed',
           timestamp: Date.now(),
@@ -366,7 +398,7 @@ class BatchService {
       this.batchQueue.get(queueKey)!.push(request);
 
       // Store resolve/reject for this specific request
-      request._resolve = resolve;
+      request._resolve = resolve as (value: unknown) => void;
       request._reject = reject;
 
       // Start batch timer if not already running
@@ -402,7 +434,7 @@ class BatchService {
     this.batchQueue.clear();
 
     // Process each batch
-    for (const [queueKey, requests] of batches) {
+    for (const [_queueKey, requests] of batches) {
       if (requests.length === 0) continue;
 
       try {
@@ -435,7 +467,7 @@ class BatchService {
         limit,
         filters: {},
       });
-      return result.results;
+      return result.results as AnalysisResult[];
     } catch (error) {
       console.warn('Failed to fetch recent analyses:', error);
       return [];
@@ -464,7 +496,7 @@ class BatchService {
     }
   }
 
-  private async getAnalysisSessions(websiteId: string): Promise<Array<{ id: string; name: string; resultCount: number }>> {
+  private async getAnalysisSessions(_websiteId: string): Promise<Array<{ id: string; name: string; resultCount: number }>> {
     try {
       // This would fetch available analysis sessions
       // For now, return a default "All" option

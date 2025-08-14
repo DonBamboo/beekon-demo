@@ -214,7 +214,7 @@ export default function Dashboard() {
         // Time Series Summary (if available)
         ...(timeSeriesData && timeSeriesData.length > 0 ? [
           { category: "Time Series", metric: "Data Points", value: timeSeriesData.length.toString(), unit: "count" },
-          { category: "Time Series", metric: "Date Range", value: `${new Date(Math.min(...timeSeriesData.map(d => new Date(d.date).getTime()))).toLocaleDateString()} - ${new Date(Math.max(...timeSeriesData.map(d => new Date(d.date).getTime()))).toLocaleDateString()}`, unit: "range" },
+          { category: "Time Series", metric: "Date Range", value: `${new Date(Math.min(...timeSeriesData.map(d => new Date(String(d.date)).getTime()))).toLocaleDateString()} - ${new Date(Math.max(...timeSeriesData.map(d => new Date(String(d.date)).getTime()))).toLocaleDateString()}`, unit: "range" },
         ] : []),
       ];
 
@@ -241,9 +241,9 @@ export default function Dashboard() {
           workspaceId: currentWorkspace?.id,
           totalWebsites: websiteIds.length,
           analysisCount: metrics?.totalAnalyses || 0,
-          averageConfidence: metrics?.averageConfidence || 0,
-          averageSentiment: metrics?.averageSentiment || 0,
-          mentionRate: metrics?.mentionRate || 0,
+          averageConfidence: (metrics as Record<string, unknown>)?.averageConfidence as number || 0,
+          averageSentiment: (metrics as Record<string, unknown>)?.averageSentiment as number || 0,
+          mentionRate: (metrics as Record<string, unknown>)?.mentionRate as number || 0,
         },
       };
 
@@ -619,12 +619,12 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* LLM Performance Chart */}
             {llmPerformance.length > 0 && (
-              <LLMPerformanceChart ref={llmChartRef} llmData={llmPerformance} />
+              <LLMPerformanceChart ref={llmChartRef} llmData={llmPerformance as Array<Record<string, unknown>>} />
             )}
 
             {/* Website Performance Chart */}
             {websitePerformance.length > 0 && (
-              <WebsitePerformanceChart ref={websiteChartRef} websiteData={websitePerformance} />
+              <WebsitePerformanceChart ref={websiteChartRef} websiteData={websitePerformance as Array<Record<string, unknown>>} />
             )}
 
             {/* Sentiment Distribution */}
@@ -649,12 +649,12 @@ export default function Dashboard() {
 
             {/* Mention Trends */}
             {timeSeriesData.length > 0 && (
-              <MentionTrendChart ref={mentionTrendChartRef} trendData={timeSeriesData} />
+              <MentionTrendChart ref={mentionTrendChartRef} trendData={timeSeriesData as Array<Record<string, unknown>>} />
             )}
 
             {/* Topic Radar Chart */}
             {topicPerformance.length > 0 && (
-              <TopicRadarChart ref={topicRadarChartRef} topicData={topicPerformance} />
+              <TopicRadarChart ref={topicRadarChartRef} topicData={topicPerformance as Array<Record<string, unknown>>} />
             )}
           </div>
         )}
@@ -690,15 +690,15 @@ export default function Dashboard() {
                     key={index}
                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
                     onClick={() =>
-                      handleMetricClick("topic-details", { topic: item.topic })
+                      handleMetricClick("topic-details", { topic: (item as Record<string, unknown>).topic })
                     }
                   >
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-2">
-                        <h4 className="font-medium">{item.topic}</h4>
+                        <h4 className="font-medium">{(item as Record<string, unknown>).topic}</h4>
                         {item.trend !== 0 &&
-                          React.createElement(getTrendIcon(item.trend), {
-                            className: `h-4 w-4 ${getTrendColor(item.trend)}`,
+                          React.createElement(getTrendIcon(Number(item.trend) || 0), {
+                            className: `h-4 w-4 ${getTrendColor(Number(item.trend) || 0)}`,
                           })}
                       </div>
                       <div className="flex items-center space-x-4">
@@ -706,18 +706,18 @@ export default function Dashboard() {
                           <div className="flex justify-between text-sm mb-1">
                             <span>Visibility</span>
                             <span className="font-medium">
-                              {item.visibility}%
+                              {Number(item.visibility) || 0}%
                             </span>
                           </div>
-                          <Progress value={item.visibility} className="h-2" />
+                          <Progress value={Number(item.visibility) || 0} className="h-2" />
                         </div>
                         <div className="text-center">
                           <div className="text-sm text-muted-foreground">
                             Avg Rank
                           </div>
                           <div className="font-medium">
-                            {item.averageRank > 0
-                              ? item.averageRank.toFixed(1)
+                            {Number(item.averageRank) > 0
+                              ? Number(item.averageRank).toFixed(1)
                               : "N/A"}
                           </div>
                         </div>
@@ -728,15 +728,15 @@ export default function Dashboard() {
                           <div className="flex items-center justify-center">
                             <div
                               className={`w-2 h-2 rounded-full ${getSentimentColor(
-                                item.sentiment
+                                Number(item.sentiment) || 0
                               )} mr-1`}
                             />
                             <span
                               className={`text-sm capitalize ${getSentimentText(
-                                item.sentiment
+                                Number(item.sentiment) || 0
                               )}`}
                             >
-                              {getSentimentLabel(item.sentiment)}
+                              {getSentimentLabel(Number(item.sentiment) || 0)}
                             </span>
                           </div>
                         </div>
@@ -744,7 +744,7 @@ export default function Dashboard() {
                           <div className="text-sm text-muted-foreground">
                             Mentions
                           </div>
-                          <div className="font-medium">{item.mentions}</div>
+                          <div className="font-medium">{(item as Record<string, unknown>).mentions}</div>
                         </div>
                       </div>
                     </div>

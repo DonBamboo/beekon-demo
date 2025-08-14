@@ -308,7 +308,7 @@ class CompetitorStatusService {
       const status: CompetitorStatus = competitor.last_analyzed_at ? 'completed' : 'pending';
       
       // If it's in an active state, start polling if we don't have real-time
-      if ((status === 'pending' || status === 'analyzing') && !subscription.realtimeChannel) {
+      if (status === 'pending' && !subscription.realtimeChannel) {
         const interval = this.getPollingInterval(status);
         if (interval > 0) {
           const pollInterval = setInterval(async () => {
@@ -397,8 +397,8 @@ class CompetitorStatusService {
   async updateCompetitorStatus(
     competitorId: string,
     status: CompetitorStatus,
-    progress?: number,
-    errorMessage?: string
+    _progress?: number,
+    _errorMessage?: string
   ): Promise<boolean> {
     try {
       // Since we don't have status tracking columns, we'll update last_analyzed_at

@@ -18,7 +18,7 @@ export function withErrorBoundary<T extends React.ComponentType<unknown>>(
     React.ComponentProps<T>
   >((props, ref) => (
     <ErrorBoundary fallback={errorFallback}>
-      <Component {...(props as any)} ref={ref} />
+      <Component {...(props as Record<string, unknown>)} ref={ref} />
     </ErrorBoundary>
   ));
 
