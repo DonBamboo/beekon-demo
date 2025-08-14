@@ -1,9 +1,9 @@
 // Competitor status utilities
 import { useMemo } from 'react';
-import type { CompetitorStatus } from '@/types/database';
+import type { CompetitorStatusValue } from '@/types/database';
 
 // Hook to get status color for custom styling
-export function useCompetitorStatusColor(status: CompetitorStatus['status']) {
+export function useCompetitorStatusColor(status: CompetitorStatusValue) {
   return useMemo(() => {
     switch (status) {
       case 'pending': return 'yellow';

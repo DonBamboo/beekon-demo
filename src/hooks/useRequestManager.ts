@@ -166,7 +166,7 @@ export function useRequestManager() {
     });
 
     return promise;
-  }, [state.requests.active, dispatch, generateRequestKey]);
+  }, [state.requests.active, dispatch, generateRequestKey, addToPriorityQueue, cleanup, updateStats]);
 
   // Update request statistics
   const updateStats = useCallback((
@@ -218,7 +218,7 @@ export function useRequestManager() {
         batchTimerRef.current = null;
       }, 100); // 100ms batch window for low priority
     }
-  }, []);
+  }, [processBatches]);
 
   // Process batched requests
   const processBatches = useCallback(() => {

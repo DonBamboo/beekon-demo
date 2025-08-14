@@ -2,6 +2,7 @@ import React, { Suspense } from "react";
 import { Skeleton } from "./ui/skeleton";
 import type { UIAnalysisResult, Workspace, Website, SubscriptionTier } from "@/types/database";
 import type { WorkspaceSettings } from "@/hooks/useWorkspace";
+import type { AnalysisAnalytics } from "@/services/analyticsService";
 import type { 
   CompetitiveGapAnalysis, 
   CompetitorAnalytics,
@@ -18,7 +19,7 @@ export interface ShareOfVoiceData {
 
 // Component prop interfaces
 export interface AnalysisVisualizationProps {
-  results: UIAnalysisResult[];
+  analytics: AnalysisAnalytics;
 }
 
 export interface ShareOfVoiceChartProps {

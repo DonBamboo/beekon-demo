@@ -26,6 +26,31 @@ export interface CompetitorPerformance {
   sentiment_score: number;
 }
 
+// Competitor status tracking types
+export type CompetitorStatusValue = "pending" | "analyzing" | "completed" | "failed";
+
+export interface CompetitorStatus {
+  competitorId: string;
+  websiteId: string;
+  status: CompetitorStatusValue;
+  progress?: number;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  updatedAt: string;
+}
+
+export interface CompetitorStatusUpdate {
+  competitorId: string;
+  websiteId: string;
+  status: CompetitorStatusValue;
+  progress?: number;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  updatedAt: string;
+}
+
 export interface CompetitorWithStatus extends Competitor {
   analysisStatus: "completed" | "pending" | "in_progress";
   performance?: CompetitorPerformance;

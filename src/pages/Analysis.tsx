@@ -57,6 +57,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOptimizedAnalysisData } from "@/hooks/useOptimizedPageData";
+import { useAnalysisAnalytics } from "@/hooks/useAnalysisAnalytics";
 import { InfiniteScrollContainer } from "@/components/InfiniteScrollContainer";
 
 // LegacyAnalysisResult interface removed - now using modern AnalysisResult directly
@@ -324,6 +325,14 @@ export default function Analysis() {
     hasSyncCache,
   } = useOptimizedAnalysisData();
 
+  // Use separate analytics hook for stable analytics independent of pagination
+  const {
+    analytics: analysisAnalytics,
+    isLoading: isLoadingAnalytics,
+    error: analyticsError,
+    refreshAnalytics,
+  } = useAnalysisAnalytics();
+
   // Filters are now managed globally - no local sync needed
 
   // Helper function to get topic name for filtering (moved after hook definition)
@@ -419,7 +428,7 @@ export default function Analysis() {
       }
     }
     return undefined;
-  }, [llmProviders, filters, setFilters]);
+  }, [llmProviders, filters, setFilters, typedFilters.llm]);
 
   // No need for legacy format transformation - work directly with modern format
   // Use analysisResults directly from infinite scroll hook
@@ -602,7 +611,7 @@ export default function Analysis() {
         description: `"${name}" has been saved as a filter preset.`,
       });
     },
-    [filterPresets, toast, customDateRange, sortBy, sortOrder]
+    [filterPresets, toast, customDateRange, sortBy, sortOrder, typedFilters.analysisSession, typedFilters.confidenceRange, typedFilters.dateRange, typedFilters.llm, typedFilters.mentionStatus, typedFilters.searchQuery, typedFilters.sentiment, typedFilters.topic]
   );
 
   const loadFilterPreset = useCallback(
@@ -626,7 +635,7 @@ export default function Analysis() {
         description: `"${preset.name}" filters have been applied.`,
       });
     },
-    [toast]
+    [toast, setFilters]
   );
 
   // Load filter presets from localStorage on mount
@@ -709,7 +718,7 @@ export default function Analysis() {
         description: `"${preset.name}" filter has been applied.`,
       });
     },
-    [toast]
+    [toast, filters, setFilters]
   );
 
   // Clear all filters function
@@ -735,7 +744,7 @@ export default function Analysis() {
       title: "Filters Cleared",
       description: "All filters have been reset to default values.",
     });
-  }, [toast]);
+  }, [toast, setFilters]);
 
   const handleRemoveFilter = (
     filterType:
@@ -1654,10 +1663,10 @@ export default function Analysis() {
 
           {/* Analysis Visualization */}
           {!loading &&
-            !isLoadingResults &&
+            !isLoadingAnalytics &&
             showVisualization &&
-            analysisResults.length > 0 && (
-              <AnalysisVisualization results={analysisResults} />
+            analysisAnalytics && (
+              <AnalysisVisualization analytics={analysisAnalytics} />
             )}
 
           {/* Additional Charts */}

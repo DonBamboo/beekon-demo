@@ -304,13 +304,13 @@ export function useWebsiteData(websiteId: string | null) {
     topics.refetch();
     llmProviders.refetch();
     metadata.refetch();
-  }, [topics.refetch, llmProviders.refetch, metadata.refetch]);
+  }, [topics, llmProviders, metadata]);
 
   const clearAllErrors = useCallback(() => {
     topics.clearError();
     llmProviders.clearError();
     metadata.clearError();
-  }, [topics.clearError, llmProviders.clearError, metadata.clearError]);
+  }, [topics, llmProviders, metadata]);
 
   return {
     topics: topics.topics,

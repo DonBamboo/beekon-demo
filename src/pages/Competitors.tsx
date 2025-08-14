@@ -27,10 +27,7 @@ import { addProtocol } from "@/lib/utils";
 import { getCompetitorColor, getYourBrandColor } from "@/lib/color-utils";
 
 export default function Competitors() {
-  const {
-    currentWorkspace,
-    loading: workspaceLoading,
-  } = useWorkspace();
+  const { currentWorkspace, loading: workspaceLoading } = useWorkspace();
   const { toast } = useToast();
 
   // State for UI controls
@@ -38,7 +35,7 @@ export default function Competitors() {
   const [competitorDomain, setCompetitorDomain] = useState("");
   const [competitorName, setCompetitorName] = useState("");
   const [isWebhookProcessing, setIsWebhookProcessing] = useState(false);
-  
+
   // Use global website selection state
   const { selectedWebsiteId, websites: globalWebsites } = useSelectedWebsite();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -53,22 +50,45 @@ export default function Competitors() {
   // Get first website ID for competitor tracking (fallback) - use global websites
   const websiteId = globalWebsites?.[0]?.id;
 
-
   // Use optimized competitors data loading with instant cache rendering
   const {
     competitors,
     performance,
-    analytics, 
+    analytics,
     isLoading,
     error,
     refresh,
     hasCachedData,
     hasSyncCache,
   } = useOptimizedCompetitorsData();
-  
+
+  // Prepare chart data from analytics (memoized to prevent unnecessary recalculations)
+  // Market Share Data is handled by ShareOfVoiceChart component directly
+  // Share of Voice Data (raw percentages)
+  const shareOfVoiceChartData = useMemo(() => {
+    return (
+      (analytics?.shareOfVoiceData as Record<string, unknown>[])?.map(
+        (item: Record<string, unknown>, index: number) => ({
+          name: item.name,
+          value: item.shareOfVoice, // Use raw share of voice percentage
+          shareOfVoice: item.shareOfVoice,
+          totalMentions: item.totalMentions,
+          totalAnalyses: item.totalAnalyses,
+          avgRank: item.avgRank,
+          competitorId: item.competitorId,
+          dataType: item.dataType,
+          fill:
+            item.name === "Your Brand"
+              ? getYourBrandColor()
+              : getCompetitorColor(item.competitorId, item.name, index),
+        })
+      ) || []
+    );
+  }, [analytics?.shareOfVoiceData]);
+
   // Derive additional data for backward compatibility
   const competitorsWithStatus = competitors; // Status already included
-  const hasData = !!(competitors.length > 0 || analytics);
+  const hasData = competitors.length > 0 || shareOfVoiceChartData.length > 1; // More than just "Your Brand"
   const isRefreshing = isLoading && hasCachedData;
   const refetch = refresh;
 
@@ -79,28 +99,6 @@ export default function Competitors() {
   // Compatibility functions for existing code
   const refreshData = refetch || (() => {});
   const clearError = () => {}; // Errors clear automatically in React Query
-
-  // Prepare chart data from analytics (memoized to prevent unnecessary recalculations)
-  // Market Share Data is handled by ShareOfVoiceChart component directly
-  // Share of Voice Data (raw percentages)
-  const shareOfVoiceChartData = useMemo(() => {
-    return (
-      (analytics?.shareOfVoiceData as Record<string, unknown>[])?.map((item: Record<string, unknown>, index: number) => ({
-        name: item.name,
-        value: item.shareOfVoice, // Use raw share of voice percentage
-        shareOfVoice: item.shareOfVoice,
-        totalMentions: item.totalMentions,
-        totalAnalyses: item.totalAnalyses,
-        avgRank: item.avgRank,
-        competitorId: item.competitorId,
-        dataType: item.dataType,
-        fill:
-          item.name === "Your Brand"
-            ? getYourBrandColor()
-            : getCompetitorColor(item.competitorId, item.name, index),
-      })) || []
-    );
-  }, [analytics?.shareOfVoiceData]);
 
   // Gap analysis data is handled by CompetitiveGapChart component directly
 
@@ -138,7 +136,9 @@ export default function Competitors() {
     }
 
     // Validate that the selected website exists and is available
-    const selectedWebsite = globalWebsites?.find((w) => w.id === selectedWebsiteId);
+    const selectedWebsite = globalWebsites?.find(
+      (w) => w.id === selectedWebsiteId
+    );
     if (!selectedWebsite) {
       toast({
         title: "Error",
@@ -254,11 +254,13 @@ export default function Competitors() {
     }
 
     setIsExporting(true);
-    
+
     try {
       // Import competitorService dynamically
-      const { competitorService } = await import("@/services/competitorService");
-      
+      const { competitorService } = await import(
+        "@/services/competitorService"
+      );
+
       // Export with comprehensive options using the competitorService
       const exportDateRange = (() => {
         const end = new Date();
@@ -283,25 +285,27 @@ export default function Competitors() {
         exportDateRange
       );
 
-      await handleExport(
-        () => Promise.resolve(blob),
-        {
-          filename: `competitor-analysis-${new Date().toISOString().split('T')[0]}`,
-          format,
-          includeTimestamp: true,
-          metadata: {
-            competitorCount: competitors?.length || 0,
-            exportType: "competitor_analysis",
-            dateFilter: (filters as CompetitorFilters).dateFilter,
-            sortBy: (filters as CompetitorFilters).sortBy,
-          },
-        }
-      );
+      await handleExport(() => Promise.resolve(blob), {
+        filename: `competitor-analysis-${
+          new Date().toISOString().split("T")[0]
+        }`,
+        format,
+        includeTimestamp: true,
+        metadata: {
+          competitorCount: competitors?.length || 0,
+          exportType: "competitor_analysis",
+          dateFilter: (filters as CompetitorFilters).dateFilter,
+          sortBy: (filters as CompetitorFilters).sortBy,
+        },
+      });
     } catch (error) {
       // Export failed
       toast({
         title: "Export Failed",
-        description: error instanceof Error ? error.message : "An unexpected error occurred during export.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred during export.",
         variant: "destructive",
       });
     } finally {
@@ -309,11 +313,10 @@ export default function Competitors() {
     }
   };
 
-
   // Show skeleton immediately unless we have synchronous cache data
   // This eliminates empty state flash by showing skeleton first
   const shouldShowSkeleton = workspaceLoading || (isLoading && !hasSyncCache());
-  
+
   if (shouldShowSkeleton) {
     return <CompetitorsSkeleton />;
   }
@@ -334,7 +337,11 @@ export default function Competitors() {
       <div className="space-y-6">
         <CompetitorsHeader
           totalCompetitors={competitorsWithStatus.length}
-          activeCompetitors={competitorsWithStatus.filter(c => c.analysisStatus === 'completed').length}
+          activeCompetitors={
+            competitorsWithStatus.filter(
+              (c) => c.analysisStatus === "completed"
+            ).length
+          }
           dateFilter={(filters as CompetitorFilters).dateFilter}
           sortBy={(filters as CompetitorFilters).sortBy}
           isRefreshing={isRefreshing}
@@ -346,8 +353,12 @@ export default function Competitors() {
           websitesLoading={workspaceLoading || isLoading}
           isExporting={isExporting}
           competitorsData={competitors}
-          setDateFilter={(value) => setFilters({ ...(filters as CompetitorFilters), dateFilter: value })}
-          setSortBy={(value) => setFilters({ ...(filters as CompetitorFilters), sortBy: value })}
+          setDateFilter={(value) =>
+            setFilters({ ...(filters as CompetitorFilters), dateFilter: value })
+          }
+          setSortBy={(value) =>
+            setFilters({ ...(filters as CompetitorFilters), sortBy: value })
+          }
           setIsAddDialogOpen={setIsAddDialogOpen}
           setCompetitorDomain={setCompetitorDomain}
           setCompetitorName={setCompetitorName}
@@ -375,8 +386,12 @@ export default function Competitors() {
 
         {/* Competitors List */}
         <CompetitorsList
-          competitorsWithStatus={competitorsWithStatus as Record<string, unknown>[]}
-          marketShareData={(analytics?.marketShareData || []) as Record<string, unknown>[]}
+          competitorsWithStatus={
+            competitorsWithStatus as Record<string, unknown>[]
+          }
+          marketShareData={
+            (analytics?.marketShareData || []) as Record<string, unknown>[]
+          }
           performance={performance as Record<string, unknown>[]}
           sortBy={(filters as CompetitorFilters).sortBy}
           confirmDelete={confirmDelete}
@@ -385,7 +400,9 @@ export default function Competitors() {
 
         {/* Competitive Gap Analysis */}
         <CompetitiveGapChart
-          gapAnalysis={(analytics?.gapAnalysis as Record<string, unknown>[]) || []}
+          gapAnalysis={
+            (analytics?.gapAnalysis as Record<string, unknown>[]) || []
+          }
           analytics={analytics as Record<string, unknown>}
           dateFilter={(filters as CompetitorFilters).dateFilter}
         />
@@ -398,7 +415,9 @@ export default function Competitors() {
         />
 
         {/* Time Series Chart */}
-        <TimeSeriesChart data={(analytics?.timeSeriesData as Record<string, unknown>[]) || []} />
+        <TimeSeriesChart
+          data={(analytics?.timeSeriesData as Record<string, unknown>[]) || []}
+        />
 
         {/* Main Empty State */}
         {!hasData && !isLoading && (

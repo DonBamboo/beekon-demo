@@ -189,7 +189,7 @@ export function useStatePersistence() {
     if (options?.prefetch && PAGE_CONFIGS[to]?.prefetchData) {
       prefetchDataForPage(to);
     }
-  }, [currentPage, config, saveScrollPosition, trackNavigation, navigateToPage, navigate]);
+  }, [currentPage, config, saveScrollPosition, trackNavigation, navigateToPage, navigate, prefetchDataForPage]);
 
   // Prefetch data based on navigation patterns
   const prefetchDataForPage = useCallback(async (page: string) => {
@@ -381,7 +381,7 @@ export function useWebsitePersistence() {
         setSelectedWebsite(savedWebsiteId);
       }
     }
-  }, [state.workspace.websites, setSelectedWebsite]);
+  }, [state.workspace.websites, state.workspace.selectedWebsiteId, setSelectedWebsite]);
 
   return {
     selectedWebsiteId: state.workspace.selectedWebsiteId,

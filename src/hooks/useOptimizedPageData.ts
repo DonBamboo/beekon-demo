@@ -466,7 +466,8 @@ export function useOptimizedDashboardData() {
     },
     [
       selectedWebsiteId,
-      serializedFilters,
+      transformedFilters.dateRange,
+      transformedFilters.period,
       getFromCache,
       setCache,
       cacheKey,
