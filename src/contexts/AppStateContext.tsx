@@ -1,5 +1,12 @@
-import React, { createContext, useReducer, useCallback, useEffect, useRef, ReactNode } from 'react';
-import { Website, Workspace } from '@/hooks/useWorkspace';
+import React, {
+  createContext,
+  useReducer,
+  useCallback,
+  useEffect,
+  useRef,
+  ReactNode,
+} from "react";
+import { Website, Workspace } from "@/hooks/useWorkspace";
 
 // Cache entry with expiration and metadata
 interface CacheEntry<T = unknown> {
@@ -74,7 +81,7 @@ export interface NavigationState {
 export interface CompetitorStatus {
   competitorId: string;
   websiteId: string;
-  status: 'pending' | 'analyzing' | 'completed' | 'failed';
+  status: "pending" | "analyzing" | "completed" | "failed";
   progress?: number;
   errorMessage?: string | null;
   startedAt?: string | null;
@@ -91,7 +98,7 @@ export interface AppState {
     selectedWebsiteId: string | null;
     loading: boolean;
   };
-  
+
   // Competitor status tracking
   competitors: {
     // Map of competitor ID to status information
@@ -99,17 +106,17 @@ export interface AppState {
     // Track which competitors are actively being monitored
     monitoredCompetitors: Set<string>;
   };
-  
+
   // Multi-level cache system
   cache: {
     // L1 Cache - In-memory, fast access
     memory: Map<string, CacheEntry>;
-    
+
     // Cache metadata for intelligent invalidation
     dependencies: Map<string, Set<string>>; // dependency -> cache keys that depend on it
     expiration: Map<string, number>; // cache key -> expiration timestamp
   };
-  
+
   // UI state management
   ui: {
     // Filter states per page - persist across navigation
@@ -118,10 +125,10 @@ export interface AppState {
       competitors: CompetitorFilters;
       dashboard: DashboardFilters;
     };
-    
+
     // Navigation tracking
     navigation: NavigationState;
-    
+
     // Loading states coordination
     loading: {
       global: boolean;
@@ -129,15 +136,22 @@ export interface AppState {
       operations: Record<string, boolean>;
     };
   };
-  
+
   // Request management
   requests: {
     // Active requests for deduplication
     active: Map<string, Promise<unknown>>;
-    
+
     // Request queue for batching
-    queue: Map<string, { resolve: (value?: unknown) => void; reject: (reason?: unknown) => void; timestamp: number }[]>;
-    
+    queue: Map<
+      string,
+      {
+        resolve: (value?: unknown) => void;
+        reject: (reason?: unknown) => void;
+        timestamp: number;
+      }[]
+    >;
+
     // Network optimization settings
     settings: {
       batchingEnabled: boolean;
@@ -148,19 +162,60 @@ export interface AppState {
 }
 
 // Action types for state management
-export type AppStateAction = 
-  | { type: 'SET_WORKSPACE'; payload: { workspace: Workspace | null; websites: Website[]; loading: boolean } }
-  | { type: 'SET_SELECTED_WEBSITE'; payload: { websiteId: string } }
-  | { type: 'UPDATE_WEBSITE_STATUS'; payload: { websiteId: string; status: string; lastCrawledAt?: string | null; updatedAt: string } }
-  | { type: 'UPDATE_COMPETITOR_STATUS'; payload: { competitorId: string; websiteId: string; status: string; progress?: number; errorMessage?: string | null; startedAt?: string | null; completedAt?: string | null; updatedAt: string } }
-  | { type: 'CACHE_SET'; payload: { key: string; data: unknown; expiresIn: number; metadata?: Record<string, unknown> } }
-  | { type: 'CACHE_DELETE'; payload: { key: string } }
-  | { type: 'CACHE_CLEAR'; payload: { pattern?: string; websiteId?: string } }
-  | { type: 'SET_FILTERS'; payload: { page: keyof AppState['ui']['filters']; filters: unknown } }
-  | { type: 'SET_NAVIGATION'; payload: { page: string } }
-  | { type: 'SET_LOADING'; payload: { scope: string; loading: boolean } }
-  | { type: 'REQUEST_START'; payload: { key: string; promise: Promise<unknown> } }
-  | { type: 'REQUEST_END'; payload: { key: string } };
+export type AppStateAction =
+  | {
+      type: "SET_WORKSPACE";
+      payload: {
+        workspace: Workspace | null;
+        websites: Website[];
+        loading: boolean;
+      };
+    }
+  | { type: "SET_SELECTED_WEBSITE"; payload: { websiteId: string } }
+  | {
+      type: "UPDATE_WEBSITE_STATUS";
+      payload: {
+        websiteId: string;
+        status: string;
+        lastCrawledAt?: string | null;
+        updatedAt: string;
+      };
+    }
+  | {
+      type: "UPDATE_COMPETITOR_STATUS";
+      payload: {
+        competitorId: string;
+        websiteId: string;
+        status: string;
+        progress?: number;
+        errorMessage?: string | null;
+        startedAt?: string | null;
+        completedAt?: string | null;
+        updatedAt: string;
+      };
+    }
+  | {
+      type: "CACHE_SET";
+      payload: {
+        key: string;
+        data: unknown;
+        expiresIn: number;
+        metadata?: Record<string, unknown>;
+      };
+    }
+  | { type: "CACHE_DELETE"; payload: { key: string } }
+  | { type: "CACHE_CLEAR"; payload: { pattern?: string; websiteId?: string } }
+  | {
+      type: "SET_FILTERS";
+      payload: { page: keyof AppState["ui"]["filters"]; filters: unknown };
+    }
+  | { type: "SET_NAVIGATION"; payload: { page: string } }
+  | { type: "SET_LOADING"; payload: { scope: string; loading: boolean } }
+  | {
+      type: "REQUEST_START";
+      payload: { key: string; promise: Promise<unknown> };
+    }
+  | { type: "REQUEST_END"; payload: { key: string } };
 
 // Default state
 const initialState: AppState = {
@@ -184,7 +239,7 @@ const initialState: AppState = {
       analysis: {
         dateRange: "7d",
         topic: "all",
-        llm: "all", 
+        llm: "all",
         mentionStatus: "all",
         sentiment: "all",
         analysisSession: "all",
@@ -224,17 +279,19 @@ const initialState: AppState = {
 // State reducer
 function appStateReducer(state: AppState, action: AppStateAction): AppState {
   switch (action.type) {
-    case 'SET_WORKSPACE': {
+    case "SET_WORKSPACE": {
       const newWebsites = action.payload.websites;
       let selectedWebsiteId = state.workspace.selectedWebsiteId;
-      
+
       // Intelligent website selection logic
       if (!selectedWebsiteId && newWebsites.length > 0) {
         // No website selected, select the first one
         selectedWebsiteId = newWebsites[0]?.id || null;
       } else if (selectedWebsiteId && newWebsites.length > 0) {
         // Check if currently selected website still exists in new website list
-        const selectedWebsiteStillExists = newWebsites.some(w => w.id === selectedWebsiteId);
+        const selectedWebsiteStillExists = newWebsites.some(
+          (w) => w.id === selectedWebsiteId
+        );
         if (!selectedWebsiteStillExists) {
           // Selected website no longer exists, select the first available
           selectedWebsiteId = newWebsites[0]?.id || null;
@@ -243,7 +300,7 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         // No websites available, clear selection
         selectedWebsiteId = null;
       }
-      
+
       return {
         ...state,
         workspace: {
@@ -254,8 +311,8 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         },
       };
     }
-      
-    case 'SET_SELECTED_WEBSITE':
+
+    case "SET_SELECTED_WEBSITE":
       return {
         ...state,
         workspace: {
@@ -264,19 +321,19 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         },
       };
 
-    case 'UPDATE_WEBSITE_STATUS': {
+    case "UPDATE_WEBSITE_STATUS": {
       const { websiteId, status, lastCrawledAt, updatedAt } = action.payload;
-      const updatedWebsites = state.workspace.websites.map(website =>
+      const updatedWebsites = state.workspace.websites.map((website) =>
         website.id === websiteId
-          ? {
+          ? ({
               ...website,
               crawl_status: status,
               last_crawled_at: lastCrawledAt || website.last_crawled_at,
               updated_at: updatedAt || website.updated_at,
-            } as Website
+            } as Website)
           : website
       );
-      
+
       return {
         ...state,
         workspace: {
@@ -286,31 +343,42 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
       };
     }
 
-    case 'UPDATE_COMPETITOR_STATUS': {
-      const { competitorId, websiteId, status, progress, errorMessage, startedAt, completedAt, updatedAt } = action.payload;
+    case "UPDATE_COMPETITOR_STATUS": {
+      const {
+        competitorId,
+        websiteId,
+        status,
+        progress,
+        errorMessage,
+        startedAt,
+        completedAt,
+        updatedAt,
+      } = action.payload;
       const newStatusMap = new Map(state.competitors.statusMap);
-      const newMonitoredCompetitors = new Set(state.competitors.monitoredCompetitors);
-      
+      const newMonitoredCompetitors = new Set(
+        state.competitors.monitoredCompetitors
+      );
+
       // Update competitor status
       newStatusMap.set(competitorId, {
         competitorId,
         websiteId,
-        status: status as CompetitorStatus['status'],
+        status: status as CompetitorStatus["status"],
         progress,
         errorMessage,
         startedAt,
         completedAt,
         updatedAt,
       });
-      
+
       // Add to monitored set if in active state
-      if (status === 'pending' || status === 'analyzing') {
+      if (status === "pending" || status === "analyzing") {
         newMonitoredCompetitors.add(competitorId);
       } else {
         // Remove from monitored set if in terminal state
         newMonitoredCompetitors.delete(competitorId);
       }
-      
+
       return {
         ...state,
         competitors: {
@@ -319,16 +387,16 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         },
       };
     }
-      
-    case 'CACHE_SET': {
+
+    case "CACHE_SET": {
       const { key, data, expiresIn, metadata } = action.payload;
       const now = Date.now();
       const expiresAt = now + expiresIn;
-      
+
       const newMemory = new Map(state.cache.memory);
       const newExpiration = new Map(state.cache.expiration);
       const newDependencies = new Map(state.cache.dependencies);
-      
+
       // Set cache entry
       newMemory.set(key, {
         data,
@@ -337,11 +405,15 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         key,
         metadata,
       });
-      
+
       newExpiration.set(key, expiresAt);
-      
+
       // Track dependencies for invalidation
-      if (metadata && 'dependencies' in metadata && Array.isArray(metadata.dependencies)) {
+      if (
+        metadata &&
+        "dependencies" in metadata &&
+        Array.isArray(metadata.dependencies)
+      ) {
         (metadata.dependencies as string[]).forEach((dep: string) => {
           if (!newDependencies.has(dep)) {
             newDependencies.set(dep, new Set());
@@ -349,7 +421,7 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           newDependencies.get(dep)!.add(key);
         });
       }
-      
+
       return {
         ...state,
         cache: {
@@ -359,17 +431,17 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         },
       };
     }
-    
-    case 'CACHE_DELETE': {
+
+    case "CACHE_DELETE": {
       const { key } = action.payload;
       const newMemory = new Map(state.cache.memory);
       const newExpiration = new Map(state.cache.expiration);
       const newDependencies = new Map(state.cache.dependencies);
-      
+
       // Remove cache entry
       newMemory.delete(key);
       newExpiration.delete(key);
-      
+
       // Clean up dependencies
       newDependencies.forEach((keys, dep) => {
         keys.delete(key);
@@ -377,7 +449,7 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           newDependencies.delete(dep);
         }
       });
-      
+
       return {
         ...state,
         cache: {
@@ -387,17 +459,17 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         },
       };
     }
-    
-    case 'CACHE_CLEAR': {
+
+    case "CACHE_CLEAR": {
       const { pattern, websiteId } = action.payload;
       const newMemory = new Map(state.cache.memory);
       const newExpiration = new Map(state.cache.expiration);
       const newDependencies = new Map(state.cache.dependencies);
-      
+
       // Clear matching cache entries
       state.cache.memory.forEach((entry, key) => {
         let shouldDelete = false;
-        
+
         if (pattern && key.includes(pattern)) {
           shouldDelete = true;
         } else if (websiteId && entry.metadata?.websiteId === websiteId) {
@@ -405,11 +477,11 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         } else if (!pattern && !websiteId) {
           shouldDelete = true; // Clear all
         }
-        
+
         if (shouldDelete) {
           newMemory.delete(key);
           newExpiration.delete(key);
-          
+
           // Clean up dependencies
           newDependencies.forEach((keys, dep) => {
             keys.delete(key);
@@ -419,7 +491,7 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           });
         }
       });
-      
+
       return {
         ...state,
         cache: {
@@ -429,8 +501,8 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         },
       };
     }
-    
-    case 'SET_FILTERS':
+
+    case "SET_FILTERS":
       return {
         ...state,
         ui: {
@@ -441,8 +513,8 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           },
         },
       };
-      
-    case 'SET_NAVIGATION':
+
+    case "SET_NAVIGATION":
       return {
         ...state,
         ui: {
@@ -450,13 +522,16 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           navigation: {
             currentPage: action.payload.page,
             previousPage: state.ui.navigation.currentPage,
-            navigationHistory: [...state.ui.navigation.navigationHistory, action.payload.page].slice(-10), // Keep last 10
+            navigationHistory: [
+              ...state.ui.navigation.navigationHistory,
+              action.payload.page,
+            ].slice(-10), // Keep last 10
             lastPageChangeAt: Date.now(),
           },
         },
       };
-      
-    case 'SET_LOADING':
+
+    case "SET_LOADING":
       return {
         ...state,
         ui: {
@@ -467,11 +542,11 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           },
         },
       };
-      
-    case 'REQUEST_START': {
+
+    case "REQUEST_START": {
       const newActive = new Map(state.requests.active);
       newActive.set(action.payload.key, action.payload.promise);
-      
+
       return {
         ...state,
         requests: {
@@ -480,11 +555,11 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         },
       };
     }
-    
-    case 'REQUEST_END': {
+
+    case "REQUEST_END": {
       const newActive = new Map(state.requests.active);
       newActive.delete(action.payload.key);
-      
+
       return {
         ...state,
         requests: {
@@ -493,7 +568,7 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         },
       };
     }
-    
+
     default:
       return state;
   }
@@ -505,87 +580,13 @@ const AppStateContext = createContext<{
   dispatch: React.Dispatch<AppStateAction>;
   // Helper functions for common operations
   setSelectedWebsite: (websiteId: string) => void;
-  updateWebsiteStatus: (websiteId: string, status: string, lastCrawledAt?: string | null, updatedAt?: string) => void;
-  updateCompetitorStatus: (competitorId: string, websiteId: string, status: string, progress?: number, errorMessage?: string | null, startedAt?: string | null, completedAt?: string | null, updatedAt?: string) => void;
-  getCompetitorStatus: (competitorId: string) => CompetitorStatus | null;
-  isCompetitorMonitored: (competitorId: string) => boolean;
-  getMonitoredCompetitors: () => string[];
-  clearCompetitorStatus: (competitorId?: string) => void;
-  getFromCache: <T>(key: string) => T | null;
-  setCache: <T>(key: string, data: T, expiresIn: number, metadata?: Record<string, unknown>) => void;
-  clearCache: (pattern?: string, websiteId?: string) => void;
-  invalidateDependentCaches: (dependency: string) => void;
-  setPageFilters: <T>(page: keyof AppState['ui']['filters'], filters: T) => void;
-  navigateToPage: (page: string) => void;
-  isRequestActive: (key: string) => boolean;
-  getCurrentPage: () => string;
-} | null>(null);
-
-// Provider component
-export function AppStateProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(appStateReducer, initialState);
-  
-  // Use ref to access current state without causing re-renders
-  const stateRef = useRef(state);
-  stateRef.current = state;
-  
-  // Helper functions
-  const setSelectedWebsite = useCallback((websiteId: string) => {
-    dispatch({ type: 'SET_SELECTED_WEBSITE', payload: { websiteId } });
-  }, []);
-
-  // Note: updateWebsiteStatus will be defined after other cache functions
-  
-  // Stabilized getFromCache - no dependencies on state
-  const getFromCache = useCallback(<T,>(key: string): T | null => {
-    const entry = stateRef.current.cache.memory.get(key);
-    if (!entry) return null;
-    
-    // Check expiration
-    if (Date.now() > entry.expiresAt) {
-      dispatch({ type: 'CACHE_DELETE', payload: { key } });
-      return null;
-    }
-    
-    return entry.data as T;
-  }, []);
-  
-  const setCache = useCallback(<T,>(key: string, data: T, expiresIn: number, metadata?: Record<string, unknown>) => {
-    dispatch({ type: 'CACHE_SET', payload: { key, data, expiresIn, metadata } });
-  }, []);
-  
-  const clearCache = useCallback((pattern?: string, websiteId?: string) => {
-    dispatch({ type: 'CACHE_CLEAR', payload: { pattern, websiteId } });
-  }, []);
-  
-  // Intelligent cache invalidation based on dependencies - stabilized
-  const invalidateDependentCaches = useCallback((dependency: string) => {
-    const dependentKeys = stateRef.current.cache.dependencies.get(dependency);
-    if (dependentKeys) {
-      dependentKeys.forEach(key => {
-        dispatch({ type: 'CACHE_DELETE', payload: { key } });
-      });
-    }
-  }, []);
-  
-  const setPageFilters = useCallback(<T,>(page: keyof AppState['ui']['filters'], filters: T) => {
-    dispatch({ type: 'SET_FILTERS', payload: { page, filters } });
-  }, []);
-  
-  const navigateToPage = useCallback((page: string) => {
-    dispatch({ type: 'SET_NAVIGATION', payload: { page } });
-  }, []);
-  
-  const isRequestActive = useCallback((key: string) => {
-    return stateRef.current.requests.active.has(key);
-  }, []);
-  
-  const getCurrentPage = useCallback(() => {
-    return stateRef.current.ui.navigation.currentPage;
-  }, []);
-
-  // Competitor status management functions
-  const updateCompetitorStatus = useCallback((
+  updateWebsiteStatus: (
+    websiteId: string,
+    status: string,
+    lastCrawledAt?: string | null,
+    updatedAt?: string
+  ) => void;
+  updateCompetitorStatus: (
     competitorId: string,
     websiteId: string,
     status: string,
@@ -594,29 +595,145 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     startedAt?: string | null,
     completedAt?: string | null,
     updatedAt?: string
-  ) => {
-    dispatch({
-      type: 'UPDATE_COMPETITOR_STATUS',
-      payload: {
-        competitorId,
-        websiteId,
-        status,
-        progress,
-        errorMessage,
-        startedAt,
-        completedAt,
-        updatedAt: updatedAt || new Date().toISOString(),
-      },
-    });
+  ) => void;
+  getCompetitorStatus: (competitorId: string) => CompetitorStatus | null;
+  isCompetitorMonitored: (competitorId: string) => boolean;
+  getMonitoredCompetitors: () => string[];
+  clearCompetitorStatus: (competitorId?: string) => void;
+  getFromCache: <T>(key: string) => T | null;
+  setCache: <T>(
+    key: string,
+    data: T,
+    expiresIn: number,
+    metadata?: Record<string, unknown>
+  ) => void;
+  clearCache: (pattern?: string, websiteId?: string) => void;
+  invalidateDependentCaches: (dependency: string) => void;
+  setPageFilters: <T>(
+    page: keyof AppState["ui"]["filters"],
+    filters: T
+  ) => void;
+  navigateToPage: (page: string) => void;
+  isRequestActive: (key: string) => boolean;
+  getCurrentPage: () => string;
+} | null>(null);
 
-    // Invalidate competitor-related caches when status updates
-    invalidateDependentCaches(`competitor_${competitorId}`);
-    invalidateDependentCaches(`website_${websiteId}_competitors`);
-  }, [invalidateDependentCaches]);
+// Provider component
+export function AppStateProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(appStateReducer, initialState);
 
-  const getCompetitorStatus = useCallback((competitorId: string): CompetitorStatus | null => {
-    return stateRef.current.competitors.statusMap.get(competitorId) || null;
+  // Use ref to access current state without causing re-renders
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // Helper functions
+  const setSelectedWebsite = useCallback((websiteId: string) => {
+    dispatch({ type: "SET_SELECTED_WEBSITE", payload: { websiteId } });
   }, []);
+
+  // Note: updateWebsiteStatus will be defined after other cache functions
+
+  // Stabilized getFromCache - no dependencies on state
+  const getFromCache = useCallback(<T,>(key: string): T | null => {
+    const entry = stateRef.current.cache.memory.get(key);
+    if (!entry) return null;
+
+    // Check expiration
+    if (Date.now() > entry.expiresAt) {
+      dispatch({ type: "CACHE_DELETE", payload: { key } });
+      return null;
+    }
+
+    return entry.data as T;
+  }, []);
+
+  const setCache = useCallback(
+    <T,>(
+      key: string,
+      data: T,
+      expiresIn: number,
+      metadata?: Record<string, unknown>
+    ) => {
+      dispatch({
+        type: "CACHE_SET",
+        payload: { key, data, expiresIn, metadata },
+      });
+    },
+    []
+  );
+
+  const clearCache = useCallback((pattern?: string, websiteId?: string) => {
+    dispatch({ type: "CACHE_CLEAR", payload: { pattern, websiteId } });
+  }, []);
+
+  // Intelligent cache invalidation based on dependencies - stabilized
+  const invalidateDependentCaches = useCallback((dependency: string) => {
+    const dependentKeys = stateRef.current.cache.dependencies.get(dependency);
+    if (dependentKeys) {
+      dependentKeys.forEach((key) => {
+        dispatch({ type: "CACHE_DELETE", payload: { key } });
+      });
+    }
+  }, []);
+
+  const setPageFilters = useCallback(
+    <T,>(page: keyof AppState["ui"]["filters"], filters: T) => {
+      dispatch({ type: "SET_FILTERS", payload: { page, filters } });
+    },
+    []
+  );
+
+  const navigateToPage = useCallback((page: string) => {
+    dispatch({ type: "SET_NAVIGATION", payload: { page } });
+  }, []);
+
+  const isRequestActive = useCallback((key: string) => {
+    return stateRef.current.requests.active.has(key);
+  }, []);
+
+  const getCurrentPage = useCallback(() => {
+    return stateRef.current.ui.navigation.currentPage;
+  }, []);
+
+  // Competitor status management functions
+  const updateCompetitorStatus = useCallback(
+    (
+      competitorId: string,
+      websiteId: string,
+      status: string,
+      progress?: number,
+      errorMessage?: string | null,
+      startedAt?: string | null,
+      completedAt?: string | null,
+      updatedAt?: string
+    ) => {
+      dispatch({
+        type: "UPDATE_COMPETITOR_STATUS",
+        payload: {
+          competitorId,
+          websiteId,
+          status,
+          progress,
+          errorMessage,
+          startedAt,
+          completedAt,
+          updatedAt: updatedAt || new Date().toISOString(),
+        },
+      });
+
+      // Invalidate competitor-related caches when status updates
+      invalidateDependentCaches(`competitor_${competitorId}`);
+      invalidateDependentCaches(`website_${websiteId}_competitors`);
+    },
+    [invalidateDependentCaches]
+  );
+
+  const getCompetitorStatus = useCallback(
+    (competitorId: string): CompetitorStatus | null => {
+      return stateRef.current.competitors.statusMap.get(competitorId) || null;
+    },
+    []
+  );
 
   const isCompetitorMonitored = useCallback((competitorId: string): boolean => {
     return stateRef.current.competitors.monitoredCompetitors.has(competitorId);
@@ -630,85 +747,95 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     if (competitorId) {
       // Clear specific competitor status
       const newStatusMap = new Map(stateRef.current.competitors.statusMap);
-      const newMonitoredCompetitors = new Set(stateRef.current.competitors.monitoredCompetitors);
-      
+      const newMonitoredCompetitors = new Set(
+        stateRef.current.competitors.monitoredCompetitors
+      );
+
       newStatusMap.delete(competitorId);
       newMonitoredCompetitors.delete(competitorId);
-      
+
       dispatch({
-        type: 'UPDATE_COMPETITOR_STATUS',
+        type: "UPDATE_COMPETITOR_STATUS",
         payload: {
           competitorId,
-          websiteId: '',
-          status: 'pending',
+          websiteId: "",
+          status: "pending",
           updatedAt: new Date().toISOString(),
         },
       });
     } else {
       // Clear all competitor status - we'll need to implement this as a new action if needed
-      console.log('Clearing all competitor status not yet implemented');
+      console.log("Clearing all competitor status not yet implemented");
     }
   }, []);
 
-  const updateWebsiteStatus = useCallback((
-    websiteId: string, 
-    status: string, 
-    lastCrawledAt?: string | null, 
-    updatedAt?: string
-  ) => {
-    dispatch({ 
-      type: 'UPDATE_WEBSITE_STATUS', 
-      payload: { 
-        websiteId, 
-        status, 
-        lastCrawledAt, 
-        updatedAt: updatedAt || new Date().toISOString() 
-      } 
-    });
+  const updateWebsiteStatus = useCallback(
+    (
+      websiteId: string,
+      status: string,
+      lastCrawledAt?: string | null,
+      updatedAt?: string
+    ) => {
+      dispatch({
+        type: "UPDATE_WEBSITE_STATUS",
+        payload: {
+          websiteId,
+          status,
+          lastCrawledAt,
+          updatedAt: updatedAt || new Date().toISOString(),
+        },
+      });
 
-    // Invalidate website-related caches when status updates
-    invalidateDependentCaches(`website_${websiteId}`);
-    
-    // Also clear workspace cache to trigger refresh of website lists
-    clearCache('workspace_');
-  }, [clearCache, invalidateDependentCaches]);
-  
+      // Invalidate website-related caches when status updates
+      invalidateDependentCaches(`website_${websiteId}`);
+
+      // Also clear workspace cache to trigger refresh of website lists
+      clearCache("workspace_");
+    },
+    [clearCache, invalidateDependentCaches]
+  );
+
   // Intelligent cache cleanup and optimization
   useEffect(() => {
     const cleanup = () => {
       const now = Date.now();
       let cleanedCount = 0;
-      
+
       // Clean expired entries
       state.cache.expiration.forEach((expiresAt, key) => {
         if (now > expiresAt) {
-          dispatch({ type: 'CACHE_DELETE', payload: { key } });
+          dispatch({ type: "CACHE_DELETE", payload: { key } });
           cleanedCount++;
         }
       });
-      
+
       // Memory management: If cache gets too large (>100 entries), clean oldest entries
       if (state.cache.memory.size > 100) {
         const entries = Array.from(state.cache.memory.entries());
-        const sortedByAge = entries.sort(([, a], [, b]) => a.timestamp - b.timestamp);
-        const toDelete = sortedByAge.slice(0, Math.floor(state.cache.memory.size * 0.2)); // Remove oldest 20%
-        
+        const sortedByAge = entries.sort(
+          ([, a], [, b]) => a.timestamp - b.timestamp
+        );
+        const toDelete = sortedByAge.slice(
+          0,
+          Math.floor(state.cache.memory.size * 0.2)
+        ); // Remove oldest 20%
+
         toDelete.forEach(([key]) => {
-          dispatch({ type: 'CACHE_DELETE', payload: { key } });
+          dispatch({ type: "CACHE_DELETE", payload: { key } });
           cleanedCount++;
         });
       }
-      
+
       // Only log in development if cleanup actually happened
-      if (process.env.NODE_ENV === 'development' && cleanedCount > 0) {
+      if (process.env.NODE_ENV === "development" && cleanedCount > 0) {
         console.log(`Cache cleanup: removed ${cleanedCount} entries`);
       }
     };
-    
+
     const interval = setInterval(cleanup, 120000); // Cleanup every 2 minutes
     return () => clearInterval(interval);
   }, [state.cache.expiration, state.cache.memory]);
-  
+
   return (
     <AppStateContext.Provider
       value={{

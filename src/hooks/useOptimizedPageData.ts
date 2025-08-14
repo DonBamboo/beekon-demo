@@ -10,7 +10,8 @@ import {
   useSelectedWebsite,
   usePageFilters,
 } from "@/hooks/appStateHooks";
-import type { CompetitorFilters, AnalysisFilters, DashboardFilters } from "@/contexts/AppStateContext";
+import type { CompetitorFilters, AnalysisFilters as UIAnalysisFilters, DashboardFilters } from "@/contexts/AppStateContext";
+import type { AnalysisFilters } from "@/hooks/useAnalysisQuery";
 import { useWebsiteData } from "./useSharedData";
 import { batchAPI } from "@/services/batchService";
 import { analysisService } from "@/services/analysisService";
@@ -65,24 +66,27 @@ export function useOptimizedAnalysisData() {
   const [cursor, setCursor] = useState<string | null>(null);
 
   // Transform filters from global state format to service-expected format
-  const transformedFilters = useMemo(() => {
-    const typedFilters = filters as AnalysisFilters;
-    const baseFilters = { ...typedFilters };
+  const transformedFilters = useMemo((): AnalysisFilters => {
+    const uiFilters = filters as UIAnalysisFilters;
+    const serviceFilters: AnalysisFilters = {};
+
+    // Map UI filters to service filters
+    if (uiFilters.topic) serviceFilters.topic = uiFilters.topic;
+    if (uiFilters.llm) serviceFilters.llmProvider = uiFilters.llm;
+    if (uiFilters.searchQuery) serviceFilters.searchQuery = uiFilters.searchQuery;
 
     // Transform dateRange from string to object format expected by services
-    if (typedFilters.dateRange && typedFilters.dateRange !== "all") {
-      const days = parseInt(typedFilters.dateRange.replace("d", ""));
+    if (uiFilters.dateRange && uiFilters.dateRange !== "all") {
+      const days = parseInt(uiFilters.dateRange.replace("d", ""));
       const now = new Date();
       const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-      baseFilters.dateRange = {
+      serviceFilters.dateRange = {
         start: startDate.toISOString(),
         end: now.toISOString(),
       };
-    } else {
-      baseFilters.dateRange = undefined;
     }
 
-    return baseFilters;
+    return serviceFilters;
   }, [filters]);
 
   // Smart cache key strategy: base cache for website, filtered cache for specific filters
@@ -128,7 +132,7 @@ export function useOptimizedAnalysisData() {
   }, [selectedWebsiteId, filteredCacheKey, baseCacheKey, getFromCache]);
 
   // Stable reference to previous filters to prevent unnecessary updates
-  const prevFiltersRef = useRef(transformedFilters);
+  const prevFiltersRef = useRef<AnalysisFilters>(transformedFilters);
   const filtersChanged =
     JSON.stringify(prevFiltersRef.current) !==
     JSON.stringify(transformedFilters);
@@ -391,9 +395,6 @@ export function useOptimizedDashboardData() {
   }, [filters]);
 
   const cacheKey = `dashboard_data_${selectedWebsiteId}_${transformedFilters.period}`;
-  
-  // Memoize filters serialization for stable dependency
-  const serializedFilters = useMemo(() => JSON.stringify(transformedFilters), [transformedFilters]);
 
   // Synchronous cache detection for immediate skeleton bypass
   const hasSyncCache = useCallback(() => {
@@ -418,7 +419,7 @@ export function useOptimizedDashboardData() {
       // Instant render from cache
       if (!forceRefresh && currentCachedData) {
         setMetrics(currentCachedData.metrics as ServiceDashboardMetrics);
-        setTimeSeriesData(currentCachedData.timeSeriesData as unknown[]);
+        setTimeSeriesData(currentCachedData.timeSeriesData as TimeSeriesDataPoint[]);
         setTopicPerformance(currentCachedData.topicPerformance as TopicPerformanceData[]);
         setIsLoading(false);
         return;
@@ -575,24 +576,15 @@ export function useOptimizedCompetitorsData() {
     const typedFilters = filters as CompetitorFilters;
     const baseFilters = { ...typedFilters };
 
-    // Transform dateFilter to dateRange if needed
-    if (typedFilters.dateFilter && typedFilters.dateFilter !== "all") {
-      const days = parseInt(typedFilters.dateFilter.replace("d", ""));
-      const now = new Date();
-      const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-      baseFilters.dateRange = {
-        start: startDate.toISOString(),
-        end: now.toISOString(),
-      };
-      if ('dateFilter' in baseFilters) {
-        delete baseFilters.dateFilter;
-      }
-    } else {
-      baseFilters.dateRange = undefined;
-      if ('dateFilter' in baseFilters) {
-        delete baseFilters.dateFilter;
-      }
-    }
+    // Transform dateFilter to dateRange
+    const days = parseInt(typedFilters.dateFilter.replace("d", ""));
+    const now = new Date();
+    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    baseFilters.dateRange = {
+      start: startDate.toISOString(),
+      end: now.toISOString(),
+    };
+    delete (baseFilters as Record<string, unknown>).dateFilter;
 
     return baseFilters;
   }, [filters]);

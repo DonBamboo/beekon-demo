@@ -189,7 +189,8 @@ export function useStatePersistence() {
     if (options?.prefetch && PAGE_CONFIGS[to]?.prefetchData) {
       prefetchDataForPage(to);
     }
-  }, [currentPage, config, saveScrollPosition, trackNavigation, navigateToPage, navigate, prefetchDataForPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, config, saveScrollPosition, trackNavigation, navigateToPage, navigate]); // prefetchDataForPage is stable (empty deps)
 
   // Prefetch data based on navigation patterns
   const prefetchDataForPage = useCallback(async (page: string) => {

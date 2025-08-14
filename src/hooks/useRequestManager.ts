@@ -86,7 +86,24 @@ export function useRequestManager() {
     // Check if request is already active (deduplication)
     if (state.requests.active.has(requestKey)) {
       console.log(`🔄 Request deduplicated: ${requestKey}`);
-      updateStats(requestKey, { deduplicated: 1 });
+      
+      // Update stats inline
+      const current = statsRef.current.get(requestKey) || {
+        total: 0,
+        successful: 0,
+        failed: 0,
+        deduplicated: 0,
+        avgResponseTime: 0,
+        lastActivity: Date.now(),
+      };
+      
+      const updated = {
+        ...current,
+        deduplicated: current.deduplicated + 1,
+        lastActivity: Date.now(),
+      };
+      
+      statsRef.current.set(requestKey, updated);
       return state.requests.active.get(requestKey) as Promise<T>;
     }
 
@@ -112,7 +129,15 @@ export function useRequestManager() {
 
     // Add to pending queue
     requestQueue.current.pending.set(requestKey, metadata);
-    addToPriorityQueue(requestKey, priority);
+    
+    // Add to priority queue inline
+    const queue = requestQueue.current;
+    
+    if (!queue.priorities.has(priority)) {
+      queue.priorities.set(priority, []);
+    }
+    
+    queue.priorities.get(priority)!.push(requestKey);
 
     // Wrap request with timeout and retry logic
     const executeWithRetry = async (attempt: number = 0): Promise<T> => {
@@ -130,8 +155,39 @@ export function useRequestManager() {
 
         // Success - update stats and cleanup
         const responseTime = performance.now() - startTime;
-        updateStats(requestKey, { successful: 1, responseTime });
-        cleanup(requestKey);
+        
+        // Update stats inline
+        const current = statsRef.current.get(requestKey) || {
+          total: 0,
+          successful: 0,
+          failed: 0,
+          deduplicated: 0,
+          avgResponseTime: 0,
+          lastActivity: Date.now(),
+        };
+        
+        const updated = {
+          ...current,
+          successful: current.successful + 1,
+          total: current.total + 1,
+          avgResponseTime: ((current.avgResponseTime * (current.total - 1)) + responseTime) / current.total,
+          lastActivity: Date.now(),
+        };
+        
+        statsRef.current.set(requestKey, updated);
+        
+        // Cleanup inline
+        const queue = requestQueue.current;
+        const metadata = queue.pending.get(requestKey);
+        if (metadata) {
+          queue.pending.delete(requestKey);
+          queue.priorities.forEach((requests, _) => {
+            const index = requests.indexOf(requestKey);
+            if (index !== -1) {
+              requests.splice(index, 1);
+            }
+          });
+        }
 
         return result;
 
@@ -148,9 +204,38 @@ export function useRequestManager() {
           
           return executeWithRetry(attempt + 1);
         } else {
-          // Final failure
-          updateStats(requestKey, { failed: 1 });
-          cleanup(requestKey);
+          // Final failure - update stats inline
+          const current = statsRef.current.get(requestKey) || {
+            total: 0,
+            successful: 0,
+            failed: 0,
+            deduplicated: 0,
+            avgResponseTime: 0,
+            lastActivity: Date.now(),
+          };
+          
+          const updated = {
+            ...current,
+            failed: current.failed + 1,
+            total: current.total + 1,
+            lastActivity: Date.now(),
+          };
+          
+          statsRef.current.set(requestKey, updated);
+          
+          // Cleanup inline
+          const queue = requestQueue.current;
+          const metadata = queue.pending.get(requestKey);
+          if (metadata) {
+            queue.pending.delete(requestKey);
+            queue.priorities.forEach((requests, _) => {
+              const index = requests.indexOf(requestKey);
+              if (index !== -1) {
+                requests.splice(index, 1);
+              }
+            });
+          }
+          
           throw error;
         }
       }
@@ -166,119 +251,8 @@ export function useRequestManager() {
     });
 
     return promise;
-  }, [state.requests.active, dispatch, generateRequestKey, addToPriorityQueue, cleanup, updateStats]);
+  }, [state.requests.active, dispatch, generateRequestKey]);
 
-  // Update request statistics
-  const updateStats = useCallback((
-    key: string,
-    updates: {
-      successful?: number;
-      failed?: number;
-      deduplicated?: number;
-      responseTime?: number;
-    }
-  ) => {
-    const current = statsRef.current.get(key) || {
-      total: 0,
-      successful: 0,
-      failed: 0,
-      deduplicated: 0,
-      avgResponseTime: 0,
-      lastActivity: Date.now(),
-    };
-
-    const updated: RequestStats = {
-      total: current.total + 1,
-      successful: current.successful + (updates.successful || 0),
-      failed: current.failed + (updates.failed || 0),
-      deduplicated: current.deduplicated + (updates.deduplicated || 0),
-      avgResponseTime: updates.responseTime
-        ? (current.avgResponseTime * current.total + updates.responseTime) / (current.total + 1)
-        : current.avgResponseTime,
-      lastActivity: Date.now(),
-    };
-
-    statsRef.current.set(key, updated);
-  }, []);
-
-  // Add request to priority queue
-  const addToPriorityQueue = useCallback((key: string, priority: RequestMetadata['priority']) => {
-    const queue = requestQueue.current;
-    
-    if (!queue.priorities.has(priority)) {
-      queue.priorities.set(priority, []);
-    }
-    
-    queue.priorities.get(priority)!.push(key);
-    
-    // Schedule batch processing for low priority requests
-    if (priority === 'low' && !batchTimerRef.current) {
-      batchTimerRef.current = setTimeout(() => {
-        processBatches();
-        batchTimerRef.current = null;
-      }, 100); // 100ms batch window for low priority
-    }
-  }, [processBatches]);
-
-  // Process batched requests
-  const processBatches = useCallback(() => {
-    const queue = requestQueue.current;
-    const lowPriorityRequests = queue.priorities.get('low') || [];
-    
-    if (lowPriorityRequests.length === 0) return;
-
-    // Group similar requests for batching
-    const batchGroups = new Map<string, string[]>();
-    
-    lowPriorityRequests.forEach(requestKey => {
-      const metadata = queue.pending.get(requestKey);
-      if (!metadata) return;
-      
-      // Group by component and endpoint pattern
-      const batchKey = `${metadata.component}_batch`;
-      if (!batchGroups.has(batchKey)) {
-        batchGroups.set(batchKey, []);
-      }
-      batchGroups.get(batchKey)!.push(requestKey);
-    });
-
-    // Execute batches
-    batchGroups.forEach((requests, batchKey) => {
-      if (requests.length > 1) {
-        console.log(`📦 Batching ${requests.length} requests: ${batchKey}`);
-        // Here you would implement actual batch execution
-        // For now, just clear the queue
-        requests.forEach(key => {
-          queue.pending.delete(key);
-        });
-      }
-    });
-
-    // Clear low priority queue
-    queue.priorities.set('low', []);
-  }, []);
-
-  // Cleanup completed requests
-  const cleanup = useCallback((key: string) => {
-    const queue = requestQueue.current;
-    const metadata = queue.pending.get(key);
-    
-    if (metadata) {
-      // Cancel abort controller
-      if (!metadata.abortController.signal.aborted) {
-        metadata.abortController.abort();
-      }
-      
-      // Remove from queues
-      queue.pending.delete(key);
-      queue.priorities.forEach((requests, _) => {
-        const index = requests.indexOf(key);
-        if (index !== -1) {
-          requests.splice(index, 1);
-        }
-      });
-    }
-  }, []);
 
   // Cancel all pending requests
   const cancelAllRequests = useCallback((pattern?: string) => {
@@ -356,10 +330,11 @@ export function useRequestManager() {
 
   // Cleanup on unmount
   useEffect(() => {
+    const batchTimer = batchTimerRef.current;
     return () => {
       cancelAllRequests();
-      if (batchTimerRef.current) {
-        clearTimeout(batchTimerRef.current);
+      if (batchTimer) {
+        clearTimeout(batchTimer);
       }
     };
   }, [cancelAllRequests]);

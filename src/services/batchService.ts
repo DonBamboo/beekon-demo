@@ -6,7 +6,8 @@
 import { analysisService } from './analysisService';
 import { competitorService } from './competitorService';
 import { dashboardService } from './dashboardService';
-import type { Topic, LLMProvider, WebsiteMetadata, AnalysisFilters, CompetitorFilters, DashboardFilters } from '@/contexts/AppStateContext';
+import type { Topic, LLMProvider, WebsiteMetadata, CompetitorFilters, DashboardFilters } from '@/contexts/AppStateContext';
+import type { AnalysisFilters } from '@/hooks/useAnalysisQuery';
 
 // Batch request types
 export interface BatchRequest {
@@ -196,7 +197,7 @@ class BatchService {
         this.getAnalysisSessions(websiteId),
         analysisService.getAnalysisResultsPaginated(websiteId, {
           limit: 20,
-          filters: (filters || {}) as Partial<AnalysisFilters>,
+          filters: filters || {},
         }),
         analysisService.getWebsiteMetadata(websiteId),
       ]);
@@ -212,11 +213,22 @@ class BatchService {
         ...llmProviders,
       ];
 
+      // Transform UIAnalysisResult[] to AnalysisResult[]
+      const transformedResults: AnalysisResult[] = recentResults.results.map(result => ({
+        id: result.id,
+        topic: result.topic,
+        llmProvider: result.llm_results[0]?.llm_provider || 'Unknown',
+        score: result.confidence,
+        createdAt: result.created_at,
+        isMentioned: result.status === 'mentioned',
+        summary: result.reporting_text || undefined,
+      }));
+
       return {
         topics: topicsWithAll,
         llmProviders: llmProvidersWithAll,
         analysisSessions,
-        recentResults: recentResults.results as AnalysisResult[],
+        recentResults: transformedResults,
         metadata,
       };
     } catch (error) {
@@ -243,13 +255,13 @@ class BatchService {
       ]);
 
       return {
-        competitors: competitors as CompetitorData[],
-        performance: performance as CompetitorPerformance[],
+        competitors: competitors as unknown as CompetitorData[],
+        performance: performance as unknown as CompetitorPerformance[],
         analytics: {
           totalCompetitors: analytics.totalCompetitors,
-          averageShareOfVoice: (analytics as Record<string, unknown>)?.averageShareOfVoice as number || 0,
-          topCompetitor: (analytics as Record<string, unknown>)?.topCompetitor as string || 'N/A',
-          competitiveGaps: (analytics.competitiveGaps || []) as Array<{ topic: string; gap: number }>,
+          averageShareOfVoice: (analytics as unknown as Record<string, unknown>)?.averageShareOfVoice as number || 0,
+          topCompetitor: (analytics as unknown as Record<string, unknown>)?.topCompetitor as string || 'N/A',
+          competitiveGaps: (analytics.competitiveGaps || []) as unknown as Array<{ topic: string; gap: number }>,
         },
         topics,
       };
@@ -281,10 +293,10 @@ class BatchService {
       return {
         metrics: {
           totalAnalyses: metrics.totalAnalyses,
-          averageVisibility: (metrics as Record<string, unknown>)?.averageVisibility as number || 0,
-          competitorCount: (metrics as Record<string, unknown>)?.competitorCount as number || 0,
-          lastAnalysisDate: (metrics as Record<string, unknown>)?.lastAnalysisDate as string,
-          growthRate: (metrics as Record<string, unknown>)?.growthRate as number || 0,
+          averageVisibility: (metrics as unknown as Record<string, unknown>)?.averageVisibility as number || 0,
+          competitorCount: (metrics as unknown as Record<string, unknown>)?.competitorCount as number || 0,
+          lastAnalysisDate: (metrics as unknown as Record<string, unknown>)?.lastAnalysisDate as string,
+          growthRate: (metrics as unknown as Record<string, unknown>)?.growthRate as number || 0,
         },
         timeSeriesData: timeSeriesData.map((item: Record<string, unknown>) => ({
           date: item.date as string,
@@ -298,19 +310,19 @@ class BatchService {
           change: (item.change as number) || 0,
           trend: (item.trend as 'up' | 'down' | 'stable') || 'stable' as const,
         })),
-        llmPerformance: llmPerformance.map((item: Record<string, unknown>) => ({
-          id: (item.id as string) || '',
-          name: (item.name as string) || '',
-          value: (item.value as number) || 0,
-          change: (item.change as number) || 0,
-          trend: (item.trend as 'up' | 'down' | 'stable') || 'stable' as const,
+        llmPerformance: (llmPerformance as unknown[]).map((item: unknown) => ({
+          id: ((item as Record<string, unknown>).id as string) || '',
+          name: ((item as Record<string, unknown>).name as string) || '',
+          value: ((item as Record<string, unknown>).value as number) || 0,
+          change: ((item as Record<string, unknown>).change as number) || 0,
+          trend: ((item as Record<string, unknown>).trend as 'up' | 'down' | 'stable') || 'stable' as const,
         })),
-        websitePerformance: websitePerformance.map((item: Record<string, unknown>) => ({
-          id: (item.id as string) || '',
-          name: (item.name as string) || '',
-          value: (item.value as number) || 0,
-          change: (item.change as number) || 0,
-          trend: (item.trend as 'up' | 'down' | 'stable') || 'stable' as const,
+        websitePerformance: (websitePerformance as unknown[]).map((item: unknown) => ({
+          id: ((item as Record<string, unknown>).id as string) || '',
+          name: ((item as Record<string, unknown>).name as string) || '',
+          value: ((item as Record<string, unknown>).value as number) || 0,
+          change: ((item as Record<string, unknown>).change as number) || 0,
+          trend: ((item as Record<string, unknown>).trend as 'up' | 'down' | 'stable') || 'stable' as const,
         })),
       };
     } catch (error) {
@@ -467,7 +479,16 @@ class BatchService {
         limit,
         filters: {},
       });
-      return result.results as AnalysisResult[];
+      // Transform UIAnalysisResult[] to AnalysisResult[]
+      return result.results.map(result => ({
+        id: result.id,
+        topic: result.topic,
+        llmProvider: result.llm_results[0]?.llm_provider || 'Unknown',
+        score: result.confidence,
+        createdAt: result.created_at,
+        isMentioned: result.status === 'mentioned',
+        summary: result.reporting_text || undefined,
+      }));
     } catch (error) {
       console.warn('Failed to fetch recent analyses:', error);
       return [];

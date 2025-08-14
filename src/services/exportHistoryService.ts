@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import {
   ExportHistoryRecord,
   ExportStatistics,
@@ -509,13 +510,13 @@ export class ExportHistoryService {
       export_type: originalRecord.export_type,
       format: originalRecord.format,
       filename: originalRecord.filename.replace(/(_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})?(\.\w+)$/, `_retry_${Date.now()}$2`),
-      filters: originalRecord.filters ? (originalRecord.filters as Record<string, unknown>) : null,
+      filters: originalRecord.filters as Json | undefined,
       date_range: originalRecord.date_range ? (originalRecord.date_range as { start: string; end: string }) : null,
       metadata: {
         ...(originalRecord.metadata as Record<string, unknown> || {}),
         retry_of: originalId,
         retry_count: ((originalRecord.metadata as Record<string, unknown>)?.retry_count as number || 0) + 1,
-      } as Record<string, unknown>,
+      } as Json,
     };
 
     return this.createExportRecord(retryData);
@@ -531,7 +532,7 @@ export class ExportHistoryService {
     return this.updateExportRecord(id, {
       status: "processing",
       started_at: new Date().toISOString(),
-      metadata: metadata ? (metadata as Record<string, unknown>) : null, // Cast to Json type for database compatibility
+      metadata: metadata as Json | undefined, // Cast to Json type for database compatibility
     });
   }
 
@@ -547,7 +548,7 @@ export class ExportHistoryService {
       status: "completed",
       file_size,
       completed_at: new Date().toISOString(),
-      metadata: metadata ? (metadata as Record<string, unknown>) : null, // Cast to Json type for database compatibility
+      metadata: metadata as Json | undefined, // Cast to Json type for database compatibility
     });
   }
 
@@ -563,7 +564,7 @@ export class ExportHistoryService {
       status: "failed",
       error_message,
       completed_at: new Date().toISOString(),
-      metadata: metadata ? (metadata as Record<string, unknown>) : null, // Cast to Json type for database compatibility
+      metadata: metadata as Json | undefined, // Cast to Json type for database compatibility
     });
   }
 }

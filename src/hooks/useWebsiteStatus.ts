@@ -249,8 +249,8 @@ export function useWebsiteStatus(
 
   // Cleanup all subscriptions on unmount
   useEffect(() => {
+    const activeSubscriptions = activeSubscriptionsRef.current;
     return () => {
-      const activeSubscriptions = activeSubscriptionsRef.current;
       const activeWorkspaces = Array.from(activeSubscriptions);
       activeWorkspaces.forEach((workspaceId) => {
         websiteStatusService
