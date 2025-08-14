@@ -103,12 +103,7 @@ export interface AnalysisPageData {
 export interface CompetitorsPageData {
   competitors: CompetitorData[];
   performance: CompetitorPerformance[];
-  analytics: {
-    totalCompetitors: number;
-    averageShareOfVoice: number;
-    topCompetitor: string;
-    competitiveGaps: Array<{ topic: string; gap: number }>;
-  };
+  analytics: Record<string, unknown>; // Full CompetitorAnalytics structure
   topics: Topic[]; // Shared with analysis page
 }
 
@@ -257,12 +252,7 @@ class BatchService {
       return {
         competitors: competitors as unknown as CompetitorData[],
         performance: performance as unknown as CompetitorPerformance[],
-        analytics: {
-          totalCompetitors: analytics.totalCompetitors,
-          averageShareOfVoice: (analytics as unknown as Record<string, unknown>)?.averageShareOfVoice as number || 0,
-          topCompetitor: (analytics as unknown as Record<string, unknown>)?.topCompetitor as string || 'N/A',
-          competitiveGaps: (analytics.competitiveGaps || []) as unknown as Array<{ topic: string; gap: number }>,
-        },
+        analytics: analytics as unknown as Record<string, unknown>,
         topics,
       };
     } catch (error) {

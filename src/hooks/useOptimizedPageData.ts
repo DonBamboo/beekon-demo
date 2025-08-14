@@ -688,8 +688,20 @@ export function useOptimizedCompetitorsData() {
           setCompetitors(competitorsWithStatus);
           const performanceData = Array.isArray(currentCachedData.performance) ? currentCachedData.performance : [];
           setPerformance(performanceData);
+          
+          // Validate and ensure cached analytics data structure has required arrays
           const analyticsData = currentCachedData.analytics as Record<string, unknown> | null;
-          setAnalytics(analyticsData || null);
+          const validatedAnalytics = analyticsData ? {
+            ...analyticsData,
+            insights: Array.isArray(analyticsData.insights) ? analyticsData.insights : [],
+            shareOfVoiceData: Array.isArray(analyticsData.shareOfVoiceData) ? analyticsData.shareOfVoiceData : [],
+            marketShareData: Array.isArray(analyticsData.marketShareData) ? analyticsData.marketShareData : [],
+            timeSeriesData: Array.isArray(analyticsData.timeSeriesData) ? analyticsData.timeSeriesData : [],
+            gapAnalysis: Array.isArray(analyticsData.gapAnalysis) ? analyticsData.gapAnalysis : [],
+            competitiveGaps: Array.isArray(analyticsData.competitiveGaps) ? analyticsData.competitiveGaps : [],
+          } : null;
+          
+          setAnalytics(validatedAnalytics);
           setIsLoading(false);
           
           if (process.env.NODE_ENV === "development") {
@@ -742,8 +754,20 @@ export function useOptimizedCompetitorsData() {
 
         setCompetitors(competitorsWithStatus);
         setPerformance(dataPerformance);
+        
+        // Validate and ensure analytics data structure has required arrays
         const analyticsData = data.analytics as Record<string, unknown> | null;
-        setAnalytics(analyticsData || null);
+        const validatedAnalytics = analyticsData ? {
+          ...analyticsData,
+          insights: Array.isArray(analyticsData.insights) ? analyticsData.insights : [],
+          shareOfVoiceData: Array.isArray(analyticsData.shareOfVoiceData) ? analyticsData.shareOfVoiceData : [],
+          marketShareData: Array.isArray(analyticsData.marketShareData) ? analyticsData.marketShareData : [],
+          timeSeriesData: Array.isArray(analyticsData.timeSeriesData) ? analyticsData.timeSeriesData : [],
+          gapAnalysis: Array.isArray(analyticsData.gapAnalysis) ? analyticsData.gapAnalysis : [],
+          competitiveGaps: Array.isArray(analyticsData.competitiveGaps) ? analyticsData.competitiveGaps : [],
+        } : null;
+        
+        setAnalytics(validatedAnalytics);
 
         // Smart caching strategy: Cache both base and filtered data
         const competitorsData = {
@@ -817,8 +841,20 @@ export function useOptimizedCompetitorsData() {
 
       setCompetitors(competitorsWithStatus);
       setPerformance(cachedPerformanceData);
+      
+      // Validate and ensure analytics data structure has required arrays
       const analyticsData = cachedData.analytics as Record<string, unknown> | null;
-      setAnalytics(analyticsData || null);
+      const validatedAnalytics = analyticsData ? {
+        ...analyticsData,
+        insights: Array.isArray(analyticsData.insights) ? analyticsData.insights : [],
+        shareOfVoiceData: Array.isArray(analyticsData.shareOfVoiceData) ? analyticsData.shareOfVoiceData : [],
+        marketShareData: Array.isArray(analyticsData.marketShareData) ? analyticsData.marketShareData : [],
+        timeSeriesData: Array.isArray(analyticsData.timeSeriesData) ? analyticsData.timeSeriesData : [],
+        gapAnalysis: Array.isArray(analyticsData.gapAnalysis) ? analyticsData.gapAnalysis : [],
+        competitiveGaps: Array.isArray(analyticsData.competitiveGaps) ? analyticsData.competitiveGaps : [],
+      } : null;
+      
+      setAnalytics(validatedAnalytics);
       setIsLoading(false);
       setError(null);
       
