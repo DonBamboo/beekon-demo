@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -569,7 +570,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, currentWorkspace?.id, toast, WEBSITES_CACHE_DURATION]);
+  }, [user?.id, currentWorkspace?.id, toast, WEBSITES_CACHE_DURATION, syncWebsitesToAppState]);
 
   // State validation function to ensure workspace consistency
   const validateWorkspaceState = useCallback(() => {
@@ -657,6 +658,16 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return undefined;
   }, [workspaces, currentWorkspace, loading, validateWorkspaceState]);
 
+  // Memoized website status hash for dependency tracking
+  const websitesStatusHash = useMemo(() => {
+    return JSON.stringify(appState.workspace.websites.map(w => ({ 
+      id: w.id, 
+      crawl_status: w.crawl_status, 
+      last_crawled_at: w.last_crawled_at, 
+      updated_at: w.updated_at 
+    })));
+  }, [appState.workspace.websites]);
+
   // Sync AppStateContext website updates with local websites state
   // This ensures real-time status updates from websiteStatusService flow through to the UI
   useEffect(() => {
@@ -715,13 +726,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       return hasUpdates ? updatedWebsites : prevWebsites;
     });
   }, [
-    // Include a hash or stringified version to ensure effect runs when status changes
-    JSON.stringify(appState.workspace.websites.map(w => ({ 
-      id: w.id, 
-      crawl_status: w.crawl_status, 
-      last_crawled_at: w.last_crawled_at, 
-      updated_at: w.updated_at 
-    }))),
+    websitesStatusHash,
+    appState.workspace.websites,
     currentWorkspace?.id, 
     invalidateWebsitesCache
   ]);
