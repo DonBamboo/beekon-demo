@@ -1,5 +1,6 @@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useAppState } from "@/hooks/appStateHooks";
 import { supabase } from "@/integrations/supabase/client";
 import {
   createContext,
@@ -97,6 +98,7 @@ const WorkspaceContext = createContext<WorkspaceContextType | undefined>(
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { state: appState, setWebsites: setAppStateWebsites } = useAppState();
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(
     null
   );
@@ -408,6 +410,17 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     websitesCache.current = null;
   }, []);
 
+  // Sync websites to AppStateContext to ensure real-time updates work
+  const syncWebsitesToAppState = useCallback((websiteData: Website[]) => {
+    try {
+      setAppStateWebsites(websiteData);
+      console.log(`[SYNC] Synced ${websiteData.length} websites to AppStateContext:`, 
+        websiteData.map(w => ({ id: w.id, status: w.crawl_status })));
+    } catch (error) {
+      console.error('Error syncing websites to AppStateContext:', error);
+    }
+  }, [setAppStateWebsites]);
+
   const deleteWorkspace = useCallback(
     async (workspaceId: string) => {
       try {
@@ -523,6 +536,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setWebsites((prev) => {
         // Use a more efficient comparison - check length and IDs first
         if (prev.length !== websiteData.length) {
+          // Sync new websites to AppStateContext
+          syncWebsitesToAppState(websiteData);
           return websiteData;
         }
 
@@ -535,6 +550,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             prevWebsite.updated_at !== newWebsite.updated_at
           );
         });
+
+        if (hasChanges) {
+          // Sync updated websites to AppStateContext
+          syncWebsitesToAppState(websiteData);
+        }
 
         return hasChanges ? websiteData : prev;
       });
@@ -636,6 +656,75 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }
     return undefined;
   }, [workspaces, currentWorkspace, loading, validateWorkspaceState]);
+
+  // Sync AppStateContext website updates with local websites state
+  // This ensures real-time status updates from websiteStatusService flow through to the UI
+  useEffect(() => {
+    if (!currentWorkspace?.id) {
+      return;
+    }
+
+    // Get websites from AppStateContext that belong to current workspace
+    const appStateWebsites = appState.workspace.websites.filter(
+      w => w.workspace_id === currentWorkspace.id
+    );
+
+    if (appStateWebsites.length === 0) {
+      return;
+    }
+
+    // Update local websites state with any status changes from AppStateContext
+    setWebsites(prevWebsites => {
+      if (prevWebsites.length === 0) {
+        // If we don't have websites yet, don't replace from AppState (let normal fetch happen)
+        return prevWebsites;
+      }
+
+      let hasUpdates = false;
+      
+      // Merge status updates from AppStateContext with more robust checking
+      const updatedWebsites = prevWebsites.map(website => {
+        const appStateWebsite = appStateWebsites.find(w => w.id === website.id);
+        
+        if (appStateWebsite) {
+          const statusChanged = appStateWebsite.crawl_status !== website.crawl_status;
+          const lastCrawledChanged = appStateWebsite.last_crawled_at !== website.last_crawled_at;
+          const updatedAtChanged = appStateWebsite.updated_at !== website.updated_at;
+          
+          if (statusChanged || lastCrawledChanged || updatedAtChanged) {
+            hasUpdates = true;
+            
+            console.log(`[SYNC] Real-time sync: Website ${website.id} status: ${website.crawl_status} -> ${appStateWebsite.crawl_status}`);
+            
+            return {
+              ...website,
+              crawl_status: appStateWebsite.crawl_status,
+              last_crawled_at: appStateWebsite.last_crawled_at,
+              updated_at: appStateWebsite.updated_at,
+            };
+          }
+        }
+        return website;
+      });
+
+      // Invalidate cache when we detect any status changes
+      if (hasUpdates) {
+        invalidateWebsitesCache();
+      }
+
+      return hasUpdates ? updatedWebsites : prevWebsites;
+    });
+  }, [
+    // Include a hash or stringified version to ensure effect runs when status changes
+    JSON.stringify(appState.workspace.websites.map(w => ({ 
+      id: w.id, 
+      crawl_status: w.crawl_status, 
+      last_crawled_at: w.last_crawled_at, 
+      updated_at: w.updated_at 
+    }))),
+    currentWorkspace?.id, 
+    invalidateWebsitesCache
+  ]);
 
   const refetchWebsites = useCallback(async () => {
     setLoading(true);

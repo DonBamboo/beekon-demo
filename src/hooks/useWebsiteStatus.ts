@@ -120,7 +120,7 @@ export function useWebsiteStatus(
         clearCache("workspace_");
         clearCache(`websites_`);
 
-        console.log("Website status updated:", {
+        console.log("[REALTIME] Website status updated:", {
           websiteId: update.websiteId,
           status: update.status,
           timestamp: update.updatedAt,

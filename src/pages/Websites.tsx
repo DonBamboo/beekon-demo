@@ -54,7 +54,7 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 export default function Websites() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -68,6 +68,8 @@ export default function Websites() {
   const [websiteToDelete, setWebsiteToDelete] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isAddingWebsite, setIsAddingWebsite] = useState(false);
+  const modalCloseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const {
     websites,
@@ -103,8 +105,45 @@ export default function Websites() {
     }
   }, [websites, selectedWebsiteId, setSelectedWebsite]);
 
+  // Debounced modal state handler to prevent rapid open/close cycles
+  const handleModalStateChange = useCallback((open: boolean) => {
+    // Prevent any modal state changes while adding a website
+    if (isAddingWebsite && open) {
+      return;
+    }
+
+    if (modalCloseTimeoutRef.current) {
+      clearTimeout(modalCloseTimeoutRef.current);
+      modalCloseTimeoutRef.current = null;
+    }
+    
+    if (!open) {
+      // Delay modal closure slightly to prevent immediate reopening
+      modalCloseTimeoutRef.current = setTimeout(() => {
+        if (!isAddingWebsite) { // Double-check the state hasn't changed
+          setIsAddDialogOpen(false);
+        }
+      }, 50);
+    } else {
+      // Open immediately but only if not currently adding a website
+      if (!isAddingWebsite) {
+        setIsAddDialogOpen(true);
+      }
+    }
+  }, [isAddingWebsite]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (modalCloseTimeoutRef.current) {
+        clearTimeout(modalCloseTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleAddWebsite = async () => {
     setProcessing(true);
+    setIsAddingWebsite(true);
     if (!domain) {
       toast({
         title: "Error",
@@ -112,6 +151,7 @@ export default function Websites() {
         variant: "destructive",
       });
       setProcessing(false);
+      setIsAddingWebsite(false);
       return;
     }
 
@@ -122,6 +162,7 @@ export default function Websites() {
         variant: "destructive",
       });
       setProcessing(false);
+      setIsAddingWebsite(false);
       return;
     }
 
@@ -136,6 +177,7 @@ export default function Websites() {
         variant: "destructive",
       });
       setProcessing(false);
+      setIsAddingWebsite(false);
       return;
     }
 
@@ -148,6 +190,7 @@ export default function Websites() {
         variant: "destructive",
       });
       setProcessing(false);
+      setIsAddingWebsite(false);
       return;
     }
 
@@ -164,6 +207,7 @@ export default function Websites() {
         variant: "destructive",
       });
       setProcessing(false);
+      setIsAddingWebsite(false);
       return;
     }
 
@@ -173,39 +217,57 @@ export default function Websites() {
       description: `Analysis started for ${domain}`,
     });
 
-    // Refetch websites to get the new website data
-    await refetchWebsites();
-
-    // Find the newly added website and start monitoring it
-    const updatedWebsites = await supabase
-      .schema("beekon_data")
-      .from("websites")
-      .select("*")
-      .eq("workspace_id", currentWorkspace.id)
-      .eq("domain", addProtocol(domain))
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    if (updatedWebsites.data && updatedWebsites.data.length > 0) {
-      const newWebsite = updatedWebsites.data[0];
-      if (newWebsite?.id) {
-        await addWebsiteToMonitoring(newWebsite.id);
-
-        // Select the new website
-        setSelectedWebsite(newWebsite.id);
-
-        toast({
-          title: "Real-time monitoring started",
-          description: "You'll receive updates as the website is analyzed",
-          variant: "default",
-        });
-      }
-    }
-
+    // Close modal immediately after successful webhook response
+    // This prevents race conditions with state updates
     setDomain("");
     setDisplayName("");
     setProcessing(false);
-    setIsAddDialogOpen(false);
+    handleModalStateChange(false);
+
+    // Use setTimeout to defer async operations until after modal closure
+    setTimeout(async () => {
+      try {
+        // Refetch websites to get the new website data
+        await refetchWebsites();
+
+        // Find the newly added website and start monitoring it
+        const updatedWebsites = await supabase
+          .schema("beekon_data")
+          .from("websites")
+          .select("*")
+          .eq("workspace_id", currentWorkspace.id)
+          .eq("domain", addProtocol(domain))
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (updatedWebsites.data && updatedWebsites.data.length > 0) {
+          const newWebsite = updatedWebsites.data[0];
+          if (newWebsite?.id) {
+            await addWebsiteToMonitoring(newWebsite.id);
+
+            // Select the new website
+            setSelectedWebsite(newWebsite.id);
+
+            toast({
+              title: "Real-time monitoring started",
+              description: "You'll receive updates as the website is analyzed",
+              variant: "default",
+            });
+          }
+        }
+      } catch (error) {
+        // Handle any errors during post-modal operations
+        console.error("Error during website setup:", error);
+        toast({
+          title: "Setup Warning",
+          description: "Website added successfully, but monitoring setup may need manual retry.",
+          variant: "default",
+        });
+      } finally {
+        // Reset adding state when all operations complete
+        setIsAddingWebsite(false);
+      }
+    }, 100); // Small delay to ensure modal has closed
   };
 
   const getStatusIndicator = (website: Website) => {
@@ -359,11 +421,11 @@ export default function Websites() {
                 showEstimatedSize={true}
               />
             )}
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <Dialog open={isAddDialogOpen && !isAddingWebsite} onOpenChange={handleModalStateChange}>
               <DialogTrigger asChild>
-                <Button disabled={!currentWorkspace?.id || workspaceLoading}>
+                <Button disabled={!currentWorkspace?.id || workspaceLoading || isAddingWebsite}>
                   <Plus className="h-4 w-4 mr-2" />
-                  {workspaceLoading ? "Loading..." : "Add Website"}
+                  {workspaceLoading ? "Loading..." : isAddingWebsite ? "Adding..." : "Add Website"}
                 </Button>
               </DialogTrigger>
               <DialogContent>
@@ -396,15 +458,15 @@ export default function Websites() {
                 <DialogFooter>
                   <Button
                     variant="outline"
-                    onClick={() => setIsAddDialogOpen(false)}
+                    onClick={() => handleModalStateChange(false)}
                   >
                     Cancel
                   </Button>
                   <LoadingButton
                     onClick={handleAddWebsite}
-                    loading={processing}
+                    loading={processing || isAddingWebsite}
                     loadingText="Starting..."
-                    disabled={!currentWorkspace?.id}
+                    disabled={!currentWorkspace?.id || isAddingWebsite}
                     icon={<Play className="h-4 w-4" />}
                   >
                     Start Analysis
@@ -415,8 +477,9 @@ export default function Websites() {
           </div>
         </div>
 
+
         {/* Empty State */}
-        {websites?.length === 0 && (
+        {websites?.length === 0 && !isAddingWebsite && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Primary Empty State */}
             <EmptyState
@@ -427,9 +490,11 @@ export default function Websites() {
               actions={[
                 {
                   label: "Add Your First Website",
-                  onClick: () => setIsAddDialogOpen(true),
+                  onClick: () => !isAddingWebsite && handleModalStateChange(true),
                   variant: "default",
                   icon: Plus,
+                  loading: isAddingWebsite,
+                  loadingText: "Adding...",
                 },
               ]}
             />
@@ -495,10 +560,11 @@ export default function Websites() {
                     variant="ghost"
                     size="sm"
                     className="w-full"
-                    onClick={() => setIsAddDialogOpen(true)}
+                    onClick={() => !isAddingWebsite && handleModalStateChange(true)}
+                    disabled={isAddingWebsite}
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Get Started
+                    {isAddingWebsite ? "Adding..." : "Get Started"}
                   </Button>
                 </div>
               </CardContent>

@@ -182,6 +182,12 @@ export type AppStateAction =
       };
     }
   | {
+      type: "SET_WEBSITES";
+      payload: {
+        websites: Website[];
+      };
+    }
+  | {
       type: "UPDATE_COMPETITOR_STATUS";
       payload: {
         competitorId: string;
@@ -339,6 +345,16 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
         workspace: {
           ...state.workspace,
           websites: updatedWebsites,
+        },
+      };
+    }
+
+    case "SET_WEBSITES": {
+      return {
+        ...state,
+        workspace: {
+          ...state.workspace,
+          websites: action.payload.websites,
         },
       };
     }
@@ -580,6 +596,7 @@ const AppStateContext = createContext<{
   dispatch: React.Dispatch<AppStateAction>;
   // Helper functions for common operations
   setSelectedWebsite: (websiteId: string) => void;
+  setWebsites: (websites: Website[]) => void;
   updateWebsiteStatus: (
     websiteId: string,
     status: string,
@@ -629,6 +646,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // Helper functions
   const setSelectedWebsite = useCallback((websiteId: string) => {
     dispatch({ type: "SET_SELECTED_WEBSITE", payload: { websiteId } });
+  }, []);
+
+  const setWebsites = useCallback((websites: Website[]) => {
+    dispatch({ type: "SET_WEBSITES", payload: { websites } });
   }, []);
 
   // Note: updateWebsiteStatus will be defined after other cache functions
@@ -842,6 +863,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         state,
         dispatch,
         setSelectedWebsite,
+        setWebsites,
         updateWebsiteStatus,
         updateCompetitorStatus,
         getCompetitorStatus,
