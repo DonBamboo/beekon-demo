@@ -2,7 +2,8 @@ import React, { Suspense } from "react";
 import { ChartSkeleton } from "../components/LoadingStates";
 
 // Higher-order component for creating lazy components
-export function withLazyLoading<T extends React.ComponentType<Record<string, unknown>>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function withLazyLoading<T extends React.ComponentType<any>>(
   Component: T,
   fallback: React.ComponentType = () => React.createElement(ChartSkeleton)
 ) {
@@ -14,7 +15,8 @@ export function withLazyLoading<T extends React.ComponentType<Record<string, unk
 
   return React.memo((props: Props) => (
     <Suspense fallback={React.createElement(fallback)}>
-      <LazyComponent {...props} />
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <LazyComponent {...(props as any)} />
     </Suspense>
   ));
 }

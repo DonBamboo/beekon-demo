@@ -9,7 +9,8 @@ interface ErrorFallbackProps {
 }
 
 // HOC for wrapping components with error boundary
-export function withErrorBoundary<T extends React.ComponentType<Record<string, unknown>>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function withErrorBoundary<T extends React.ComponentType<any>>(
   Component: T,
   errorFallback?: React.ComponentType<ErrorFallbackProps>
 ) {
@@ -18,7 +19,8 @@ export function withErrorBoundary<T extends React.ComponentType<Record<string, u
     React.ComponentProps<T>
   >((props, ref) => (
     <ErrorBoundary fallback={errorFallback}>
-      <Component {...props} ref={ref} />
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <Component {...(props as any)} ref={ref} />
     </ErrorBoundary>
   ));
 

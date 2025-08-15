@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { AnalysisResult, LLMResult, UIAnalysisResult } from "@/types/database";
+import { Database } from "@/integrations/supabase/types";
 // Using local AnalysisSession interface defined in this file
 
 // Helper functions for safe type extraction
@@ -208,6 +209,9 @@ export class AnalysisService {
     }
 
     const topicId = topicIds[0]; // Single topic per analysis
+    if (!topicId) {
+      throw new Error("No topic ID available for prompt creation");
+    }
 
     for (const prompt of customPrompts) {
       const { data: newPrompt, error } = await supabase
@@ -219,7 +223,7 @@ export class AnalysisService {
           is_active: true,
           priority: 1,
           prompt_type: "custom",
-        })
+        } as Database["beekon_data"]["Tables"]["prompts"]["Insert"])
         .select("id")
         .single();
 
@@ -253,7 +257,7 @@ export class AnalysisService {
           completedSteps: 0,
           totalSteps: config.customPrompts.length * config.llmModels.length,
         } as Record<string, unknown>,
-      })
+      } as Database["beekon_data"]["Tables"]["analysis_sessions"]["Insert"])
       .select()
       .single();
 

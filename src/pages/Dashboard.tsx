@@ -241,9 +241,9 @@ export default function Dashboard() {
           workspaceId: currentWorkspace?.id,
           totalWebsites: websiteIds.length,
           analysisCount: metrics?.totalAnalyses || 0,
-          averageConfidence: (metrics as Record<string, unknown>)?.averageConfidence as number || 0,
-          averageSentiment: (metrics as Record<string, unknown>)?.averageSentiment as number || 0,
-          mentionRate: (metrics as Record<string, unknown>)?.mentionRate as number || 0,
+          averageConfidence: metrics?.overallVisibilityScore || 0,
+          averageSentiment: metrics?.sentimentScore || 0,
+          mentionRate: metrics?.totalMentions || 0,
         },
       };
 
@@ -403,7 +403,8 @@ export default function Dashboard() {
     <TooltipProvider>
       <div className="space-y-6">
         <DashboardHeader
-          currentWorkspace={currentWorkspace}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          currentWorkspace={currentWorkspace as any}
           metrics={metrics}
           dateFilter={dateFilter}
           setDateFilter={setDateFilter}
@@ -619,12 +620,27 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* LLM Performance Chart */}
             {llmPerformance.length > 0 && (
-              <LLMPerformanceChart ref={llmChartRef} llmData={llmPerformance as Array<Record<string, unknown>>} />
+              <LLMPerformanceChart ref={llmChartRef} llmData={llmPerformance.map(llm => ({
+                provider: (llm as Record<string, unknown>).provider as string,
+                mentionRate: (llm as Record<string, unknown>).mentionRate as number,
+                averageRank: (llm as Record<string, unknown>).averageRank as number,
+                sentiment: (llm as Record<string, unknown>).sentiment as number,
+                totalAnalyses: (llm as Record<string, unknown>).totalAnalyses as number
+              }))} />
             )}
 
             {/* Website Performance Chart */}
             {websitePerformance.length > 0 && (
-              <WebsitePerformanceChart ref={websiteChartRef} websiteData={websitePerformance as Array<Record<string, unknown>>} />
+              <WebsitePerformanceChart ref={websiteChartRef} websiteData={websitePerformance.map(site => ({
+                websiteId: (site as Record<string, unknown>).websiteId as string,
+                domain: (site as Record<string, unknown>).domain as string,
+                displayName: (site as Record<string, unknown>).displayName as string,
+                visibility: (site as Record<string, unknown>).visibility as number,
+                mentions: (site as Record<string, unknown>).mentions as number,
+                averageRank: (site as Record<string, unknown>).averageRank as number,
+                sentiment: (site as Record<string, unknown>).sentiment as number,
+                lastAnalyzed: (site as Record<string, unknown>).lastAnalyzed as string || new Date().toISOString()
+              }))} />
             )}
 
             {/* Sentiment Distribution */}
@@ -649,12 +665,21 @@ export default function Dashboard() {
 
             {/* Mention Trends */}
             {timeSeriesData.length > 0 && (
-              <MentionTrendChart ref={mentionTrendChartRef} trendData={timeSeriesData as Array<Record<string, unknown>>} />
+              <MentionTrendChart ref={mentionTrendChartRef} trendData={timeSeriesData.map(data => ({
+                date: (data as Record<string, unknown>).date as string,
+                mentions: (data as Record<string, unknown>).mentions as number,
+                sentiment: (data as Record<string, unknown>).sentiment as number
+              }))} />
             )}
 
             {/* Topic Radar Chart */}
             {topicPerformance.length > 0 && (
-              <TopicRadarChart ref={topicRadarChartRef} topicData={topicPerformance as Array<Record<string, unknown>>} />
+              <TopicRadarChart ref={topicRadarChartRef} topicData={topicPerformance.map(topic => ({
+                topic: (topic as Record<string, unknown>).topic as string,
+                visibility: (topic as Record<string, unknown>).visibility as number,
+                mentions: (topic as Record<string, unknown>).mentions as number,
+                sentiment: (topic as Record<string, unknown>).sentiment as number
+              }))} />
             )}
           </div>
         )}
@@ -690,12 +715,12 @@ export default function Dashboard() {
                     key={index}
                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
                     onClick={() =>
-                      handleMetricClick("topic-details", { topic: (item as Record<string, unknown>).topic })
+                      handleMetricClick("topic-details", { topic: String((item as Record<string, unknown>).topic) })
                     }
                   >
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-2">
-                        <h4 className="font-medium">{(item as Record<string, unknown>).topic}</h4>
+                        <h4 className="font-medium">{String((item as Record<string, unknown>).topic)}</h4>
                         {item.trend !== 0 &&
                           React.createElement(getTrendIcon(Number(item.trend) || 0), {
                             className: `h-4 w-4 ${getTrendColor(Number(item.trend) || 0)}`,
@@ -744,7 +769,7 @@ export default function Dashboard() {
                           <div className="text-sm text-muted-foreground">
                             Mentions
                           </div>
-                          <div className="font-medium">{(item as Record<string, unknown>).mentions}</div>
+                          <div className="font-medium">{String((item as Record<string, unknown>).mentions)}</div>
                         </div>
                       </div>
                     </div>
