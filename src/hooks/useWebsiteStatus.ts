@@ -298,7 +298,8 @@ export function useWorkspaceWebsiteStatus(
     }
 
     // Subscribe to new workspace if we have one
-    if (currentWorkspaceId && websiteIds.length > 0) {
+    // Remove websiteIds.length > 0 requirement to allow immediate subscription
+    if (currentWorkspaceId) {
       const websiteIdsChanged =
         JSON.stringify(previousWebsiteIds.sort()) !==
         JSON.stringify([...websiteIds].sort());

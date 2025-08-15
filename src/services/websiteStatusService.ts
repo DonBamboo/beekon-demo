@@ -62,11 +62,15 @@ class WebsiteStatusService {
 
     this.subscriptions.set(workspaceId, subscription);
 
+    console.log(`[REALTIME] Setting up subscription for workspace ${workspaceId} with ${websiteIds.length} websites:`, websiteIds);
+
     // Try real-time first, fallback to polling if needed
     const realtimeSuccess = await this.setupRealtimeSubscription(subscription);
     if (!realtimeSuccess) {
-      console.warn(`Real-time subscription failed for workspace ${workspaceId}, falling back to polling`);
+      console.warn(`[REALTIME] Real-time subscription failed for workspace ${workspaceId}, falling back to polling`);
       this.startPollingForWorkspace(subscription);
+    } else {
+      console.log(`[REALTIME] Real-time subscription established successfully for workspace ${workspaceId}`);
     }
   }
 
@@ -89,24 +93,31 @@ class WebsiteStatusService {
             if (!subscription.isActive) return;
 
             const website = payload.new as Website;
-            if (subscription.websiteIds.has(website.id)) {
-              this.handleStatusUpdate(subscription, {
-                websiteId: website.id,
-                status: website.crawl_status as WebsiteStatus,
-                lastCrawledAt: website.last_crawled_at,
-                updatedAt: website.updated_at || new Date().toISOString(),
-              });
-            }
+            console.log(`[REALTIME] Received update for website ${website.id}:`, {
+              status: website.crawl_status,
+              workspace: website.workspace_id,
+              timestamp: new Date().toISOString()
+            });
+
+            // Process ALL workspace website updates - no filtering by websiteIds
+            // This ensures newly added websites are immediately monitored
+            this.handleStatusUpdate(subscription, {
+              websiteId: website.id,
+              status: website.crawl_status as WebsiteStatus,
+              lastCrawledAt: website.last_crawled_at,
+              updatedAt: website.updated_at || new Date().toISOString(),
+            });
           }
         )
         .subscribe((status) => {
+          console.log(`[REALTIME] Subscription status for workspace ${subscription.workspaceId}: ${status}`);
           if (status === 'SUBSCRIBED') {
-            console.log(`Real-time subscription active for workspace ${subscription.workspaceId}`);
+            console.log(`[REALTIME] ✅ Subscription active for workspace ${subscription.workspaceId}`);
           } else if (status === 'CHANNEL_ERROR') {
-            console.error(`Real-time subscription error for workspace ${subscription.workspaceId}`);
+            console.error(`[REALTIME] ❌ Subscription error for workspace ${subscription.workspaceId}`);
             this.handleRealtimeError(subscription);
           } else if (status === 'TIMED_OUT') {
-            console.warn(`Real-time subscription timeout for workspace ${subscription.workspaceId}`);
+            console.warn(`[REALTIME] ⏰ Subscription timeout for workspace ${subscription.workspaceId}`);
             this.handleRealtimeError(subscription);
           }
         });
