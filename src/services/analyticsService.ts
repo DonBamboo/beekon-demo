@@ -4,7 +4,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import type { AnalysisFilters } from "@/contexts/AppStateContext";
+import type { AnalysisFilters } from "@/hooks/useAnalysisQuery";
 
 // Analytics interfaces for Analysis page
 export interface AnalysisAnalytics {
@@ -123,11 +123,16 @@ class AnalyticsService {
         .select(
           `
           *,
-          prompts (
+          prompts!inner (
             id,
-            topic,
             prompt_text,
-            created_at
+            topic_id,
+            created_at,
+            topics!inner (
+              id,
+              topic_name,
+              website_id
+            )
           )
         `
         )
@@ -142,36 +147,16 @@ class AnalyticsService {
         }
 
         if (filters.topic && filters.topic !== "all") {
-          query = query.eq("prompts.topic", filters.topic);
+          query = query.eq("prompts.topics.topic_name", filters.topic);
         }
 
-        if (filters.llm && filters.llm !== "all") {
-          query = query.eq("llm_provider", filters.llm);
+        if (filters.llmProvider && filters.llmProvider !== "all") {
+          query = query.eq("llm_provider", filters.llmProvider);
         }
 
-        if (filters.mentionStatus && filters.mentionStatus !== "all") {
-          const isMentioned = filters.mentionStatus === "mentioned";
-          query = query.eq("is_mentioned", isMentioned);
-        }
-
-        if (filters.sentiment && filters.sentiment !== "all") {
-          // Apply sentiment filter based on sentiment_score
-          if (filters.sentiment === "positive") {
-            query = query.gt("sentiment_score", 0);
-          } else if (filters.sentiment === "negative") {
-            query = query.lt("sentiment_score", 0);
-          } else if (filters.sentiment === "neutral") {
-            query = query.eq("sentiment_score", 0);
-          }
-        }
-
-        console.log("filters", filters);
-
-        if (filters.confidenceRange && filters.confidenceRange.length === 2) {
-          const [min, max] = filters.confidenceRange;
-          query = query
-            .gte("confidence_score", min / 100)
-            .lte("confidence_score", max / 100);
+        if (filters.searchQuery) {
+          // Apply search query to relevant text fields
+          query = query.or(`summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%`);
         }
       }
 
@@ -192,13 +177,13 @@ class AnalyticsService {
    */
   async getCompetitorAnalytics(
     websiteId: string,
-    filters?: Record<string, unknown>
+    _filters?: Record<string, unknown>
   ): Promise<CompetitorAnalytics> {
     try {
       // Get complete competitor data with analysis results
       const { data: competitorData, error } = await supabase
         .schema("beekon_data")
-        .from("competitor_analysis_results_view")
+        .from("mv_competitor_performance")
         .select("*")
         .eq("website_id", websiteId);
 
@@ -216,13 +201,13 @@ class AnalyticsService {
    */
   async getDashboardAnalytics(
     websiteIds: string[],
-    filters?: Record<string, unknown>
+    _filters?: Record<string, unknown>
   ): Promise<DashboardAnalytics> {
     try {
       // Get aggregated data across all websites
       const { data: dashboardData, error } = await supabase
         .schema("beekon_data")
-        .from("dashboard_metrics_view")
+        .from("llm_analysis_results")
         .select("*")
         .in("website_id", websiteIds);
 
@@ -239,7 +224,7 @@ class AnalyticsService {
    * Calculate analytics from analysis results data
    */
   private calculateAnalysisAnalytics(
-    results: Record<string, unknown>[]
+    results: any[]
   ): AnalysisAnalytics {
     if (results.length === 0) {
       return this.getEmptyAnalysisAnalytics();
@@ -274,12 +259,12 @@ class AnalyticsService {
         : 0;
 
     // Group by topic for topic-based analytics
-    const topicGroups = results.reduce((acc, r) => {
-      const topic = r.prompts?.topic || "Unknown";
+    const topicGroups = results.reduce((acc, r: any) => {
+      const topic = r.prompts?.topics?.topic_name || "Unknown";
       if (!acc[topic]) acc[topic] = [];
       acc[topic].push(r);
       return acc;
-    }, {} as Record<string, Record<string, unknown>[]>);
+    }, {} as Record<string, any[]>);
 
     const topPerformingTopics = Object.entries(topicGroups)
       .map(([topic, topicResults]) => {
@@ -307,11 +292,11 @@ class AnalyticsService {
       .slice(0, 10);
 
     // Group by LLM provider
-    const llmGroups = results.reduce((acc, r) => {
+    const llmGroups = results.reduce((acc, r: any) => {
       if (!acc[r.llm_provider]) acc[r.llm_provider] = [];
       acc[r.llm_provider].push(r);
       return acc;
-    }, {} as Record<string, Record<string, unknown>[]>);
+    }, {} as Record<string, any[]>);
 
     const llmPerformance = Object.entries(llmGroups).map(
       ([provider, llmResults]) => {
@@ -388,7 +373,7 @@ class AnalyticsService {
    * Calculate competitor analytics from competitor data
    */
   private calculateCompetitorAnalytics(
-    data: Record<string, unknown>[]
+    _data: any[]
   ): CompetitorAnalytics {
     // Implementation will depend on the competitor data structure
     return {
@@ -405,7 +390,7 @@ class AnalyticsService {
    * Calculate dashboard analytics from dashboard data
    */
   private calculateDashboardAnalytics(
-    data: Record<string, unknown>[]
+    _data: any[]
   ): DashboardAnalytics {
     // Implementation will depend on the dashboard data structure
     return {
