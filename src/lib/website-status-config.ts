@@ -1,6 +1,6 @@
 // Website status indicator configurations
 
-import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
+import { CheckCircle, XCircle, Clock } from "lucide-react";
 import { Spinner } from "@/components/LoadingStates";
 
 export const statusConfig = {

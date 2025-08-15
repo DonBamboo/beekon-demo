@@ -2,6 +2,24 @@ import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ExportFormat } from "@/types/database";
 import { useExportHandler } from "@/lib/export-utils";
+import type { 
+  CompetitorWithStatus
+} from "@/hooks/useCompetitorsQuery";
+import type { 
+  CompetitorPerformance,
+  CompetitiveGapAnalysis,
+  CompetitorAnalytics 
+} from "@/services/competitorService";
+
+// Local interface for MarketShareItem since it's not exported
+interface MarketShareItem {
+  name: string;
+  normalizedValue: number;
+  rawValue: number;
+  competitorId?: string;
+  mentions?: number;
+  dataType?: string;
+}
 import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import {
   useAddCompetitor,
@@ -69,18 +87,18 @@ export default function Competitors() {
     return (
       (analytics?.shareOfVoiceData as Record<string, unknown>[])?.map(
         (item: Record<string, unknown>, index: number) => ({
-          name: item.name,
-          value: item.shareOfVoice, // Use raw share of voice percentage
-          shareOfVoice: item.shareOfVoice,
-          totalMentions: item.totalMentions,
-          totalAnalyses: item.totalAnalyses,
-          avgRank: item.avgRank,
-          competitorId: item.competitorId,
-          dataType: item.dataType,
+          name: item.name as string,
+          value: item.shareOfVoice as number,
+          shareOfVoice: item.shareOfVoice as number,
+          totalMentions: item.totalMentions as number,
+          totalAnalyses: item.totalAnalyses as number,
+          avgRank: item.avgRank as number,
+          competitorId: item.competitorId as string,
+          dataType: item.dataType as string,
           fill:
             item.name === "Your Brand"
               ? getYourBrandColor()
-              : getCompetitorColor(item.competitorId, item.name, index),
+              : getCompetitorColor(item.competitorId as string, item.name as string, index),
         })
       ) || []
     );
@@ -386,13 +404,9 @@ export default function Competitors() {
 
         {/* Competitors List */}
         <CompetitorsList
-          competitorsWithStatus={
-            competitorsWithStatus as Record<string, unknown>[]
-          }
-          marketShareData={
-            (analytics?.marketShareData || []) as Record<string, unknown>[]
-          }
-          performance={performance as Record<string, unknown>[]}
+          competitorsWithStatus={competitorsWithStatus as unknown as CompetitorWithStatus[]}
+          marketShareData={(analytics?.marketShareData || []) as MarketShareItem[]}
+          performance={performance as CompetitorPerformance[]}
           sortBy={(filters as CompetitorFilters).sortBy}
           confirmDelete={confirmDelete}
           isDeleting={deleteCompetitorMutation.isPending}
@@ -400,10 +414,8 @@ export default function Competitors() {
 
         {/* Competitive Gap Analysis */}
         <CompetitiveGapChart
-          gapAnalysis={
-            (analytics?.gapAnalysis as Record<string, unknown>[]) || []
-          }
-          analytics={analytics as Record<string, unknown>}
+          gapAnalysis={(analytics?.gapAnalysis || []) as CompetitiveGapAnalysis[]}
+          analytics={analytics as CompetitorAnalytics | null}
           dateFilter={(filters as CompetitorFilters).dateFilter}
         />
 

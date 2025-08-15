@@ -6,6 +6,30 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { AnalysisFilters } from "@/hooks/useAnalysisQuery";
 
+// Type definitions for database result structures
+interface AnalysisResultData {
+  llm_provider: string;
+  is_mentioned: boolean;
+  rank_position: number;
+  confidence_score: number;
+  sentiment_score: number;
+  summary_text: string;
+  response_text: string;
+  analyzed_at: string;
+  created_at: string;
+  prompts?: {
+    id: string;
+    prompt_text: string;
+    topic_id: string;
+    created_at: string;
+    topics?: {
+      id: string;
+      topic_name: string;
+      website_id: string;
+    };
+  };
+}
+
 // Analytics interfaces for Analysis page
 export interface AnalysisAnalytics {
   totalResults: number;
@@ -165,7 +189,7 @@ class AnalyticsService {
       if (error) throw error;
 
       // Calculate analytics from complete dataset
-      return this.calculateAnalysisAnalytics(results || []);
+      return this.calculateAnalysisAnalytics((results || []) as AnalysisResultData[]);
     } catch (error) {
       console.error("Failed to get analysis analytics:", error);
       throw error;
@@ -224,7 +248,7 @@ class AnalyticsService {
    * Calculate analytics from analysis results data
    */
   private calculateAnalysisAnalytics(
-    results: any[]
+    results: AnalysisResultData[]
   ): AnalysisAnalytics {
     if (results.length === 0) {
       return this.getEmptyAnalysisAnalytics();
@@ -259,25 +283,25 @@ class AnalyticsService {
         : 0;
 
     // Group by topic for topic-based analytics
-    const topicGroups = results.reduce((acc, r: any) => {
+    const topicGroups = results.reduce((acc, r) => {
       const topic = r.prompts?.topics?.topic_name || "Unknown";
       if (!acc[topic]) acc[topic] = [];
       acc[topic].push(r);
       return acc;
-    }, {} as Record<string, any[]>);
+    }, {} as Record<string, AnalysisResultData[]>);
 
     const topPerformingTopics = Object.entries(topicGroups)
-      .map(([topic, topicResults]) => {
+      .map(([topic, topicResults]: [string, AnalysisResultData[]]) => {
         const topicMentioned = topicResults.filter(
-          (r) => r.is_mentioned
+          (r: AnalysisResultData) => r.is_mentioned
         ).length;
         const topicMentionRate = (topicMentioned / topicResults.length) * 100;
         const rankedResults = topicResults.filter(
-          (r) => r.is_mentioned && r.rank_position > 0
+          (r: AnalysisResultData) => r.is_mentioned && r.rank_position > 0
         );
         const avgRank =
           rankedResults.length > 0
-            ? rankedResults.reduce((sum, r) => sum + r.rank_position, 0) /
+            ? rankedResults.reduce((sum: number, r: AnalysisResultData) => sum + r.rank_position, 0) /
               rankedResults.length
             : 0;
 
@@ -292,31 +316,32 @@ class AnalyticsService {
       .slice(0, 10);
 
     // Group by LLM provider
-    const llmGroups = results.reduce((acc, r: any) => {
-      if (!acc[r.llm_provider]) acc[r.llm_provider] = [];
-      acc[r.llm_provider].push(r);
+    const llmGroups = results.reduce((acc, r) => {
+      const provider = r.llm_provider || 'unknown';
+      if (!acc[provider]) acc[provider] = [];
+      acc[provider].push(r);
       return acc;
-    }, {} as Record<string, any[]>);
+    }, {} as Record<string, AnalysisResultData[]>);
 
     const llmPerformance = Object.entries(llmGroups).map(
-      ([provider, llmResults]) => {
-        const mentioned = llmResults.filter((r) => r.is_mentioned).length;
+      ([provider, llmResults]: [string, AnalysisResultData[]]) => {
+        const mentioned = llmResults.filter((r: AnalysisResultData) => r.is_mentioned).length;
         const mentionRate = (mentioned / llmResults.length) * 100;
         const withConfidence = llmResults.filter(
-          (r) => r.is_mentioned && r.confidence_score
+          (r: AnalysisResultData) => r.is_mentioned && r.confidence_score
         );
         const avgConfidence =
           withConfidence.length > 0
-            ? (withConfidence.reduce((sum, r) => sum + r.confidence_score, 0) /
+            ? (withConfidence.reduce((sum: number, r: AnalysisResultData) => sum + r.confidence_score, 0) /
                 withConfidence.length) *
               100
             : 0;
         const withRank = llmResults.filter(
-          (r) => r.is_mentioned && r.rank_position > 0
+          (r: AnalysisResultData) => r.is_mentioned && r.rank_position > 0
         );
         const avgRank =
           withRank.length > 0
-            ? withRank.reduce((sum, r) => sum + r.rank_position, 0) /
+            ? withRank.reduce((sum: number, r: AnalysisResultData) => sum + r.rank_position, 0) /
               withRank.length
             : 0;
 
@@ -373,7 +398,7 @@ class AnalyticsService {
    * Calculate competitor analytics from competitor data
    */
   private calculateCompetitorAnalytics(
-    _data: any[]
+    _data: unknown[]
   ): CompetitorAnalytics {
     // Implementation will depend on the competitor data structure
     return {
@@ -390,7 +415,7 @@ class AnalyticsService {
    * Calculate dashboard analytics from dashboard data
    */
   private calculateDashboardAnalytics(
-    _data: any[]
+    _data: unknown[]
   ): DashboardAnalytics {
     // Implementation will depend on the dashboard data structure
     return {

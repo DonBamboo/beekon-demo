@@ -9,7 +9,7 @@ interface ErrorFallbackProps {
 }
 
 // HOC for wrapping components with error boundary
-export function withErrorBoundary<T extends React.ComponentType<unknown>>(
+export function withErrorBoundary<T extends React.ComponentType<Record<string, unknown>>>(
   Component: T,
   errorFallback?: React.ComponentType<ErrorFallbackProps>
 ) {
@@ -18,7 +18,7 @@ export function withErrorBoundary<T extends React.ComponentType<unknown>>(
     React.ComponentProps<T>
   >((props, ref) => (
     <ErrorBoundary fallback={errorFallback}>
-      <Component {...(props as Record<string, unknown>)} ref={ref} />
+      <Component {...props} ref={ref} />
     </ErrorBoundary>
   ));
 

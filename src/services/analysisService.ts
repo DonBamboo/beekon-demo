@@ -219,7 +219,7 @@ export class AnalysisService {
           is_active: true,
           priority: 1,
           prompt_type: "custom",
-        } as Record<string, unknown>)
+        })
         .select("id")
         .single();
 
@@ -244,7 +244,7 @@ export class AnalysisService {
         user_id: userId,
         workspace_id: workspaceId,
         status: "pending" as const,
-        configuration: config as Record<string, unknown>,
+        configuration: config as unknown as Record<string, unknown>,
         progress_data: {
           analysisId: "", // Will be set to session ID
           status: "pending",

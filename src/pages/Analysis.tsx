@@ -329,8 +329,8 @@ export default function Analysis() {
   const {
     analytics: analysisAnalytics,
     isLoading: isLoadingAnalytics,
-    error: analyticsError,
-    refreshAnalytics,
+    // error: analyticsError, // TODO: Add error handling UI
+    // refreshAnalytics, // TODO: Add manual refresh functionality
   } = useAnalysisAnalytics();
 
   // Filters are now managed globally - no local sync needed
@@ -626,7 +626,11 @@ export default function Analysis() {
         analysisSession: preset.filters.analysisSession || "all",
         searchQuery: preset.filters.searchQuery || "",
       });
-      setCustomDateRange(preset.filters.customDateRange as { start: Date; end: Date } | null || null);
+      const dateRange = preset.filters.customDateRange as { start: Date; end: Date } | null;
+      setCustomDateRange(dateRange ? {
+        start: dateRange.start.toISOString(),
+        end: dateRange.end.toISOString()
+      } : null);
       setSortBy((preset.filters.sortBy as "date" | "confidence" | "mentions" | "rank") || "date");
       setSortOrder((preset.filters.sortOrder as "asc" | "desc") || "desc");
 

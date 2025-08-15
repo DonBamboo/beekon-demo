@@ -302,7 +302,7 @@ export function useNetworkStatus() {
     // Listen for connection changes
     const connection = (navigator as NavigatorExtended).connection;
     if (connection) {
-      (connection as EventTarget).addEventListener('change', updateNetworkStatus);
+      (connection as unknown as EventTarget).addEventListener('change', updateNetworkStatus);
     }
 
     // Initial check
@@ -312,7 +312,7 @@ export function useNetworkStatus() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       if (connection) {
-        (connection as EventTarget).removeEventListener('change', updateNetworkStatus);
+        (connection as unknown as EventTarget).removeEventListener('change', updateNetworkStatus);
       }
     };
   }, []);
