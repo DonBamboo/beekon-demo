@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/LoadingStates";
 import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEffect, useRef } from "react";
 
 export type WebsiteStatusType = "pending" | "crawling" | "completed" | "failed";
 
@@ -112,6 +113,36 @@ export function WebsiteStatusIndicator({
 }: WebsiteStatusIndicatorProps) {
   const config = statusConfig[status];
   const sizeStyles = sizeConfig[size];
+  
+  // Debug: Track prop changes in development
+  const prevStatusRef = useRef<WebsiteStatusType | undefined>();
+  const renderCountRef = useRef(0);
+  
+  useEffect(() => {
+    renderCountRef.current += 1;
+    
+    if (process.env.NODE_ENV === 'development') {
+      const prevStatus = prevStatusRef.current;
+      if (prevStatus !== undefined && prevStatus !== status) {
+        console.log(`[WEBSITE-STATUS-INDICATOR] 🎨 Status changed:`, {
+          from: prevStatus,
+          to: status,
+          renderCount: renderCountRef.current,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      if (renderCountRef.current === 1) {
+        console.log(`[WEBSITE-STATUS-INDICATOR] 🎨 Initial render:`, {
+          status,
+          lastCrawledAt,
+          renderCount: renderCountRef.current
+        });
+      }
+    }
+    
+    prevStatusRef.current = status;
+  }, [status, lastCrawledAt]);
 
   if (!config) {
     console.warn(`Unknown website status: ${status}`);

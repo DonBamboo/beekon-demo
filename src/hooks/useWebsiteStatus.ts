@@ -53,12 +53,25 @@ export function useWebsiteStatus(
     useAppState();
   const { toast } = useToast();
   const activeSubscriptionsRef = useRef<Set<string>>(new Set());
+  const previousStatusRef = useRef<Map<string, WebsiteStatus>>(new Map());
 
   /**
-   * Show toast notification for status changes
+   * Show toast notification for status changes (only when status actually changes)
    */
   const showStatusNotification = useCallback(
     (update: WebsiteStatusUpdate) => {
+      // Check if status actually changed from previous state
+      const previousStatus = previousStatusRef.current.get(update.websiteId);
+      const currentStatus = update.status;
+
+      // Only show toast if status changed (not for duplicate status updates)
+      if (previousStatus === currentStatus) {
+        return; // Skip duplicate status notifications
+      }
+
+      // Update previous status tracking
+      previousStatusRef.current.set(update.websiteId, currentStatus);
+
       const statusMessages = {
         pending: {
           title: "Website Added",
@@ -82,7 +95,7 @@ export function useWebsiteStatus(
         },
       };
 
-      const message = statusMessages[update.status as WebsiteStatus];
+      const message = statusMessages[currentStatus as WebsiteStatus];
       if (message) {
         toast({
           title: message.title,
@@ -100,6 +113,27 @@ export function useWebsiteStatus(
   const handleStatusUpdate = useCallback(
     (update: WebsiteStatusUpdate) => {
       try {
+        console.log("[WEBSITESTATUS] 📨 Received status update:", {
+          websiteId: update.websiteId,
+          status: update.status,
+          lastCrawledAt: update.lastCrawledAt,
+          timestamp: update.updatedAt,
+          showToast: showToastNotifications
+        });
+
+        // CRITICAL: Force immediate cache invalidation for real-time updates
+        console.log("[WEBSITESTATUS] 🚨 FORCING IMMEDIATE CACHE INVALIDATION for real-time update");
+        clearCache("workspace_");
+        clearCache(`websites_`);
+        invalidateDependentCaches(`website_${update.websiteId}`);
+        
+        // Also invalidate the specific website cache in useWorkspace
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('websiteStatusUpdate', { 
+            detail: { websiteId: update.websiteId, status: update.status } 
+          }));
+        }
+
         // Update website status in app state
         updateWebsiteStatus(
           update.websiteId,
@@ -107,26 +141,18 @@ export function useWebsiteStatus(
           update.lastCrawledAt,
           update.updatedAt
         );
+        console.log("[WEBSITESTATUS] ✅ AppState updated for website:", update.websiteId);
 
         // Show toast notification if enabled
         if (showToastNotifications) {
           showStatusNotification(update);
+          console.log("[WEBSITESTATUS] 🍞 Toast notification processed");
         }
 
-        // Invalidate related caches
-        invalidateDependentCaches(`website_${update.websiteId}`);
+        console.log("[WEBSITESTATUS] 🔄 ALL CACHES CLEARED - UI should update immediately");
 
-        // Clear workspace-related caches to trigger UI refresh
-        clearCache("workspace_");
-        clearCache(`websites_`);
-
-        console.log("[REALTIME] Website status updated:", {
-          websiteId: update.websiteId,
-          status: update.status,
-          timestamp: update.updatedAt,
-        });
       } catch (error) {
-        console.error("Error handling website status update:", error);
+        console.error("[WEBSITESTATUS] ❌ Error handling status update:", error);
       }
     },
     [
@@ -179,6 +205,10 @@ export function useWebsiteStatus(
       await websiteStatusService.unsubscribeFromWorkspace(workspaceId);
       activeSubscriptionsRef.current.delete(workspaceId);
 
+      // Clear previous status tracking for this workspace's websites
+      // (Note: We don't have direct workspace-to-website mapping here, 
+      // but the map will be naturally cleaned up over time)
+
       console.log(
         `Unsubscribed from website status updates for workspace: ${workspaceId}`
       );
@@ -227,6 +257,9 @@ export function useWebsiteStatus(
           websiteId
         );
 
+        // Clean up previous status tracking for this website
+        previousStatusRef.current.delete(websiteId);
+
         console.log(
           `Removed website from monitoring: ${websiteId} from workspace: ${workspaceId}`
         );
@@ -250,6 +283,8 @@ export function useWebsiteStatus(
   // Cleanup all subscriptions on unmount
   useEffect(() => {
     const activeSubscriptions = activeSubscriptionsRef.current;
+    const previousStatusMap = previousStatusRef.current;
+    
     return () => {
       const activeWorkspaces = Array.from(activeSubscriptions);
       activeWorkspaces.forEach((workspaceId) => {
@@ -263,6 +298,9 @@ export function useWebsiteStatus(
           });
       });
       activeSubscriptions.clear();
+      
+      // Clean up all previous status tracking
+      previousStatusMap.clear();
     };
   }, []); // Empty dependency array is correct for cleanup
 

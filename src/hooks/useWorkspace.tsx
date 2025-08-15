@@ -637,6 +637,28 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user?.id, fetchWorkspaces, setCurrentWorkspaceWithNotification]);
 
+  // Listen for real-time website status updates to force cache refresh
+  useEffect(() => {
+    const handleWebsiteStatusUpdate = (event: CustomEvent) => {
+      console.log(`[WORKSPACE] 🚨 REAL-TIME STATUS UPDATE EVENT - forcing cache refresh:`, event.detail);
+      invalidateWebsitesCache();
+      // Force immediate re-fetch of websites to get latest data
+      if (currentWorkspace?.id) {
+        fetchWebsites(true); // Force refresh bypassing cache
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('websiteStatusUpdate', handleWebsiteStatusUpdate as EventListener);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('websiteStatusUpdate', handleWebsiteStatusUpdate as EventListener);
+      }
+    };
+  }, [currentWorkspace?.id, fetchWebsites, invalidateWebsitesCache]);
+
   // Separate effect for fetching websites when workspace changes
   useEffect(() => {
     if (user?.id && currentWorkspace?.id) {
@@ -658,20 +680,37 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return undefined;
   }, [workspaces, currentWorkspace, loading, validateWorkspaceState]);
 
-  // Memoized website status hash for dependency tracking
+  // CRITICAL: More sensitive hash that detects ALL status changes
   const websitesStatusHash = useMemo(() => {
-    return JSON.stringify(appState.workspace.websites.map(w => ({ 
+    const hashData = appState.workspace.websites.map(w => ({ 
       id: w.id, 
       crawl_status: w.crawl_status, 
       last_crawled_at: w.last_crawled_at, 
-      updated_at: w.updated_at 
-    })));
+      updated_at: w.updated_at,
+      workspace_id: w.workspace_id
+    }));
+    const hash = JSON.stringify(hashData);
+    console.log(`[WORKSPACE-SYNC] 🔍 Status hash updated:`, {
+      websiteCount: hashData.length,
+      hashLength: hash.length,
+      websites: hashData.map(w => ({ id: w.id.slice(-8), status: w.crawl_status })),
+      timestamp: new Date().toISOString()
+    });
+    return hash;
   }, [appState.workspace.websites]);
 
   // Sync AppStateContext website updates with local websites state
   // This ensures real-time status updates from websiteStatusService flow through to the UI
   useEffect(() => {
+    console.log(`[WORKSPACE-SYNC] 🔄 SYNC EFFECT TRIGGERED:`, {
+      hasCurrentWorkspace: !!currentWorkspace?.id,
+      appStateWebsiteCount: appState.workspace.websites.length,
+      currentWorkspaceId: currentWorkspace?.id,
+      timestamp: new Date().toISOString()
+    });
+
     if (!currentWorkspace?.id) {
+      console.log(`[WORKSPACE-SYNC] ⏸️ No current workspace, skipping sync`);
       return;
     }
 
@@ -680,20 +719,37 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       w => w.workspace_id === currentWorkspace.id
     );
 
+    console.log(`[WORKSPACE-SYNC] 📊 AppState websites for workspace ${currentWorkspace.id}:`, {
+      totalAppStateWebsites: appState.workspace.websites.length,
+      filteredForWorkspace: appStateWebsites.length,
+      websiteStatuses: appStateWebsites.map(w => ({ id: w.id, status: w.crawl_status }))
+    });
+
     if (appStateWebsites.length === 0) {
+      console.log(`[WORKSPACE-SYNC] ⏸️ No AppState websites for current workspace, skipping sync`);
       return;
     }
 
     // Update local websites state with any status changes from AppStateContext
+    // Simplified sync without requestAnimationFrame timing issues
     setWebsites(prevWebsites => {
+      console.log(`[WORKSPACE-SYNC] 🎯 SYNC FUNCTION CALLED:`, {
+        prevWebsitesCount: prevWebsites.length,
+        prevWebsiteStatuses: prevWebsites.map(w => ({ id: w.id, status: w.crawl_status })),
+        appStateWebsiteStatuses: appStateWebsites.map(w => ({ id: w.id, status: w.crawl_status })),
+        timestamp: new Date().toISOString()
+      });
+
       if (prevWebsites.length === 0) {
-        // If we don't have websites yet, don't replace from AppState (let normal fetch happen)
+        console.log(`[WORKSPACE-SYNC] ⏸️ Skipping sync - no local websites loaded yet`);
         return prevWebsites;
       }
 
       let hasUpdates = false;
+      let updateCount = 0;
+      const websiteUpdates: string[] = [];
       
-      // Merge status updates from AppStateContext with more robust checking
+      // Create new array reference every time to ensure React detects changes
       const updatedWebsites = prevWebsites.map(website => {
         const appStateWebsite = appStateWebsites.find(w => w.id === website.id);
         
@@ -704,8 +760,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           
           if (statusChanged || lastCrawledChanged || updatedAtChanged) {
             hasUpdates = true;
+            updateCount++;
+            websiteUpdates.push(`${website.id}:${website.crawl_status}->${appStateWebsite.crawl_status}`);
             
-            console.log(`[SYNC] Real-time sync: Website ${website.id} status: ${website.crawl_status} -> ${appStateWebsite.crawl_status}`);
+            console.log(`[WORKSPACE-SYNC] 🔄 Status sync for website ${website.id}:`, {
+              statusChange: statusChanged ? `${website.crawl_status} → ${appStateWebsite.crawl_status}` : null,
+              lastCrawled: lastCrawledChanged ? 'updated' : null,
+              updatedAt: updatedAtChanged ? 'updated' : null,
+              timestamp: new Date().toISOString()
+            });
             
             return {
               ...website,
@@ -718,19 +781,27 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         return website;
       });
 
-      // Invalidate cache when we detect any status changes
       if (hasUpdates) {
+        console.log(`[WORKSPACE-SYNC] ✅ REACT STATE UPDATE: Synced ${updateCount} website status updates:`, websiteUpdates);
+        
+        // CRITICAL: Force immediate cache invalidation and UI update
         invalidateWebsitesCache();
+        console.log(`[WORKSPACE-SYNC] 🗑️ Cache invalidated - forcing UI refresh`);
+        
+        // ALWAYS return new array reference to force React re-render
+        const newWebsiteState = [...updatedWebsites];
+        console.log(`[WORKSPACE-SYNC] 🎯 RETURNING NEW WEBSITE STATE - UI should re-render`);
+        return newWebsiteState;
+      } else {
+        console.log(`[WORKSPACE-SYNC] ℹ️ No status changes detected (${prevWebsites.length} websites checked)`);
+        return prevWebsites;
       }
-
-      return hasUpdates ? updatedWebsites : prevWebsites;
     });
   }, [
-    websitesStatusHash,
-    appState.workspace.websites,
+    websitesStatusHash, // This triggers when AppStateContext websites change
     currentWorkspace?.id, 
     invalidateWebsitesCache
-  ]);
+  ]); // Removed duplicate dependencies
 
   const refetchWebsites = useCallback(async () => {
     setLoading(true);

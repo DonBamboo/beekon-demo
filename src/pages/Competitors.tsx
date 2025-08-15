@@ -21,6 +21,7 @@ import {
 import { useOptimizedCompetitorsData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useSelectedWebsite, usePageFilters } from "@/hooks/appStateHooks";
+import { useCompetitorStatus } from "@/hooks/useCompetitorStatus";
 import type { CompetitorFilters } from "@/contexts/AppStateContext";
 import CompetitorsHeader from "@/components/competitors/CompetitorsHeader";
 import { CompetitorsSkeleton } from "@/components/skeletons";
@@ -40,6 +41,9 @@ import { getCompetitorColor, getYourBrandColor } from "@/lib/color-utils";
 export default function Competitors() {
   const { currentWorkspace, loading: workspaceLoading } = useWorkspace();
   const { toast } = useToast();
+
+  // Initialize real-time competitor status monitoring
+  useCompetitorStatus();
 
   // State for UI controls
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
