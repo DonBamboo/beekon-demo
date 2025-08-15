@@ -19,7 +19,8 @@ const statusConfig = {
   pending: {
     label: "Pending",
     icon: Clock,
-    color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
+    color:
+      "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
     iconColor: "text-yellow-600 dark:text-yellow-400",
     description: "Waiting to start crawling",
     badgeVariant: "secondary" as const,
@@ -35,7 +36,8 @@ const statusConfig = {
   completed: {
     label: "Completed",
     icon: CheckCircle,
-    color: "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
+    color:
+      "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
     iconColor: "text-green-600 dark:text-green-400",
     description: "Analysis complete",
     badgeVariant: "secondary" as const,
@@ -73,13 +75,17 @@ const sizeConfig = {
 
 function formatLastCrawled(lastCrawledAt: string | null): string {
   if (!lastCrawledAt) return "";
-  
+
   const date = new Date(lastCrawledAt);
   const now = new Date();
-  const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-  
+  const diffInHours = Math.floor(
+    (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+  );
+
   if (diffInHours < 1) {
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    const diffInMinutes = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60)
+    );
     return diffInMinutes < 1 ? "Just now" : `${diffInMinutes}m ago`;
   } else if (diffInHours < 24) {
     return `${diffInHours}h ago`;
@@ -91,7 +97,7 @@ function formatLastCrawled(lastCrawledAt: string | null): string {
 
 /**
  * Website Status Indicator Component
- * 
+ *
  * Displays website crawling status with animations and styling
  * Supports multiple variants and sizes
  */
@@ -123,28 +129,25 @@ export function WebsiteStatusIndicator({
   // Badge variant
   if (variant === "badge") {
     return (
-      <Badge 
+      <Badge
         variant={status === "failed" ? "destructive" : "secondary"}
         className={cn(
           config.color,
           sizeStyles.gap,
           sizeStyles.padding,
           "transition-all duration-300 ease-in-out",
-          isAnimated && "animate-pulse",
           className
         )}
       >
-        <Icon 
+        <Icon
           className={cn(
             sizeStyles.iconSize,
             config.iconColor,
             isAnimated && status === "crawling" && "animate-spin"
-          )} 
+          )}
         />
         {showLabel && (
-          <span className={sizeStyles.textSize}>
-            {config.label}
-          </span>
+          <span className={sizeStyles.textSize}>{config.label}</span>
         )}
         {showTimestamp && lastCrawledAt && (
           <span className={cn(sizeStyles.textSize, "opacity-75 ml-1")}>
@@ -159,12 +162,12 @@ export function WebsiteStatusIndicator({
   if (variant === "inline") {
     return (
       <div className={cn("flex items-center", sizeStyles.gap, className)}>
-        <Icon 
+        <Icon
           className={cn(
             sizeStyles.iconSize,
             config.iconColor,
             isAnimated && status === "crawling" && "animate-spin"
-          )} 
+          )}
         />
         {showLabel && (
           <span className={cn(sizeStyles.textSize, "text-muted-foreground")}>
@@ -183,21 +186,20 @@ export function WebsiteStatusIndicator({
   // Card variant
   if (variant === "card") {
     return (
-      <div 
+      <div
         className={cn(
           "flex items-center justify-between p-3 rounded-lg border transition-all duration-300",
           config.color,
-          isAnimated && "animate-pulse",
           className
         )}
       >
         <div className={cn("flex items-center", sizeStyles.gap)}>
-          <Icon 
+          <Icon
             className={cn(
               sizeStyles.iconSize,
               config.iconColor,
               isAnimated && status === "crawling" && "animate-spin"
-            )} 
+            )}
           />
           {showLabel && (
             <div>
@@ -233,10 +235,10 @@ interface StatusTransitionProps {
   onTransitionComplete?: () => void;
 }
 
-export function StatusTransition({ 
-  previousStatus, 
-  currentStatus, 
-  onTransitionComplete 
+export function StatusTransition({
+  previousStatus,
+  currentStatus,
+  onTransitionComplete,
 }: StatusTransitionProps) {
   const showTransition = previousStatus && previousStatus !== currentStatus;
 
@@ -250,12 +252,9 @@ export function StatusTransition({
       <div className="absolute inset-0 animate-fade-out opacity-0">
         <WebsiteStatusIndicator status={previousStatus} />
       </div>
-      
+
       {/* Current status (fading in) */}
-      <div 
-        className="animate-fade-in"
-        onAnimationEnd={onTransitionComplete}
-      >
+      <div className="animate-fade-in" onAnimationEnd={onTransitionComplete}>
         <WebsiteStatusIndicator status={currentStatus} />
       </div>
     </div>
@@ -274,24 +273,24 @@ interface StatusHistoryProps {
   className?: string;
 }
 
-export function StatusHistory({ 
-  statusHistory, 
-  maxItems = 3, 
-  className 
+export function StatusHistory({
+  statusHistory,
+  maxItems = 3,
+  className,
 }: StatusHistoryProps) {
   const recentHistory = statusHistory.slice(-maxItems).reverse();
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {recentHistory.map((entry, index) => (
-        <div 
+        <div
           key={`${entry.status}-${entry.timestamp}`}
           className={cn(
             "flex items-center gap-2 text-sm",
             index > 0 && "opacity-60"
           )}
         >
-          <WebsiteStatusIndicator 
+          <WebsiteStatusIndicator
             status={entry.status}
             size="sm"
             showLabel={false}
