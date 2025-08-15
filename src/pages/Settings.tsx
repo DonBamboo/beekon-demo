@@ -18,14 +18,16 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useProfile } from "@/hooks/useProfile";
+import { useOptimizedProfile } from "@/hooks/useOptimizedProfile";
+import { useOptimizedApiKeys } from "@/hooks/useOptimizedApiKeys";
 import { useExportHistory } from "@/hooks/useExportHistory";
-import { ApiKey, apiKeyService } from "@/services/apiKeyService";
-import { profileService, UserProfile } from "@/services/profileService";
+import { useSelectedWebsite } from "@/hooks/appStateHooks";
+// ApiKey type is used in components, apiKeyService is handled by optimized hooks
+import { profileService } from "@/services/profileService";
+import type { UserProfile as _UserProfile } from "@/types/database";
 import {
   AlertCircle,
   Bell,
-  Camera,
   Key,
   Lock,
   Save,
@@ -35,19 +37,19 @@ import {
   FileOutput,
   History,
 } from "lucide-react";
-import { Spinner } from "@/components/LoadingStates";
 import { SettingsSkeleton } from "@/components/skeletons";
 import { useEffect, useState } from "react";
 
 export default function Settings() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { profile, isLoading: isLoadingProfile, loadProfile, updateProfile, uploadAvatar, deleteAvatar, getInitials } = useProfile();
+  const { profile, isLoading: isLoadingProfile, loadProfile, updateProfile, uploadAvatar, deleteAvatar, getInitials, hasCachedData: _hasCachedData, hasSyncCache: hasProfileSyncCache } = useOptimizedProfile();
+  const { apiKeys: _apiKeys, primaryApiKey, isLoading: isLoadingApiKeys, error: apiKeysError, refreshApiKeys, hasSyncCache: hasApiKeysSyncCache } = useOptimizedApiKeys();
   const { exportSummary, recentActivity } = useExportHistory();
+  const { selectedWebsiteId, websites } = useSelectedWebsite();
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [isPasswordUpdating, setIsPasswordUpdating] = useState(false);
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [loadingError, setLoadingError] = useState<string | null>(null);
 
   // Profile form state
@@ -71,9 +73,6 @@ export default function Settings() {
   const [competitorAlerts, setCompetitorAlerts] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(true);
 
-  // API keys state
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [primaryApiKey, setPrimaryApiKey] = useState<string>("");
 
   // Sync form state with profile data
   useEffect(() => {
@@ -94,68 +93,32 @@ export default function Settings() {
     }
   }, [profile]);
 
-  // Load API keys when user changes
+  // Handle loading errors from optimized hooks
   useEffect(() => {
-    const loadApiKeys = async () => {
-      if (!user?.id) {
-        setIsLoading(false);
-        return;
-      }
+    if (apiKeysError) {
+      setLoadingError(apiKeysError);
+      toast({
+        title: "Error",
+        description: apiKeysError,
+        variant: "destructive",
+      });
+    }
+  }, [apiKeysError, toast]);
 
-      setIsLoading(true);
-      setLoadingError(null);
-
-      try {
-        const userApiKeys = await apiKeyService.getApiKeys(user.id);
-        setApiKeys(userApiKeys);
-        if (userApiKeys.length > 0) {
-          setPrimaryApiKey(userApiKeys[0]?.key_prefix + "...");
-        }
-      } catch (error) {
-        // Failed to load API keys
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "Failed to load API keys.";
-        setLoadingError(errorMessage);
-        toast({
-          title: "Error",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadApiKeys();
-  }, [user?.id, toast]);
-
-  // Retry function for loading profile
+  // Retry function for loading all data
   const retryLoadProfile = async () => {
     if (user?.id) {
-      setIsLoading(true);
       setLoadingError(null);
-
       try {
-        // Use the useProfile hook's loadProfile method
-        await loadProfile();
-
-        // Load API keys
-        const userApiKeys = await apiKeyService.getApiKeys(user.id);
-        setApiKeys(userApiKeys);
-        if (userApiKeys.length > 0) {
-          setPrimaryApiKey(userApiKeys[0]?.key_prefix + "...");
-        }
+        // Use the optimized hooks' refresh methods
+        await loadProfile(true);
+        refreshApiKeys();
       } catch (error) {
-        // Failed to load profile
         const errorMessage =
           error instanceof Error
             ? error.message
             : "Failed to load profile data.";
         setLoadingError(errorMessage);
-      } finally {
-        setIsLoading(false);
       }
     }
   };
@@ -330,7 +293,7 @@ export default function Settings() {
     const hasUpperCase = /[A-Z]/.test(newPassword);
     const hasLowerCase = /[a-z]/.test(newPassword);
     const hasNumbers = /\d/.test(newPassword);
-    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+    // Password strength validation handles special characters in the validation logic
 
     if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
       toast({
@@ -414,6 +377,10 @@ export default function Settings() {
     }
   };
 
+  // Show skeleton immediately unless we have synchronous cache data for both profile and API keys
+  // This eliminates empty state flash by showing skeleton first
+  const shouldShowSkeleton = (isLoadingProfile && !hasProfileSyncCache()) || (isLoadingApiKeys && !hasApiKeysSyncCache());
+
   return (
     <>
       <div className="space-y-6">
@@ -422,9 +389,20 @@ export default function Settings() {
           <p className="text-muted-foreground">
             Manage your account settings and preferences
           </p>
+          {selectedWebsiteId && websites.length > 0 && (
+            <div className="mt-2">
+              <p className="text-sm text-muted-foreground">
+                Current website: <span className="font-medium text-foreground">
+                  {websites.find(w => w.id === selectedWebsiteId)?.display_name || 
+                   websites.find(w => w.id === selectedWebsiteId)?.domain || 
+                   'Unknown'}
+                </span>
+              </p>
+            </div>
+          )}
         </div>
 
-        {(isLoading || isLoadingProfile) ? (
+        {shouldShowSkeleton ? (
           <SettingsSkeleton />
         ) : loadingError ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
@@ -813,7 +791,7 @@ export default function Settings() {
                             </span>
                           </div>
                           <span className="text-xs text-gray-500">
-                            {new Date(activity.created_at).toLocaleDateString()}
+                            {activity.created_at ? new Date(activity.created_at).toLocaleDateString() : 'N/A'}
                           </span>
                         </div>
                       ))}
@@ -843,19 +821,7 @@ export default function Settings() {
       <ApiKeyModal
         isOpen={isApiModalOpen}
         onClose={() => setIsApiModalOpen(false)}
-        onApiKeyChange={() => {
-          // Refresh API keys when modal closes
-          if (user?.id) {
-            apiKeyService.getApiKeys(user.id).then((keys) => {
-              setApiKeys(keys);
-              if (keys.length > 0) {
-                setPrimaryApiKey(keys[0]?.key_prefix + "...");
-              } else {
-                setPrimaryApiKey("");
-              }
-            });
-          }
-        }}
+        onApiKeyChange={refreshApiKeys}
       />
     </>
   );

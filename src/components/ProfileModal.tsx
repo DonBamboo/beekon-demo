@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Spinner, FormSkeleton } from "@/components/LoadingStates";
+import { FormSkeleton } from "@/components/LoadingStates";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Camera, User } from "lucide-react";
+import { User } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -27,8 +27,6 @@ const profileSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
   company: z.string().optional(),
-  jobTitle: z.string().optional(),
-  phone: z.string().optional(),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -58,8 +56,6 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       lastName: "",
       email: user?.email || "",
       company: "",
-      jobTitle: "",
-      phone: "",
     },
   });
 
@@ -71,18 +67,18 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     try {
       const profile = await profileService.getProfile(user.id);
 
-      // Reset form with profile data
-      form.reset({
-        firstName: profile.first_name || "",
-        lastName: profile.last_name || "",
-        email: user.email || "",
-        company: profile.company || "",
-        jobTitle: profile.job_title || "",
-        phone: profile.phone || "",
-      });
+      // Reset form with profile data (with null safety)
+      if (profile) {
+        form.reset({
+          firstName: profile.first_name || "",
+          lastName: profile.last_name || "",
+          email: user.email || "",
+          company: profile.company || "",
+        });
 
-      // Set avatar URL for display
-      setCurrentAvatarUrl(profile.avatar_url);
+        // Set avatar URL for display
+        setCurrentAvatarUrl(profile.avatar_url);
+      }
       setAvatarPreview(null); // Clear any preview when loading real data
     } catch (error) {
       toast({
@@ -110,9 +106,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       await profileService.updateProfile(user.id, {
         first_name: data.firstName,
         last_name: data.lastName,
-        company: data.company || null,
-        job_title: data.jobTitle || null,
-        phone: data.phone || null,
+        company: data.company || undefined,
       });
 
       toast({
@@ -381,30 +375,11 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="company">Company</Label>
-                <Input
-                  id="company"
-                  {...form.register("company")}
-                  className="focus-ring"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="jobTitle">Job Title</Label>
-                <Input
-                  id="jobTitle"
-                  {...form.register("jobTitle")}
-                  className="focus-ring"
-                />
-              </div>
-            </div>
-
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
+              <Label htmlFor="company">Company</Label>
               <Input
-                id="phone"
-                {...form.register("phone")}
+                id="company"
+                {...form.register("company")}
                 className="focus-ring"
               />
             </div>

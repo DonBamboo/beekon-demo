@@ -1,8 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import {
-  Profile,
-  ProfileInsert,
-  ProfileUpdate,
   UserProfile,
   NotificationSettings,
 } from "@/types/database";
@@ -21,6 +19,27 @@ export interface NotificationUpdateData {
   weekly_reports?: boolean;
   competitor_alerts?: boolean;
   analysis_complete?: boolean;
+}
+
+// Helper function to convert Json to NotificationSettings
+function jsonToNotificationSettings(json: Json): NotificationSettings {
+  const defaultSettings: NotificationSettings = {
+    email_notifications: true,
+    weekly_reports: true,
+    competitor_alerts: true,
+    analysis_complete: true,
+  };
+
+  if (!json || typeof json !== 'object' || Array.isArray(json)) {
+    return defaultSettings;
+  }
+
+  return {
+    email_notifications: typeof json.email_notifications === 'boolean' ? json.email_notifications : defaultSettings.email_notifications,
+    weekly_reports: typeof json.weekly_reports === 'boolean' ? json.weekly_reports : defaultSettings.weekly_reports,
+    competitor_alerts: typeof json.competitor_alerts === 'boolean' ? json.competitor_alerts : defaultSettings.competitor_alerts,
+    analysis_complete: typeof json.analysis_complete === 'boolean' ? json.analysis_complete : defaultSettings.analysis_complete,
+  };
 }
 
 export class ProfileService extends BaseService {
@@ -59,12 +78,7 @@ export class ProfileService extends BaseService {
 
       return {
         ...data,
-        notification_settings: data.notification_settings || {
-          email_notifications: true,
-          weekly_reports: true,
-          competitor_alerts: false,
-          analysis_complete: true,
-        },
+        notification_settings: jsonToNotificationSettings(data.notification_settings),
       };
     });
   }
@@ -106,8 +120,7 @@ export class ProfileService extends BaseService {
 
     return {
       ...data,
-      notification_settings:
-        data.notification_settings || defaultNotificationSettings,
+      notification_settings: jsonToNotificationSettings(data.notification_settings),
     };
   }
 
@@ -157,12 +170,7 @@ export class ProfileService extends BaseService {
 
       return {
         ...data,
-        notification_settings: data.notification_settings || {
-          email_notifications: true,
-          weekly_reports: true,
-          competitor_alerts: false,
-          analysis_complete: true,
-        },
+        notification_settings: jsonToNotificationSettings(data.notification_settings),
       };
     });
   }
@@ -196,7 +204,7 @@ export class ProfileService extends BaseService {
 
     return {
       ...data,
-      notification_settings: data.notification_settings || updatedSettings,
+      notification_settings: jsonToNotificationSettings(data.notification_settings),
     };
   }
 
@@ -217,7 +225,7 @@ export class ProfileService extends BaseService {
    * Change user password
    */
   async changePassword(
-    currentPassword: string,
+    _currentPassword: string,
     newPassword: string
   ): Promise<void> {
     // Get current user session
@@ -267,7 +275,7 @@ export class ProfileService extends BaseService {
     const fileName = `${userId}/${Date.now()}.${fileExt}`;
 
     // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from("avatars")
       .upload(fileName, file, {
         cacheControl: "3600",
@@ -303,7 +311,7 @@ export class ProfileService extends BaseService {
     if (deleteError) throw deleteError;
 
     // Update profile to remove avatar URL
-    await this.updateProfile(userId, { avatar_url: null });
+    await this.updateProfile(userId, { avatar_url: undefined });
   }
 
   /**
@@ -324,7 +332,11 @@ export class ProfileService extends BaseService {
         throw error;
       }
 
-      return data;
+      return data ? {
+        id: data.id,
+        name: data.name,
+        created_at: data.created_at || ""
+      } : null;
     } catch (error) {
       // Failed to get user workspace
       return null;

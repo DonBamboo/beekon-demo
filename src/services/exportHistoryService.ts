@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import {
   ExportHistoryRecord,
   ExportStatistics,
@@ -69,7 +70,18 @@ export class ExportHistoryService {
       throw error;
     }
 
-    return data;
+    // Cast database row to ExportHistoryRecord with proper types
+    return {
+      ...data,
+      export_type: data.export_type as ExportType,
+      format: data.format as ExportFormat,
+      status: data.status as ExportStatus,
+      filters: data.filters ? (data.filters as Record<string, unknown>) : null,
+      date_range: data.date_range ? (data.date_range as { start: string; end: string }) : null,
+      metadata: data.metadata ? (data.metadata as Record<string, unknown>) : null,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+    };
   }
 
   /**
@@ -110,7 +122,18 @@ export class ExportHistoryService {
       throw error;
     }
 
-    return data;
+    // Cast database row to ExportHistoryRecord with proper types
+    return {
+      ...data,
+      export_type: data.export_type as ExportType,
+      format: data.format as ExportFormat,
+      status: data.status as ExportStatus,
+      filters: data.filters ? (data.filters as Record<string, unknown>) : null,
+      date_range: data.date_range ? (data.date_range as { start: string; end: string }) : null,
+      metadata: data.metadata ? (data.metadata as Record<string, unknown>) : null,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+    };
   }
 
   /**
@@ -183,9 +206,22 @@ export class ExportHistoryService {
       throw error;
     }
 
+    // Cast database rows to ExportHistoryRecord with proper types
+    const exportRecords = (data || []).map(record => ({
+      ...record,
+      export_type: record.export_type as ExportType,
+      format: record.format as ExportFormat,
+      status: record.status as ExportStatus,
+      filters: record.filters ? (record.filters as Record<string, unknown>) : null,
+      date_range: record.date_range ? (record.date_range as { start: string; end: string }) : null,
+      metadata: record.metadata ? (record.metadata as Record<string, unknown>) : null,
+      created_at: record.created_at,
+      updated_at: record.updated_at,
+    }));
+
     return {
-      data: data || [],
-      count: data?.length || 0,
+      data: exportRecords,
+      count: exportRecords.length,
       total: count || 0,
     };
   }
@@ -214,7 +250,14 @@ export class ExportHistoryService {
       throw error;
     }
 
-    return data || [];
+    // Cast database rows to ExportStatistics with proper types
+    return (data || []).map(record => ({
+      ...record,
+      user_id: record.user_id || '',
+      export_type: record.export_type as ExportType | null,
+      format: record.format as ExportFormat | null,
+      status: record.status as ExportStatus | null,
+    })) as ExportStatistics[];
   }
 
   /**
@@ -248,34 +291,40 @@ export class ExportHistoryService {
 
     // Calculate favorite format
     const formatCounts = exports.reduce((acc, exp) => {
-      acc[exp.format] = (acc[exp.format] || 0) + 1;
+      const format = exp.format as ExportFormat;
+      acc[format] = (acc[format] || 0) + 1;
       return acc;
     }, {} as Record<ExportFormat, number>);
 
     const favoriteFormat = Object.entries(formatCounts).reduce(
-      (max, [format, count]) =>
-        count > formatCounts[max as ExportFormat] ? format : max,
-      "json"
-    ) as ExportFormat;
+      (max, [format, count]) => {
+        const maxFormat = max as ExportFormat;
+        return count > (formatCounts[maxFormat] || 0) ? format as ExportFormat : maxFormat;
+      },
+      "json" as ExportFormat
+    );
 
     // Calculate most exported type
     const typeCounts = exports.reduce((acc, exp) => {
-      acc[exp.export_type] = (acc[exp.export_type] || 0) + 1;
+      const exportType = exp.export_type as ExportType;
+      acc[exportType] = (acc[exportType] || 0) + 1;
       return acc;
     }, {} as Record<ExportType, number>);
 
     const mostExportedType = Object.entries(typeCounts).reduce(
-      (max, [type, count]) =>
-        count > typeCounts[max as ExportType] ? type : max,
-      "analysis"
-    ) as ExportType;
+      (max, [type, count]) => {
+        const maxType = max as ExportType;
+        return count > (typeCounts[maxType] || 0) ? type as ExportType : maxType;
+      },
+      "analysis" as ExportType
+    );
 
     // Calculate export frequency (exports per day)
     const oldestExport = exports.reduce((oldest, exp) =>
-      exp.created_at < oldest.created_at ? exp : oldest
+      (exp.created_at && oldest.created_at && exp.created_at < oldest.created_at) ? exp : oldest
     );
 
-    const daysSinceFirstExport = oldestExport
+    const daysSinceFirstExport = oldestExport && oldestExport.created_at
       ? Math.max(
           1,
           Math.ceil(
@@ -291,7 +340,7 @@ export class ExportHistoryService {
       failed_exports: failed.length,
       total_size: totalSize,
       avg_size: successful.length > 0 ? Math.round(totalSize / successful.length) : 0,
-      last_export: exports.length > 0 ? exports[0].created_at : null,
+      last_export: exports.length > 0 ? (exports[0]?.created_at || null) : null,
       favorite_format: favoriteFormat,
       most_exported_type: mostExportedType,
       export_frequency: Math.round((exports.length / daysSinceFirstExport) * 100) / 100,
@@ -353,7 +402,18 @@ export class ExportHistoryService {
       throw error;
     }
 
-    return data;
+    // Cast database row to ExportHistoryRecord with proper types
+    return {
+      ...data,
+      export_type: data.export_type as ExportType,
+      format: data.format as ExportFormat,  
+      status: data.status as ExportStatus,
+      filters: data.filters ? (data.filters as Record<string, unknown>) : null,
+      date_range: data.date_range ? (data.date_range as { start: string; end: string }) : null,
+      metadata: data.metadata ? (data.metadata as Record<string, unknown>) : null,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+    };
   }
 
   /**
@@ -418,7 +478,18 @@ export class ExportHistoryService {
       throw error;
     }
 
-    return data || [];
+    // Cast database rows to ExportHistoryRecord with proper types
+    return (data || []).map(record => ({
+      ...record,
+      export_type: record.export_type as ExportType,
+      format: record.format as ExportFormat,
+      status: record.status as ExportStatus,
+      filters: record.filters ? (record.filters as Record<string, unknown>) : null,
+      date_range: record.date_range ? (record.date_range as { start: string; end: string }) : null,
+      metadata: record.metadata ? (record.metadata as Record<string, unknown>) : null,
+      created_at: record.created_at,
+      updated_at: record.updated_at,
+    }));
   }
 
   /**
@@ -439,13 +510,13 @@ export class ExportHistoryService {
       export_type: originalRecord.export_type,
       format: originalRecord.format,
       filename: originalRecord.filename.replace(/(_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})?(\.\w+)$/, `_retry_${Date.now()}$2`),
-      filters: originalRecord.filters,
-      date_range: originalRecord.date_range,
+      filters: originalRecord.filters as Json | undefined,
+      date_range: originalRecord.date_range ? (originalRecord.date_range as { start: string; end: string }) : null,
       metadata: {
-        ...originalRecord.metadata,
+        ...(originalRecord.metadata as Record<string, unknown> || {}),
         retry_of: originalId,
-        retry_count: (originalRecord.metadata?.retry_count || 0) + 1,
-      },
+        retry_count: ((originalRecord.metadata as Record<string, unknown>)?.retry_count as number || 0) + 1,
+      } as Json,
     };
 
     return this.createExportRecord(retryData);
@@ -461,7 +532,7 @@ export class ExportHistoryService {
     return this.updateExportRecord(id, {
       status: "processing",
       started_at: new Date().toISOString(),
-      metadata,
+      metadata: metadata as Json | undefined, // Cast to Json type for database compatibility
     });
   }
 
@@ -477,7 +548,7 @@ export class ExportHistoryService {
       status: "completed",
       file_size,
       completed_at: new Date().toISOString(),
-      metadata,
+      metadata: metadata as Json | undefined, // Cast to Json type for database compatibility
     });
   }
 
@@ -493,7 +564,7 @@ export class ExportHistoryService {
       status: "failed",
       error_message,
       completed_at: new Date().toISOString(),
-      metadata,
+      metadata: metadata as Json | undefined, // Cast to Json type for database compatibility
     });
   }
 }

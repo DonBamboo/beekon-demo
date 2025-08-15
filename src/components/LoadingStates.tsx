@@ -199,29 +199,142 @@ export const LoadingOverlay = ({
   </div>
 );
 
-// Inline loading component
+// Inline loading component with skeleton support
 export const InlineLoading = ({ 
   message = 'Loading...',
-  size = 'default' 
+  size: _ = 'default' 
 }: { 
   message?: string; 
   size?: 'sm' | 'default' | 'lg'; 
-}) => (
-  <div className="flex items-center justify-center space-x-2 p-4">
-    <Spinner size={size} />
-    <span className="text-sm text-muted-foreground">{message}</span>
-  </div>
-);
-
-// Page loading component
-export const PageLoading = ({ message = 'Loading page...' }: { message?: string }) => (
-  <div className="flex items-center justify-center min-h-screen">
-    <div className="flex flex-col items-center space-y-4">
-      <Spinner size="lg" />
-      <p className="text-lg text-muted-foreground">{message}</p>
+}) => {
+  // For page loading, show a simple skeleton placeholder
+  if (message.toLowerCase().includes('page')) {
+    return (
+      <div className="space-y-6 p-6">
+        {/* Page Header */}
+        <div className="space-y-3">
+          <div className="animate-pulse bg-muted/50 h-9 w-64 rounded"></div>
+          <div className="animate-pulse bg-muted/50 h-5 w-96 rounded"></div>
+        </div>
+        
+        {/* Main Content */}
+        <div className="space-y-4">
+          <div className="animate-pulse bg-muted/50 h-48 w-full rounded-lg"></div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="animate-pulse bg-muted/50 h-24 rounded-lg"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // For other inline loading, keep the compact skeleton
+  return (
+    <div className="flex items-center justify-center space-x-2 p-4">
+      <div className="animate-pulse bg-muted/50 h-4 w-4 rounded-full"></div>
+      <span className="text-sm text-muted-foreground">{message}</span>
     </div>
-  </div>
-);
+  );
+};
+
+// Page loading component with skeleton support
+export const PageLoading = ({ message = 'Loading page...' }: { message?: string }) => {
+  // Application loading skeleton - full app structure
+  if (message.toLowerCase().includes('application')) {
+    return (
+      <div className="min-h-screen flex w-full">
+        {/* Sidebar Skeleton */}
+        <div className="w-64 border-r bg-background p-4 space-y-6">
+          <div className="flex items-center space-x-3">
+            <div className="animate-pulse bg-muted/50 h-8 w-8 rounded-full"></div>
+            <div className="animate-pulse bg-muted/50 h-6 w-24 rounded"></div>
+          </div>
+          
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center space-x-3">
+                <div className="animate-pulse bg-muted/50 h-4 w-4 rounded-full"></div>
+                <div className="animate-pulse bg-muted/50 h-4 w-20 rounded"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col">
+          <div className="border-b bg-background p-4">
+            <div className="flex items-center justify-between">
+              <div className="animate-pulse bg-muted/50 h-6 w-48 rounded"></div>
+              <div className="flex items-center space-x-3">
+                <div className="animate-pulse bg-muted/50 h-8 w-8 rounded-full"></div>
+                <div className="animate-pulse bg-muted/50 h-8 w-8 rounded-full"></div>
+              </div>
+            </div>
+          </div>
+          
+          <main className="flex-1 p-6 space-y-6">
+            <div className="animate-pulse bg-muted/50 h-9 w-72 rounded"></div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="animate-pulse bg-muted/50 h-32 rounded-lg"></div>
+              ))}
+            </div>
+            <div className="animate-pulse bg-muted/50 h-64 rounded-lg"></div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+  
+  // Authentication loading skeleton
+  if (message.toLowerCase().includes('authenticat')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-full max-w-md space-y-6 p-6">
+          <div className="text-center space-y-4">
+            <div className="animate-pulse bg-muted/50 h-16 w-16 rounded-full mx-auto"></div>
+            <div className="animate-pulse bg-muted/50 h-8 w-48 rounded mx-auto"></div>
+            <div className="animate-pulse bg-muted/50 h-4 w-64 rounded mx-auto"></div>
+          </div>
+          
+          <div className="border rounded-lg p-6 space-y-4">
+            <div className="space-y-2">
+              <div className="animate-pulse bg-muted/50 h-4 w-16 rounded"></div>
+              <div className="animate-pulse bg-muted/50 h-10 w-full rounded"></div>
+            </div>
+            <div className="space-y-2">
+              <div className="animate-pulse bg-muted/50 h-4 w-20 rounded"></div>
+              <div className="animate-pulse bg-muted/50 h-10 w-full rounded"></div>
+            </div>
+            <div className="animate-pulse bg-muted/50 h-10 w-full rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Default page loading skeleton
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-3">
+        <div className="animate-pulse bg-muted/50 h-9 w-64 rounded"></div>
+        <div className="animate-pulse bg-muted/50 h-5 w-96 rounded"></div>
+      </div>
+      
+      <div className="space-y-4">
+        <div className="animate-pulse bg-muted/50 h-48 w-full rounded-lg"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="animate-pulse bg-muted/50 h-24 rounded-lg"></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Competitive analysis loading states
 export const CompetitorAnalysisLoadingSkeleton = () => (

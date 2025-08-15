@@ -1,12 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "./use-toast";
+import { useGlobalCache } from "@/hooks/appStateHooks";
 import {
   analysisService,
   type AnalysisStatus,
   type AnalysisConfig,
-  type AnalysisProgress,
 } from "@/services/analysisService";
-import { UIAnalysisResult } from "@/types/database";
 
 export interface AnalysisFilters {
   topic?: string;
@@ -108,13 +107,18 @@ export function useAnalysisData(websiteId: string, filters?: AnalysisFilters) {
 export function useCreateAnalysis() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { clearCache } = useGlobalCache();
 
   return useMutation({
     mutationFn: (config: AnalysisConfig) => analysisService.createAnalysis(config),
-    onSuccess: (analysisId, variables) => {
+    onSuccess: (_, variables) => {
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: analysisKeys.results(variables.websiteId) });
       queryClient.invalidateQueries({ queryKey: analysisKeys.topics(variables.websiteId) });
+      
+      // Clear global app state cache for this website
+      clearCache(`analysis_results_${variables.websiteId}`);
+      clearCache(`analysis_metadata_${variables.websiteId}`);
       
       toast({
         title: "Analysis started",
@@ -146,7 +150,7 @@ export function useSaveAnalysisResult() {
       responseText?: string;
       confidenceScore?: number;
     }) => analysisService.saveAnalysisResult(result),
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: analysisKeys.results(variables.websiteId) });
       
@@ -199,25 +203,18 @@ export function useExportAnalysis() {
 
 // Hook for real-time analysis progress tracking
 export function useAnalysisProgressTracking(analysisId: string) {
-  const queryClient = useQueryClient();
   
   return useQuery({
     queryKey: analysisKeys.progress(analysisId),
     queryFn: () => analysisService.getCurrentProgress(analysisId),
     enabled: !!analysisId,
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Stop polling if analysis is completed or failed
-      if (data?.status === 'completed' || data?.status === 'failed') {
+      if (query.state.data?.status === 'completed' || query.state.data?.status === 'failed') {
         return false;
       }
       return 2000; // Poll every 2 seconds
     },
     staleTime: 0,
-    onSettled: (data) => {
-      // If analysis is completed, invalidate analysis results
-      if (data?.status === 'completed') {
-        queryClient.invalidateQueries({ queryKey: analysisKeys.all });
-      }
-    },
   });
 }

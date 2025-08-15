@@ -1,13 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
+import { Json } from "@/integrations/supabase/types";
 import { WebsiteSettings } from "@/types/website";
-
-type WebsiteSettingsRow =
-  Database["beekon_data"]["Tables"]["website_settings"]["Row"];
-type WebsiteSettingsInsert =
-  Database["beekon_data"]["Tables"]["website_settings"]["Insert"];
-type WebsiteSettingsUpdate =
-  Database["beekon_data"]["Tables"]["website_settings"]["Update"];
 
 export interface WebsiteSettingsUpdateData {
   analysis_frequency?: "daily" | "weekly" | "bi-weekly" | "monthly";
@@ -22,6 +15,23 @@ export interface WebsiteSettingsUpdateData {
   data_retention?: "30" | "90" | "180" | "365";
   export_enabled?: boolean;
   description?: string;
+}
+
+// Type guard for settings JSON
+function isValidSettingsJson(json: Json): json is {
+  analysis_frequency?: string;
+  auto_analysis?: boolean;
+  notifications?: boolean;
+  competitor_tracking?: boolean;
+  weekly_reports?: boolean;
+  show_in_dashboard?: boolean;
+  priority_level?: string;
+  custom_labels?: string;
+  api_access?: boolean;
+  data_retention?: string;
+  export_enabled?: boolean;
+} {
+  return json !== null && typeof json === 'object' && !Array.isArray(json);
 }
 
 export class WebsiteSettingsService {
@@ -52,24 +62,25 @@ export class WebsiteSettingsService {
     }
 
     if (settingsData) {
+      const settings = isValidSettingsJson(settingsData.settings) ? settingsData.settings : {};
+      
       return {
         id: settingsData.id,
         website_id: settingsData.website_id,
         analysis_frequency:
-          settingsData.settings?.analysis_frequency || "weekly",
-        auto_analysis: settingsData.settings?.auto_analysis ?? true,
-        notifications: settingsData.settings?.notifications ?? true,
-        competitor_tracking:
-          settingsData.settings?.competitor_tracking ?? false,
-        weekly_reports: settingsData.settings?.weekly_reports ?? true,
-        show_in_dashboard: settingsData.settings?.show_in_dashboard ?? true,
-        priority_level: settingsData.settings?.priority_level || "medium",
-        custom_labels: settingsData.settings?.custom_labels || "",
-        api_access: settingsData.settings?.api_access ?? false,
-        data_retention: settingsData.settings?.data_retention || "90",
-        export_enabled: settingsData.settings?.export_enabled ?? true,
-        created_at: settingsData.created_at,
-        updated_at: settingsData.updated_at,
+          (settings.analysis_frequency as WebsiteSettingsUpdateData['analysis_frequency']) || "weekly",
+        auto_analysis: settings.auto_analysis ?? true,
+        notifications: settings.notifications ?? true,
+        competitor_tracking: settings.competitor_tracking ?? false,
+        weekly_reports: settings.weekly_reports ?? true,
+        show_in_dashboard: settings.show_in_dashboard ?? true,
+        priority_level: (settings.priority_level as WebsiteSettingsUpdateData['priority_level']) || "medium",
+        custom_labels: settings.custom_labels || "",
+        api_access: settings.api_access ?? false,
+        data_retention: (settings.data_retention as WebsiteSettingsUpdateData['data_retention']) || "90",
+        export_enabled: settings.export_enabled ?? true,
+        created_at: settingsData.created_at || undefined,
+        updated_at: settingsData.updated_at || undefined,
       };
     }
 
@@ -168,22 +179,24 @@ export class WebsiteSettingsService {
       data = newData;
     }
 
+    const settings = isValidSettingsJson(data.settings) ? data.settings : {};
+    
     return {
       id: data.id,
       website_id: data.website_id,
-      analysis_frequency: data.settings?.analysis_frequency || "weekly",
-      auto_analysis: data.settings?.auto_analysis ?? true,
-      notifications: data.settings?.notifications ?? true,
-      competitor_tracking: data.settings?.competitor_tracking ?? false,
-      weekly_reports: data.settings?.weekly_reports ?? true,
-      show_in_dashboard: data.settings?.show_in_dashboard ?? true,
-      priority_level: data.settings?.priority_level || "medium",
-      custom_labels: data.settings?.custom_labels || "",
-      api_access: data.settings?.api_access ?? false,
-      data_retention: data.settings?.data_retention || "90",
-      export_enabled: data.settings?.export_enabled ?? true,
-      created_at: data.created_at,
-      updated_at: data.updated_at,
+      analysis_frequency: (settings.analysis_frequency as WebsiteSettingsUpdateData['analysis_frequency']) || "weekly",
+      auto_analysis: settings.auto_analysis ?? true,
+      notifications: settings.notifications ?? true,
+      competitor_tracking: settings.competitor_tracking ?? false,
+      weekly_reports: settings.weekly_reports ?? true,
+      show_in_dashboard: settings.show_in_dashboard ?? true,
+      priority_level: (settings.priority_level as WebsiteSettingsUpdateData['priority_level']) || "medium",
+      custom_labels: settings.custom_labels || "",
+      api_access: settings.api_access ?? false,
+      data_retention: (settings.data_retention as WebsiteSettingsUpdateData['data_retention']) || "90",
+      export_enabled: settings.export_enabled ?? true,
+      created_at: data.created_at || undefined,
+      updated_at: data.updated_at || undefined,
     };
   }
 

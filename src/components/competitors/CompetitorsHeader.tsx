@@ -21,8 +21,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Plus, RefreshCw, Filter, Globe } from "lucide-react";
-import { Website } from "@/hooks/useWorkspace";
 import { ExportFormat } from "@/types/database";
+import { useSelectedWebsite } from "@/hooks/appStateHooks";
 
 interface CompetitorsHeaderProps {
   totalCompetitors: number;
@@ -34,9 +34,7 @@ interface CompetitorsHeaderProps {
   isAddDialogOpen: boolean;
   competitorDomain: string;
   competitorName: string;
-  selectedWebsiteId: string;
   isAdding: boolean;
-  websites: Website[];
   websitesLoading: boolean;
   setDateFilter: (value: "7d" | "30d" | "90d") => void;
   setSortBy: (
@@ -45,12 +43,11 @@ interface CompetitorsHeaderProps {
   setIsAddDialogOpen: (value: boolean) => void;
   setCompetitorDomain: (value: string) => void;
   setCompetitorName: (value: string) => void;
-  setSelectedWebsiteId: (value: string) => void;
   refreshData: () => void;
   handleAddCompetitor: () => void;
   isExporting: boolean;
   competitorsData: unknown[];
-  handleExportData: (format: ExportFormat) => void;
+  handleExportData: (format: ExportFormat) => Promise<void>;
 }
 
 export default function CompetitorsHeader({
@@ -63,22 +60,21 @@ export default function CompetitorsHeader({
   isAddDialogOpen,
   competitorDomain,
   competitorName,
-  selectedWebsiteId,
   isAdding,
-  websites,
   websitesLoading,
   setDateFilter,
   setSortBy,
   setIsAddDialogOpen,
   setCompetitorDomain,
   setCompetitorName,
-  setSelectedWebsiteId,
   refreshData,
   handleAddCompetitor,
   isExporting,
   competitorsData,
   handleExportData,
 }: CompetitorsHeaderProps) {
+  // Use global website selection state
+  const { selectedWebsiteId, setSelectedWebsite, websites } = useSelectedWebsite();
   return (
     <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
       <div>
@@ -97,32 +93,47 @@ export default function CompetitorsHeader({
       <div className="flex flex-wrap items-center gap-2">
         {/* Website Selector - Primary control */}
         <Select
-          value={selectedWebsiteId}
-          onValueChange={setSelectedWebsiteId}
-          disabled={websitesLoading || websites.length === 0 || isRefreshing}
+          value={selectedWebsiteId || ""}
+          onValueChange={(value) => {
+            if (process.env.NODE_ENV === "development") {
+              console.log('Competitors: Optimistic website change', {
+                from: selectedWebsiteId, 
+                to: value,
+                timestamp: Date.now()
+              });
+            }
+            // Immediate optimistic update - UI responds instantly
+            setSelectedWebsite(value);
+          }}
+          disabled={websitesLoading || websites.length === 0}
         >
-          <SelectTrigger
-            className={`w-[200px] ${isRefreshing ? "opacity-50" : ""}`}
-          >
-            <Globe className="h-4 w-4 mr-2" />
-            <SelectValue
-              placeholder={
-                websitesLoading
-                  ? "Loading websites..."
-                  : websites.length === 0
-                  ? "No websites available"
-                  : "Select website..."
-              }
-            >
-              {selectedWebsiteId && websites.length > 0 && (
-                <span className="truncate">
-                  {websites.find((w) => w.id === selectedWebsiteId)
-                    ?.display_name ||
-                    websites.find((w) => w.id === selectedWebsiteId)?.domain ||
-                    "Selected website"}
-                </span>
+          <SelectTrigger className="w-[200px]">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center">
+                <Globe className="h-4 w-4 mr-2" />
+                <SelectValue
+                  placeholder={
+                    websitesLoading
+                      ? "Loading websites..."
+                      : websites.length === 0
+                      ? "No websites available"
+                      : "Select website..."
+                  }
+                >
+                  {selectedWebsiteId && websites.length > 0 && (
+                    <span className="truncate">
+                      {websites.find((w) => w.id === selectedWebsiteId)
+                        ?.display_name ||
+                        websites.find((w) => w.id === selectedWebsiteId)?.domain ||
+                        "Selected website"}
+                    </span>
+                  )}
+                </SelectValue>
+              </div>
+              {(isRefreshing || (websitesLoading && websites.length === 0)) && (
+                <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
               )}
-            </SelectValue>
+            </div>
           </SelectTrigger>
           <SelectContent>
             {websites.length > 0 ? (
@@ -205,7 +216,7 @@ export default function CompetitorsHeader({
               isLoading={isExporting}
               disabled={!hasData || !competitorsData || competitorsData.length === 0}
               formats={["csv", "json", "pdf"]}
-              data={competitorsData}
+              data={competitorsData as Record<string, unknown>[]}
               showEstimatedSize={true}
             />
           )}
@@ -230,8 +241,8 @@ export default function CompetitorsHeader({
               <div className="space-y-2">
                 <Label htmlFor="websiteSelect">Website</Label>
                 <Select
-                  value={selectedWebsiteId}
-                  onValueChange={setSelectedWebsiteId}
+                  value={selectedWebsiteId || ""}
+                  onValueChange={setSelectedWebsite}
                   disabled={websitesLoading || websites.length === 0}
                 >
                   <SelectTrigger>

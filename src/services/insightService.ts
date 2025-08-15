@@ -1,21 +1,5 @@
 import { AnalysisResult, UIAnalysisResult } from "@/types/database";
-
-// Type guards for proper validation
-function isUIAnalysisResult(result: any): result is UIAnalysisResult {
-  return result && 
-    typeof result === 'object' && 
-    typeof result.id === 'string' &&
-    typeof result.prompt === 'string' &&
-    Array.isArray(result.llm_results);
-}
-
-function isAnalysisResult(result: any): result is AnalysisResult {
-  return result && 
-    typeof result === 'object' && 
-    typeof result.id === 'string' &&
-    typeof result.topic_name === 'string' &&
-    Array.isArray(result.llm_results);
-}
+import { isUIAnalysisResult, isAnalysisResult } from "@/utils/typeGuards";
 
 export interface AnalysisInsights {
   strengths: string[];

@@ -1,16 +1,13 @@
 // Enhanced export service with additional formats and features
 
 import { supabase } from "@/integrations/supabase/client";
+import { Database } from "@/integrations/supabase/types";
 import {
   ExportData,
-  ExportConfig,
   formatJsonExport,
   formatCsvExport,
   formatPdfExport,
   generateExportFilename,
-  applyFieldMapping,
-  getFieldMapping,
-  formatValue,
   validateExportData,
   sanitizeExportData,
   ChartInfo,
@@ -18,6 +15,7 @@ import {
 import type { ExportFormat } from "@/types/database";
 import { exportHistoryService } from "./exportHistoryService";
 import { ExportType, ExportHistoryRecord } from "@/types/database";
+import { Json } from "@/integrations/supabase/types";
 
 // Export service class with enhanced functionality
 export class ExportService {
@@ -30,60 +28,6 @@ export class ExportService {
     return ExportService.instance;
   }
 
-  // Format array data for Word
-  private formatArrayToWord(data: Record<string, unknown>[]): string {
-    if (data.length === 0) return "No data available\n";
-    
-    let wordContent = "Data Records\n";
-    wordContent += "-".repeat(20) + "\n\n";
-    
-    data.forEach((item, index) => {
-      wordContent += `${index + 1}. Record\n`;
-      wordContent += "-".repeat(15) + "\n";
-      
-      Object.entries(item).forEach(([key, value]) => {
-        const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-        let formattedValue: string;
-        
-        if (typeof value === 'object' && value !== null) {
-          formattedValue = JSON.stringify(value, null, 2);
-        } else if (value instanceof Date) {
-          formattedValue = value.toLocaleString();
-        } else {
-          formattedValue = String(value ?? '');
-        }
-        
-        wordContent += `${formattedKey}: ${formattedValue}\n`;
-      });
-      
-      wordContent += "\n";
-    });
-    
-    return wordContent;
-  }
-
-  // Format object data for Word
-  private formatObjectToWord(data: Record<string, unknown>): string {
-    let wordContent = "Data Summary\n";
-    wordContent += "-".repeat(20) + "\n\n";
-    
-    Object.entries(data).forEach(([key, value]) => {
-      const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-      let formattedValue: string;
-      
-      if (typeof value === 'object' && value !== null) {
-        formattedValue = JSON.stringify(value, null, 2);
-      } else if (value instanceof Date) {
-        formattedValue = value.toLocaleString();
-      } else {
-        formattedValue = String(value ?? '');
-      }
-      
-      wordContent += `${formattedKey}: ${formattedValue}\n`;
-    });
-    
-    return wordContent;
-  }
 
   // Main export function with support for all formats and history tracking
   async exportData(
@@ -114,6 +58,11 @@ export class ExportService {
       // Create export history record if tracking is enabled
       if (trackHistory) {
         try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            throw new Error('User not authenticated');
+          }
+
           const filename = customFilename || generateExportFilename(
             data.title.toLowerCase().replace(/\s+/g, '_'),
             format,
@@ -127,8 +76,9 @@ export class ExportService {
             export_type: exportType,
             format,
             filename,
-            filters: data.filters,
+            filters: data.filters as Json,
             date_range: data.dateRange,
+            user_id: user.id,
             metadata: {
               ...data.metadata,
               total_records: data.totalRecords,
@@ -277,10 +227,11 @@ export class ExportService {
         
         // Calculate metrics
         const totalAnalyses = websiteMetrics?.metrics.length || 0;
-        const averageConfidence = websiteMetrics?.metrics.reduce((sum, m) => sum + (m.confidence_score || 0), 0) / (websiteMetrics?.metrics.length || 1) || 0;
-        const averageSentiment = websiteMetrics?.metrics.reduce((sum, m) => sum + (m.sentiment_score || 0), 0) / (websiteMetrics?.metrics.length || 1) || 0;
-        const mentionRate = (websiteMetrics?.metrics.filter(m => m.is_mentioned).length || 0) / (websiteMetrics?.metrics.length || 1) * 100;
-        const averageRank = websiteMetrics?.metrics.reduce((sum, m) => sum + (m.rank_position || 0), 0) / (websiteMetrics?.metrics.length || 1) || 0;
+        const metrics = websiteMetrics?.metrics || [];
+        const averageConfidence = metrics.length > 0 ? metrics.reduce((sum, m) => sum + (m.confidence_score || 0), 0) / metrics.length : 0;
+        const averageSentiment = metrics.length > 0 ? metrics.reduce((sum, m) => sum + (m.sentiment_score || 0), 0) / metrics.length : 0;
+        const mentionRate = metrics.length > 0 ? (metrics.filter(m => m.is_mentioned).length / metrics.length) * 100 : 0;
+        const averageRank = metrics.length > 0 ? metrics.reduce((sum, m) => sum + (m.rank_position || 0), 0) / metrics.length : 0;
         
         // Return flattened tabular data - each row represents one data point
         return [
@@ -289,8 +240,8 @@ export class ExportService {
           { category: "Website Info", metric: "Domain URL", value: website.domain, unit: "url", websiteId: website.id },
           { category: "Website Info", metric: "Active Status", value: website.is_active ? "Active" : "Inactive", unit: "status", websiteId: website.id },
           { category: "Website Info", metric: "Crawl Status", value: website.crawl_status || "Unknown", unit: "status", websiteId: website.id },
-          { category: "Website Info", metric: "Date Added", value: new Date(website.created_at).toLocaleDateString(), unit: "date", websiteId: website.id },
-          { category: "Website Info", metric: "Last Modified", value: new Date(website.updated_at).toLocaleDateString(), unit: "date", websiteId: website.id },
+          { category: "Website Info", metric: "Date Added", value: website.created_at ? new Date(website.created_at).toLocaleDateString() : "Unknown", unit: "date", websiteId: website.id },
+          { category: "Website Info", metric: "Last Modified", value: website.updated_at ? new Date(website.updated_at).toLocaleDateString() : "Unknown", unit: "date", websiteId: website.id },
           { category: "Website Info", metric: "Last Analyzed", value: website.last_crawled_at ? new Date(website.last_crawled_at).toLocaleDateString() : "Never", unit: "date", websiteId: website.id },
           
           // Performance metrics
@@ -436,7 +387,7 @@ export class ExportService {
     // Build query
     let query = supabase
       .schema("beekon_data")
-      .from(tableName)
+      .from(tableName as keyof Database['beekon_data']['Tables'])
       .select(selectFields)
       .order(orderBy, { ascending: false });
 
@@ -468,7 +419,7 @@ export class ExportService {
 
     const exportContent: ExportData = {
       title,
-      data: data || [],
+      data: Array.isArray(data) ? (data as unknown as Record<string, unknown>[]) : [],
       exportedAt: new Date().toISOString(),
       totalRecords: data?.length || 0,
       filters,

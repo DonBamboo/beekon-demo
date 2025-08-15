@@ -1,4 +1,3 @@
-import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,13 +22,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useExportHandler } from "@/lib/export-utils";
-import type { ExportFormat } from "@/types/database";
+import type { ExportFormat, ExportType } from "@/types/database";
 import { exportService } from "@/services/exportService";
-import { 
-  Download, 
-  FileText, 
-  Table, 
-  FileSpreadsheet, 
+import {
+  Download,
+  FileText,
+  Table,
   FileImage,
   Settings,
   Eye,
@@ -79,7 +77,7 @@ export function ExportPreviewModal({
   const [isExporting, setIsExporting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<string>("");
-  
+
   // Export options
   const [format, setFormat] = useState<ExportFormat>(defaultFormat);
   const [filename, setFilename] = useState(`${exportType}-export`);
@@ -91,10 +89,30 @@ export function ExportPreviewModal({
   const [customDescription, setCustomDescription] = useState("");
 
   const formatOptions = [
-    { value: "json", label: "JSON", icon: FileText, description: "Structured data format" },
-    { value: "csv", label: "CSV", icon: Table, description: "Spreadsheet compatible" },
-    { value: "pdf", label: "PDF", icon: FileImage, description: "Printable document" },
-    { value: "word", label: "Word", icon: FileText, description: "Word document" },
+    {
+      value: "json",
+      label: "JSON",
+      icon: FileText,
+      description: "Structured data format",
+    },
+    {
+      value: "csv",
+      label: "CSV",
+      icon: Table,
+      description: "Spreadsheet compatible",
+    },
+    {
+      value: "pdf",
+      label: "PDF",
+      icon: FileImage,
+      description: "Printable document",
+    },
+    {
+      value: "word",
+      label: "Word",
+      icon: FileText,
+      description: "Word document",
+    },
   ] as const;
 
   const handlePreview = async () => {
@@ -147,6 +165,7 @@ export function ExportPreviewModal({
           description: customDescription,
           data,
           exportedAt: new Date().toISOString(),
+          totalRecords: Array.isArray(data) ? data.length : 1,
           metadata: {
             exportType,
             format,
@@ -159,20 +178,16 @@ export function ExportPreviewModal({
         };
 
         const blob = await exportService.exportData(exportData, format, {
-          exportType,
+          exportType: exportType as ExportType,
           customFilename: filename,
-          includeTimestamp,
         });
 
-        await handleExport(
-          () => Promise.resolve(blob),
-          {
-            filename,
-            format,
-            includeTimestamp,
-            metadata: exportData.metadata,
-          }
-        );
+        await handleExport(() => Promise.resolve(blob), {
+          filename,
+          format,
+          includeTimestamp,
+          metadata: exportData.metadata,
+        });
       }
 
       toast({
@@ -193,29 +208,46 @@ export function ExportPreviewModal({
     }
   };
 
-  const generatePreviewContent = async (data: Record<string, unknown>[] | Record<string, unknown>, options: ExportOptions): Promise<string> => {
+  const generatePreviewContent = async (
+    data: Record<string, unknown>[] | Record<string, unknown>,
+    options: ExportOptions
+  ): Promise<string> => {
     // Generate better previews based on the format
     switch (options.format) {
       case "json":
-        return JSON.stringify(data, null, 2).slice(0, 1000) + (JSON.stringify(data).length > 1000 ? "..." : "");
-      
+        return (
+          JSON.stringify(data, null, 2).slice(0, 1000) +
+          (JSON.stringify(data).length > 1000 ? "..." : "")
+        );
+
       case "csv": {
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data) && data.length > 0 && data[0]) {
           const headers = Object.keys(data[0]).join(",");
-          const rows = data.slice(0, 5).map(row => 
-            Object.values(row).map(val => `"${String(val)}"`).join(",")
-          ).join("\n");
-          const additionalRows = data.length > 5 ? `\n... and ${data.length - 5} more rows` : "";
+          const rows = data
+            .slice(0, 5)
+            .map((row) =>
+              Object.values(row || {})
+                .map((val) => `"${String(val)}"`)
+                .join(",")
+            )
+            .join("\n");
+          const additionalRows =
+            data.length > 5 ? `\n... and ${data.length - 5} more rows` : "";
           return `${headers}\n${rows}${additionalRows}`;
-        } else if (typeof data === 'object' && data !== null) {
+        } else if (typeof data === "object" && data !== null) {
           const entries = Object.entries(data).slice(0, 10);
-          const csvContent = entries.map(([key, value]) => `"${key}","${String(value)}"`).join("\n");
-          const additionalEntries = Object.keys(data).length > 10 ? `\n... and ${Object.keys(data).length - 10} more properties` : "";
+          const csvContent = entries
+            .map(([key, value]) => `"${key}","${String(value)}"`)
+            .join("\n");
+          const additionalEntries =
+            Object.keys(data).length > 10
+              ? `\n... and ${Object.keys(data).length - 10} more properties`
+              : "";
           return `"Property","Value"\n${csvContent}${additionalEntries}`;
         }
         return "No data available for CSV preview";
       }
-      
+
       case "pdf":
         return `📊 BEEKON AI REPORT
 ════════════════════════════════════
@@ -224,26 +256,36 @@ export function ExportPreviewModal({
 📈 Total Records: ${Array.isArray(data) ? data.length : 1}
 
 🔍 APPLIED FILTERS
-${options.includeFilters ? '• Sample filters will be listed here' : '• No filters applied'}
+${
+  options.includeFilters
+    ? "• Sample filters will be listed here"
+    : "• No filters applied"
+}
 
 📋 DATA PREVIEW
-${Array.isArray(data) && data.length > 0 ? 
-  `First few records will be displayed in a professional table format...
+${
+  Array.isArray(data) && data.length > 0
+    ? `First few records will be displayed in a professional table format...
   
 001. RECORD
 ───────────────
-${Object.entries(data[0]).slice(0, 3).map(([key, value]) => 
-  `${key.padEnd(20)}: ${String(value)}`
-).join('\n')}
+${
+  data[0]
+    ? Object.entries(data[0])
+        .slice(0, 3)
+        .map(([key, value]) => `${key.padEnd(20)}: ${String(value)}`)
+        .join("\n")
+    : ""
+}
 ...
 
-${data.length > 1 ? `... and ${data.length - 1} more records` : ''}` :
-  'Data will be displayed in a structured format'
+${data.length > 1 ? `... and ${data.length - 1} more records` : ""}`
+    : "Data will be displayed in a structured format"
 }
 
 ══════════════════════════════════════
 🚀 Generated by Beekon AI`;
-      
+
       case "word":
         return `📄 WORD DOCUMENT PREVIEW
 
@@ -254,21 +296,36 @@ Document Information
 ══════════════════════
 Generated: ${new Date().toLocaleString()}
 Total Records: ${Array.isArray(data) ? data.length : 1}
-${options.includeFilters ? '\nApplied Filters:\n• Sample filters will be listed here' : ''}
+${
+  options.includeFilters
+    ? "\nApplied Filters:\n• Sample filters will be listed here"
+    : ""
+}
 
 Data
 ════
-${Array.isArray(data) && data.length > 0 ? 
-  `Professional table with ${Object.keys(data[0]).length} columns and ${data.length} rows
+${
+  Array.isArray(data) && data.length > 0
+    ? data[0]
+      ? `Professional table with ${Object.keys(data[0]).length} columns and ${
+          data.length
+        } rows
   
 Sample structure:
 ┌─────────────────┬─────────────────┐
-│ ${Object.keys(data[0])[0]?.padEnd(15) || 'Column 1'} │ ${Object.keys(data[0])[1]?.padEnd(15) || 'Column 2'} │
+│ ${Object.keys(data[0])[0]?.padEnd(15) || "Column 1"} │ ${
+          Object.keys(data[0])[1]?.padEnd(15) || "Column 2"
+        } │
 ├─────────────────┼─────────────────┤
-│ ${String(data[0][Object.keys(data[0])[0]]).substring(0, 15).padEnd(15)} │ ${String(data[0][Object.keys(data[0])[1]]).substring(0, 15).padEnd(15)} │
+│ ${String(data[0][Object.keys(data[0])[0] || ""] || "")
+          .substring(0, 15)
+          .padEnd(15)} │ ${String(data[0][Object.keys(data[0])[1] || ""] || "")
+          .substring(0, 15)
+          .padEnd(15)} │
 └─────────────────┴─────────────────┘
-...and more rows` :
-  'Key-value pairs in a professional table format'
+...and more rows`
+      : "Key-value pairs in a professional table format"
+    : "Key-value pairs in a professional table format"
 }
 
 💡 The actual Word document will have:
@@ -276,14 +333,14 @@ Sample structure:
 • Structured tables
 • Proper spacing and typography
 • Headers and footers`;
-      
+
       default:
         return "Preview not available for this format.";
     }
   };
 
   const getFormatIcon = (formatValue: string) => {
-    const option = formatOptions.find(opt => opt.value === formatValue);
+    const option = formatOptions.find((opt) => opt.value === formatValue);
     return option ? option.icon : FileText;
   };
 
@@ -304,7 +361,10 @@ Sample structure:
           {/* Export Format Selection */}
           <div className="space-y-2">
             <Label htmlFor="format">Export Format</Label>
-            <Select value={format} onValueChange={(value) => setFormat(value as ExportFormat)}>
+            <Select
+              value={format}
+              onValueChange={(value) => setFormat(value as ExportFormat)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select format" />
               </SelectTrigger>
@@ -369,7 +429,7 @@ Sample structure:
               <Settings className="h-4 w-4" />
               <Label className="text-sm font-medium">Export Options</Label>
             </div>
-            
+
             <div className="space-y-3 pl-6">
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -381,38 +441,47 @@ Sample structure:
                   Include metadata (export info, record counts, etc.)
                 </Label>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="includeTimestamp"
                   checked={includeTimestamp}
                   onCheckedChange={(checked) => setIncludeTimestamp(!!checked)}
                 />
-                <Label htmlFor="includeTimestamp" className="text-sm flex items-center space-x-1">
+                <Label
+                  htmlFor="includeTimestamp"
+                  className="text-sm flex items-center space-x-1"
+                >
                   <Calendar className="h-3 w-3" />
                   <span>Include timestamp in filename</span>
                 </Label>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="includeUserInfo"
                   checked={includeUserInfo}
                   onCheckedChange={(checked) => setIncludeUserInfo(!!checked)}
                 />
-                <Label htmlFor="includeUserInfo" className="text-sm flex items-center space-x-1">
+                <Label
+                  htmlFor="includeUserInfo"
+                  className="text-sm flex items-center space-x-1"
+                >
                   <User className="h-3 w-3" />
                   <span>Include user information</span>
                 </Label>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="includeFilters"
                   checked={includeFilters}
                   onCheckedChange={(checked) => setIncludeFilters(!!checked)}
                 />
-                <Label htmlFor="includeFilters" className="text-sm flex items-center space-x-1">
+                <Label
+                  htmlFor="includeFilters"
+                  className="text-sm flex items-center space-x-1"
+                >
                   <Building className="h-3 w-3" />
                   <span>Include applied filters</span>
                 </Label>
@@ -436,8 +505,7 @@ Sample structure:
                 <span>Filename:</span>
                 <span className="font-mono text-xs">
                   {filename}
-                  {includeTimestamp && "-YYYY-MM-DD-HH-mm-ss"}
-                  .{format}
+                  {includeTimestamp && "-YYYY-MM-DD-HH-mm-ss"}.{format}
                 </span>
               </div>
             </div>
@@ -470,7 +538,10 @@ Sample structure:
           <LoadingButton
             onClick={handleExportClick}
             loading={isExporting}
-            icon={React.createElement(getFormatIcon(format), { className: "h-4 w-4" })}
+            icon={(() => {
+              const Icon = getFormatIcon(format);
+              return <Icon className="h-4 w-4" />;
+            })()}
           >
             Export {format.toUpperCase()}
           </LoadingButton>

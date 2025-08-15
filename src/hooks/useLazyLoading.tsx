@@ -1,25 +1,30 @@
-import React, { Suspense } from 'react';
-import { ChartSkeleton } from '../components/LoadingStates';
+import React, { Suspense } from "react";
+import { ChartSkeleton } from "../components/LoadingStates";
 
 // Higher-order component for creating lazy components
-export function withLazyLoading<T extends React.ComponentType<Record<string, unknown>>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function withLazyLoading<T extends React.ComponentType<any>>(
   Component: T,
   fallback: React.ComponentType = () => React.createElement(ChartSkeleton)
 ) {
-  const LazyComponent = React.lazy(() => Promise.resolve({ default: Component }));
-  
-  return React.memo((props: React.ComponentProps<T>) => (
+  type Props = React.ComponentProps<T>;
+
+  const LazyComponent = React.lazy(async () => ({
+    default: Component,
+  }));
+
+  return React.memo((props: Props) => (
     <Suspense fallback={React.createElement(fallback)}>
-      <LazyComponent {...props} />
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <LazyComponent {...(props as any)} />
     </Suspense>
   ));
 }
 
 // Hook for lazy loading components conditionally
-export function useLazyComponent<T extends React.ComponentType<Record<string, unknown>>>(
-  componentLoader: () => Promise<{ default: T }>,
-  shouldLoad: boolean = true
-) {
+export function useLazyComponent<
+  T extends React.ComponentType<Record<string, unknown>>
+>(componentLoader: () => Promise<{ default: T }>, shouldLoad: boolean = true) {
   const [Component, setComponent] = React.useState<T | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<Error | null>(null);
@@ -28,13 +33,15 @@ export function useLazyComponent<T extends React.ComponentType<Record<string, un
     if (shouldLoad && !Component && !isLoading) {
       setIsLoading(true);
       setError(null);
-      
+
       componentLoader()
         .then(({ default: LoadedComponent }) => {
           setComponent(() => LoadedComponent);
         })
         .catch((err) => {
-          setError(err instanceof Error ? err : new Error('Failed to load component'));
+          setError(
+            err instanceof Error ? err : new Error("Failed to load component")
+          );
         })
         .finally(() => {
           setIsLoading(false);
@@ -46,7 +53,9 @@ export function useLazyComponent<T extends React.ComponentType<Record<string, un
 }
 
 // Intersection Observer based lazy loading
-export function useIntersectionLazyLoading<T extends React.ComponentType<Record<string, unknown>>>(
+export function useIntersectionLazyLoading<
+  T extends React.ComponentType<Record<string, unknown>>
+>(
   componentLoader: () => Promise<{ default: T }>,
   options: IntersectionObserverInit = {}
 ) {
@@ -60,26 +69,30 @@ export function useIntersectionLazyLoading<T extends React.ComponentType<Record<
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
+        if (entry?.isIntersecting) {
           setIsLoading(true);
           setError(null);
-          
+
           componentLoader()
             .then(({ default: LoadedComponent }) => {
               setComponent(() => LoadedComponent);
             })
             .catch((err) => {
-              setError(err instanceof Error ? err : new Error('Failed to load component'));
+              setError(
+                err instanceof Error
+                  ? err
+                  : new Error("Failed to load component")
+              );
             })
             .finally(() => {
               setIsLoading(false);
             });
-          
+
           observer.disconnect();
         }
       },
       {
-        rootMargin: '50px',
+        rootMargin: "50px",
         threshold: 0.1,
         ...options,
       }

@@ -52,7 +52,8 @@ export interface ServiceError extends BaseError {
     | "website"
     | "analysis"
     | "api-key"
-    | "dashboard";
+    | "dashboard"
+    | "competitor";
   operation?: string;
 }
 

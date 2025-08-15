@@ -18,6 +18,46 @@ export type CompetitorInsert =
 export type CompetitorUpdate =
   Database["beekon_data"]["Tables"]["competitors"]["Update"];
 
+// Extended competitor types for status tracking
+export interface CompetitorPerformance {
+  visibility_score: number;
+  avg_rank: number;
+  total_mentions: number;
+  sentiment_score: number;
+}
+
+// Competitor status tracking types
+export type CompetitorStatusValue = "pending" | "analyzing" | "completed" | "failed";
+
+export interface CompetitorStatus {
+  competitorId: string;
+  websiteId: string;
+  status: CompetitorStatusValue;
+  progress?: number;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  updatedAt: string;
+}
+
+export interface CompetitorStatusUpdate {
+  competitorId: string;
+  websiteId: string;
+  status: CompetitorStatusValue;
+  progress?: number;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  updatedAt: string;
+}
+
+export interface CompetitorWithStatus extends Competitor {
+  analysisStatus: "completed" | "pending" | "in_progress";
+  performance?: CompetitorPerformance;
+  addedAt: string; // Non-nullable version of created_at
+  analysis_frequency: string | null;
+}
+
 export type LLMAnalysisResult =
   Database["beekon_data"]["Tables"]["llm_analysis_results"]["Row"];
 export type LLMAnalysisResultInsert =
@@ -66,12 +106,14 @@ export type ExportHistoryInsert =
 export type ExportHistoryUpdate =
   Database["beekon_data"]["Tables"]["export_history"]["Update"];
 
-// Common notification settings type
+// Common notification settings type (compatible with Supabase Json type)
 export interface NotificationSettings {
   email_notifications: boolean;
   weekly_reports: boolean;
   competitor_alerts: boolean;
   analysis_complete: boolean;
+  // Index signature to make it compatible with Supabase Json type
+  [key: string]: boolean | string | number | null | undefined;
 }
 
 // Extended user profile with notification settings
@@ -117,6 +159,7 @@ export interface AnalysisInsights {
 export interface AnalysisResult {
   id: string;
   topic_name: string;
+  topic: string; // Added missing topic property
   topic_keywords: string[];
   llm_results: LLMResult[];
   total_mentions: number;
@@ -124,6 +167,10 @@ export interface AnalysisResult {
   avg_confidence: number | null;
   avg_sentiment: number | null;
   insights?: AnalysisInsights;
+  // Additional properties commonly accessed
+  created_at?: string;
+  website_id?: string;
+  filters?: Record<string, unknown>;
 }
 
 // UI-specific analysis result format for DetailedAnalysisModal
@@ -195,7 +242,7 @@ export interface WebsiteFilter {
   analysis_status: "all" | "completed" | "pending" | "failed";
 }
 
-// Dashboard metrics
+// Dashboard metrics - Unified interface
 export interface DashboardMetrics {
   total_websites: number;
   total_competitors: number;
@@ -205,12 +252,51 @@ export interface DashboardMetrics {
   rank_trend: number;
   confidence_trend: number;
   sentiment_trend: number;
+  // Additional properties accessed throughout the app
+  visibilityScore: number;
+  overallVisibilityScore: number;
+  averageRanking: number;
+  totalMentions: number;
+  sentimentScore: number;
+  totalAnalyses: number;
+  activeWebsites: number;
+  topPerformingTopic: string | null;
+  improvementTrend: number;
+  averageVisibility: number;
+  competitorCount: number;
+  lastAnalysisDate?: string | null;
+  growthRate: number;
+}
+
+// Subscription tier types
+export type SubscriptionTier = "free" | "starter" | "pro" | "professional" | "enterprise";
+
+// Export format types for data export functionality
+export type ExportColumnType = "number" | "boolean" | "date" | "text" | "url" | "percentage" | "currency" | "datetime" | "rank" | "auto";
+
+// Generic filter type for handling unknown filter objects
+export interface FilterData {
+  filters: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+// Cache level types for cache system
+export interface CacheLevel {
+  name: string;
+  storage: Storage | Record<string, unknown>;
+  ttl: number;
+}
+
+export interface CacheLevels {
+  L1_MEMORY: CacheLevel;
+  L2_SESSION: CacheLevel;
+  L3_LOCAL: CacheLevel;
 }
 
 // Export history types
 export type ExportStatus = "pending" | "processing" | "completed" | "failed";
 export type ExportType = "analysis" | "dashboard" | "website" | "competitor" | "configuration" | "filtered_data";
-export type ExportFormat = "pdf" | "csv" | "json";
+export type ExportFormat = "pdf" | "csv" | "json" | "word";
 
 export interface ExportHistoryRecord {
   id: string;
@@ -224,23 +310,23 @@ export interface ExportHistoryRecord {
   date_range: { start: string; end: string } | null;
   metadata: Record<string, unknown> | null;
   error_message: string | null;
-  created_at: string;
+  created_at: string | null;
   started_at: string | null;
   completed_at: string | null;
-  updated_at: string;
+  updated_at: string | null;
 }
 
 export interface ExportStatistics {
   user_id: string;
-  export_type: ExportType;
-  format: ExportFormat;
-  status: ExportStatus;
-  total_exports: number;
+  export_type: ExportType | null;
+  format: ExportFormat | null;
+  status: ExportStatus | null;
+  total_exports: number | null;
   total_size: number | null;
   avg_size: number | null;
   last_export: string | null;
-  successful_exports: number;
-  failed_exports: number;
+  successful_exports: number | null;
+  failed_exports: number | null;
   avg_duration_seconds: number | null;
 }
 

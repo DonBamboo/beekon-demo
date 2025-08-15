@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { profileService, UserProfile } from '@/services/profileService';
+import { profileService } from '@/services/profileService';
+import { UserProfile } from '@/types/database';
 
 export function useProfile() {
   const { user } = useAuth();
@@ -39,7 +40,15 @@ export function useProfile() {
     setIsLoading(true);
     setError(null);
     try {
-      const updatedProfile = await profileService.updateProfile(user.id, updates);
+      // Convert UserProfile partial to ProfileUpdateData by filtering out nulls
+      const profileUpdates: Partial<UserProfile> & Record<string, unknown> = {};
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value !== null) {
+          profileUpdates[key] = value;
+        }
+      });
+      
+      const updatedProfile = await profileService.updateProfile(user.id, profileUpdates as Record<string, unknown>);
       setProfile(updatedProfile);
       return updatedProfile;
     } catch (error) {

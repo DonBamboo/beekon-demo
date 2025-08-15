@@ -1,32 +1,31 @@
-import { WorkspaceErrorBoundary } from "@/components/WorkspaceErrorBoundary";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
+import { WorkspaceProvider } from "@/hooks/useWorkspace";
+import { AppStateProvider } from "@/contexts/AppStateContext";
+import { OptimizedAppProvider, StateManagementDevTools } from "@/contexts/OptimizedAppProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Suspense, lazy, useEffect } from "react";
-import { WorkspaceProvider } from "./hooks/useWorkspace";
 import { registerSW } from "./lib/serviceWorker";
-import { PageLoading, InlineLoading } from "@/components/LoadingStates";
+import { PageLoading } from "@/components/LoadingStates";
+import AppDashboard from "@/components/AppDashboard";
 
-// Lazy load all pages for code splitting
-const Analysis = lazy(() => import("./pages/Analysis"));
+// Lazy load only non-core pages for code splitting
 const Auth = lazy(() => import("./pages/Auth"));
-const Competitors = lazy(() => import("./pages/Competitors"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Websites = lazy(() => import("./pages/Websites"));
+
+// Core dashboard pages are now directly imported in AppDashboard for instant navigation
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000, // 5 minutes
-      cacheTime: 10 * 60 * 1000, // 10 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
       retry: (failureCount, error) => {
         // Don't retry on 4xx errors
         if (error && typeof error === 'object' && 'status' in error) {
@@ -38,9 +37,21 @@ const queryClient = new QueryClient({
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       refetchOnWindowFocus: false,
       refetchOnReconnect: 'always',
+      // Prevent duplicate requests for the same query
+      refetchOnMount: (query) => {
+        return Date.now() - query.state.dataUpdatedAt > 2 * 60 * 1000; // Only refetch if data is older than 2 minutes
+      },
+      // Enable background refetching with longer intervals
+      refetchInterval: false, // Disable automatic background refetching by default
+      // Optimize network usage
+      networkMode: 'online',
     },
     mutations: {
       retry: 1,
+      // Add better error handling for mutations
+      onError: (error) => {
+        console.warn('Mutation error:', error);
+      },
     },
   },
 });
@@ -125,73 +136,75 @@ const App = () => {
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <WorkspaceErrorBoundary>
+          <AppStateProvider>
             <WorkspaceProvider>
-              <BrowserRouter>
+              <OptimizedAppProvider>
+                <BrowserRouter>
                 <Suspense fallback={<PageLoading message="Loading application..." />}>
                   <Routes>
                     <Route path="/" element={<LandingPage />} />
                     <Route path="/auth" element={<Auth />} />
+                    
+                    {/* Unified route for all dashboard pages - true SPA */}
                     <Route
-                      path="/dashboard"
+                      path="/dashboard/*"
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Dashboard />
+                            <AppDashboard />
                           </AppLayout>
                         </ProtectedRoute>
                       }
                     />
                     <Route
-                      path="/websites"
+                      path="/websites/*"
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Websites />
+                            <AppDashboard />
                           </AppLayout>
                         </ProtectedRoute>
                       }
                     />
                     <Route
-                      path="/analysis"
+                      path="/analysis/*"
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Suspense fallback={<InlineLoading message="Loading page..." />}>
-                              <Analysis />
-                            </Suspense>
+                            <AppDashboard />
                           </AppLayout>
                         </ProtectedRoute>
                       }
                     />
                     <Route
-                      path="/competitors"
+                      path="/competitors/*"
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Suspense fallback={<InlineLoading message="Loading page..." />}>
-                              <Competitors />
-                            </Suspense>
+                            <AppDashboard />
                           </AppLayout>
                         </ProtectedRoute>
                       }
                     />
                     <Route
-                      path="/settings"
+                      path="/settings/*"
                       element={
                         <ProtectedRoute>
                           <AppLayout>
-                            <Settings />
+                            <AppDashboard />
                           </AppLayout>
                         </ProtectedRoute>
                       }
                     />
+                    
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>
-              </BrowserRouter>
+                  <StateManagementDevTools />
+                </BrowserRouter>
+              </OptimizedAppProvider>
             </WorkspaceProvider>
-          </WorkspaceErrorBoundary>
+          </AppStateProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

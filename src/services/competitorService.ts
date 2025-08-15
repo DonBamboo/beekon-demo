@@ -1,10 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
   Competitor,
-  CompetitorInsert,
-  CompetitorUpdate,
   AnalysisResult,
-  LLMResult,
 } from "@/types/database";
 import BaseService from "./baseService";
 import {
@@ -13,6 +10,10 @@ import {
   type CompetitiveGapAnalysis,
   type CompetitorInsight,
 } from "./competitorAnalysisService";
+
+// Re-export types for external use
+export type { CompetitiveGapAnalysis, CompetitorShareOfVoice, CompetitorInsight };
+export type { Competitor };
 
 export interface CompetitorPerformance {
   competitorId: string;
@@ -58,7 +59,8 @@ export interface MarketShareDataPoint {
   rawValue: number; // Raw share of voice percentage
   competitorId?: string;
   mentions?: number;
-  avgRank?: number;
+  avgRank?: number | null;
+  value?: number; // Add missing property
   dataType: "market_share"; // Explicit data type identifier
 }
 
@@ -68,7 +70,7 @@ export interface ShareOfVoiceDataPoint {
   totalMentions: number;
   totalAnalyses: number;
   competitorId?: string;
-  avgRank?: number;
+  avgRank?: number | null;
   dataType: "share_of_voice"; // Explicit data type identifier
 }
 
@@ -135,7 +137,7 @@ export class OptimizedCompetitorService extends BaseService {
     const now = Date.now();
 
     if (cached && now - cached.timestamp < cached.ttl) {
-      return cached.data;
+      return cached.data as T;
     }
 
     const data = await fetchFunction();
@@ -201,28 +203,31 @@ export class OptimizedCompetitorService extends BaseService {
       }
 
       // Use the optimized database function
-      const { data, error } = await supabase.rpc("get_competitor_performance", {
-        p_website_id: websiteId,
-        p_limit: 50,
-        p_offset: 0,
-      });
+      const { data, error } = await supabase
+        .schema('beekon_data')
+        .rpc("get_competitor_performance", {
+          p_website_id: websiteId,
+          p_limit: 50,
+          p_offset: 0,
+        });
 
       if (error) throw error;
 
       // Transform database results to match interface with safe calculations
-      return (data || []).map((row: Record<string, unknown>) => {
-        const totalMentions = row.total_mentions || 0;
-        const positiveMentions = row.positive_mentions || 0;
-        const avgSentiment = row.avg_sentiment_score;
-        const avgRank = row.avg_rank_position;
-        const mentionTrend = row.mention_trend_7d;
+      const performanceData = Array.isArray(data) ? data : [];
+      return performanceData.map((row: Record<string, unknown>) => {
+        const totalMentions = Number(row.total_mentions) || 0;
+        const positiveMentions = Number(row.positive_mentions) || 0;
+        const avgSentiment = Number(row.avg_sentiment_score);
+        const avgRank = Number(row.avg_rank_position);
+        const mentionTrend = Number(row.mention_trend_7d);
 
         // Average rank processing completed
 
         return {
-          competitorId: row.competitor_id,
-          domain: row.competitor_domain,
-          name: row.competitor_name || row.competitor_domain,
+          competitorId: String(row.competitor_id),
+          domain: String(row.competitor_domain),
+          name: String(row.competitor_name || row.competitor_domain),
           shareOfVoice:
             totalMentions > 0
               ? Math.round((positiveMentions / totalMentions) * 100)
@@ -230,7 +235,7 @@ export class OptimizedCompetitorService extends BaseService {
           averageRank:
             avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20
               ? avgRank
-              : null,
+              : 0,
           mentionCount: totalMentions,
           sentimentScore:
             avgSentiment && !isNaN(avgSentiment)
@@ -243,7 +248,7 @@ export class OptimizedCompetitorService extends BaseService {
           trend: this.calculateTrend(mentionTrend),
           trendPercentage:
             mentionTrend && !isNaN(mentionTrend) ? Math.abs(mentionTrend) : 0,
-          lastAnalyzed: row.last_analysis_date || new Date().toISOString(),
+          lastAnalyzed: String(row.last_analysis_date || new Date().toISOString()),
           isActive: true,
         };
       });
@@ -277,19 +282,22 @@ export class OptimizedCompetitorService extends BaseService {
         return [];
       }
 
-      const { data, error } = await supabase.rpc("get_competitor_time_series", {
-        p_website_id: websiteId,
-        p_competitor_domain: competitorDomain,
-        p_days: days,
-      });
+      const { data, error } = await supabase
+        .schema('beekon_data')
+        .rpc("get_competitor_time_series", {
+          p_website_id: websiteId,
+          p_competitor_domain: competitorDomain,
+          p_days: days,
+        });
 
       if (error) throw error;
 
       // Group by date
       const timeSeriesMap = new Map<string, CompetitorTimeSeriesData>();
+      const timeSeriesData = Array.isArray(data) ? data : [];
 
-      (data || []).forEach((row: Record<string, unknown>) => {
-        const dateStr = row.analysis_date;
+      timeSeriesData.forEach((row: Record<string, unknown>) => {
+        const dateStr = String(row.analysis_date);
         if (!timeSeriesMap.has(dateStr)) {
           timeSeriesMap.set(dateStr, {
             date: dateStr,
@@ -297,14 +305,14 @@ export class OptimizedCompetitorService extends BaseService {
           });
         }
 
-        const dailyMentions = row.daily_mentions || 0;
-        const dailyPositiveMentions = row.daily_positive_mentions || 0;
-        const dailyAvgSentiment = row.daily_avg_sentiment;
-        const dailyAvgRank = row.daily_avg_rank;
+        const dailyMentions = Number(row.daily_mentions) || 0;
+        const dailyPositiveMentions = Number(row.daily_positive_mentions) || 0;
+        const dailyAvgSentiment = Number(row.daily_avg_sentiment);
+        const dailyAvgRank = Number(row.daily_avg_rank);
 
         timeSeriesMap.get(dateStr)!.competitors.push({
           competitorId: "", // Would need to join with competitors table
-          name: row.competitor_domain,
+          name: String(row.competitor_domain),
           shareOfVoice:
             dailyMentions > 0
               ? Math.round((dailyPositiveMentions / dailyMentions) * 100)
@@ -470,7 +478,7 @@ export class OptimizedCompetitorService extends BaseService {
           ),
           rawValue: yourBrandMentionRate, // Keep old mention rate for reference
           mentions: yourBrandMentions,
-          avgRank: null, // Your brand doesn't have a rank position
+          avgRank: undefined, // Your brand doesn't have a rank position
           dataType: "market_share",
         },
         ...competitorTrueShares.map((comp) => ({
@@ -493,7 +501,7 @@ export class OptimizedCompetitorService extends BaseService {
           shareOfVoice: yourBrandTrueShareOfVoice, // Use true share of voice
           totalMentions: yourBrandMentions,
           totalAnalyses: yourBrandAnalyses,
-          avgRank: null,
+          avgRank: undefined,
           dataType: "share_of_voice",
         },
         ...competitorTrueShares.map((comp) => ({
@@ -598,7 +606,7 @@ export class OptimizedCompetitorService extends BaseService {
     }
 
     // Clear all relevant cache for this website
-    this.clearCache(`competitors_${websiteId}`);
+    this.clearCache(`competitors_data_${websiteId}`);
     this.clearCache(`performance_${websiteId}`);
     this.clearCache(`analytics_${websiteId}`);
 
@@ -648,7 +656,7 @@ export class OptimizedCompetitorService extends BaseService {
       }
       throw new Error("Failed to add or retrieve competitor");
     }
-    return result[0];
+    return result[0]!;
   }
 
   /**
@@ -669,7 +677,7 @@ export class OptimizedCompetitorService extends BaseService {
     if (error) throw error;
 
     // Clear relevant cache
-    this.clearCache(`competitors_${data.website_id}`);
+    this.clearCache(`competitors_data_${data.website_id}`);
 
     // Refresh materialized views to ensure updated competitors appear in analytics
     try {
@@ -700,7 +708,7 @@ export class OptimizedCompetitorService extends BaseService {
 
     // Clear relevant cache
     if (data) {
-      this.clearCache(`competitors_${data.website_id}`);
+      this.clearCache(`competitors_data_${data.website_id}`);
 
       // Refresh materialized views to ensure deleted competitors are removed from analytics
       try {
@@ -965,7 +973,9 @@ export class OptimizedCompetitorService extends BaseService {
    * Refresh materialized views (for real-time updates)
    */
   async refreshCompetitorViews(): Promise<void> {
-    await supabase.rpc("refresh_competitor_performance_views");
+    await supabase
+      .schema('beekon_data')
+      .rpc("refresh_competitor_performance_views");
     // Clear all cache after refresh
     this.clearCache();
   }
@@ -979,84 +989,7 @@ export class OptimizedCompetitorService extends BaseService {
     return "stable";
   }
 
-  private calculateBrandMetrics(results: AnalysisResult[]): {
-    overallVisibilityScore: number;
-  } {
-    if (results.length === 0) return { overallVisibilityScore: 0 };
 
-    // Calculate share of voice using same methodology as competitor database function
-    // Count total analyses and total mentions across all LLM results
-    const allLLMResults = results.flatMap((r) => r.llm_results);
-    const totalAnalyses = allLLMResults.length;
-    const totalMentions = allLLMResults.filter((r) => r.is_mentioned).length;
-
-    // Calculate share of voice as percentage of mentions
-    // This matches the database function logic: (total_voice_mentions / total_analyses) * 100
-    const overallVisibilityScore =
-      totalAnalyses > 0 ? Math.round((totalMentions / totalAnalyses) * 100) : 0;
-
-    return { overallVisibilityScore };
-  }
-
-  /**
-   * @deprecated Legacy method - no longer used. Gap analysis now handled in unified analytics.
-   */
-  private transformGapAnalysisToLegacyFormat(
-    gapAnalysis: CompetitiveGapAnalysis[]
-  ): CompetitorComparison[] {
-    // Legacy format transformation deprecated
-    return gapAnalysis.map((gap) => ({
-      topic: gap.topicName,
-      yourBrand: Math.round(gap.yourBrandScore),
-      competitors: gap.competitorData.map((comp) => ({
-        competitorId: comp.competitorId,
-        name: comp.competitor_name,
-        score: Math.round(comp.score),
-      })),
-    }));
-  }
-
-  // Legacy method kept for backward compatibility but now deprecated
-  private calculateCompetitiveGaps(
-    competitors: CompetitorPerformance[],
-    yourBrandResults: AnalysisResult[]
-  ): CompetitorComparison[] {
-    // Method deprecated - use newer implementation
-
-    // Group your brand's results by topic
-    const topicMap = new Map<string, number>();
-
-    yourBrandResults.forEach((result) => {
-      const mentionedCount = result.llm_results.filter(
-        (r) => r.is_mentioned
-      ).length;
-      const totalCount = result.llm_results.length;
-      const score = totalCount > 0 ? (mentionedCount / totalCount) * 100 : 0;
-
-      if (!topicMap.has(result.topic)) {
-        topicMap.set(result.topic, 0);
-      }
-      topicMap.set(result.topic, topicMap.get(result.topic)! + score);
-    });
-
-    // Create competitive gaps for each topic using real competitor data
-    const gaps: CompetitorComparison[] = [];
-
-    topicMap.forEach((yourScore, topic) => {
-      gaps.push({
-        topic,
-        yourBrand: Math.round(yourScore),
-        competitors: competitors.slice(0, 3).map((comp) => ({
-          competitorId: comp.competitorId,
-          name: comp.name,
-          // Use actual share of voice as proxy for topic score instead of random data
-          score: Math.round(comp.shareOfVoice),
-        })),
-      });
-    });
-
-    return gaps;
-  }
 
   private convertToCSV(data: {
     competitors: CompetitorPerformance[];
@@ -1151,6 +1084,8 @@ export class OptimizedCompetitorService extends BaseService {
 
       if (!resultsMap.has(topicName)) {
         resultsMap.set(topicName, {
+          id: topicName,
+          topic: topicName,
           topic_name: topicName,
           topic_keywords: topic.topic_keywords || [],
           llm_results: [],
@@ -1158,7 +1093,7 @@ export class OptimizedCompetitorService extends BaseService {
           avg_rank: null,
           avg_confidence: null,
           avg_sentiment: null,
-        });
+        } as AnalysisResult);
       }
 
       const analysisResult = resultsMap.get(topicName)!;
@@ -1283,8 +1218,6 @@ export class OptimizedCompetitorService extends BaseService {
     timeSeriesData,
     marketShareData,
     shareOfVoiceData,
-    totalMentionsAllBrands,
-    yourBrandMentions,
   }: {
     competitors: CompetitorPerformance[];
     shareOfVoice: CompetitorShareOfVoice[];
@@ -1295,6 +1228,7 @@ export class OptimizedCompetitorService extends BaseService {
     shareOfVoiceData: ShareOfVoiceDataPoint[];
     totalMentionsAllBrands: number;
     yourBrandMentions: number;
+    // Note: totalMentionsAllBrands and yourBrandMentions can be calculated from shareOfVoice data
   }): CompetitorAnalytics {
     // Validate data consistency before creating analytics
     const validation = this.validateCompetitorData({
@@ -1381,15 +1315,6 @@ export class OptimizedCompetitorService extends BaseService {
           marketShareData,
           shareOfVoice
         ),
-        calculationMethod: {
-          shareOfVoiceCalculation: "relative_to_total_mentions",
-          totalMentionsAllBrands,
-          yourBrandMentions,
-          shareOfVoiceTotal: shareOfVoiceTotal.toFixed(1),
-          marketShareTotal: marketShareTotal.toFixed(1),
-          description:
-            "Share of voice calculated as (brand_mentions / total_mentions_all_brands) * 100",
-        },
       },
     };
   }
@@ -1592,7 +1517,7 @@ export class OptimizedCompetitorService extends BaseService {
   /**
    * Log validation issues for monitoring and debugging
    */
-  private logValidationIssues(validation: {
+  private logValidationIssues(_validation: {
     isValid: boolean;
     issues: string[];
     warnings: string[];
@@ -1604,14 +1529,6 @@ export class OptimizedCompetitorService extends BaseService {
     // - DataDog for metrics
     // - Custom analytics endpoint
 
-    const logData = {
-      timestamp: new Date().toISOString(),
-      service: "competitorService",
-      validationResults: validation,
-      userAgent:
-        typeof window !== "undefined" ? window.navigator.userAgent : "server",
-    };
-
     // Validation issues and warnings detected
     // This could be enhanced with proper monitoring integration
   }
@@ -1620,25 +1537,17 @@ export class OptimizedCompetitorService extends BaseService {
    * Performance monitoring wrapper for async operations
    */
   private async withPerformanceMonitoring<T>(
-    operationName: string,
+    _operationName: string,
     operation: () => Promise<T>
   ): Promise<T> {
-    const startTime = performance.now();
+    // Performance timing for debugging (startTime available for future monitoring)
 
-    try {
-      const result = await operation();
-      const duration = performance.now() - startTime;
+    const result = await operation();
+    // Performance metrics logged
+    // In production, you might want to send metrics to a monitoring service
+    // Slow operation detection for monitoring
 
-      // Performance metrics logged
-      // In production, you might want to send metrics to a monitoring service
-      // Slow operation detection for monitoring
-
-      return result;
-    } catch (error) {
-      const duration = performance.now() - startTime;
-      // Operation failed with performance metrics logged
-      throw error;
-    }
+    return result;
   }
 
   /**

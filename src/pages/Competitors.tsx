@@ -1,16 +1,29 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ExportFormat } from "@/types/database";
 import { useExportHandler } from "@/lib/export-utils";
+import type { 
+  CompetitorWithStatus
+} from "@/hooks/useCompetitorsQuery";
+import type { 
+  CompetitiveGapAnalysis,
+  CompetitorAnalytics 
+} from "@/services/competitorService";
+
+// Local interfaces since they're not exported
+
+
 import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import {
-  useCompetitorData,
   useAddCompetitor,
   useDeleteCompetitor,
 } from "@/hooks/useCompetitorsQuery";
+import { useOptimizedCompetitorsData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useSelectedWebsite, usePageFilters } from "@/hooks/appStateHooks";
+import { useCompetitorStatus } from "@/hooks/useCompetitorStatus";
+import type { CompetitorFilters } from "@/contexts/AppStateContext";
 import CompetitorsHeader from "@/components/competitors/CompetitorsHeader";
-import CompetitorsLoadingState from "@/components/competitors/CompetitorsLoadingState";
 import { CompetitorsSkeleton } from "@/components/skeletons";
 import WorkspaceRequiredState from "@/components/competitors/WorkspaceRequiredState";
 import CompetitorsErrorState from "@/components/competitors/CompetitorsErrorState";
@@ -26,69 +39,73 @@ import { addProtocol } from "@/lib/utils";
 import { getCompetitorColor, getYourBrandColor } from "@/lib/color-utils";
 
 export default function Competitors() {
-  const {
-    currentWorkspace,
-    websites,
-    loading: workspaceLoading,
-  } = useWorkspace();
+  const { currentWorkspace, loading: workspaceLoading } = useWorkspace();
   const { toast } = useToast();
+
+  // Initialize real-time competitor status monitoring
+  useCompetitorStatus();
 
   // State for UI controls
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [competitorDomain, setCompetitorDomain] = useState("");
   const [competitorName, setCompetitorName] = useState("");
-  const [selectedWebsiteId, setSelectedWebsiteId] = useState("");
   const [isWebhookProcessing, setIsWebhookProcessing] = useState(false);
+
+  // Use global website selection state
+  const { selectedWebsiteId, websites: globalWebsites } = useSelectedWebsite();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [competitorToDelete, setCompetitorToDelete] = useState<string | null>(
     null
   );
-  const [dateFilter, setDateFilter] = useState<"7d" | "30d" | "90d">("30d");
-  const [sortBy, setSortBy] = useState<
-    "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore"
-  >("shareOfVoice");
+  // Use global filter state from AppStateContext
+  const { filters, setFilters } = usePageFilters("competitors");
   const [isExporting, setIsExporting] = useState(false);
   const { handleExport } = useExportHandler();
 
-  // Get first website ID for competitor tracking (fallback)
-  const websiteId = websites?.[0]?.id;
+  // Get first website ID for competitor tracking (fallback) - use global websites
+  const websiteId = globalWebsites?.[0]?.id;
 
-  // Initialize selectedWebsiteId when websites are loaded
-  React.useEffect(() => {
-    if (websites && websites.length > 0 && !selectedWebsiteId) {
-      setSelectedWebsiteId(websites[0]!.id);
-    }
-  }, [websites, selectedWebsiteId]);
-
-  // Calculate date range (memoized to prevent infinite re-renders)
-  const dateRange = useMemo(() => {
-    const end = new Date();
-    const start = new Date();
-    const days = dateFilter === "7d" ? 7 : dateFilter === "30d" ? 30 : 90;
-    start.setDate(end.getDate() - days);
-    return {
-      start: start.toISOString(),
-      end: end.toISOString(),
-    };
-  }, [dateFilter]);
-
-  // Use competitors React Query hooks
+  // Use optimized competitors data loading with instant cache rendering
   const {
     competitors,
-    competitorsWithStatus,
     performance,
     analytics,
     isLoading,
-    isRefreshing,
     error,
-    refetch,
-    targetWebsiteId,
-    hasData,
-  } = useCompetitorData(selectedWebsiteId, {
-    dateRange,
-    sortBy,
-    sortOrder: "desc",
-  });
+    refresh,
+    hasCachedData,
+    hasSyncCache,
+  } = useOptimizedCompetitorsData();
+
+  // Prepare chart data from analytics (memoized to prevent unnecessary recalculations)
+  // Market Share Data is handled by ShareOfVoiceChart component directly
+  // Share of Voice Data (raw percentages)
+  const shareOfVoiceChartData = useMemo(() => {
+    return (
+      (analytics?.shareOfVoiceData as Record<string, unknown>[])?.map(
+        (item: Record<string, unknown>, index: number) => ({
+          name: item.name as string,
+          value: item.shareOfVoice as number,
+          shareOfVoice: item.shareOfVoice as number,
+          totalMentions: item.totalMentions as number,
+          totalAnalyses: item.totalAnalyses as number,
+          avgRank: item.avgRank as number,
+          competitorId: item.competitorId as string,
+          dataType: (item.dataType as string) === "market_share" ? "market_share" as const : "share_of_voice" as const,
+          fill:
+            item.name === "Your Brand"
+              ? getYourBrandColor()
+              : getCompetitorColor(item.competitorId as string, item.name as string, index),
+        })
+      ) || []
+    );
+  }, [analytics?.shareOfVoiceData]);
+
+  // Derive additional data for backward compatibility
+  const competitorsWithStatus = competitors; // Status already included
+  const hasData = competitors.length > 0 || shareOfVoiceChartData.length > 1; // More than just "Your Brand"
+  const isRefreshing = isLoading && hasCachedData;
+  const refetch = refresh;
 
   // Mutations for competitor operations
   const addCompetitorMutation = useAddCompetitor();
@@ -98,63 +115,7 @@ export default function Competitors() {
   const refreshData = refetch || (() => {});
   const clearError = () => {}; // Errors clear automatically in React Query
 
-  // Prepare chart data from analytics (memoized to prevent unnecessary recalculations)
-  // Market Share Data (normalized percentages)
-  const marketShareChartData = useMemo(() => {
-    return (
-      analytics?.marketShareData.map((item, index) => ({
-        name: item.name,
-        value: item.normalizedValue, // Use normalized value for display
-        normalizedValue: item.normalizedValue,
-        rawValue: item.rawValue,
-        mentions: item.mentions,
-        avgRank: item.avgRank,
-        competitorId: item.competitorId,
-        dataType: item.dataType,
-        fill:
-          item.name === "Your Brand"
-            ? getYourBrandColor()
-            : getCompetitorColor(item.competitorId, item.name, index),
-      })) || []
-    );
-  }, [analytics?.marketShareData]);
-
-  // Share of Voice Data (raw percentages)
-  const shareOfVoiceChartData = useMemo(() => {
-    return (
-      analytics?.shareOfVoiceData.map((item, index) => ({
-        name: item.name,
-        value: item.shareOfVoice, // Use raw share of voice percentage
-        shareOfVoice: item.shareOfVoice,
-        totalMentions: item.totalMentions,
-        totalAnalyses: item.totalAnalyses,
-        avgRank: item.avgRank,
-        competitorId: item.competitorId,
-        dataType: item.dataType,
-        fill:
-          item.name === "Your Brand"
-            ? getYourBrandColor()
-            : getCompetitorColor(item.competitorId, item.name, index),
-      })) || []
-    );
-  }, [analytics?.shareOfVoiceData]);
-
-  // Use gapAnalysis as the single source of truth for competitive gap data
-  const competitiveGapData = useMemo(() => {
-    return (
-      analytics?.gapAnalysis.map((gap) => {
-        const data: Record<string, number | string> = {
-          topic: gap.topicName,
-          yourBrand: gap.yourBrandScore,
-        };
-        gap.competitorData.forEach((comp, index) => {
-          data[`competitor${index + 1}`] = comp.score;
-          data[`competitor${index + 1}_name`] = comp.competitor_name;
-        });
-        return data;
-      }) || []
-    );
-  }, [analytics?.gapAnalysis]);
+  // Gap analysis data is handled by CompetitiveGapChart component directly
 
   // Competitor insights refresh handler
   const handleInsightsRefresh = () => {
@@ -162,7 +123,7 @@ export default function Competitors() {
   };
 
   const handleAddCompetitor = async () => {
-    if (!websites || websites.length === 0) {
+    if (!globalWebsites || globalWebsites.length === 0) {
       toast({
         title: "Error",
         description: "No websites available. Please add a website first.",
@@ -190,7 +151,9 @@ export default function Competitors() {
     }
 
     // Validate that the selected website exists and is available
-    const selectedWebsite = websites?.find((w) => w.id === selectedWebsiteId);
+    const selectedWebsite = globalWebsites?.find(
+      (w) => w.id === selectedWebsiteId
+    );
     if (!selectedWebsite) {
       toast({
         title: "Error",
@@ -229,6 +192,9 @@ export default function Competitors() {
         domain: addProtocol(competitorDomain),
         name: competitorName || undefined,
       });
+
+      // Immediately refresh competitors data to show the new competitor in UI
+      refreshData();
 
       // Step 2: Send webhook to N8N for analysis processing
       setIsWebhookProcessing(true);
@@ -278,7 +244,7 @@ export default function Competitors() {
     try {
       await deleteCompetitorMutation.mutateAsync({
         competitorId,
-        websiteId: selectedWebsiteId,
+        websiteId: selectedWebsiteId || "",
       });
       setShowDeleteConfirm(false);
       setCompetitorToDelete(null);
@@ -303,16 +269,18 @@ export default function Competitors() {
     }
 
     setIsExporting(true);
-    
+
     try {
       // Import competitorService dynamically
-      const { competitorService } = await import("@/services/competitorService");
-      
+      const { competitorService } = await import(
+        "@/services/competitorService"
+      );
+
       // Export with comprehensive options using the competitorService
-      const dateRange = (() => {
+      const exportDateRange = (() => {
         const end = new Date();
         const start = new Date();
-        switch (dateFilter) {
+        switch ((filters as CompetitorFilters).dateFilter) {
           case "7d":
             start.setDate(end.getDate() - 7);
             break;
@@ -329,28 +297,30 @@ export default function Competitors() {
       const blob = await competitorService.exportCompetitorData(
         selectedWebsiteId,
         format as "csv" | "json" | "pdf",
-        dateRange
+        exportDateRange
       );
 
-      await handleExport(
-        () => Promise.resolve(blob),
-        {
-          filename: `competitor-analysis-${new Date().toISOString().split('T')[0]}`,
-          format,
-          includeTimestamp: true,
-          metadata: {
-            competitorCount: competitors?.length || 0,
-            exportType: "competitor_analysis",
-            dateFilter,
-            sortBy,
-          },
-        }
-      );
+      await handleExport(() => Promise.resolve(blob), {
+        filename: `competitor-analysis-${
+          new Date().toISOString().split("T")[0]
+        }`,
+        format,
+        includeTimestamp: true,
+        metadata: {
+          competitorCount: competitors?.length || 0,
+          exportType: "competitor_analysis",
+          dateFilter: (filters as CompetitorFilters).dateFilter,
+          sortBy: (filters as CompetitorFilters).sortBy,
+        },
+      });
     } catch (error) {
       // Export failed
       toast({
         title: "Export Failed",
-        description: error instanceof Error ? error.message : "An unexpected error occurred during export.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred during export.",
         variant: "destructive",
       });
     } finally {
@@ -358,9 +328,11 @@ export default function Competitors() {
     }
   };
 
+  // Show skeleton immediately unless we have synchronous cache data
+  // This eliminates empty state flash by showing skeleton first
+  const shouldShowSkeleton = workspaceLoading || (isLoading && !hasSyncCache());
 
-  // Show loading state
-  if (workspaceLoading || isLoading) {
+  if (shouldShowSkeleton) {
     return <CompetitorsSkeleton />;
   }
 
@@ -380,26 +352,31 @@ export default function Competitors() {
       <div className="space-y-6">
         <CompetitorsHeader
           totalCompetitors={competitorsWithStatus.length}
-          activeCompetitors={competitorsWithStatus.filter(c => c.analysisStatus === 'completed').length}
-          dateFilter={dateFilter}
-          sortBy={sortBy}
+          activeCompetitors={
+            competitorsWithStatus.filter(
+              (c) => c.analysisStatus === "completed"
+            ).length
+          }
+          dateFilter={(filters as CompetitorFilters).dateFilter}
+          sortBy={(filters as CompetitorFilters).sortBy}
           isRefreshing={isRefreshing}
           hasData={hasData}
           isAddDialogOpen={isAddDialogOpen}
           competitorDomain={competitorDomain}
           competitorName={competitorName}
-          selectedWebsiteId={selectedWebsiteId}
           isAdding={addCompetitorMutation.isPending || isWebhookProcessing}
-          websites={websites || []}
-          websitesLoading={workspaceLoading}
+          websitesLoading={workspaceLoading || isLoading}
           isExporting={isExporting}
           competitorsData={competitors}
-          setDateFilter={setDateFilter}
-          setSortBy={setSortBy}
+          setDateFilter={(value) =>
+            setFilters({ ...(filters as CompetitorFilters), dateFilter: value })
+          }
+          setSortBy={(value) =>
+            setFilters({ ...(filters as CompetitorFilters), sortBy: value })
+          }
           setIsAddDialogOpen={setIsAddDialogOpen}
           setCompetitorDomain={setCompetitorDomain}
           setCompetitorName={setCompetitorName}
-          setSelectedWebsiteId={setSelectedWebsiteId}
           refreshData={refreshData}
           handleAddCompetitor={handleAddCompetitor}
           handleExportData={handleExportData}
@@ -418,36 +395,74 @@ export default function Competitors() {
         {/* Share of Voice Chart */}
         <ShareOfVoiceChart
           data={shareOfVoiceChartData}
-          dateFilter={dateFilter}
+          dateFilter={(filters as CompetitorFilters).dateFilter}
           chartType="share_of_voice"
         />
 
         {/* Competitors List */}
         <CompetitorsList
-          competitorsWithStatus={competitorsWithStatus}
-          marketShareData={analytics?.marketShareData || []}
-          performance={performance}
-          sortBy={sortBy}
+          competitorsWithStatus={competitorsWithStatus as unknown as CompetitorWithStatus[]}
+          marketShareData={Array.isArray(analytics?.marketShareData) ? (analytics.marketShareData).map(item => ({
+            name: (item as Record<string, unknown>).name as string,
+            normalizedValue: (item as Record<string, unknown>).normalizedValue as number,
+            rawValue: (item as Record<string, unknown>).rawValue as number,
+            competitorId: (item as Record<string, unknown>).competitorId as string,
+            mentions: (item as Record<string, unknown>).mentions as number,
+            dataType: "market_share" as const
+          })) : []}
+          performance={Array.isArray(performance) ? (performance as unknown as Record<string, unknown>[]).map(p => ({
+            competitorId: (p.competitorId as string) || "",
+            domain: (p.domain as string) || "",
+            name: (p.name as string) || "",
+            shareOfVoice: (p.shareOfVoice as number) || 0,
+            averageRank: (p.averageRank as number) || 0,
+            mentionCount: (p.mentionCount as number) || 0,
+            sentimentScore: (p.sentimentScore as number) || 0,
+            visibilityScore: (p.visibilityScore as number) || 0,
+            trend: ((p.trend as string) === "up" || (p.trend as string) === "down") ? (p.trend as "up" | "down") : "stable" as const,
+            trendPercentage: (p.trendPercentage as number) || 0,
+            lastAnalyzed: (p.lastAnalyzed as string) || new Date().toISOString(),
+            isActive: (p.isActive as boolean) || true
+          })) : []}
+          sortBy={(filters as CompetitorFilters).sortBy}
           confirmDelete={confirmDelete}
           isDeleting={deleteCompetitorMutation.isPending}
         />
 
         {/* Competitive Gap Analysis */}
         <CompetitiveGapChart
-          gapAnalysis={analytics?.gapAnalysis || []}
-          analytics={analytics}
-          dateFilter={dateFilter}
+          gapAnalysis={(analytics?.gapAnalysis || []) as CompetitiveGapAnalysis[]}
+          analytics={analytics as CompetitorAnalytics | null}
+          dateFilter={(filters as CompetitorFilters).dateFilter}
         />
 
         {/* Competitive Intelligence */}
         <CompetitorInsights
-          insights={analytics?.insights || []}
+          insights={((analytics?.insights as unknown as Record<string, unknown>[]) || []).map(insight => ({
+            type: ((insight.type as string) === "opportunity" || (insight.type as string) === "threat") ? (insight.type as "opportunity" | "threat") : "neutral" as const,
+            title: insight.title as string,
+            description: insight.description as string,
+            impact: ((insight.impact as string) === "high" || (insight.impact as string) === "medium" || (insight.impact as string) === "low") ? (insight.impact as "high" | "medium" | "low") : "medium" as const,
+            recommendations: insight.recommendations as string[]
+          }))}
           isLoading={isLoading}
           onRefresh={handleInsightsRefresh}
         />
 
         {/* Time Series Chart */}
-        <TimeSeriesChart data={analytics?.timeSeriesData || []} />
+        <TimeSeriesChart
+          data={Array.isArray(analytics?.timeSeriesData) ? (analytics.timeSeriesData as Record<string, unknown>[]).map(item => ({
+            date: item.date as string,
+            competitors: Array.isArray(item.competitors) ? (item.competitors as Array<Record<string, unknown>>).map(comp => ({
+              competitorId: (comp.competitorId as string) || "",
+              name: (comp.name as string) || "",
+              shareOfVoice: (comp.shareOfVoice as number) || 0,
+              averageRank: (comp.averageRank as number) || 0,
+              mentionCount: (comp.mentionCount as number) || 0,
+              sentimentScore: (comp.sentimentScore as number) || 0
+            })) : []
+          })) : []}
+        />
 
         {/* Main Empty State */}
         {!hasData && !isLoading && (

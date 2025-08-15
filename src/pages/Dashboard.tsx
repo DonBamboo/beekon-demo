@@ -8,10 +8,7 @@ import {
 } from "@/components/DashboardCharts";
 import { DashboardErrorState } from "@/components/dashboard/DashboardErrorState";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { DashboardLoadingState } from "@/components/dashboard/DashboardLoadingState";
 import { DashboardSkeleton } from "@/components/skeletons";
-import { DashboardMetricsCards } from "@/components/dashboard/DashboardMetricsCards";
-import { VisibilityChart } from "@/components/dashboard/VisibilityChart";
 import { WorkspaceCreationPrompt } from "@/components/dashboard/WorkspaceCreationPrompt";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +18,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { LoadingButton } from "@/components/ui/loading-button";
 import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
@@ -31,18 +27,13 @@ import {
 } from "@/components/ui/tooltip";
 import { ExportFormat, useExportHandler, captureMultipleCharts, ChartInfo, ChartCaptureConfig } from "@/lib/export-utils";
 import { useToast } from "@/hooks/use-toast";
-import { useDashboardMetrics } from "@/hooks/useDashboard";
+import { useOptimizedDashboardData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { dashboardService } from "@/services/dashboardService";
 import {
-  AlertCircle,
   BarChart3,
-  Building,
   Download,
   ExternalLink,
   MessageSquare,
-  Plus,
-  RefreshCw,
   Target,
   TrendingDown,
   TrendingUp,
@@ -65,7 +56,7 @@ export default function Dashboard() {
   const { currentWorkspace, loading, websites } = useWorkspace();
   const navigate = useNavigate();
   const [isExporting, setIsExporting] = useState(false);
-  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
+  const [, ] = useState(false);
   const [dateFilter, setDateFilter] = useState<"7d" | "30d" | "90d">("7d");
   const [showAllCharts, setShowAllCharts] = useState(false);
   const { handleExport } = useExportHandler();
@@ -78,27 +69,25 @@ export default function Dashboard() {
   const topicRadarChartRef = useRef<HTMLDivElement>(null);
   const visibilityChartRef = useRef<HTMLDivElement>(null);
   
-  const filters = useMemo(
-    () => ({
-      period: dateFilter,
-    }),
-    [dateFilter]
-  );
 
-  // Use dashboard data hooks
+  // Use optimized dashboard data loading
   const {
     metrics,
     timeSeriesData,
     topicPerformance,
-    llmPerformance,
-    websitePerformance,
     isLoading: isDashboardLoading,
-    isRefreshing,
-    refreshData,
     error: dashboardError,
-    hasData,
-    clearError,
-  } = useDashboardMetrics(filters);
+    refresh: refreshData,
+    hasCachedData,
+    hasSyncCache,
+  } = useOptimizedDashboardData();
+  
+  // Derive additional data for backward compatibility
+  const hasData = !!(metrics || timeSeriesData.length > 0 || topicPerformance.length > 0);
+  const isRefreshing = isDashboardLoading && hasCachedData;
+  const clearError = () => {}; // Not needed with optimized hook
+  const llmPerformance: Array<Record<string, unknown>> = []; // To be implemented
+  const websitePerformance: Array<Record<string, unknown>> = []; // To be implemented
 
   const websiteIds = useMemo(() => websites?.map((w) => w.id) || [], [websites]);
 
@@ -159,7 +148,7 @@ export default function Dashboard() {
           category: "Websites", 
           metric: w.display_name, 
           value: w.domain, 
-          unit: `${w.is_active ? 'Active' : 'Inactive'}${w.monitoring_enabled ? ' | Monitored' : ''}`
+          unit: `${w.is_active ? 'Active' : 'Inactive'}`
         })) || []),
         
         // Topic Performance (top 5) - Fixed property mapping to match TopicPerformance interface
@@ -168,36 +157,36 @@ export default function Dashboard() {
         ).slice(0, 5).map((topic, index) => ({
           category: "Top Topics",
           metric: `#${index + 1} ${topic.topic}`,
-          value: `${topic.visibility.toFixed(1)}%`,
+          value: `${Number(topic.visibility).toFixed(1)}%`,
           unit: "visibility"
         })) || []),
         
         // Performance by Topics - Comprehensive section with detailed metrics
         ...(topicPerformance?.filter(topic => 
           topic?.topic && typeof topic?.visibility === 'number'
-        ).slice(0, 10).flatMap((topic, index) => [
+        ).slice(0, 10).flatMap((topic, _) => [
           {
             category: "Performance by Topics",
             metric: `${topic.topic} - Visibility`,
-            value: `${topic.visibility.toFixed(1)}%`,
+            value: `${Number(topic.visibility).toFixed(1)}%`,
             unit: "visibility score"
           },
           {
             category: "Performance by Topics", 
             metric: `${topic.topic} - Sentiment`,
-            value: `${topic.sentiment.toFixed(1)}%`,
+            value: `${Number(topic.sentiment).toFixed(1)}%`,
             unit: "sentiment score" 
           },
           {
             category: "Performance by Topics",
             metric: `${topic.topic} - Mentions`,
-            value: topic.mentions.toString(),
+            value: Number(topic.mentions).toString(),
             unit: "total mentions"
           },
           {
             category: "Performance by Topics",
             metric: `${topic.topic} - Avg Rank`,
-            value: topic.averageRank.toFixed(1),
+            value: Number(topic.averageRank).toFixed(1),
             unit: "ranking position"
           }
         ]) || []),
@@ -208,7 +197,7 @@ export default function Dashboard() {
         ).map(llm => ({
           category: "LLM Performance",
           metric: llm.provider,
-          value: `${llm.mentionRate.toFixed(1)}%`,
+          value: `${Number(llm.mentionRate).toFixed(1)}%`,
           unit: `${llm.totalAnalyses} analyses`
         })) || []),
         
@@ -218,14 +207,14 @@ export default function Dashboard() {
         ).slice(0, 5).map((site, index) => ({
           category: "Website Performance",
           metric: `#${index + 1} ${site.displayName}`,
-          value: `${site.visibility.toFixed(1)}%`,
+          value: `${Number(site.visibility).toFixed(1)}%`,
           unit: `${site.mentions} mentions`
         })) || []),
         
         // Time Series Summary (if available)
         ...(timeSeriesData && timeSeriesData.length > 0 ? [
           { category: "Time Series", metric: "Data Points", value: timeSeriesData.length.toString(), unit: "count" },
-          { category: "Time Series", metric: "Date Range", value: `${new Date(Math.min(...timeSeriesData.map(d => new Date(d.date).getTime()))).toLocaleDateString()} - ${new Date(Math.max(...timeSeriesData.map(d => new Date(d.date).getTime()))).toLocaleDateString()}`, unit: "range" },
+          { category: "Time Series", metric: "Date Range", value: `${new Date(Math.min(...timeSeriesData.map(d => new Date(String(d.date)).getTime()))).toLocaleDateString()} - ${new Date(Math.max(...timeSeriesData.map(d => new Date(String(d.date)).getTime()))).toLocaleDateString()}`, unit: "range" },
         ] : []),
       ];
 
@@ -252,9 +241,9 @@ export default function Dashboard() {
           workspaceId: currentWorkspace?.id,
           totalWebsites: websiteIds.length,
           analysisCount: metrics?.totalAnalyses || 0,
-          averageConfidence: metrics?.averageConfidence || 0,
-          averageSentiment: metrics?.averageSentiment || 0,
-          mentionRate: metrics?.mentionRate || 0,
+          averageConfidence: metrics?.overallVisibilityScore || 0,
+          averageSentiment: metrics?.sentimentScore || 0,
+          mentionRate: metrics?.totalMentions || 0,
         },
       };
 
@@ -397,8 +386,11 @@ export default function Dashboard() {
     return trend >= 0 ? "text-success" : "text-destructive";
   };
 
-  // Show loading state
-  if (loading || isDashboardLoading) {
+  // Show skeleton immediately unless we have synchronous cache data
+  // This eliminates empty state flash by showing skeleton first
+  const shouldShowSkeleton = loading || (isDashboardLoading && !hasSyncCache());
+  
+  if (shouldShowSkeleton) {
     return <DashboardSkeleton />;
   }
 
@@ -411,7 +403,8 @@ export default function Dashboard() {
     <TooltipProvider>
       <div className="space-y-6">
         <DashboardHeader
-          currentWorkspace={currentWorkspace}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          currentWorkspace={currentWorkspace as any}
           metrics={metrics}
           dateFilter={dateFilter}
           setDateFilter={setDateFilter}
@@ -627,12 +620,27 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* LLM Performance Chart */}
             {llmPerformance.length > 0 && (
-              <LLMPerformanceChart ref={llmChartRef} llmData={llmPerformance} />
+              <LLMPerformanceChart ref={llmChartRef} llmData={llmPerformance.map(llm => ({
+                provider: (llm as Record<string, unknown>).provider as string,
+                mentionRate: (llm as Record<string, unknown>).mentionRate as number,
+                averageRank: (llm as Record<string, unknown>).averageRank as number,
+                sentiment: (llm as Record<string, unknown>).sentiment as number,
+                totalAnalyses: (llm as Record<string, unknown>).totalAnalyses as number
+              }))} />
             )}
 
             {/* Website Performance Chart */}
             {websitePerformance.length > 0 && (
-              <WebsitePerformanceChart ref={websiteChartRef} websiteData={websitePerformance} />
+              <WebsitePerformanceChart ref={websiteChartRef} websiteData={websitePerformance.map(site => ({
+                websiteId: (site as Record<string, unknown>).websiteId as string,
+                domain: (site as Record<string, unknown>).domain as string,
+                displayName: (site as Record<string, unknown>).displayName as string,
+                visibility: (site as Record<string, unknown>).visibility as number,
+                mentions: (site as Record<string, unknown>).mentions as number,
+                averageRank: (site as Record<string, unknown>).averageRank as number,
+                sentiment: (site as Record<string, unknown>).sentiment as number,
+                lastAnalyzed: (site as Record<string, unknown>).lastAnalyzed as string || new Date().toISOString()
+              }))} />
             )}
 
             {/* Sentiment Distribution */}
@@ -657,12 +665,21 @@ export default function Dashboard() {
 
             {/* Mention Trends */}
             {timeSeriesData.length > 0 && (
-              <MentionTrendChart ref={mentionTrendChartRef} trendData={timeSeriesData} />
+              <MentionTrendChart ref={mentionTrendChartRef} trendData={timeSeriesData.map(data => ({
+                date: (data as Record<string, unknown>).date as string,
+                mentions: (data as Record<string, unknown>).mentions as number,
+                sentiment: (data as Record<string, unknown>).sentiment as number
+              }))} />
             )}
 
             {/* Topic Radar Chart */}
             {topicPerformance.length > 0 && (
-              <TopicRadarChart ref={topicRadarChartRef} topicData={topicPerformance} />
+              <TopicRadarChart ref={topicRadarChartRef} topicData={topicPerformance.map(topic => ({
+                topic: (topic as Record<string, unknown>).topic as string,
+                visibility: (topic as Record<string, unknown>).visibility as number,
+                mentions: (topic as Record<string, unknown>).mentions as number,
+                sentiment: (topic as Record<string, unknown>).sentiment as number
+              }))} />
             )}
           </div>
         )}
@@ -698,15 +715,15 @@ export default function Dashboard() {
                     key={index}
                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
                     onClick={() =>
-                      handleMetricClick("topic-details", { topic: item.topic })
+                      handleMetricClick("topic-details", { topic: String((item as Record<string, unknown>).topic) })
                     }
                   >
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-2">
-                        <h4 className="font-medium">{item.topic}</h4>
+                        <h4 className="font-medium">{String((item as Record<string, unknown>).topic)}</h4>
                         {item.trend !== 0 &&
-                          React.createElement(getTrendIcon(item.trend), {
-                            className: `h-4 w-4 ${getTrendColor(item.trend)}`,
+                          React.createElement(getTrendIcon(Number(item.trend) || 0), {
+                            className: `h-4 w-4 ${getTrendColor(Number(item.trend) || 0)}`,
                           })}
                       </div>
                       <div className="flex items-center space-x-4">
@@ -714,18 +731,18 @@ export default function Dashboard() {
                           <div className="flex justify-between text-sm mb-1">
                             <span>Visibility</span>
                             <span className="font-medium">
-                              {item.visibility}%
+                              {Number(item.visibility) || 0}%
                             </span>
                           </div>
-                          <Progress value={item.visibility} className="h-2" />
+                          <Progress value={Number(item.visibility) || 0} className="h-2" />
                         </div>
                         <div className="text-center">
                           <div className="text-sm text-muted-foreground">
                             Avg Rank
                           </div>
                           <div className="font-medium">
-                            {item.averageRank > 0
-                              ? item.averageRank.toFixed(1)
+                            {Number(item.averageRank) > 0
+                              ? Number(item.averageRank).toFixed(1)
                               : "N/A"}
                           </div>
                         </div>
@@ -736,15 +753,15 @@ export default function Dashboard() {
                           <div className="flex items-center justify-center">
                             <div
                               className={`w-2 h-2 rounded-full ${getSentimentColor(
-                                item.sentiment
+                                Number(item.sentiment) || 0
                               )} mr-1`}
                             />
                             <span
                               className={`text-sm capitalize ${getSentimentText(
-                                item.sentiment
+                                Number(item.sentiment) || 0
                               )}`}
                             >
-                              {getSentimentLabel(item.sentiment)}
+                              {getSentimentLabel(Number(item.sentiment) || 0)}
                             </span>
                           </div>
                         </div>
@@ -752,7 +769,7 @@ export default function Dashboard() {
                           <div className="text-sm text-muted-foreground">
                             Mentions
                           </div>
-                          <div className="font-medium">{item.mentions}</div>
+                          <div className="font-medium">{String((item as Record<string, unknown>).mentions)}</div>
                         </div>
                       </div>
                     </div>

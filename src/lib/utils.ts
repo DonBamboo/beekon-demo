@@ -19,3 +19,15 @@ export function addProtocol(domain: string): string {
   if (!domain.includes("https://")) return "https://" + domain;
   return domain;
 }
+
+// Deduplicate array of objects by a specific key field
+export function deduplicateById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter(item => {
+    if (seen.has(item.id)) {
+      return false;
+    }
+    seen.add(item.id);
+    return true;
+  });
+}

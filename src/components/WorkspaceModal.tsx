@@ -24,11 +24,10 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 
 import {
-  SubscriptionTier,
   useWorkspace,
   Workspace,
-  isValidSubscriptionTier,
 } from "@/hooks/useWorkspace";
+import { isValidSubscriptionTier } from "@/utils/typeGuards";
 import { Building, Plus, Save } from "lucide-react";
 
 const workspaceSchema = z.object({
@@ -36,7 +35,7 @@ const workspaceSchema = z.object({
     .string()
     .min(1, "Workspace name is required")
     .max(50, "Name must be 50 characters or less"),
-  subscriptionTier: z.enum(["free", "starter", "professional", "enterprise"]),
+  subscriptionTier: z.enum(["free", "starter", "pro", "professional", "enterprise"]) as z.ZodEnum<["free", "starter", "pro", "professional", "enterprise"]>,
   creditLimit: z.number().min(1, "Credit limit must be at least 1").optional(),
 });
 
@@ -50,31 +49,24 @@ interface WorkspaceModalProps {
 
 const subscriptionTiers = [
   {
-    value: "free",
+    value: "free" as const,
     label: "Free",
     description: "5 website analyses per month",
     credits: 5,
     color: "bg-gray-500",
   },
   {
-    value: "starter",
-    label: "Starter",
+    value: "pro" as const,
+    label: "Pro",
     description: "50 website analyses per month",
     credits: 50,
     color: "bg-blue-500",
   },
   {
-    value: "professional",
-    label: "Professional",
+    value: "enterprise" as const,
+    label: "Enterprise",
     description: "1000 website analyses per month",
     credits: 1000,
-    color: "bg-purple-500",
-  },
-  {
-    value: "enterprise",
-    label: "Enterprise",
-    description: "10000 website analyses per month",
-    credits: 10000,
     color: "bg-orange-500",
   },
 ];
@@ -143,11 +135,13 @@ export function WorkspaceModal({
     onClose();
   };
 
-  const handleTierChange = (value: SubscriptionTier) => {
-    setValue("subscriptionTier", value);
-    const tierData = subscriptionTiers.find((tier) => tier.value === value);
-    if (tierData && !isEditing) {
-      setValue("creditLimit", tierData.credits);
+  const handleTierChange = (value: string) => {
+    if (isValidSubscriptionTier(value)) {
+      setValue("subscriptionTier", value);
+      const tierData = subscriptionTiers.find((tier) => tier.value === value);
+      if (tierData && !isEditing) {
+        setValue("creditLimit", tierData.credits);
+      }
     }
   };
 

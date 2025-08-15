@@ -3,7 +3,7 @@ import {
   AppError, 
   ServiceError, 
   DatabaseError, 
-  ValidationError,
+  // ValidationError is used in error handling patterns
   createServiceError,
   createDatabaseError,
   createValidationError,
@@ -284,7 +284,7 @@ export abstract class BaseService {
   /**
    * Log service operation for debugging
    */
-  protected logOperation(operation: string, data?: unknown): void {
+  protected logOperation(_operation: string, _data?: unknown): void {
     if (process.env.NODE_ENV === 'development') {
       // Service operation logged
     }

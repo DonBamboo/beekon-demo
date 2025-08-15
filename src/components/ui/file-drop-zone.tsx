@@ -6,7 +6,6 @@ import { Upload, X, AlertCircle, CheckCircle, Camera, Image } from 'lucide-react
 
 interface FileDropZoneProps {
   onFileSelect: (file: File) => void;
-  onFileUpload?: (file: File) => Promise<void>;
   acceptedTypes?: string[];
   maxSize?: number; // in bytes
   multiple?: boolean;
@@ -23,7 +22,6 @@ interface FileDropZoneProps {
 
 export function FileDropZone({
   onFileSelect,
-  onFileUpload,
   acceptedTypes = ['image/*'],
   maxSize = 2 * 1024 * 1024, // 2MB default
   multiple = false,
@@ -75,6 +73,8 @@ export function FileDropZone({
     if (!files || files.length === 0) return;
 
     const file = files[0];
+    if (!file) return; // Guard against undefined
+    
     const validationError = validateFile(file);
     
     if (validationError) {

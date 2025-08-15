@@ -10,23 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
+import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   History, 
-  Download, 
   RefreshCw, 
   Trash2, 
-  Calendar, 
-  Search,
   FileText,
   AlertCircle,
   CheckCircle,
   Clock,
-  Filter,
   MoreHorizontal,
   Archive,
   TrendingUp,
@@ -47,7 +41,6 @@ import {
   ExportType, 
   ExportFormat,
   UserExportSummary,
-  ExportStatistics,
 } from "@/types/database";
 
 interface ExportHistoryModalProps {
@@ -63,7 +56,6 @@ export function ExportHistoryModal({
 }: ExportHistoryModalProps) {
   const [exportHistory, setExportHistory] = useState<ExportHistoryRecord[]>([]);
   const [exportSummary, setExportSummary] = useState<UserExportSummary | null>(null);
-  const [exportStats, setExportStats] = useState<ExportStatistics[]>([]);
   const [loading, setLoading] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -74,8 +66,8 @@ export function ExportHistoryModal({
   const [statusFilter, setStatusFilter] = useState<ExportStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<ExportType | "all">("all");
   const [formatFilter, setFormatFilter] = useState<ExportFormat | "all">("all");
-  const [sortBy, setSortBy] = useState<"created_at" | "updated_at" | "file_size">("created_at");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortBy] = useState<"created_at" | "updated_at" | "file_size">("created_at");
+  const [sortOrder] = useState<"asc" | "desc">("desc");
 
   const pageSize = 10;
 
@@ -101,16 +93,14 @@ export function ExportHistoryModal({
         sort_order: sortOrder,
       };
 
-      const [historyResult, summary, stats] = await Promise.all([
+      const [historyResult, summary] = await Promise.all([
         exportHistoryService.getUserExportHistory(filters, options),
         exportHistoryService.getUserExportSummary(),
-        exportHistoryService.getExportStatistics(),
       ]);
 
       setExportHistory(historyResult.data);
       setTotalRecords(historyResult.total);
       setExportSummary(summary);
-      setExportStats(stats);
       setCurrentPage(page);
     } catch (error) {
       // Failed to fetch export history
@@ -386,7 +376,7 @@ export function ExportHistoryModal({
                     </div>
                     <div className="text-sm text-gray-600 grid grid-cols-2 gap-4">
                       <div>
-                        <span className="font-medium">Created:</span> {formatDistanceToNow(new Date(record.created_at), { addSuffix: true })}
+                        <span className="font-medium">Created:</span> {record.created_at ? formatDistanceToNow(new Date(record.created_at), { addSuffix: true }) : 'Unknown'}
                       </div>
                       <div>
                         <span className="font-medium">Size:</span> {formatFileSize(record.file_size)}

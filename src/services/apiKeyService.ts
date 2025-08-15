@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { ApiKey, ApiKeyInsert, ApiKeyUpdate } from "@/types/database";
+import { ApiKey } from "@/types/database";
 import BaseService from "./baseService";
 
 // Browser-compatible crypto functions
@@ -20,7 +20,8 @@ const sha256 = async (data: string): Promise<string> => {
   return arrayBufferToHex(hashBuffer);
 };
 
-// ApiKey is now imported from database types
+// Re-export ApiKey from database types for easier imports
+export type { ApiKey } from "@/types/database";
 
 export interface ApiKeyWithSecret extends Omit<ApiKey, "key_hash"> {
   key: string; // Only available immediately after creation
@@ -166,7 +167,7 @@ export class ApiKeyService extends BaseService {
         .schema("beekon_data")
         .from("api_keys")
         .update({
-          usage_count: data.usage_count + 1,
+          usage_count: (data.usage_count ?? 0) + 1,
           last_used_at: new Date().toISOString(),
         })
         .eq("id", data.id);
@@ -193,7 +194,7 @@ export class ApiKeyService extends BaseService {
 
       const keys = data || [];
       const activeKeys = keys.filter((key) => key.is_active);
-      const totalRequests = keys.reduce((sum, key) => sum + key.usage_count, 0);
+      const totalRequests = keys.reduce((sum, key) => sum + (key.usage_count ?? 0), 0);
 
       // Calculate success rate (simplified - would need actual error tracking)
       const successRate = totalRequests > 0 ? 99.2 : 0;
@@ -205,7 +206,7 @@ export class ApiKeyService extends BaseService {
         (key) => key.last_used_at && new Date(key.last_used_at) > thirtyDaysAgo
       );
       const last30DaysRequests = recentKeys.reduce(
-        (sum, key) => sum + key.usage_count,
+        (sum, key) => sum + (key.usage_count ?? 0),
         0
       );
 

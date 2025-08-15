@@ -24,12 +24,21 @@
       "Bash(npm:*)",
       "Bash(npx rimraf:*)",
       "Bash(mv:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(npx eslint:*)",
+      "Bash(timeout 10s npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(timeout 15s npm run dev)",
+      "Bash(time npm run type-check)",
+      "Bash(true)",
+      "WebSearch",
+      "WebFetch(domain:supabase.com)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "supabase"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

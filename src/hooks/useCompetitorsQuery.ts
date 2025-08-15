@@ -5,7 +5,6 @@ import {
   competitorService,
   type Competitor,
   type CompetitorPerformance,
-  type CompetitorAnalytics,
 } from "@/services/competitorService";
 
 export interface CompetitorFilters {
@@ -88,20 +87,20 @@ export function useCompetitorData(websiteId: string, filters: CompetitorFilters 
   const queries = useQueries({
     queries: [
       {
-        queryKey: competitorKeys.list(targetWebsiteId),
-        queryFn: () => competitorService.getCompetitors(targetWebsiteId),
+        queryKey: competitorKeys.list(targetWebsiteId || ''),
+        queryFn: () => competitorService.getCompetitors(targetWebsiteId || ''),
         enabled: !workspaceLoading && !!targetWebsiteId,
         staleTime: 10 * 60 * 1000,
       },
       {
-        queryKey: competitorKeys.performance(targetWebsiteId, filters),
-        queryFn: () => competitorService.getCompetitorPerformance(targetWebsiteId, filters.dateRange),
+        queryKey: competitorKeys.performance(targetWebsiteId || '', filters),
+        queryFn: () => competitorService.getCompetitorPerformance(targetWebsiteId || '', filters.dateRange),
         enabled: !workspaceLoading && !!targetWebsiteId,
         staleTime: 5 * 60 * 1000,
       },
       {
-        queryKey: competitorKeys.analytics(targetWebsiteId, filters.dateRange),
-        queryFn: () => competitorService.getCompetitiveAnalysis(targetWebsiteId, filters.dateRange),
+        queryKey: competitorKeys.analytics(targetWebsiteId || '', filters.dateRange),
+        queryFn: () => competitorService.getCompetitiveAnalysis(targetWebsiteId || '', filters.dateRange),
         enabled: !workspaceLoading && !!targetWebsiteId,
         staleTime: 5 * 60 * 1000,
       },
@@ -129,15 +128,17 @@ export function useCompetitorData(websiteId: string, filters: CompetitorFilters 
       analysisStatus = "completed";
     } else {
       // No performance data - check if recently added (within last 30 minutes = in_progress)
-      const addedAt = new Date(competitor.created_at);
-      const now = new Date();
-      const timeDiff = now.getTime() - addedAt.getTime();
-      const minutesAgo = Math.floor(timeDiff / (1000 * 60));
-      
-      if (minutesAgo <= 30) {
-        analysisStatus = "in_progress";
-      } else {
-        analysisStatus = "pending";
+      if (competitor.created_at) {
+        const addedAt = new Date(competitor.created_at);
+        const now = new Date();
+        const timeDiff = now.getTime() - addedAt.getTime();
+        const minutesAgo = Math.floor(timeDiff / (1000 * 60));
+        
+        if (minutesAgo <= 30) {
+          analysisStatus = "in_progress";
+        } else {
+          analysisStatus = "pending";
+        }
       }
     }
 
@@ -145,7 +146,8 @@ export function useCompetitorData(websiteId: string, filters: CompetitorFilters 
       ...competitor,
       analysisStatus,
       performance: performanceData,
-      addedAt: competitor.created_at,
+      addedAt: competitor.created_at || new Date().toISOString(), // Provide non-null fallback
+      analysis_frequency: competitor.analysis_frequency,
     };
   });
 
@@ -173,7 +175,7 @@ export function useAddCompetitor() {
   return useMutation({
     mutationFn: ({ websiteId, domain, name }: { websiteId: string; domain: string; name?: string }) =>
       competitorService.addCompetitor(websiteId, domain, name),
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       // Invalidate all related queries for this website
       queryClient.invalidateQueries({ 
         queryKey: competitorKeys.all,
@@ -205,15 +207,14 @@ export function useUpdateCompetitor() {
   return useMutation({
     mutationFn: ({ 
       competitorId, 
-      updates, 
-      websiteId 
+      updates 
     }: { 
       competitorId: string; 
       updates: Partial<Pick<Competitor, "competitor_name" | "is_active">>; 
       websiteId: string;
     }) =>
       competitorService.updateCompetitor(competitorId, updates),
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       // Invalidate all related queries for this website
       queryClient.invalidateQueries({ 
         queryKey: competitorKeys.all,
@@ -243,9 +244,9 @@ export function useDeleteCompetitor() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: ({ competitorId, websiteId }: { competitorId: string; websiteId: string }) =>
+    mutationFn: ({ competitorId }: { competitorId: string; websiteId: string }) =>
       competitorService.deleteCompetitor(competitorId),
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       // Invalidate all related queries for this website
       queryClient.invalidateQueries({ 
         queryKey: competitorKeys.all,

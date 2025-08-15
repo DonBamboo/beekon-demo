@@ -16,7 +16,6 @@ import {
   Settings,
   Trash2,
 } from "lucide-react";
-import { Spinner } from "@/components/LoadingStates";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import { ConfirmationDialog } from "./ConfirmationDialog";

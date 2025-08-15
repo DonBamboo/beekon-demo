@@ -22,7 +22,7 @@ export interface TimeSeriesData {
   visibility: number;
   mentions: number;
   sentiment: number;
-}
+  [key: string]: unknown;}
 
 export interface TopicPerformance {
   topic: string;
@@ -31,7 +31,7 @@ export interface TopicPerformance {
   averageRank: number;
   sentiment: number;
   trend: number; // percentage change
-}
+  [key: string]: unknown;}
 
 export interface LLMPerformance {
   provider: string;
@@ -185,7 +185,22 @@ export class DashboardService {
             .single(),
         ]);
 
-        const metrics = this.calculateMetricsForResults(results);
+        // Convert UIAnalysisResult to AnalysisResult format for metrics calculation
+        const analysisResults = results.map(result => ({
+          id: result.id,
+          topic_name: result.topic,
+          topic: result.topic,
+          topic_keywords: [],
+          llm_results: result.llm_results,
+          total_mentions: result.llm_results.filter(r => r.is_mentioned).length,
+          avg_rank: result.llm_results.reduce((acc, r) => acc + (r.rank_position || 0), 0) / result.llm_results.length,
+          avg_confidence: result.confidence,
+          avg_sentiment: result.llm_results.reduce((acc, r) => acc + (r.sentiment_score || 0), 0) / result.llm_results.length,
+          created_at: result.created_at,
+          website_id: result.website_id,
+        }));
+        
+        const metrics = this.calculateMetricsForResults(analysisResults);
 
         return {
           websiteId,
@@ -194,7 +209,7 @@ export class DashboardService {
           visibility: metrics.overallVisibilityScore,
           mentions: metrics.totalMentions,
           sentiment: metrics.sentimentScore,
-          lastAnalyzed: results.length > 0 ? results[0]!.analyzed_at : "",
+          lastAnalyzed: results.length > 0 ? results[0]!.created_at : "",
         };
       });
 
@@ -222,8 +237,21 @@ export class DashboardService {
 
       const allResultsArrays = await Promise.all(allResultsPromises);
 
-      // Flatten all results into a single array
-      return allResultsArrays.flat();
+      // Flatten all results into a single array and convert to AnalysisResult format
+      const flatResults = allResultsArrays.flat();
+      return flatResults.map(result => ({
+        id: result.id,
+        topic_name: result.topic,
+        topic: result.topic,
+        topic_keywords: [],
+        llm_results: result.llm_results,
+        total_mentions: result.llm_results.filter(r => r.is_mentioned).length,
+        avg_rank: result.llm_results.reduce((acc, r) => acc + (r.rank_position || 0), 0) / result.llm_results.length || null,
+        avg_confidence: result.confidence,
+        avg_sentiment: result.llm_results.reduce((acc, r) => acc + (r.sentiment_score || 0), 0) / result.llm_results.length || null,
+        created_at: result.created_at,
+        website_id: result.website_id,
+      }));
     } catch (error) {
       // Failed to get analysis results
       return [];
@@ -569,7 +597,7 @@ export class DashboardService {
           websiteCount: websiteIds.length,
           totalTopics: topicPerformance.length,
           analysisPoints: timeSeriesData.length,
-          avgVisibilityScore: metrics.visibilityScore,
+          avgVisibilityScore: metrics.overallVisibilityScore,
           avgSentimentScore: metrics.sentimentScore,
         },
       },
@@ -599,44 +627,6 @@ export class DashboardService {
     });
   }
 
-  private convertToCSV(data: {
-    metrics: DashboardMetrics;
-    timeSeriesData: TimeSeriesData[];
-    topicPerformance: TopicPerformance[];
-  }): string {
-    const { metrics, timeSeriesData, topicPerformance } = data;
-
-    let csv = "Dashboard Export\n\n";
-
-    // Metrics section
-    csv += "Metrics\n";
-    csv += "Metric,Value\n";
-    csv += `Overall Visibility Score,${metrics.overallVisibilityScore}%\n`;
-    csv += `Average Ranking,${metrics.averageRanking}\n`;
-    csv += `Total Mentions,${metrics.totalMentions}\n`;
-    csv += `Sentiment Score,${metrics.sentimentScore}%\n`;
-    csv += `Total Analyses,${metrics.totalAnalyses}\n`;
-    csv += `Active Websites,${metrics.activeWebsites}\n`;
-    csv += `Top Performing Topic,${metrics.topPerformingTopic || "N/A"}\n`;
-    csv += `Improvement Trend,${metrics.improvementTrend}%\n\n`;
-
-    // Time series data
-    csv += "Time Series Data\n";
-    csv += "Date,Visibility,Mentions,Sentiment\n";
-    timeSeriesData.forEach((item: TimeSeriesData) => {
-      csv += `${item.date},${item.visibility},${item.mentions},${item.sentiment}\n`;
-    });
-    csv += "\n";
-
-    // Topic performance
-    csv += "Topic Performance\n";
-    csv += "Topic,Visibility,Mentions,Average Rank,Sentiment\n";
-    topicPerformance.forEach((item: TopicPerformance) => {
-      csv += `${item.topic},${item.visibility},${item.mentions},${item.averageRank},${item.sentiment}\n`;
-    });
-
-    return csv;
-  }
 }
 
 export const dashboardService = DashboardService.getInstance();

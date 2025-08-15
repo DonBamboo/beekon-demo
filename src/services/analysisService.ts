@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { AnalysisResult, LLMResult, UIAnalysisResult } from "@/types/database";
+import { Database } from "@/integrations/supabase/types";
+// Using local AnalysisSession interface defined in this file
 
 // Helper functions for safe type extraction
 function safeString(value: unknown, fallback = ""): string {
@@ -75,22 +77,6 @@ export interface AnalysisProgress {
   error?: string;
 }
 
-// Type guard for AnalysisSession
-function isValidAnalysisSession(data: any): data is AnalysisSession {
-  return (
-    data &&
-    typeof data === "object" &&
-    typeof data.id === "string" &&
-    typeof data.analysis_name === "string" &&
-    typeof data.website_id === "string" &&
-    typeof data.user_id === "string" &&
-    typeof data.workspace_id === "string" &&
-    typeof data.status === "string" &&
-    typeof data.created_at === "string" &&
-    typeof data.updated_at === "string"
-  );
-}
-
 export class AnalysisService {
   private static instance: AnalysisService;
   private progressCallbacks: Map<string, (progress: AnalysisProgress) => void> =
@@ -109,9 +95,8 @@ export class AnalysisService {
     userId?: string,
     workspaceId?: string
   ): Promise<string> {
-    try {
-      // Get current user if not provided
-      if (!userId) {
+    // Get current user if not provided
+    if (!userId) {
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -139,6 +124,7 @@ export class AnalysisService {
         userId,
         workspaceId
       );
+      console.log("analysisSession", analysisSession);
 
       // First, create topics if they don't exist
       const topicIds = await this.ensureTopicsExist(
@@ -170,16 +156,6 @@ export class AnalysisService {
       );
 
       return analysisSession.id;
-    } catch (error) {
-      // Failed to create analysis
-
-      // Clean up any polling intervals that might have been started
-      if (analysisSession?.id) {
-        this.unsubscribeFromProgress(analysisSession.id);
-      }
-
-      throw error;
-    }
   }
 
   private async ensureTopicsExist(
@@ -233,6 +209,9 @@ export class AnalysisService {
     }
 
     const topicId = topicIds[0]; // Single topic per analysis
+    if (!topicId) {
+      throw new Error("No topic ID available for prompt creation");
+    }
 
     for (const prompt of customPrompts) {
       const { data: newPrompt, error } = await supabase
@@ -244,7 +223,7 @@ export class AnalysisService {
           is_active: true,
           priority: 1,
           prompt_type: "custom",
-        })
+        } as Database["beekon_data"]["Tables"]["prompts"]["Insert"])
         .select("id")
         .single();
 
@@ -268,8 +247,8 @@ export class AnalysisService {
         website_id: config.websiteId,
         user_id: userId,
         workspace_id: workspaceId,
-        status: "pending",
-        configuration: config,
+        status: "pending" as const,
+        configuration: config as unknown as Record<string, unknown>,
         progress_data: {
           analysisId: "", // Will be set to session ID
           status: "pending",
@@ -277,24 +256,37 @@ export class AnalysisService {
           currentStep: "Initializing analysis...",
           completedSteps: 0,
           totalSteps: config.customPrompts.length * config.llmModels.length,
-        },
-      })
+        } as Record<string, unknown>,
+      } as Database["beekon_data"]["Tables"]["analysis_sessions"]["Insert"])
       .select()
       .single();
 
     if (error) throw error;
 
-    if (!isValidAnalysisSession(data)) {
-      throw new Error("Invalid analysis session data received from database");
-    }
+    // Extract only the fields needed for AnalysisSession
+    const session: AnalysisSession = {
+      id: data.id,
+      analysis_name: data.analysis_name,
+      website_id: data.website_id,
+      user_id: data.user_id,
+      workspace_id: data.workspace_id,
+      status: data.status as AnalysisStatus,
+      configuration: data.configuration as unknown as AnalysisConfig,
+      progress_data: data.progress_data as AnalysisProgress | null,
+      error_message: data.error_message,
+      started_at: data.started_at,
+      completed_at: data.completed_at,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+    };
 
-    return data;
+    return session;
   }
 
   private async startAnalysis(
     sessionId: string,
     config: AnalysisConfig,
-    promptIds: string[]
+    _: string[]
   ): Promise<void> {
     // Calculate total steps, ensuring minimum of 1 to avoid division by zero
     const totalSteps = Math.max(
@@ -429,7 +421,7 @@ export class AnalysisService {
   ): UIAnalysisResult[] {
     const resultsMap = new Map<string, UIAnalysisResult>();
 
-    data?.forEach((row, index) => {
+    data?.forEach((row, _index) => {
       const promptId = safeString(row.prompt_id);
       if (!promptId) {
         // Skip rows with null prompt_id
@@ -492,7 +484,7 @@ export class AnalysisService {
           (prompts?.topics as Record<string, unknown>)?.topic_name,
           "Unknown topic"
         );
-        resultWebsiteId = safeString(row.website_id);
+        resultWebsiteId = websiteId || safeString(row.website_id);
       }
 
       if (!resultsMap.has(promptId)) {
@@ -736,14 +728,14 @@ export class AnalysisService {
     // Apply analysis session filter
     if (filters?.analysisSession && filters.analysisSession !== "all") {
       filteredResults = filteredResults.filter(
-        (result) => result.analysis_session_id === filters.analysisSession
+        (result) => result.analysis_session_id === (filters.analysisSession ?? null)
       );
     }
 
     // Get the next cursor from the last selected prompt
     const nextCursor =
       selectedPrompts.length > 0
-        ? selectedPrompts[selectedPrompts.length - 1]?.created_at
+        ? selectedPrompts[selectedPrompts.length - 1]?.created_at || null
         : null;
 
     return {
@@ -865,7 +857,7 @@ export class AnalysisService {
     // Apply analysis session filter
     if (filters?.analysisSession && filters.analysisSession !== "all") {
       filteredResults = filteredResults.filter(
-        (result) => result.analysis_session_id === filters.analysisSession
+        (result) => result.analysis_session_id === (filters.analysisSession ?? null)
       );
     }
 
@@ -965,7 +957,6 @@ export class AnalysisService {
           chatgpt: "ChatGPT",
           claude: "Claude",
           gemini: "Gemini",
-          perplexity: "Perplexity",
         };
 
         return Array.from(providerCounts.entries()).map(([id, count]) => ({
@@ -978,6 +969,35 @@ export class AnalysisService {
         return [];
       }
     }
+  }
+
+  /**
+   * Get website metadata for caching and display purposes
+   */
+  async getWebsiteMetadata(websiteId: string): Promise<import('@/contexts/AppStateContext').WebsiteMetadata> {
+    const { data: website, error } = await supabase
+      .schema("beekon_data")
+      .from("websites")
+      .select("id, domain, display_name, last_crawled_at, crawl_status, is_active")
+      .eq("id", websiteId)
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to fetch website metadata: ${error.message}`);
+    }
+
+    if (!website) {
+      throw new Error("Website not found");
+    }
+
+    return {
+      id: website.id,
+      domain: website.domain,
+      displayName: website.display_name || website.domain,
+      lastCrawledAt: website.last_crawled_at || new Date().toISOString(),
+      crawlStatus: website.crawl_status || 'unknown',
+      isActive: website.is_active ?? true,
+    };
   }
 
   subscribeToProgress(
@@ -1131,13 +1151,7 @@ export class AnalysisService {
 
   private async updateAnalysisSession(
     sessionId: string,
-    updates: Partial<{
-      status: AnalysisStatus;
-      progress_data: AnalysisProgress;
-      error_message: string;
-      started_at: string;
-      completed_at: string;
-    }>
+    updates: Record<string, unknown>
   ): Promise<void> {
     const { error } = await supabase
       .schema("beekon_data")
@@ -1145,10 +1159,7 @@ export class AnalysisService {
       .update(updates)
       .eq("id", sessionId);
 
-    if (error) {
-      // Failed to update analysis session
-      throw error;
-    }
+    if (error) throw error;
   }
 
   async getAnalysisSession(sessionId: string): Promise<AnalysisSession | null> {
@@ -1159,15 +1170,26 @@ export class AnalysisService {
       .eq("id", sessionId)
       .single();
 
-    if (error) {
-      // Failed to get analysis session
-      return null;
-    }
+    if (error) return null;
 
-    if (!isValidAnalysisSession(data)) {
-      throw new Error("Invalid analysis session data received from database");
-    }
-    return data;
+    // Transform data to match AnalysisSession interface
+    const session: AnalysisSession = {
+      id: data.id,
+      analysis_name: data.analysis_name,
+      website_id: data.website_id,
+      user_id: data.user_id,
+      workspace_id: data.workspace_id,
+      status: data.status as AnalysisStatus,
+      configuration: data.configuration as unknown as AnalysisConfig,
+      progress_data: data.progress_data as AnalysisProgress | null,
+      error_message: data.error_message,
+      started_at: data.started_at,
+      completed_at: data.completed_at,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+    };
+
+    return session;
   }
 
   async getAnalysisSessionsForWebsite(
@@ -1180,17 +1202,26 @@ export class AnalysisService {
       .eq("website_id", websiteId)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      // Failed to get analysis sessions
-      return [];
-    }
+    if (error) return [];
 
-    if (!Array.isArray(data) || !data.every(isValidAnalysisSession)) {
-      throw new Error(
-        "Invalid analysis session array data received from database"
-      );
-    }
-    return data;
+    // Transform data array to match AnalysisSession interface
+    const sessions: AnalysisSession[] = data.map((item) => ({
+      id: item.id,
+      analysis_name: item.analysis_name,
+      website_id: item.website_id,
+      user_id: item.user_id,
+      workspace_id: item.workspace_id,
+      status: item.status as AnalysisStatus,
+      configuration: item.configuration as unknown as AnalysisConfig,
+      progress_data: item.progress_data as AnalysisProgress | null,
+      error_message: item.error_message,
+      started_at: item.started_at,
+      completed_at: item.completed_at,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+    }));
+
+    return sessions;
   }
 
   // This method would be called by webhook handlers or polling
@@ -1224,7 +1255,7 @@ export class AnalysisService {
     }
   }
 
-  private async getCurrentProgress(
+  public async getCurrentProgress(
     sessionId: string
   ): Promise<AnalysisProgress> {
     const session = await this.getAnalysisSession(sessionId);
@@ -1386,7 +1417,7 @@ export class AnalysisService {
       );
 
       // LLM Results Section
-      result.llm_results.forEach((llmResult, index) => {
+      result.llm_results.forEach((llmResult, _index) => {
         const mentionStatus = llmResult.is_mentioned
           ? "Mentioned"
           : "Not Mentioned";
@@ -1537,23 +1568,13 @@ export class AnalysisService {
     });
   }
 
-  private generateJsonExport(results: UIAnalysisResult[]): Blob {
-    const exportData = {
-      analysisResults: results,
-      exportedAt: new Date().toISOString(),
-      totalResults: results.length,
-      totalLLMResults: results.reduce(
-        (sum, r) => sum + r.llm_results.length,
-        0
-      ),
-    };
+  // JSON export functionality (reserved for future implementation)
+  // This would generate a structured JSON export of analysis results
 
-    return new Blob([JSON.stringify(exportData, null, 2)], {
-      type: "application/json",
-    });
-  }
-
-  private generateCsvExport(results: UIAnalysisResult[]): Blob {
+  // CSV export functionality (reserved for future implementation)
+  // This would generate a CSV export of analysis results
+  
+  /*
     const headers = [
       "Analysis ID",
       "Prompt",
@@ -1598,7 +1619,12 @@ export class AnalysisService {
     return new Blob([csvContent], { type: "text/csv" });
   }
 
-  private generatePdfExport(results: UIAnalysisResult[]): Blob {
+  */
+  
+  // PDF export functionality (reserved for future implementation)
+  // This would generate a PDF export of analysis results
+  
+  /*
     // For now, generate a structured text document that can be saved as PDF
     // In a production environment, you would use a PDF library like jsPDF or Puppeteer
 
@@ -1647,8 +1673,7 @@ export class AnalysisService {
       pdfContent += "\n";
     });
 
-    return new Blob([pdfContent], { type: "text/plain" });
-  }
+  */
 }
 
 export const analysisService = AnalysisService.getInstance();

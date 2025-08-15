@@ -1,5 +1,6 @@
 import { useToast } from "@/hooks/use-toast";
-import { SubscriptionTier, useWorkspace, isValidSubscriptionTier } from "./useWorkspace";
+import { useWorkspace } from "./useWorkspace";
+import { SubscriptionTier, isValidSubscriptionTier } from "@/utils/typeGuards";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface SubscriptionLimits {
@@ -22,6 +23,13 @@ const subscriptionLimits: Record<SubscriptionTier, SubscriptionLimits> = {
     websiteAnalyses: 50,
     competitorTracking: 3,
     apiAccess: false,
+    supportLevel: "priority",
+    reports: "weekly",
+  },
+  pro: {
+    websiteAnalyses: 200,
+    competitorTracking: 10,
+    apiAccess: true,
     supportLevel: "priority",
     reports: "weekly",
   },
@@ -74,7 +82,7 @@ export function useSubscriptionEnforcement() {
 
   const enforceLimit = (
     action: keyof SubscriptionLimits,
-    actionName: string
+    _: string
   ): boolean => {
     if (!canPerformAction(action)) {
       const tier =
@@ -133,12 +141,15 @@ export function useSubscriptionEnforcement() {
           : "Feature Limit Reached",
         description: message,
         variant: "destructive",
-        action: {
-          label: upgradeAction,
-          onClick: () => {
-            // Here you would typically navigate to upgrade page or open upgrade modal
-          },
-        },
+        action: (
+          <button
+            onClick={() => {
+              // Here you would typically navigate to upgrade page or open upgrade modal
+            }}
+          >
+            {upgradeAction}
+          </button>
+        ),
       });
       return false;
     }
@@ -167,7 +178,7 @@ export function useSubscriptionEnforcement() {
 
     try {
       // Make actual database call to consume a credit
-      const { data, error } = await supabase
+      const { error } = await supabase
         .schema("beekon_data")
         .from("workspaces")
         .update({ 
@@ -246,7 +257,7 @@ export function useSubscriptionEnforcement() {
       const currentCredits = currentWorkspace.credits_remaining || 0;
       
       // Restore one credit to the workspace
-      const { data, error } = await supabase
+      const { error } = await supabase
         .schema("beekon_data")
         .from("workspaces")
         .update({ 

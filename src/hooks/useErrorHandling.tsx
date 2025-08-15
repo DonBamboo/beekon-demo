@@ -1,21 +1,32 @@
-import React from 'react';
-import { ErrorBoundary } from '../components/ErrorBoundary';
+import React from "react";
+import { ErrorBoundary } from "../components/ErrorBoundary";
+
+interface ErrorFallbackProps {
+  error: Error;
+  errorInfo: React.ErrorInfo;
+  resetError: () => void;
+  errorId: string;
+}
 
 // HOC for wrapping components with error boundary
-export function withErrorBoundary<T extends React.ComponentType<Record<string, unknown>>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function withErrorBoundary<T extends React.ComponentType<any>>(
   Component: T,
-  errorFallback?: React.ComponentType<{ error: Error; resetError?: () => void }>
+  errorFallback?: React.ComponentType<ErrorFallbackProps>
 ) {
   const WrappedComponent = React.forwardRef<
     React.ElementRef<T>,
     React.ComponentProps<T>
   >((props, ref) => (
     <ErrorBoundary fallback={errorFallback}>
-      <Component {...props} ref={ref} />
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <Component {...(props as any)} ref={ref} />
     </ErrorBoundary>
   ));
 
-  WrappedComponent.displayName = `withErrorBoundary(${Component.displayName || Component.name})`;
+  WrappedComponent.displayName = `withErrorBoundary(${
+    Component.displayName || Component.name
+  })`;
 
   return WrappedComponent;
 }
@@ -32,7 +43,7 @@ export function useErrorHandler(): {
   }, []);
 
   const handleError = React.useCallback((error: Error | string) => {
-    const errorObj = typeof error === 'string' ? new Error(error) : error;
+    const errorObj = typeof error === "string" ? new Error(error) : error;
     setError(errorObj);
   }, []);
 
@@ -47,13 +58,10 @@ export function useErrorHandler(): {
 // Async error boundary for handling async operations
 export function useAsyncError(): (error: Error) => void {
   const [, setError] = React.useState();
-  
-  return React.useCallback(
-    (error: Error) => {
-      setError(() => {
-        throw error;
-      });
-    },
-    []
-  );
+
+  return React.useCallback((error: Error) => {
+    setError(() => {
+      throw error;
+    });
+  }, []);
 }

@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Spinner, ProgressiveLoading } from "@/components/LoadingStates";
+import { Spinner } from "@/components/LoadingStates";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AdvancedExportDropdown } from "@/components/ui/export-components";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionEnforcement } from "@/hooks/useSubscriptionEnforcement";
+import { useGlobalCache } from "@/hooks/appStateHooks";
 import {
   analysisService,
   type AnalysisProgress,
@@ -33,14 +34,7 @@ import {
 import { useExportHandler } from "@/lib/export-utils";
 import { exportService } from "@/services/exportService";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  AlertCircle,
-  CheckCircle,
-  Plus,
-  Search,
-  X,
-  Zap,
-} from "lucide-react";
+import { AlertCircle, CheckCircle, Plus, Search, X, Zap } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -104,6 +98,7 @@ export function AnalysisConfigModal({
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
   const [topicError, setTopicError] = useState<string | null>(null);
   const { handleExport } = useExportHandler();
+  const { clearCache } = useGlobalCache();
 
   const availableLLMs = [
     {
@@ -113,7 +108,6 @@ export function AnalysisConfigModal({
     },
     { id: "claude", name: "Claude", description: "Anthropic's AI assistant" },
     { id: "gemini", name: "Gemini", description: "Google's AI model" },
-    { id: "perplexity", name: "Perplexity", description: "AI-powered search" },
   ];
 
   // Load topics for the selected website
@@ -228,6 +222,10 @@ export function AnalysisConfigModal({
       // Start the analysis
       const sessionId = await analysisService.createAnalysis(config);
       setCurrentAnalysisId(sessionId);
+
+      // Clear analysis cache for this website since new analysis is being created
+      clearCache(`analysis_results_${websiteId}`);
+      clearCache(`analysis_metadata_${websiteId}`);
 
       // Get the created session for display purposes
       const session = await analysisService.getAnalysisSession(sessionId);
@@ -589,7 +587,10 @@ export function AnalysisConfigModal({
                     variant="ghost"
                     size="sm"
                     className="h-6 w-6 p-0"
-                    onClick={() => removeTopic(form.watch("topics")[0])}
+                    onClick={() => {
+                      const firstTopic = form.watch("topics")[0];
+                      if (firstTopic) removeTopic(firstTopic);
+                    }}
                   >
                     <X className="h-3 w-3" />
                   </Button>
