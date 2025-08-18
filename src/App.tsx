@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { WorkspaceProvider } from "@/hooks/useWorkspace";
 import { AppStateProvider } from "@/contexts/AppStateContext";
+import { WebsiteStatusProvider } from "@/contexts/WebsiteStatusContext";
 import { OptimizedAppProvider, StateManagementDevTools } from "@/contexts/OptimizedAppProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
@@ -137,8 +138,9 @@ const App = () => {
         <Sonner />
         <AuthProvider>
           <AppStateProvider>
-            <WorkspaceProvider>
-              <OptimizedAppProvider>
+            <WebsiteStatusProvider>
+              <WorkspaceProvider>
+                <OptimizedAppProvider>
                 <BrowserRouter>
                 <Suspense fallback={<PageLoading message="Loading application..." />}>
                   <Routes>
@@ -202,8 +204,9 @@ const App = () => {
                 </Suspense>
                   <StateManagementDevTools />
                 </BrowserRouter>
-              </OptimizedAppProvider>
-            </WorkspaceProvider>
+                </OptimizedAppProvider>
+              </WorkspaceProvider>
+            </WebsiteStatusProvider>
           </AppStateProvider>
         </AuthProvider>
       </TooltipProvider>

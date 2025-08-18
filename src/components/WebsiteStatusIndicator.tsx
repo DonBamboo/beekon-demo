@@ -3,12 +3,12 @@ import { Spinner } from "@/components/LoadingStates";
 import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
+import { useWebsiteStatus } from "@/contexts/WebsiteStatusContext";
 
 export type WebsiteStatusType = "pending" | "crawling" | "completed" | "failed";
 
 interface WebsiteStatusIndicatorProps {
-  status: WebsiteStatusType;
-  lastCrawledAt?: string | null;
+  websiteId: string; // NOW REQUIRES WEBSITE ID INSTEAD OF STATUS PROP
   className?: string;
   showLabel?: boolean;
   showTimestamp?: boolean;
@@ -99,22 +99,26 @@ function formatLastCrawled(lastCrawledAt: string | null): string {
 /**
  * Website Status Indicator Component
  *
- * Displays website crawling status with animations and styling
- * Supports multiple variants and sizes
+ * UNIFIED VERSION: Reads status directly from WebsiteStatusContext
+ * No more prop-based status passing - single source of truth
  */
 export function WebsiteStatusIndicator({
-  status,
-  lastCrawledAt,
+  websiteId,
   className,
   showLabel = true,
   showTimestamp = false,
   size = "md",
   variant = "badge",
 }: WebsiteStatusIndicatorProps) {
-  const config = statusConfig[status];
+  // CRITICAL: Read status from unified context - single source of truth
+  const { status: contextStatus, lastCrawledAt, isConnected } = useWebsiteStatus(websiteId);
+  
+  // Default to 'pending' if no status available
+  const status = contextStatus || 'pending';
+  const config = statusConfig[status as WebsiteStatusType];
   const sizeStyles = sizeConfig[size];
   
-  // Debug: Track prop changes in development
+  // Debug: Track status changes from context
   const prevStatusRef = useRef<WebsiteStatusType | undefined>();
   const renderCountRef = useRef(0);
   
@@ -124,25 +128,29 @@ export function WebsiteStatusIndicator({
     if (process.env.NODE_ENV === 'development') {
       const prevStatus = prevStatusRef.current;
       if (prevStatus !== undefined && prevStatus !== status) {
-        console.log(`[WEBSITE-STATUS-INDICATOR] 🎨 Status changed:`, {
+        console.log(`[WEBSITE-STATUS-INDICATOR] 🎨 CONTEXT STATUS CHANGED:`, {
+          websiteId: websiteId.slice(-8),
           from: prevStatus,
           to: status,
           renderCount: renderCountRef.current,
+          isConnected,
           timestamp: new Date().toISOString()
         });
       }
       
       if (renderCountRef.current === 1) {
-        console.log(`[WEBSITE-STATUS-INDICATOR] 🎨 Initial render:`, {
+        console.log(`[WEBSITE-STATUS-INDICATOR] 🎨 INITIAL RENDER FROM CONTEXT:`, {
+          websiteId: websiteId.slice(-8),
           status,
           lastCrawledAt,
+          isConnected,
           renderCount: renderCountRef.current
         });
       }
     }
     
-    prevStatusRef.current = status;
-  }, [status, lastCrawledAt]);
+    prevStatusRef.current = status as WebsiteStatusType;
+  }, [status, lastCrawledAt, websiteId, isConnected]);
 
   if (!config) {
     console.warn(`Unknown website status: ${status}`);
@@ -156,6 +164,9 @@ export function WebsiteStatusIndicator({
 
   const Icon = config.icon;
   const isAnimated = status === "crawling";
+  
+  // Connection status available for debugging if needed
+  // const showConnectionStatus = !isConnected && process.env.NODE_ENV === 'development';
 
   // Badge variant
   if (variant === "badge") {
@@ -259,41 +270,29 @@ export function WebsiteStatusIndicator({
 /**
  * Animated status transition component
  * Shows a smooth transition between status changes
+ * NOTE: Requires website ID for unified architecture
  */
 interface StatusTransitionProps {
+  websiteId: string;
   previousStatus?: WebsiteStatusType;
-  currentStatus: WebsiteStatusType;
   onTransitionComplete?: () => void;
 }
 
 export function StatusTransition({
-  previousStatus,
-  currentStatus,
+  websiteId,
   onTransitionComplete,
 }: StatusTransitionProps) {
-  const showTransition = previousStatus && previousStatus !== currentStatus;
-
-  if (!showTransition) {
-    return <WebsiteStatusIndicator status={currentStatus} />;
-  }
-
+  // Status transitions are now handled automatically by the context
   return (
-    <div className="relative">
-      {/* Previous status (fading out) */}
-      <div className="absolute inset-0 animate-fade-out opacity-0">
-        <WebsiteStatusIndicator status={previousStatus} />
-      </div>
-
-      {/* Current status (fading in) */}
-      <div className="animate-fade-in" onAnimationEnd={onTransitionComplete}>
-        <WebsiteStatusIndicator status={currentStatus} />
-      </div>
+    <div onAnimationEnd={onTransitionComplete}>
+      <WebsiteStatusIndicator websiteId={websiteId} />
     </div>
   );
 }
 
 /**
  * Status history indicator showing recent status changes
+ * NOTE: This is a display-only component for historical data
  */
 interface StatusHistoryProps {
   statusHistory: Array<{
@@ -313,29 +312,34 @@ export function StatusHistory({
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      {recentHistory.map((entry, index) => (
-        <div
-          key={`${entry.status}-${entry.timestamp}`}
-          className={cn(
-            "flex items-center gap-2 text-sm",
-            index > 0 && "opacity-60"
-          )}
-        >
-          <WebsiteStatusIndicator
-            status={entry.status}
-            size="sm"
-            showLabel={false}
-          />
-          <span className="text-muted-foreground">
-            {formatLastCrawled(entry.timestamp)}
-          </span>
-          {index === 0 && (
-            <Badge variant="outline" className="text-xs">
-              Current
-            </Badge>
-          )}
-        </div>
-      ))}
+      {recentHistory.map((entry, index) => {
+        // For historical display, we create a temporary div since we don't have websiteId context
+        const config = statusConfig[entry.status];
+        const Icon = config.icon;
+        
+        return (
+          <div
+            key={`${entry.status}-${entry.timestamp}`}
+            className={cn(
+              "flex items-center gap-2 text-sm",
+              index > 0 && "opacity-60"
+            )}
+          >
+            <div className="flex items-center gap-1">
+              <Icon className="h-3 w-3" />
+              <span className="text-xs">{config.label}</span>
+            </div>
+            <span className="text-muted-foreground">
+              {formatLastCrawled(entry.timestamp)}
+            </span>
+            {index === 0 && (
+              <Badge variant="outline" className="text-xs">
+                Current
+              </Badge>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

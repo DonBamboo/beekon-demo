@@ -2,7 +2,6 @@ import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   WebsiteStatusIndicator,
-  WebsiteStatusType,
 } from "@/components/WebsiteStatusIndicator";
 import { Button } from "@/components/ui/button";
 import {
@@ -313,8 +312,7 @@ export default function Websites() {
   const getStatusIndicator = (website: Website) => {
     return (
       <WebsiteStatusIndicator
-        status={website.crawl_status as WebsiteStatusType}
-        lastCrawledAt={website.last_crawled_at}
+        websiteId={website.id}
         variant="badge"
         size="sm"
         showLabel={true}
@@ -869,8 +867,7 @@ export default function Websites() {
                   {/* Status Information */}
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <WebsiteStatusIndicator
-                      status={website.crawl_status as WebsiteStatusType}
-                      lastCrawledAt={website.last_crawled_at}
+                      websiteId={website.id}
                       variant="card"
                       size="md"
                       showLabel={true}
