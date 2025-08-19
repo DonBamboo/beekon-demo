@@ -1,8 +1,8 @@
+import React, { useState, useEffect, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/LoadingStates";
 import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useRef } from "react";
 import { useWebsiteStatus } from "@/contexts/WebsiteStatusContext";
 
 export type WebsiteStatusType = "pending" | "crawling" | "completed" | "failed";
@@ -101,8 +101,9 @@ function formatLastCrawled(lastCrawledAt: string | null): string {
  *
  * UNIFIED VERSION: Reads status directly from WebsiteStatusContext
  * No more prop-based status passing - single source of truth
+ * FIXED: Force re-renders and eliminate stale closures
  */
-export function WebsiteStatusIndicator({
+export const WebsiteStatusIndicator = React.memo(function WebsiteStatusIndicator({
   websiteId,
   className,
   showLabel = true,
@@ -110,54 +111,64 @@ export function WebsiteStatusIndicator({
   size = "md",
   variant = "badge",
 }: WebsiteStatusIndicatorProps) {
+  // Force re-render counter to eliminate stale closures
+  const [forceRenderCounter, setForceRenderCounter] = useState(0);
+  const lastStatusRef = useRef<string | null>(null);
+  
   // CRITICAL: Read status from unified context - single source of truth
   const { status: contextStatus, lastCrawledAt, isConnected } = useWebsiteStatus(websiteId);
   
   // Default to 'pending' if no status available
   const status = contextStatus || 'pending';
+  
+  // Force re-render when status actually changes
+  useEffect(() => {
+    if (lastStatusRef.current !== status) {
+      console.log(`[WebsiteStatusIndicator] Status changed for ${websiteId}: ${lastStatusRef.current} → ${status}`);
+      lastStatusRef.current = status;
+      setForceRenderCounter(prev => prev + 1);
+    }
+  }, [status, websiteId]);
+
+  // Listen for custom website status update events
+  useEffect(() => {
+    const handleCustomStatusUpdate = (event: CustomEvent) => {
+      if (event.detail?.websiteId === websiteId) {
+        console.log(`[WebsiteStatusIndicator] Custom event received for ${websiteId}:`, event.detail);
+        setForceRenderCounter(prev => prev + 1);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('websiteStatusUpdate', handleCustomStatusUpdate as EventListener);
+      return () => {
+        window.removeEventListener('websiteStatusUpdate', handleCustomStatusUpdate as EventListener);
+      };
+    }
+    return undefined;
+  }, [websiteId]);
+  
   const config = statusConfig[status as WebsiteStatusType];
   const sizeStyles = sizeConfig[size];
   
-  // Debug: Track status changes from context
-  const prevStatusRef = useRef<WebsiteStatusType | undefined>();
-  const renderCountRef = useRef(0);
-  
+  // Debug logging for development
   useEffect(() => {
-    renderCountRef.current += 1;
-    
     if (process.env.NODE_ENV === 'development') {
-      const prevStatus = prevStatusRef.current;
-      if (prevStatus !== undefined && prevStatus !== status) {
-        console.log(`[WEBSITE-STATUS-INDICATOR] 🎨 CONTEXT STATUS CHANGED:`, {
-          websiteId: websiteId.slice(-8),
-          from: prevStatus,
-          to: status,
-          renderCount: renderCountRef.current,
-          isConnected,
-          timestamp: new Date().toISOString()
-        });
-      }
-      
-      if (renderCountRef.current === 1) {
-        console.log(`[WEBSITE-STATUS-INDICATOR] 🎨 INITIAL RENDER FROM CONTEXT:`, {
-          websiteId: websiteId.slice(-8),
-          status,
-          lastCrawledAt,
-          isConnected,
-          renderCount: renderCountRef.current
-        });
-      }
+      console.log(`[WebsiteStatusIndicator] Render ${forceRenderCounter} for ${websiteId}:`, {
+        status,
+        isConnected,
+        contextStatus,
+        lastCrawledAt
+      });
     }
-    
-    prevStatusRef.current = status as WebsiteStatusType;
-  }, [status, lastCrawledAt, websiteId, isConnected]);
+  }, [websiteId, status, isConnected, contextStatus, lastCrawledAt, forceRenderCounter]);
 
   if (!config) {
     console.warn(`Unknown website status: ${status}`);
     return (
       <Badge variant="secondary" className={cn("gap-1", className)}>
         <AlertCircle className="h-3 w-3" />
-        Unknown
+        Unknown ({status})
       </Badge>
     );
   }
@@ -265,7 +276,16 @@ export function WebsiteStatusIndicator({
   }
 
   return null;
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function for React.memo
+  // Always re-render if websiteId changes, let internal logic handle status changes
+  return prevProps.websiteId === nextProps.websiteId &&
+         prevProps.className === nextProps.className &&
+         prevProps.showLabel === nextProps.showLabel &&
+         prevProps.showTimestamp === nextProps.showTimestamp &&
+         prevProps.size === nextProps.size &&
+         prevProps.variant === nextProps.variant;
+});
 
 /**
  * Animated status transition component

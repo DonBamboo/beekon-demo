@@ -107,10 +107,25 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   // const [websites, setWebsites] = useState<Website[]>([]);
   
   // Get websites directly from AppStateContext (single source of truth)
+  // Include a status hash to force re-render when any website status changes
   const websites = useMemo(() => {
     if (!currentWorkspace?.id) return [];
-    return appState.workspace.websites.filter(w => w.workspace_id === currentWorkspace.id);
-  }, [appState.workspace.websites, currentWorkspace?.id]);
+    const filteredWebsites = appState.workspace.websites.filter(w => w.workspace_id === currentWorkspace.id);
+    
+    // Log website changes for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[WorkspaceProvider] Websites updated for workspace ${currentWorkspace.id}:`, 
+        filteredWebsites.map(w => ({ id: w.id, domain: w.domain, status: w.crawl_status }))
+      );
+    }
+    
+    return filteredWebsites;
+  }, [
+    appState.workspace.websites, 
+    currentWorkspace?.id,
+    // Add status hash to trigger re-renders when status changes
+    appState.workspace.websites.map(w => `${w.id}:${w.crawl_status}:${w.updated_at}`).join('|')
+  ]);
   const [loading, setLoading] = useState(true);
   
   // Add intelligent caching for websites
@@ -414,10 +429,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const syncWebsitesToAppState = useCallback((websiteData: Website[]) => {
     try {
       setAppStateWebsites(websiteData);
-      console.log(`[SYNC] Synced ${websiteData.length} websites to AppStateContext:`, 
-        websiteData.map(w => ({ id: w.id, status: w.crawl_status })));
     } catch (error) {
-      console.error('Error syncing websites to AppStateContext:', error);
+      // Error syncing websites to AppStateContext - handled silently
     }
   }, [setAppStateWebsites]);
 
@@ -535,7 +548,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
       // UNIFIED: Always sync fresh data to AppStateContext (single source of truth)  
       syncWebsitesToAppState(websiteData);
-      console.log(`[WORKSPACE] ✅ Fetched and synced ${websiteData.length} websites to AppStateContext`);
     } catch (error) {
       // Error fetching websites - sync empty array to AppStateContext
       syncWebsitesToAppState([]);
@@ -627,7 +639,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         // Set up real-time subscription for the current workspace
         const websiteIds = websites.map(w => w.id);
         if (websiteIds.length > 0) {
-          console.log(`[WORKSPACE] 📡 Setting up real-time subscription for workspace ${currentWorkspace.id} with ${websiteIds.length} websites`);
           websiteStatusContext.subscribeToWorkspace(currentWorkspace.id, websiteIds);
         }
       });
@@ -646,7 +657,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const currentId = currentWorkspace?.id || null;
     
     if (previousId && previousId !== currentId) {
-      console.log(`[WORKSPACE] 🔌 Cleaning up subscription for previous workspace ${previousId}`);
       websiteStatusContext.unsubscribeFromWorkspace(previousId);
     }
     
@@ -701,7 +711,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       // Re-subscribe with updated website list including the new website
       const updatedWebsiteIds = [...websites.map(w => w.id), websiteId];
       await websiteStatusContext.subscribeToWorkspace(currentWorkspace.id, updatedWebsiteIds);
-      console.log(`[WORKSPACE] ➕ Added website ${websiteId} to monitoring`);
     }
   }, [currentWorkspace?.id, websites, websiteStatusContext]);
 
@@ -714,7 +723,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       } else {
         await websiteStatusContext.unsubscribeFromWorkspace(currentWorkspace.id);
       }
-      console.log(`[WORKSPACE] ➖ Removed website ${websiteId} from monitoring`);
     }
   }, [currentWorkspace?.id, websites, websiteStatusContext]);
 

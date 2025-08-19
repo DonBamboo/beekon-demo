@@ -330,24 +330,7 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
     case "UPDATE_WEBSITE_STATUS": {
       const { websiteId, status, lastCrawledAt, updatedAt } = action.payload;
       
-      // Enhanced debugging for AppStateContext updates
-      const targetWebsite = state.workspace.websites.find(w => w.id === websiteId);
-      
-      if (targetWebsite) {
-        console.log(`[APPSTATE] 🎯 UPDATING WEBSITE STATUS in AppStateContext:`, {
-          websiteId,
-          oldStatus: targetWebsite.crawl_status,
-          newStatus: status,
-          statusChanged: targetWebsite.crawl_status !== status,
-          oldLastCrawled: targetWebsite.last_crawled_at,
-          newLastCrawled: lastCrawledAt,
-          oldUpdatedAt: targetWebsite.updated_at,
-          newUpdatedAt: updatedAt,
-          timestamp: new Date().toISOString()
-        });
-      } else {
-        console.warn(`[APPSTATE] ⚠️ Website ${websiteId} not found in AppStateContext for status update`);
-      }
+      console.log(`[AppStateContext] UPDATE_WEBSITE_STATUS: ${websiteId} → ${status}`);
       
       const updatedWebsites = state.workspace.websites.map((website) =>
         website.id === websiteId
@@ -360,13 +343,20 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           : website
       );
 
-      console.log(`[APPSTATE] ✅ APPSTATE REDUCER COMPLETED:`, {
-        websiteId,
-        newStatus: status,
-        websitesInState: updatedWebsites.length,
-        updatedWebsite: updatedWebsites.find(w => w.id === websiteId)?.crawl_status,
-        timestamp: new Date().toISOString()
-      });
+      // Force UI refresh by dispatching custom event immediately after state update
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          console.log(`[AppStateContext] Dispatching websiteStatusUpdate event for ${websiteId}`);
+          window.dispatchEvent(new CustomEvent('websiteStatusUpdate', { 
+            detail: { 
+              websiteId, 
+              status, 
+              source: 'app-state-context',
+              timestamp: Date.now()
+            } 
+          }));
+        }
+      }, 0);
 
       return {
         ...state,

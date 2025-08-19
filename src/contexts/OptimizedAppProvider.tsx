@@ -224,7 +224,8 @@ export function StateManagementDevTools() {
     return undefined;
   }, [isOpen, contextAvailable, appState]);
 
-  if (process.env.NODE_ENV !== 'development') {
+  // Only show when DEBUG_MODE is explicitly enabled
+  if (!import.meta.env.VITE_DEBUG_MODE || import.meta.env.VITE_DEBUG_MODE !== 'true') {
     return null;
   }
 

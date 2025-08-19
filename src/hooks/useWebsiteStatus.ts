@@ -113,16 +113,8 @@ export function useWebsiteStatus(
   const handleStatusUpdate = useCallback(
     (update: WebsiteStatusUpdate) => {
       try {
-        console.log("[WEBSITESTATUS] 📨 Received status update:", {
-          websiteId: update.websiteId,
-          status: update.status,
-          lastCrawledAt: update.lastCrawledAt,
-          timestamp: update.updatedAt,
-          showToast: showToastNotifications
-        });
 
         // CRITICAL: Force immediate cache invalidation for real-time updates
-        console.log("[WEBSITESTATUS] 🚨 FORCING IMMEDIATE CACHE INVALIDATION for real-time update");
         clearCache("workspace_");
         clearCache(`websites_`);
         invalidateDependentCaches(`website_${update.websiteId}`);
@@ -141,18 +133,14 @@ export function useWebsiteStatus(
           update.lastCrawledAt,
           update.updatedAt
         );
-        console.log("[WEBSITESTATUS] ✅ AppState updated for website:", update.websiteId);
 
         // Show toast notification if enabled
         if (showToastNotifications) {
           showStatusNotification(update);
-          console.log("[WEBSITESTATUS] 🍞 Toast notification processed");
         }
 
-        console.log("[WEBSITESTATUS] 🔄 ALL CACHES CLEARED - UI should update immediately");
-
       } catch (error) {
-        console.error("[WEBSITESTATUS] ❌ Error handling status update:", error);
+        // Error handling status update - handled silently
       }
     },
     [
@@ -180,18 +168,9 @@ export function useWebsiteStatus(
 
         activeSubscriptionsRef.current.add(workspaceId);
 
-        console.log(
-          `Subscribed to website status updates for workspace: ${workspaceId}`,
-          {
-            websiteCount: websiteIds.length,
-            websiteIds: websiteIds.slice(0, 3), // Log first 3 for debugging
-          }
-        );
+        // Subscribed to website status updates
       } catch (error) {
-        console.error(
-          `Failed to subscribe to workspace ${workspaceId}:`,
-          error
-        );
+        // Failed to subscribe to workspace - handled silently
       }
     },
     [handleStatusUpdate, enableRealTimeUpdates]
@@ -209,14 +188,9 @@ export function useWebsiteStatus(
       // (Note: We don't have direct workspace-to-website mapping here, 
       // but the map will be naturally cleaned up over time)
 
-      console.log(
-        `Unsubscribed from website status updates for workspace: ${workspaceId}`
-      );
+      // Unsubscribed from website status updates
     } catch (error) {
-      console.error(
-        `Failed to unsubscribe from workspace ${workspaceId}:`,
-        error
-      );
+      // Failed to unsubscribe from workspace - handled silently
     }
   }, []);
 
@@ -233,14 +207,9 @@ export function useWebsiteStatus(
           websiteId
         );
 
-        console.log(
-          `Added website to monitoring: ${websiteId} in workspace: ${workspaceId}`
-        );
+        // Added website to monitoring
       } catch (error) {
-        console.error(
-          `Failed to add website ${websiteId} to monitoring:`,
-          error
-        );
+        // Failed to add website to monitoring - handled silently
       }
     },
     [enableRealTimeUpdates]
@@ -260,14 +229,9 @@ export function useWebsiteStatus(
         // Clean up previous status tracking for this website
         previousStatusRef.current.delete(websiteId);
 
-        console.log(
-          `Removed website from monitoring: ${websiteId} from workspace: ${workspaceId}`
-        );
+        // Removed website from monitoring
       } catch (error) {
-        console.error(
-          `Failed to remove website ${websiteId} from monitoring:`,
-          error
-        );
+        // Failed to remove website from monitoring - handled silently
       }
     },
     []
@@ -290,11 +254,8 @@ export function useWebsiteStatus(
       activeWorkspaces.forEach((workspaceId) => {
         websiteStatusService
           .unsubscribeFromWorkspace(workspaceId)
-          .catch((error) => {
-            console.error(
-              `Failed to cleanup subscription for workspace ${workspaceId}:`,
-              error
-            );
+          .catch(() => {
+            // Failed to cleanup subscription - handled silently
           });
       });
       activeSubscriptions.clear();

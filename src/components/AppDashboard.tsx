@@ -95,8 +95,8 @@ export function AppDashboard() {
 
   return (
     <div className="app-dashboard">
-      {/* Debug info in development */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* Debug info when DEBUG_MODE is enabled */}
+      {import.meta.env.VITE_DEBUG_MODE === 'true' && (
         <div className="fixed top-2 right-2 z-50 bg-black/80 text-white text-xs p-2 rounded">
           Page: {page} | URL: {currentPath} | Mode: Persistent
         </div>

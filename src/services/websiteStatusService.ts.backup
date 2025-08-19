@@ -93,6 +93,7 @@ class WebsiteStatusService {
     const realtimeSuccess = await this.setupRealtimeSubscription(subscription);
     if (!realtimeSuccess) {
       this.startPollingForWorkspace(subscription);
+    } else {
     }
 
     // Start connection health monitoring
@@ -118,7 +119,8 @@ class WebsiteStatusService {
 
       const channel = supabase
         .channel(channelName)
-        .on('postgres_changes' as any, subscriptionConfig, (payload: any) => {
+        .on('postgres_changes' as any, subscriptionConfig,
+          (payload: any) => {
             if (!subscription.isActive) return;
 
 
@@ -139,6 +141,22 @@ class WebsiteStatusService {
               return;
             }
 
+            console.log(`[REALTIME] 🔄 Processing ${eventType} event for website ${websiteId}:`, {
+              eventType: eventType,
+              status: website.crawl_status,
+              domain: website.domain,
+              workspace: website.workspace_id,
+              timestamp: new Date().toISOString(),
+              websiteData: {
+                id: website.id,
+                domain: website.domain,
+                crawl_status: website.crawl_status,
+                last_crawled_at: website.last_crawled_at,
+                updated_at: website.updated_at,
+                created_at: website.created_at,
+                workspace_id: website.workspace_id
+              }
+            });
 
             // Skip processing DELETE events for status updates
             if (eventType === 'DELETE') {
@@ -161,18 +179,51 @@ class WebsiteStatusService {
           }
         )
         .subscribe((status) => {
-          console.log(`[WebsiteStatusService] Subscription status: ${status}`);
+          const emoji = status === 'SUBSCRIBED' ? '✅' : status === 'CHANNEL_ERROR' ? '❌' : status === 'TIMED_OUT' ? '⏰' : '📡';
+          
+          // Enhanced subscription health diagnostics
+          console.log(`[REALTIME] ${emoji} SUBSCRIPTION HEALTH CHECK:`, {
+            workspaceId: subscription.workspaceId,
+            connectionStatus: status,
+            websiteCount: subscription.websiteIds.size,
+            hasChannel: !!subscription.realtimeChannel,
+            channelState: subscription.realtimeChannel?.state || 'none',
+            isActive: subscription.isActive,
+            timestamp: new Date().toISOString(),
+            subscriptionConfig: {
+              event: '*',
+              schema: 'beekon_data', 
+              table: 'websites',
+              filter: `workspace_id=eq.${subscription.workspaceId}`
+            }
+          });
           
           if (status === 'SUBSCRIBED') {
+            console.log(`[REALTIME] ✅ WEBSOCKET CONNECTED: Real-time monitoring active for workspace ${subscription.workspaceId} with ${subscription.websiteIds.size} websites`);
             
-            // Mark connection as healthy
+            // Mark connection as healthy and log diagnostics
             const health = this.connectionHealth.get(subscription.workspaceId);
             if (health) {
               health.isHealthy = true;
               health.lastSeen = Date.now();
+              console.log(`[REALTIME] 💚 Connection health restored for workspace ${subscription.workspaceId}`);
             }
             
+            // Test the subscription by logging its readiness
+            console.log(`[REALTIME] 🔍 SUBSCRIPTION READY - will receive events for:`, {
+              table: 'beekon_data.websites',
+              events: ['INSERT', 'UPDATE', 'DELETE'],
+              filter: `workspace_id=eq.${subscription.workspaceId}`,
+              expectingEventsFor: Array.from(subscription.websiteIds)
+            });
+            
           } else if (status === 'CHANNEL_ERROR') {
+            console.error(`[REALTIME] ❌ WEBSOCKET ERROR: Connection failed for workspace ${subscription.workspaceId}`, {
+              error: 'CHANNEL_ERROR',
+              channelState: subscription.realtimeChannel?.state,
+              reconnectAttempts: this.reconnectAttempts.get(subscription.workspaceId) || 0,
+              timestamp: new Date().toISOString()
+            });
             
             // Mark connection as unhealthy
             const health = this.connectionHealth.get(subscription.workspaceId);
@@ -182,6 +233,12 @@ class WebsiteStatusService {
             this.handleRealtimeError(subscription);
             
           } else if (status === 'TIMED_OUT') {
+            console.warn(`[REALTIME] ⏰ WEBSOCKET TIMEOUT: Connection timed out for workspace ${subscription.workspaceId}`, {
+              error: 'TIMED_OUT',
+              channelState: subscription.realtimeChannel?.state,
+              lastHealthyAt: this.connectionHealth.get(subscription.workspaceId)?.lastSeen,
+              timestamp: new Date().toISOString()
+            });
             
             // Mark connection as unhealthy
             const health = this.connectionHealth.get(subscription.workspaceId);
@@ -191,12 +248,14 @@ class WebsiteStatusService {
             this.handleRealtimeError(subscription);
             
           } else if (status === 'CLOSED') {
+            console.warn(`[REALTIME] 🔐 WEBSOCKET CLOSED: Connection closed for workspace ${subscription.workspaceId}`);
           }
         });
 
       subscription.realtimeChannel = channel;
       return true;
     } catch (error) {
+      console.error('Failed to setup real-time subscription:', error);
       return false;
     }
   }
@@ -215,6 +274,7 @@ class WebsiteStatusService {
       const jitter = Math.random() * 1000; // Add randomness to prevent thundering herd
       const delay = baseDelay + jitter;
       
+      console.log(`[REALTIME] 🔄 Reconnection attempt ${attempts + 1}/${this.MAX_RECONNECT_ATTEMPTS} for workspace ${subscription.workspaceId} in ${Math.round(delay/1000)}s`);
       
       setTimeout(async () => {
         if (subscription.isActive) {
@@ -226,14 +286,17 @@ class WebsiteStatusService {
           
           const success = await this.setupRealtimeSubscription(subscription);
           if (!success) {
+            console.warn(`[REALTIME] Reconnection attempt ${attempts + 1} failed for workspace ${subscription.workspaceId}`);
             this.startPollingForWorkspace(subscription);
           } else {
+            console.log(`[REALTIME] ✅ Successfully reconnected workspace ${subscription.workspaceId} after ${attempts + 1} attempts`);
             // Reset attempt counter on successful reconnection
             this.reconnectAttempts.set(subscription.workspaceId, 0);
           }
         }
       }, delay);
     } else {
+      console.warn(`[REALTIME] ❌ Max reconnection attempts (${this.MAX_RECONNECT_ATTEMPTS}) reached for workspace ${subscription.workspaceId}, switching to polling fallback`);
       this.startPollingForWorkspace(subscription);
     }
   }
@@ -259,6 +322,7 @@ class WebsiteStatusService {
         .in('crawl_status', ['pending', 'crawling']); // Only poll active states
 
       if (error) {
+        console.error('Error polling website status:', error);
         return;
       }
 
@@ -286,6 +350,7 @@ class WebsiteStatusService {
       });
 
     } catch (error) {
+      console.error('Error in pollActiveWebsites:', error);
     }
   }
 
@@ -329,6 +394,7 @@ class WebsiteStatusService {
       });
 
     } catch (error) {
+      console.error(`Error checking status for website ${websiteId}:`, error);
     }
   }
 
@@ -337,6 +403,13 @@ class WebsiteStatusService {
    */
   private handleStatusUpdate(subscription: StatusSubscription, update: WebsiteStatusUpdate): void {
     try {
+      console.log(`[REALTIME] 🎯 Processing status update for website ${update.websiteId}:`, {
+        status: update.status,
+        workspaceId: subscription.workspaceId,
+        lastCrawledAt: update.lastCrawledAt,
+        timestamp: update.updatedAt,
+        isTerminal: update.status === 'completed' || update.status === 'failed'
+      });
 
       // Update connection health (we received activity)
       const health = this.connectionHealth.get(subscription.workspaceId);
@@ -347,6 +420,7 @@ class WebsiteStatusService {
 
       // Call the callback with the update
       subscription.callback(update);
+      console.log(`[REALTIME] ✅ Status update callback executed for website ${update.websiteId}`);
 
       // Clean up polling for websites that reached terminal states
       if (update.status === 'completed' || update.status === 'failed') {
@@ -356,8 +430,10 @@ class WebsiteStatusService {
           subscription.pollingIntervals.delete(update.websiteId);
         }
         
+        console.log(`[REALTIME] 🏁 Website ${update.websiteId} reached terminal state: ${update.status}, polling cleaned up`);
       }
     } catch (error) {
+      console.error(`[REALTIME] ❌ Error handling status update for website ${update.websiteId}:`, error);
     }
   }
 
@@ -458,10 +534,12 @@ class WebsiteStatusService {
           health.isHealthy = false;
           
           if (wasHealthy) {
+            console.warn(`[REALTIME] 🔴 Connection appears stale for workspace ${workspaceId}, last activity: ${Math.round(timeSinceLastSeen / 1000)}s ago`);
             
             // Attempt to reconnect stale connections
             const subscription = this.subscriptions.get(workspaceId);
             if (subscription) {
+              console.log(`[REALTIME] 🔄 Attempting to revive stale connection for workspace ${workspaceId}`);
               this.handleRealtimeError(subscription);
             }
           }
@@ -489,6 +567,7 @@ class WebsiteStatusService {
     }
 
     this.syncCheckInterval = setInterval(async () => {
+      console.log(`[SYNC-CHECK] 🔄 Running intelligent sync verification with fallback polling`);
       
       // Check sync for all monitored websites
       for (const [workspaceId, subscription] of this.subscriptions) {
@@ -503,11 +582,13 @@ class WebsiteStatusService {
             .eq('workspace_id', workspaceId);
 
           if (error) {
+            console.error(`[SYNC-CHECK] ❌ Error querying websites for workspace ${workspaceId}:`, error);
             continue;
           }
 
           if (!websites) continue;
 
+          console.log(`[SYNC-CHECK] 📊 Found ${websites.length} websites for workspace ${workspaceId}`);
           
           // Check for stale real-time connections and perform intelligent fallback
           const connectionHealth = this.connectionHealth.get(workspaceId);
@@ -515,12 +596,20 @@ class WebsiteStatusService {
             (Date.now() - (connectionHealth?.lastSeen || 0)) > 120000; // 2 minutes
 
           if (isConnectionStale) {
+            console.warn(`[SYNC-CHECK] ⚠️ Real-time connection is stale for workspace ${workspaceId}, using polling fallback`);
           }
           
           websites.forEach(website => {
+            console.log(`[SYNC-CHECK] 🏠 Website ${website.id} (${website.domain}):`, {
+              status: website.crawl_status,
+              lastCrawled: website.last_crawled_at,
+              updated: website.updated_at,
+              connectionStale: isConnectionStale
+            });
 
             // INTELLIGENT POLLING FALLBACK: If connection is stale and website is in active status, force update
             if (isConnectionStale && (website.crawl_status === 'crawling' || website.crawl_status === 'pending')) {
+              console.log(`[SYNC-CHECK] 🔄 POLLING FALLBACK: Forcing status update for ${website.id} due to stale connection`);
               
               // Force status update since real-time may be missing events
               this.handleStatusUpdate(subscription, {
@@ -534,6 +623,7 @@ class WebsiteStatusService {
             // Also check if website completed but we missed the event
             const tracker = subscription.eventTrackers.get(website.id);
             if (tracker && tracker.lastStatus === 'crawling' && website.crawl_status === 'completed') {
+              console.log(`[SYNC-CHECK] 🎯 MISSED COMPLETION EVENT: Forcing completed status for ${website.id}`);
               
               // CRITICAL: Trigger immediate UI refresh for missed events
               if (typeof window !== 'undefined') {
@@ -552,6 +642,7 @@ class WebsiteStatusService {
           });
 
         } catch (error) {
+          console.error(`[SYNC-CHECK] ❌ Failed sync check for workspace ${workspaceId}:`, error);
         }
       }
     }, 30000); // Check every 30 seconds for more responsive fallback
@@ -638,8 +729,31 @@ class WebsiteStatusService {
     tracker.lastEventTimestamp = now;
     tracker.lastStatus = currentStatus;
 
+    // Log event sequence info
+    console.log(`[REALTIME] 📊 EVENT SEQUENCE TRACKING:`, {
+      websiteId,
+      eventType,
+      currentStatus,
+      sequenceNumber,
+      totalEvents: tracker.eventCount,
+      potentialMissedEvents,
+      totalMissedEvents: tracker.missedEventCount,
+      timeSinceLastEvent: tracker.eventHistory.length > 1 ? 
+        now - (tracker.eventHistory[tracker.eventHistory.length - 2]?.timestamp || 0) : 0,
+      recentHistory: tracker.eventHistory.slice(-3).map(e => ({
+        type: e.eventType,
+        status: e.status,
+        seq: e.sequenceNumber
+      }))
+    });
 
     if (potentialMissedEvents > 0) {
+      console.warn(`[REALTIME] ⚠️ POTENTIAL MISSED EVENTS DETECTED:`, {
+        websiteId,
+        potentialMissedEvents,
+        statusJump: `${tracker.lastStatus} → ${currentStatus}`,
+        totalMissedEvents: tracker.missedEventCount
+      });
     }
   }
 
@@ -648,6 +762,7 @@ class WebsiteStatusService {
    */
   private async verifyDatabaseSync(websiteId: string, realtimeStatus: string | null): Promise<void> {
     try {
+      console.log(`[DB-SYNC] 🔍 Verifying sync for website ${websiteId} (realtime: ${realtimeStatus || 'null'})`);
       
       const { data: website, error } = await supabase
         .schema('beekon_data')
@@ -657,16 +772,31 @@ class WebsiteStatusService {
         .single();
 
       if (error) {
+        console.error(`[DB-SYNC] ❌ Error querying database for website ${websiteId}:`, error);
         return;
       }
 
       if (!website) {
+        console.error(`[DB-SYNC] ❌ Website ${websiteId} not found in database`);
         return;
       }
 
       const dbStatus = website.crawl_status;
       const isInSync = realtimeStatus === dbStatus;
 
+      console.log(`[DB-SYNC] ${isInSync ? '✅' : '🚨'} Sync check for website ${websiteId}:`, {
+        realtimeStatus,
+        databaseStatus: dbStatus,
+        inSync: isInSync,
+        website: {
+          id: website.id,
+          domain: website.domain,
+          crawl_status: website.crawl_status,
+          last_crawled_at: website.last_crawled_at,
+          updated_at: website.updated_at
+        },
+        timestamp: new Date().toISOString()
+      });
 
       if (!isInSync) {
         console.error(`[DB-SYNC] 🚨 DATA DESYNC DETECTED!`, {

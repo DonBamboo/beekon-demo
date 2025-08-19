@@ -14,6 +14,7 @@ import { Suspense, lazy, useEffect } from "react";
 import { registerSW } from "./lib/serviceWorker";
 import { PageLoading } from "@/components/LoadingStates";
 import AppDashboard from "@/components/AppDashboard";
+import { RealTimeDebugger } from "@/components/debug/RealTimeDebugger";
 
 // Lazy load only non-core pages for code splitting
 const Auth = lazy(() => import("./pages/Auth"));
@@ -203,6 +204,7 @@ const App = () => {
                   </Routes>
                 </Suspense>
                   <StateManagementDevTools />
+                  <RealTimeDebugger />
                 </BrowserRouter>
                 </OptimizedAppProvider>
               </WorkspaceProvider>

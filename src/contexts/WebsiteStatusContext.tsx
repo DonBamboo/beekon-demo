@@ -30,17 +30,13 @@ export function WebsiteStatusProvider({ children }: WebsiteStatusProviderProps) 
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<Record<string, boolean>>({});
   const activeSubscriptionsRef = useRef<Set<string>>(new Set());
+  const reconciliationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  console.log('[WEBSITE-STATUS-PROVIDER] 🚀 Provider initialized');
 
   // Handle real-time status updates - SINGLE SOURCE OF TRUTH
   const handleStatusUpdate = useCallback((update: WebsiteStatusUpdate) => {
     try {
-      console.log('[WEBSITE-STATUS-PROVIDER] 📨 Real-time status update received:', {
-        websiteId: update.websiteId,
-        status: update.status,
-        timestamp: update.updatedAt
-      });
+      console.log(`[WebsiteStatusContext] Handling status update:`, update);
 
       // CRITICAL: Update AppStateContext immediately - this is our single source of truth
       updateWebsiteStatus(
@@ -50,22 +46,33 @@ export function WebsiteStatusProvider({ children }: WebsiteStatusProviderProps) 
         update.updatedAt
       );
 
-      console.log('[WEBSITE-STATUS-PROVIDER] ✅ AppStateContext updated - UI should reflect changes immediately');
+      // Force immediate UI refresh with custom event
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          console.log(`[WebsiteStatusContext] Dispatching immediate UI refresh for ${update.websiteId}`);
+          window.dispatchEvent(new CustomEvent('websiteStatusUpdate', { 
+            detail: { 
+              websiteId: update.websiteId, 
+              status: update.status,
+              source: 'website-status-context',
+              timestamp: Date.now()
+            } 
+          }));
+        }
+      }, 0);
 
     } catch (error) {
-      console.error('[WEBSITE-STATUS-PROVIDER] ❌ Error handling status update:', error);
+      console.error('[WebsiteStatusContext] Error handling status update:', error);
     }
   }, [updateWebsiteStatus]);
 
   // Subscribe to workspace real-time updates
   const subscribeToWorkspace = useCallback(async (workspaceId: string, websiteIds: string[]) => {
     if (activeSubscriptionsRef.current.has(workspaceId)) {
-      console.log(`[WEBSITE-STATUS-PROVIDER] ⏸️ Already subscribed to workspace ${workspaceId}`);
       return;
     }
 
     try {
-      console.log(`[WEBSITE-STATUS-PROVIDER] 📡 Subscribing to workspace ${workspaceId} with ${websiteIds.length} websites`);
       
       await websiteStatusService.subscribeToWorkspace(
         workspaceId,
@@ -77,9 +84,7 @@ export function WebsiteStatusProvider({ children }: WebsiteStatusProviderProps) 
       setConnectionStatus(prev => ({ ...prev, [workspaceId]: true }));
       setIsConnected(true);
 
-      console.log(`[WEBSITE-STATUS-PROVIDER] ✅ Successfully subscribed to workspace ${workspaceId}`);
     } catch (error) {
-      console.error(`[WEBSITE-STATUS-PROVIDER] ❌ Failed to subscribe to workspace ${workspaceId}:`, error);
       setConnectionStatus(prev => ({ ...prev, [workspaceId]: false }));
     }
   }, [handleStatusUpdate]);
@@ -91,7 +96,6 @@ export function WebsiteStatusProvider({ children }: WebsiteStatusProviderProps) 
     }
 
     try {
-      console.log(`[WEBSITE-STATUS-PROVIDER] 🔌 Unsubscribing from workspace ${workspaceId}`);
       
       await websiteStatusService.unsubscribeFromWorkspace(workspaceId);
       
@@ -105,28 +109,71 @@ export function WebsiteStatusProvider({ children }: WebsiteStatusProviderProps) 
       // Update overall connection status
       setIsConnected(activeSubscriptionsRef.current.size > 0);
 
-      console.log(`[WEBSITE-STATUS-PROVIDER] ✅ Successfully unsubscribed from workspace ${workspaceId}`);
     } catch (error) {
-      console.error(`[WEBSITE-STATUS-PROVIDER] ❌ Failed to unsubscribe from workspace ${workspaceId}:`, error);
     }
   }, []);
 
   // Get real-time status for specific website
   const getWebsiteStatus = useCallback((websiteId: string): WebsiteStatus | null => {
-    const website = appState.workspace.websites.find((w: any) => w.id === websiteId);
+    const website = appState.workspace.websites.find((w: { id: string }) => w.id === websiteId);
     return website?.crawl_status as WebsiteStatus || null;
   }, [appState.workspace.websites]);
+
+  // Periodic state reconciliation to ensure UI stays in sync
+  const startStateReconciliation = useCallback(() => {
+    if (reconciliationIntervalRef.current) {
+      clearInterval(reconciliationIntervalRef.current);
+    }
+    
+    reconciliationIntervalRef.current = setInterval(async () => {
+      console.log('[WebsiteStatusContext] Running periodic state reconciliation');
+      
+      try {
+        // Force UI refresh for all monitored websites
+        const workspaceIds = Array.from(activeSubscriptionsRef.current);
+        for (const workspaceId of workspaceIds) {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('websiteStatusUpdate', { 
+              detail: { 
+                workspaceId,
+                source: 'periodic-reconciliation',
+                timestamp: Date.now()
+              } 
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('[WebsiteStatusContext] Error during state reconciliation:', error);
+      }
+    }, 30000); // Every 30 seconds
+  }, []);
+
+  const stopStateReconciliation = useCallback(() => {
+    if (reconciliationIntervalRef.current) {
+      clearInterval(reconciliationIntervalRef.current);
+      reconciliationIntervalRef.current = null;
+    }
+  }, []);
+
+  // Start reconciliation when we have active subscriptions
+  useEffect(() => {
+    if (activeSubscriptionsRef.current.size > 0) {
+      startStateReconciliation();
+    } else {
+      stopStateReconciliation();
+    }
+  }, [startStateReconciliation, stopStateReconciliation]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      console.log('[WEBSITE-STATUS-PROVIDER] 🧹 Cleaning up all subscriptions');
       const workspaceIds = Array.from(activeSubscriptionsRef.current);
       workspaceIds.forEach(workspaceId => {
         websiteStatusService.unsubscribeFromWorkspace(workspaceId).catch(console.error);
       });
+      stopStateReconciliation();
     };
-  }, []);
+  }, [stopStateReconciliation]);
 
   const contextValue: WebsiteStatusContextType = {
     getWebsiteStatus,
