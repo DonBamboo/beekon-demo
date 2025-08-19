@@ -2,6 +2,7 @@ import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { debugError } from '@/lib/debug-utils';
 
 interface WorkspaceErrorBoundaryState {
   hasError: boolean;
@@ -28,6 +29,26 @@ export class WorkspaceErrorBoundary extends React.Component<
 
   override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("WorkspaceErrorBoundary caught an error:", error, errorInfo);
+    
+    // Log to debug monitor
+    debugError(
+      `Workspace Component Error: ${error.message}`,
+      'WorkspaceErrorBoundary',
+      {
+        errorName: error.name,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        componentStack: errorInfo.componentStack,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        workspaceContext: {
+          pathname: window.location.pathname,
+          search: window.location.search,
+        },
+      },
+      error,
+      'component'
+    );
   }
 
   handleRetry = () => {
@@ -90,6 +111,21 @@ export function useWorkspaceErrorHandler() {
   const handleError = (error: Error) => {
     console.error("Workspace error:", error);
     setError(error);
+    
+    // Log to debug monitor
+    debugError(
+      `Workspace Hook Error: ${error.message}`,
+      'useWorkspaceErrorHandler',
+      {
+        errorName: error.name,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+      },
+      error,
+      'component'
+    );
   };
 
   return { error, resetError, handleError };

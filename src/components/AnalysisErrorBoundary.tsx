@@ -2,6 +2,7 @@ import React from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { debugError } from '@/lib/debug-utils';
 
 interface AnalysisErrorBoundaryState {
   hasError: boolean;
@@ -45,6 +46,26 @@ export class AnalysisErrorBoundary extends React.Component<
     
     // Log error to monitoring service
     console.error("Analysis Error Boundary caught an error:", error, errorInfo);
+    
+    // Log to debug monitor
+    debugError(
+      `Analysis Component Error: ${error.message}`,
+      'AnalysisErrorBoundary',
+      {
+        errorName: error.name,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        componentStack: errorInfo.componentStack,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        analysisContext: {
+          pathname: window.location.pathname,
+          search: window.location.search,
+        },
+      },
+      error,
+      'component'
+    );
   }
 
   resetError = () => {

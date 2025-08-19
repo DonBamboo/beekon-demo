@@ -7,6 +7,7 @@ import React, {
   ReactNode,
 } from "react";
 import { Website, Workspace } from "@/hooks/useWorkspace";
+import { debugError, debugInfo, addDebugEvent } from '@/lib/debug-utils';
 
 // Cache entry with expiration and metadata
 interface CacheEntry<T = unknown> {
@@ -812,23 +813,65 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       lastCrawledAt?: string | null,
       updatedAt?: string
     ) => {
-      dispatch({
-        type: "UPDATE_WEBSITE_STATUS",
-        payload: {
+      try {
+        // Log state update to debug monitor
+        addDebugEvent({
+          type: 'app-state',
+          category: 'ui',
+          source: 'AppStateContext',
+          message: 'Website status updated',
+          details: {
+            websiteId,
+            status,
+            lastCrawledAt,
+            updatedAt: updatedAt || new Date().toISOString(),
+            previousState: state.workspace.websites.find(w => w.id === websiteId)?.crawl_status,
+          },
           websiteId,
-          status,
-          lastCrawledAt,
-          updatedAt: updatedAt || new Date().toISOString(),
-        },
-      });
+          severity: 'low',
+        });
 
-      // Invalidate website-related caches when status updates
-      invalidateDependentCaches(`website_${websiteId}`);
+        dispatch({
+          type: "UPDATE_WEBSITE_STATUS",
+          payload: {
+            websiteId,
+            status,
+            lastCrawledAt,
+            updatedAt: updatedAt || new Date().toISOString(),
+          },
+        });
 
-      // Also clear workspace cache to trigger refresh of website lists
-      clearCache("workspace_");
+        // Invalidate website-related caches when status updates
+        invalidateDependentCaches(`website_${websiteId}`);
+
+        // Also clear workspace cache to trigger refresh of website lists
+        clearCache("workspace_");
+
+        debugInfo(
+          `Website status updated successfully: ${websiteId} -> ${status}`,
+          'AppStateContext',
+          {
+            websiteId,
+            status,
+            cachesInvalidated: true,
+          },
+          'ui'
+        );
+      } catch (error) {
+        debugError(
+          `Failed to update website status: ${error instanceof Error ? error.message : String(error)}`,
+          'AppStateContext',
+          {
+            websiteId,
+            status,
+            error: error instanceof Error ? error.stack : String(error),
+          },
+          error instanceof Error ? error : undefined,
+          'ui'
+        );
+      }
     },
-    [clearCache, invalidateDependentCaches]
+    [clearCache, invalidateDependentCaches, state.workspace.websites]
   );
 
   // Intelligent cache cleanup and optimization
