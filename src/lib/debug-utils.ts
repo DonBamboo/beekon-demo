@@ -33,10 +33,9 @@ export const getDebugModeStatus = (): string => {
 /**
  * Copy text to clipboard with error handling
  * @param text - Text to copy to clipboard
- * @param successMessage - Optional success message (defaults to "Copied to clipboard")
  * @returns Promise<boolean> - Success status
  */
-export const copyToClipboard = async (text: string, successMessage?: string): Promise<boolean> => {
+export const copyToClipboard = async (text: string): Promise<boolean> => {
   try {
     // Modern clipboard API
     if (navigator.clipboard && window.isSecureContext) {

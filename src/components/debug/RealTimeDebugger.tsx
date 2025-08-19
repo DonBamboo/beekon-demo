@@ -2,9 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppState } from '@/hooks/appStateHooks';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { useWebsiteStatusContext } from '@/contexts/WebsiteStatusContext';
+import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Copy } from 'lucide-react';
+import { copyToClipboard, formatDebugData } from '@/lib/debug-utils';
 
 interface DebugEvent {
   id: string;
@@ -25,6 +28,7 @@ export function RealTimeDebugger() {
   const { state: appState } = useAppState();
   const { websites, currentWorkspace } = useWorkspace();
   const websiteStatusContext = useWebsiteStatusContext();
+  const { toast } = useToast();
 
   // Track events
   const addEvent = useCallback((event: Omit<DebugEvent, 'id' | 'timestamp'>) => {
@@ -110,6 +114,77 @@ export function RealTimeDebugger() {
     setEvents([]);
   }, []);
 
+  // Copy functionality
+  const copyEvent = useCallback(async (event: DebugEvent) => {
+    const formattedData = formatDebugData(event, {
+      eventType: event.type,
+      workspace: currentWorkspace?.name,
+      websiteCount: websites?.length,
+      connectionStatus: websiteStatusContext.isConnected,
+    });
+    
+    const success = await copyToClipboard(formattedData);
+    if (success) {
+      toast({
+        title: "Event Copied",
+        description: `${event.type} event copied to clipboard`,
+      });
+    } else {
+      toast({
+        title: "Copy Failed",
+        description: "Failed to copy event to clipboard",
+        variant: "destructive",
+      });
+    }
+  }, [currentWorkspace?.name, websites?.length, websiteStatusContext.isConnected, toast]);
+
+  const copyAllEvents = useCallback(async () => {
+    const formattedData = formatDebugData(events, {
+      eventType: 'all-events',
+      workspace: currentWorkspace?.name,
+      websiteCount: websites?.length,
+      connectionStatus: websiteStatusContext.isConnected,
+    });
+    
+    const success = await copyToClipboard(formattedData);
+    if (success) {
+      toast({
+        title: "All Events Copied",
+        description: `${events.length} events copied to clipboard`,
+      });
+    } else {
+      toast({
+        title: "Copy Failed",
+        description: "Failed to copy events to clipboard",
+        variant: "destructive",
+      });
+    }
+  }, [events, currentWorkspace?.name, websites?.length, websiteStatusContext.isConnected, toast]);
+
+  const copyAppStateEvents = useCallback(async () => {
+    const appStateEvents = events.filter(event => event.type === 'app-state');
+    const formattedData = formatDebugData(appStateEvents, {
+      eventType: 'app-state-events',
+      workspace: currentWorkspace?.name,
+      websiteCount: websites?.length,
+      connectionStatus: websiteStatusContext.isConnected,
+    });
+    
+    const success = await copyToClipboard(formattedData);
+    if (success) {
+      toast({
+        title: "App State Events Copied",
+        description: `${appStateEvents.length} app state events copied to clipboard`,
+      });
+    } else {
+      toast({
+        title: "Copy Failed",
+        description: "Failed to copy app state events to clipboard",
+        variant: "destructive",
+      });
+    }
+  }, [events, currentWorkspace?.name, websites?.length, websiteStatusContext.isConnected, toast]);
+
   // Only show when DEBUG_MODE is explicitly enabled
   if (!import.meta.env.VITE_DEBUG_MODE || import.meta.env.VITE_DEBUG_MODE !== 'true') {
     return null;
@@ -139,6 +214,24 @@ export function RealTimeDebugger() {
             <CardTitle className="text-lg flex items-center justify-between">
               Real-Time Debug Monitor
               <div className="flex gap-2">
+                <Button
+                  onClick={copyAppStateEvents}
+                  variant="outline"
+                  size="sm"
+                  title="Copy app-state events"
+                >
+                  <Copy className="h-3 w-3 mr-1" />
+                  App State
+                </Button>
+                <Button
+                  onClick={copyAllEvents}
+                  variant="outline"
+                  size="sm"
+                  title="Copy all events"
+                >
+                  <Copy className="h-3 w-3 mr-1" />
+                  All
+                </Button>
                 <Button
                   onClick={triggerManualRefresh}
                   variant="outline"
@@ -197,11 +290,38 @@ export function RealTimeDebugger() {
                       '#8b5cf6'
                     }`,
                     backgroundColor: 'white',
-                    borderRadius: '2px'
+                    borderRadius: '2px',
+                    position: 'relative'
                   }}
                 >
-                  <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '2px' }}>
-                    {new Date(event.timestamp).toLocaleTimeString()} | {event.type} | {event.source}
+                  <div style={{ 
+                    fontSize: '10px', 
+                    color: '#6b7280', 
+                    marginBottom: '2px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span>
+                      {new Date(event.timestamp).toLocaleTimeString()} | {event.type} | {event.source}
+                    </span>
+                    <button
+                      onClick={() => copyEvent(event)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#6b7280',
+                        fontSize: '10px',
+                        padding: '2px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '2px'
+                      }}
+                      title="Copy this event"
+                    >
+                      <Copy style={{ width: '10px', height: '10px' }} />
+                    </button>
                   </div>
                   {event.websiteId && (
                     <div style={{ fontSize: '10px', color: '#374151' }}>
