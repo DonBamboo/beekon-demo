@@ -51,8 +51,8 @@ const queryClient = new QueryClient({
     mutations: {
       retry: 1,
       // Add better error handling for mutations
-      onError: (error) => {
-        console.warn('Mutation error:', error);
+      onError: () => {
+        // Mutation errors handled silently in production
       },
     },
   },

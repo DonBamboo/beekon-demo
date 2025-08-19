@@ -36,7 +36,6 @@ export function WebsiteStatusProvider({ children }: WebsiteStatusProviderProps) 
   // Handle real-time status updates - SINGLE SOURCE OF TRUTH
   const handleStatusUpdate = useCallback((update: WebsiteStatusUpdate) => {
     try {
-      console.log(`[WebsiteStatusContext] Handling status update:`, update);
 
       // CRITICAL: Update AppStateContext immediately - this is our single source of truth
       updateWebsiteStatus(
@@ -49,7 +48,6 @@ export function WebsiteStatusProvider({ children }: WebsiteStatusProviderProps) 
       // Force immediate UI refresh with custom event
       setTimeout(() => {
         if (typeof window !== 'undefined') {
-          console.log(`[WebsiteStatusContext] Dispatching immediate UI refresh for ${update.websiteId}`);
           window.dispatchEvent(new CustomEvent('websiteStatusUpdate', { 
             detail: { 
               websiteId: update.websiteId, 
@@ -126,7 +124,6 @@ export function WebsiteStatusProvider({ children }: WebsiteStatusProviderProps) 
     }
     
     reconciliationIntervalRef.current = setInterval(async () => {
-      console.log('[WebsiteStatusContext] Running periodic state reconciliation');
       
       try {
         // Force UI refresh for all monitored websites

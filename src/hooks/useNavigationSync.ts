@@ -21,13 +21,6 @@ export function useNavigationSync() {
     if (currentGlobalPage !== currentUrlPath) {
       navigateToPage(currentUrlPath);
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 URL sync: Updated global navigation state', {
-          from: currentGlobalPage,
-          to: currentUrlPath,
-          source: 'URL change'
-        });
-      }
     }
   }, [location.pathname, navigateToPage, getCurrentPage]);
 
@@ -40,13 +33,6 @@ export function useNavigationSync() {
     if (location.pathname !== path) {
       navigate(path, { replace: false });
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🚀 Navigation complete:', {
-          newPath: path,
-          previousPath: location.pathname,
-          timestamp: new Date().toISOString()
-        });
-      }
     }
   };
 

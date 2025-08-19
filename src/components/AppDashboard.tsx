@@ -22,25 +22,11 @@ export function AppDashboard() {
   // Remove leading slash and handle default case
   const page = currentPage.replace('/', '') || 'dashboard';
   
-  // Debug logging for navigation
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🏠 AppDashboard render (persistent):', {
-        currentPage,
-        currentPath,
-        resolvedPage: page
-      });
-    }
-  }, [currentPage, currentPath, page]);
   
   // Scroll restoration - always start at top when navigating to a new page
   useEffect(() => {
     // Scroll to top whenever the page changes
     window.scrollTo(0, 0);
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log('📜 Scroll restored to top for page:', page);
-    }
   }, [page]); // Trigger whenever the active page changes
 
   // All pages are always mounted, only visibility changes

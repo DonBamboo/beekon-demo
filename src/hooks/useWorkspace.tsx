@@ -112,12 +112,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     if (!currentWorkspace?.id) return [];
     const filteredWebsites = appState.workspace.websites.filter(w => w.workspace_id === currentWorkspace.id);
     
-    // Log website changes for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[WorkspaceProvider] Websites updated for workspace ${currentWorkspace.id}:`, 
-        filteredWebsites.map(w => ({ id: w.id, domain: w.domain, status: w.crawl_status }))
-      );
-    }
     
     return filteredWebsites;
   }, [

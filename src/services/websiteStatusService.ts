@@ -161,7 +161,6 @@ class WebsiteStatusService {
           }
         )
         .subscribe((status) => {
-          console.log(`[WebsiteStatusService] Subscription status: ${status}`);
           
           if (status === 'SUBSCRIBED') {
             
@@ -677,7 +676,6 @@ class WebsiteStatusService {
         });
 
         // AUTOMATIC SYNC RECOVERY: Force a fresh status update with correct database data
-        console.log(`[DB-SYNC] 🔄 INITIATING AUTOMATIC SYNC RECOVERY for website ${websiteId}`);
         
         // Find the subscription for this website's workspace
         const websiteWorkspaceId = website.workspace_id;
@@ -685,7 +683,6 @@ class WebsiteStatusService {
         
         if (subscription && subscription.isActive) {
           // Force update with correct database status
-          console.log(`[DB-SYNC] ✅ FORCING STATUS UPDATE: ${realtimeStatus} → ${dbStatus}`);
           
           // CRITICAL: Trigger immediate UI refresh by dispatching custom event
           if (typeof window !== 'undefined') {
@@ -701,9 +698,7 @@ class WebsiteStatusService {
             updatedAt: website.updated_at || new Date().toISOString(),
           });
           
-          console.log(`[DB-SYNC] 🎯 SYNC RECOVERY COMPLETED for website ${websiteId} - UI refresh triggered`);
         } else {
-          console.warn(`[DB-SYNC] ⚠️ Could not find active subscription for workspace ${websiteWorkspaceId} to perform sync recovery`);
         }
       }
 
@@ -735,7 +730,6 @@ class WebsiteStatusService {
         return null;
       }
 
-      console.log(`[DB-DIRECT] 📊 Direct query result for website ${websiteId}:`, website);
       return website;
     } catch (error) {
       console.error(`[DB-DIRECT] ❌ Failed to query website ${websiteId}:`, error);

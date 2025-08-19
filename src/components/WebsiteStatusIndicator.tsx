@@ -112,11 +112,11 @@ export const WebsiteStatusIndicator = React.memo(function WebsiteStatusIndicator
   variant = "badge",
 }: WebsiteStatusIndicatorProps) {
   // Force re-render counter to eliminate stale closures
-  const [forceRenderCounter, setForceRenderCounter] = useState(0);
+  const [, setForceRenderCounter] = useState(0);
   const lastStatusRef = useRef<string | null>(null);
   
   // CRITICAL: Read status from unified context - single source of truth
-  const { status: contextStatus, lastCrawledAt, isConnected } = useWebsiteStatus(websiteId);
+  const { status: contextStatus, lastCrawledAt } = useWebsiteStatus(websiteId);
   
   // Default to 'pending' if no status available
   const status = contextStatus || 'pending';
@@ -124,7 +124,6 @@ export const WebsiteStatusIndicator = React.memo(function WebsiteStatusIndicator
   // Force re-render when status actually changes
   useEffect(() => {
     if (lastStatusRef.current !== status) {
-      console.log(`[WebsiteStatusIndicator] Status changed for ${websiteId}: ${lastStatusRef.current} → ${status}`);
       lastStatusRef.current = status;
       setForceRenderCounter(prev => prev + 1);
     }
@@ -134,7 +133,6 @@ export const WebsiteStatusIndicator = React.memo(function WebsiteStatusIndicator
   useEffect(() => {
     const handleCustomStatusUpdate = (event: CustomEvent) => {
       if (event.detail?.websiteId === websiteId) {
-        console.log(`[WebsiteStatusIndicator] Custom event received for ${websiteId}:`, event.detail);
         setForceRenderCounter(prev => prev + 1);
       }
     };
@@ -151,20 +149,8 @@ export const WebsiteStatusIndicator = React.memo(function WebsiteStatusIndicator
   const config = statusConfig[status as WebsiteStatusType];
   const sizeStyles = sizeConfig[size];
   
-  // Debug logging for development
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[WebsiteStatusIndicator] Render ${forceRenderCounter} for ${websiteId}:`, {
-        status,
-        isConnected,
-        contextStatus,
-        lastCrawledAt
-      });
-    }
-  }, [websiteId, status, isConnected, contextStatus, lastCrawledAt, forceRenderCounter]);
 
   if (!config) {
-    console.warn(`Unknown website status: ${status}`);
     return (
       <Badge variant="secondary" className={cn("gap-1", className)}>
         <AlertCircle className="h-3 w-3" />

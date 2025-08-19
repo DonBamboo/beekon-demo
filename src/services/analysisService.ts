@@ -124,7 +124,6 @@ export class AnalysisService {
         userId,
         workspaceId
       );
-      console.log("analysisSession", analysisSession);
 
       // First, create topics if they don't exist
       const topicIds = await this.ensureTopicsExist(

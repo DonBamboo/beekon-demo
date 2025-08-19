@@ -52,9 +52,6 @@ class ContextErrorBoundary extends React.Component<
 function PerformanceMonitor({ children }: { children: React.ReactNode }) {
   // Monitor basic performance without external hooks to avoid circular dependencies
   React.useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🚀 State Management System Initialized');
-    }
   }, []);
 
   return <>{children}</>;
@@ -116,17 +113,6 @@ function WorkspaceStateSync({ children }: { children: React.ReactNode }) {
             // Update last sync data
             lastSyncDataRef.current = currentSyncData;
             
-            // Debug logging for website selection
-            if (process.env.NODE_ENV === 'development' && websiteList.length > 0) {
-              console.log('WorkspaceStateSync: Debounced sync completed', {
-                selectedWebsiteId: state.workspace.selectedWebsiteId || websiteList[0]?.id,
-                availableWebsites: websiteList.length,
-                workspaceName: currentWorkspace?.name,
-                hasWorkspaceChanged,
-                hasWebsitesChanged,
-                hasLoadingChanged,
-              });
-            }
           }, 50); // 50ms debounce to prevent cascading updates
         }
       }

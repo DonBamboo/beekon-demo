@@ -330,7 +330,6 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
     case "UPDATE_WEBSITE_STATUS": {
       const { websiteId, status, lastCrawledAt, updatedAt } = action.payload;
       
-      console.log(`[AppStateContext] UPDATE_WEBSITE_STATUS: ${websiteId} → ${status}`);
       
       const updatedWebsites = state.workspace.websites.map((website) =>
         website.id === websiteId
@@ -346,7 +345,6 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
       // Force UI refresh by dispatching custom event immediately after state update
       setTimeout(() => {
         if (typeof window !== 'undefined') {
-          console.log(`[AppStateContext] Dispatching websiteStatusUpdate event for ${websiteId}`);
           window.dispatchEvent(new CustomEvent('websiteStatusUpdate', { 
             detail: { 
               websiteId, 
@@ -804,7 +802,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       });
     } else {
       // Clear all competitor status - we'll need to implement this as a new action if needed
-      console.log("Clearing all competitor status not yet implemented");
     }
   }, []);
 
@@ -865,10 +862,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // Only log in development if cleanup actually happened
-      if (process.env.NODE_ENV === "development" && cleanedCount > 0) {
-        console.log(`Cache cleanup: removed ${cleanedCount} entries`);
-      }
     };
 
     const interval = setInterval(cleanup, 120000); // Cleanup every 2 minutes
