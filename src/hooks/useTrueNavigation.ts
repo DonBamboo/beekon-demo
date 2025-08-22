@@ -25,13 +25,6 @@ export function useTrueNavigation() {
     if (currentGlobalPage !== currentUrlPath) {
       navigateToPage(currentUrlPath);
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 URL sync (true navigation):', {
-          from: currentGlobalPage,
-          to: currentUrlPath,
-          fullPath: location.pathname
-        });
-      }
     }
   }, [location.pathname, navigateToPage, getCurrentPage, getCurrentPageFromUrl]);
 
@@ -44,13 +37,6 @@ export function useTrueNavigation() {
     if (location.pathname !== path) {
       window.history.pushState(null, '', path);
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🚀 True navigation (no reload):', {
-          newPath: path,
-          previousPath: location.pathname,
-          method: 'pushState'
-        });
-      }
     }
   }, [navigateToPage, location.pathname]);
 
@@ -60,12 +46,6 @@ export function useTrueNavigation() {
       const newPath = getCurrentPageFromUrl(window.location.pathname);
       navigateToPage(newPath);
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 Browser navigation (back/forward):', {
-          newPath,
-          fullPath: window.location.pathname
-        });
-      }
     };
 
     window.addEventListener('popstate', handlePopState);

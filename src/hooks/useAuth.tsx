@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User, AuthError } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useState } from "react";
+import { debugAuth } from '@/lib/debug-utils';
 
 interface AuthContextType {
   user: User | null;
@@ -25,14 +26,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up auth state listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      debugAuth(
+        `Auth state changed: ${event}`,
+        {
+          event,
+          hasSession: !!session,
+          userId: session?.user?.id,
+          email: session?.user?.email,
+        }
+      );
+
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        debugAuth(
+          `Failed to get initial session: ${error.message}`,
+          { error: error.message },
+          true
+        );
+      } else {
+        debugAuth(
+          'Initial session loaded',
+          {
+            hasSession: !!session,
+            userId: session?.user?.id,
+            email: session?.user?.email,
+          }
+        );
+      }
+
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -46,6 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const fetchWorkspace = async () => {
       if (user?.id) {
         try {
+          debugAuth(
+            'Fetching user workspace',
+            { userId: user.id }
+          );
+
           const { data, error } = await supabase
             .schema("beekon_data")
             .from("workspaces")
@@ -55,12 +88,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .single();
 
           if (error && error.code !== "PGRST116") {
-            // Error fetching workspace
+            debugAuth(
+              `Error fetching workspace: ${error.message}`,
+              { userId: user.id, error: error.message, errorCode: error.code },
+              true
+            );
+          } else if (data?.id) {
+            debugAuth(
+              'Workspace found',
+              { userId: user.id, workspaceId: data.id }
+            );
+          } else {
+            debugAuth(
+              'No workspace found for user',
+              { userId: user.id }
+            );
           }
 
           setWorkspaceId(data?.id || null);
         } catch (error) {
-          // Error fetching workspace
+          debugAuth(
+            `Unexpected error fetching workspace: ${error instanceof Error ? error.message : String(error)}`,
+            { userId: user.id, error: String(error) },
+            true
+          );
           setWorkspaceId(null);
         }
       } else {
@@ -85,6 +136,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string) => {
+    debugAuth(
+      'Attempting user signup',
+      { email, hasPassword: !!password }
+    );
+
     const redirectUrl = `${window.location.origin}/`;
 
     const { error } = await supabase.auth.signUp({
@@ -95,19 +151,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
 
+    if (error) {
+      debugAuth(
+        `Signup failed: ${error.message}`,
+        { email, error: error.message, errorCode: error.name },
+        true
+      );
+    } else {
+      debugAuth(
+        'Signup successful',
+        { email }
+      );
+    }
+
     return { error };
   };
 
   const signIn = async (email: string, password: string) => {
+    debugAuth(
+      'Attempting user signin',
+      { email, hasPassword: !!password }
+    );
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+
+    if (error) {
+      debugAuth(
+        `Signin failed: ${error.message}`,
+        { email, error: error.message, errorCode: error.name },
+        true
+      );
+    } else {
+      debugAuth(
+        'Signin successful',
+        { email }
+      );
+    }
+
     return { error };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    debugAuth(
+      'Attempting user signout',
+      { userId: user?.id }
+    );
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      debugAuth(
+        `Signout failed: ${error.message}`,
+        { userId: user?.id, error: error.message },
+        true
+      );
+    } else {
+      debugAuth(
+        'Signout successful',
+        { userId: user?.id }
+      );
+    }
   };
 
   const value = {

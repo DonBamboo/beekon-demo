@@ -105,7 +105,7 @@ export function useQueryOptimization() {
       await Promise.allSettled(commonPrefetches);
     } catch (error) {
       // Prefetch failures should not break the app
-      console.warn('Prefetch failed:', error);
+
     }
   }, [queryClient]);
 

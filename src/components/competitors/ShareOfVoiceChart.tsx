@@ -213,7 +213,7 @@ export default function ShareOfVoiceChart({
     if (active && payload && payload.length) {
       const data = payload[0]?.payload;
       if (!data) return null;
-      
+
       const isMarketShare = chartType === "market_share";
       const displayValue = payload[0]?.value;
       if (displayValue === undefined) return null;
@@ -225,7 +225,7 @@ export default function ShareOfVoiceChart({
             {isMarketShare ? "Market Share" : "Share of Voice"}:{" "}
             <span className="font-bold">{displayValue}%</span>
           </p>
-          {isMarketShare && typeof data.rawValue === 'number' && (
+          {isMarketShare && typeof data.rawValue === "number" && (
             <p className="text-sm text-muted-foreground">
               Raw Share: {data.rawValue.toFixed(1)}%
             </p>
@@ -240,7 +240,7 @@ export default function ShareOfVoiceChart({
               Total Analyses: {data.totalAnalyses}
             </p>
           )}
-          {typeof data.avgRank === 'number' && (
+          {typeof data.avgRank === "number" && (
             <p className="text-sm text-muted-foreground">
               Avg. Rank: #{data.avgRank.toFixed(1)}
             </p>
@@ -709,7 +709,14 @@ export default function ShareOfVoiceChart({
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, value }: { name: string; value: number; index?: number }) => {
+                  label={({
+                    name,
+                    value,
+                  }: {
+                    name: string;
+                    value: number;
+                    index?: number;
+                  }) => {
                     // Only show labels for segments > 5% to avoid clutter
                     if (value < 5) return "";
                     const shortName =
@@ -794,7 +801,7 @@ export default function ShareOfVoiceChart({
                 <p className="text-sm text-muted-foreground mt-1">
                   {insights.leader.name} is currently leading with{" "}
                   {insights.leader.value.toFixed(1)}% share of voice. You're{" "}
-                  {(insights.leader.value - insights.yourBrandShare).toFixed(1)}
+                  {(insights.leader.value - insights.yourBrandShare).toFixed(1)}{" "}
                   percentage points behind. Focus on topics where they have
                   lower rankings to close the gap.
                 </p>

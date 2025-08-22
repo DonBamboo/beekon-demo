@@ -80,7 +80,7 @@ export function useWebsitesCoordinated() {
         lastAnalysisDate: lastAnalysisDate || undefined,
       };
     } catch (error) {
-      console.warn(`Failed to load metrics for website ${websiteId}:`, error);
+
       return {
         totalTopics: 0,
         avgVisibility: 0,

@@ -1,6 +1,9 @@
 import React from 'react';
 import { useAppState } from '@/hooks/appStateHooks';
 import { useWorkspace } from '@/hooks/useWorkspace';
+import { useToast } from '@/hooks/use-toast';
+import { Copy } from 'lucide-react';
+import { copyToClipboard, formatDebugData } from '@/lib/debug-utils';
 
 // Error boundary for context-related errors
 class ContextErrorBoundary extends React.Component<
@@ -49,9 +52,6 @@ class ContextErrorBoundary extends React.Component<
 function PerformanceMonitor({ children }: { children: React.ReactNode }) {
   // Monitor basic performance without external hooks to avoid circular dependencies
   React.useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🚀 State Management System Initialized');
-    }
   }, []);
 
   return <>{children}</>;
@@ -113,17 +113,6 @@ function WorkspaceStateSync({ children }: { children: React.ReactNode }) {
             // Update last sync data
             lastSyncDataRef.current = currentSyncData;
             
-            // Debug logging for website selection
-            if (process.env.NODE_ENV === 'development' && websiteList.length > 0) {
-              console.log('WorkspaceStateSync: Debounced sync completed', {
-                selectedWebsiteId: state.workspace.selectedWebsiteId || websiteList[0]?.id,
-                availableWebsites: websiteList.length,
-                workspaceName: currentWorkspace?.name,
-                hasWorkspaceChanged,
-                hasWebsitesChanged,
-                hasLoadingChanged,
-              });
-            }
           }, 50); // 50ms debounce to prevent cascading updates
         }
       }
@@ -188,6 +177,8 @@ export function StateManagementDevTools() {
   
   // Use hooks at top level - context availability will be handled by the hook itself
   const appState = useAppState();
+  const { currentWorkspace, websites } = useWorkspace();
+  const { toast } = useToast();
   const contextAvailable = appState !== null;
 
   React.useEffect(() => {
@@ -224,7 +215,41 @@ export function StateManagementDevTools() {
     return undefined;
   }, [isOpen, contextAvailable, appState]);
 
-  if (process.env.NODE_ENV !== 'development') {
+  // Copy stats functionality
+  const copyStats = React.useCallback(async () => {
+    if (!stats) {
+      toast({
+        title: "No Stats Available",
+        description: "No state management stats to copy",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const formattedData = formatDebugData(stats, {
+      eventType: 'state-management-stats',
+      workspace: currentWorkspace?.name,
+      websiteCount: websites?.length,
+      connectionStatus: true, // Always true for state management
+    });
+    
+    const success = await copyToClipboard(formattedData);
+    if (success) {
+      toast({
+        title: "Stats Copied",
+        description: "State management stats copied to clipboard",
+      });
+    } else {
+      toast({
+        title: "Copy Failed",
+        description: "Failed to copy stats to clipboard",
+        variant: "destructive",
+      });
+    }
+  }, [stats, currentWorkspace?.name, websites?.length, toast]);
+
+  // Only show when DEBUG_MODE is explicitly enabled
+  if (!import.meta.env.VITE_DEBUG_MODE || import.meta.env.VITE_DEBUG_MODE !== 'true') {
     return null;
   }
 
@@ -265,7 +290,33 @@ export function StateManagementDevTools() {
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
           }}
         >
-          <h3>🚀 State Management Stats</h3>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '10px'
+          }}>
+            <h3 style={{ margin: 0 }}>🚀 State Management Stats</h3>
+            <button
+              onClick={copyStats}
+              style={{
+                background: 'none',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                color: '#6b7280',
+                fontSize: '11px',
+                padding: '4px 6px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              title="Copy stats to clipboard"
+            >
+              <Copy style={{ width: '12px', height: '12px' }} />
+              Copy
+            </button>
+          </div>
           {!contextAvailable && (
             <div style={{ color: 'red', marginBottom: '10px' }}>
               ⚠️ Context not available

@@ -2,7 +2,6 @@ import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   WebsiteStatusIndicator,
-  WebsiteStatusType,
 } from "@/components/WebsiteStatusIndicator";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,45 +81,6 @@ export default function Websites() {
   const { selectedWebsiteId, setSelectedWebsite } = useSelectedWebsite();
   const { handleExport } = useExportHandler();
   
-  // Debug: Get real-time connection status for development
-  const [debugInfo, setDebugInfo] = useState<{
-    workspaceId: string;
-    timestamp: string;
-    isActive: boolean;
-    hasRealtime: boolean;
-    monitoredWebsites: number;
-    pollingWebsites: number;
-    connectionHealth?: {
-      isHealthy: boolean;
-      lastSeenAgo: number;
-      reconnectAttempts: number;
-    };
-  } | null>(null);
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && currentWorkspace?.id) {
-      const updateDebugInfo = async () => {
-        const { websiteStatusService } = await import("@/services/websiteStatusService");
-        const status = websiteStatusService.getSubscriptionStatus(currentWorkspace.id);
-        
-        if (status) {
-          setDebugInfo({
-            workspaceId: currentWorkspace.id,
-            timestamp: new Date().toISOString(),
-            isActive: status.isActive,
-            hasRealtime: status.hasRealtime,
-            monitoredWebsites: status.monitoredWebsites,
-            pollingWebsites: status.pollingWebsites,
-            connectionHealth: status.connectionHealth
-          });
-        }
-      };
-      
-      updateDebugInfo();
-      const interval = setInterval(updateDebugInfo, 5000);
-      return () => clearInterval(interval);
-    }
-    return () => {}; // No cleanup needed when not in development
-  }, [currentWorkspace?.id]);
 
   // Use coordinated websites loading to prevent flickering
   const {
@@ -136,12 +96,6 @@ export default function Websites() {
   useEffect(() => {
     if (websites && websites.length > 0 && !selectedWebsiteId) {
       setSelectedWebsite(websites[0]?.id || "");
-      if (process.env.NODE_ENV === "development") {
-        console.log(
-          "Websites page: Auto-selected first website",
-          websites[0]?.id
-        );
-      }
     }
   }, [websites, selectedWebsiteId, setSelectedWebsite]);
 
@@ -313,8 +267,8 @@ export default function Websites() {
   const getStatusIndicator = (website: Website) => {
     return (
       <WebsiteStatusIndicator
-        status={website.crawl_status as WebsiteStatusType}
-        lastCrawledAt={website.last_crawled_at}
+        key={`status-${website.id}-${website.crawl_status}-${website.updated_at}`}
+        websiteId={website.id}
         variant="badge"
         size="sm"
         showLabel={true}
@@ -439,48 +393,6 @@ export default function Websites() {
   // Show loading for initial metrics load to prevent flickering stats
   const showMetricsLoading = isLoadingMetrics && isInitialLoad;
 
-  // Debug: Track component renders and website array changes
-  const websitesRefDebug = useRef(websites);
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const websiteStates = websites?.map(w => `${w.id.slice(-4)}:${w.crawl_status}`).join(', ') || 'none';
-      const refChanged = websitesRefDebug.current !== websites;
-      
-      console.log(`[WEBSITES-PAGE] 📄 COMPONENT RE-RENDERED:`, {
-        websiteCount: websites?.length || 0,
-        states: websiteStates,
-        refChanged,
-        websiteObjectReference: websites,
-        previousReference: websitesRefDebug.current,
-        sameReference: websitesRefDebug.current === websites,
-        timestamp: new Date().toISOString(),
-        fullWebsiteData: websites?.map(w => ({
-          id: w.id.slice(-8),
-          domain: w.domain.slice(0, 20),
-          status: w.crawl_status,
-          lastCrawled: w.last_crawled_at?.slice(0, 16),
-          updated: w.updated_at?.slice(0, 16)
-        }))
-      });
-      
-      // Also check if individual website statuses changed
-      if (websitesRefDebug.current && websites && websitesRefDebug.current.length === websites.length) {
-        const statusChanges = websites.map((w, i) => {
-          const prev = websitesRefDebug.current?.[i];
-          if (prev && prev.id === w.id && prev.crawl_status !== w.crawl_status) {
-            return `${w.id.slice(-8)}: ${prev.crawl_status} → ${w.crawl_status}`;
-          }
-          return null;
-        }).filter(Boolean);
-        
-        if (statusChanges.length > 0) {
-          console.log(`[WEBSITES-PAGE] 🎯 STATUS CHANGES DETECTED IN UI:`, statusChanges);
-        }
-      }
-      
-      websitesRefDebug.current = websites;
-    }
-  }, [websites]);
 
   return (
     <WorkspaceGuard requireWorkspace={true}>
@@ -560,137 +472,6 @@ export default function Websites() {
           </div>
         </div>
 
-        {/* Development Debug Panel */}
-        {process.env.NODE_ENV === 'development' && debugInfo && (
-          <div className="bg-gray-100 border rounded-lg p-4 text-xs font-mono space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="font-semibold text-gray-700">🐛 Real-time Status Debug</h3>
-              <div className="flex gap-2">
-                <span className="text-gray-500">Updated: {new Date(debugInfo.timestamp).toLocaleTimeString()}</span>
-                <button 
-                  onClick={() => refetchWebsites()} 
-                  className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
-                >
-                  Force Refresh
-                </button>
-                <button 
-                  onClick={async () => {
-                    if (websites && websites.length > 0) {
-                      const { websiteStatusService } = await import("@/services/websiteStatusService");
-                      console.log('[DEBUG] 🔍 Manual database sync verification started');
-                      for (const website of websites) {
-                        const dbData = await websiteStatusService.getWebsiteStatusFromDB(website.id);
-                        console.log(`[DEBUG] 📊 Website ${website.id} comparison:`, {
-                          appState: website.crawl_status,
-                          database: dbData?.crawl_status,
-                          inSync: website.crawl_status === dbData?.crawl_status,
-                          website: website.domain
-                        });
-                      }
-                    }
-                  }}
-                  className="px-2 py-1 bg-purple-500 text-white rounded text-xs hover:bg-purple-600"
-                >
-                  Check DB Sync
-                </button>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <div className="text-gray-600">Connection</div>
-                <div className={debugInfo.hasRealtime ? 'text-green-600' : 'text-red-600'}>
-                  {debugInfo.hasRealtime ? '🟢 Real-time' : '🔴 Polling'}
-                </div>
-              </div>
-              <div>
-                <div className="text-gray-600">Health</div>
-                <div className={debugInfo.connectionHealth?.isHealthy ? 'text-green-600' : 'text-orange-600'}>
-                  {debugInfo.connectionHealth?.isHealthy ? '💚 Healthy' : '⚠️ Stale'}
-                </div>
-              </div>
-              <div>
-                <div className="text-gray-600">Monitored</div>
-                <div className="text-blue-600">{debugInfo.monitoredWebsites || 0} websites</div>
-              </div>
-              <div>
-                <div className="text-gray-600">Reconnects</div>
-                <div className="text-purple-600">{debugInfo.connectionHealth?.reconnectAttempts || 0} attempts</div>
-              </div>
-            </div>
-            
-            {debugInfo.connectionHealth?.lastSeenAgo && (
-              <div className="text-gray-600">
-                Last activity: {Math.round(debugInfo.connectionHealth.lastSeenAgo / 1000)}s ago
-              </div>
-            )}
-            
-            {/* Website Status Table */}
-            {websites && websites.length > 0 && (
-              <div>
-                <h4 className="font-semibold text-gray-700 mb-2">Website Status Details:</h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-gray-300">
-                        <th className="text-left p-1">Domain</th>
-                        <th className="text-left p-1">App Status</th>
-                        <th className="text-left p-1">Last Crawled</th>
-                        <th className="text-left p-1">Updated At</th>
-                        <th className="text-left p-1">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {websites.map(website => (
-                        <tr key={website.id} className="border-b border-gray-200">
-                          <td className="p-1 truncate max-w-32" title={website.domain}>
-                            {website.domain.replace(/^https?:\/\//, '')}
-                          </td>
-                          <td className="p-1">
-                            <span className={
-                              website.crawl_status === 'completed' ? 'text-green-600' :
-                              website.crawl_status === 'crawling' ? 'text-blue-600' :
-                              website.crawl_status === 'pending' ? 'text-yellow-600' :
-                              'text-red-600'
-                            }>
-                              {website.crawl_status}
-                            </span>
-                          </td>
-                          <td className="p-1 text-gray-600">
-                            {website.last_crawled_at ? 
-                              new Date(website.last_crawled_at).toLocaleTimeString() : 
-                              'Never'
-                            }
-                          </td>
-                          <td className="p-1 text-gray-600">
-                            {website.updated_at ? 
-                              new Date(website.updated_at).toLocaleTimeString() :
-                              'Unknown'
-                            }
-                          </td>
-                          <td className="p-1">
-                            <button 
-                              onClick={async () => {
-                                const { websiteStatusService } = await import("@/services/websiteStatusService");
-                                const dbData = await websiteStatusService.getWebsiteStatusFromDB(website.id);
-                                const inSync = website.crawl_status === dbData?.crawl_status;
-                                alert(`App: ${website.crawl_status}\nDB: ${dbData?.crawl_status}\nIn Sync: ${inSync ? 'Yes' : 'No'}`);
-                              }}
-                              className="px-1 py-0.5 bg-gray-400 text-white rounded text-xs hover:bg-gray-500"
-                              title="Compare with database"
-                            >
-                              🔍
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Empty State */}
         {websites?.length === 0 && !isAddingWebsite && (
@@ -869,8 +650,8 @@ export default function Websites() {
                   {/* Status Information */}
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <WebsiteStatusIndicator
-                      status={website.crawl_status as WebsiteStatusType}
-                      lastCrawledAt={website.last_crawled_at}
+                      key={`card-status-${website.id}-${website.crawl_status}-${website.updated_at}`}
+                      websiteId={website.id}
                       variant="card"
                       size="md"
                       showLabel={true}

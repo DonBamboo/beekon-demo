@@ -9,6 +9,7 @@ import {
   createValidationError,
   getErrorMessage
 } from '@/types/errors';
+import { debugError, debugService, debugWarning } from '@/lib/debug-utils';
 
 /**
  * Base service class providing common functionality for all services
@@ -20,37 +21,94 @@ export abstract class BaseService {
    * Handle and transform errors into consistent AppError format
    */
   protected handleError(error: unknown, operation?: string): AppError {
-    // Service error handled
+    let appError: AppError;
 
     // Handle PostgreSQL/Supabase errors
     if (this.isPostgrestError(error)) {
-      return this.handleDatabaseError(error, operation);
+      appError = this.handleDatabaseError(error, operation);
+      
+      // Log database error to debug monitor
+      debugError(
+        `Database Error in ${this.serviceName}: ${error.message}`,
+        this.serviceName,
+        {
+          operation,
+          errorCode: error.code,
+          errorDetails: error.details,
+          errorHint: error.hint,
+          timestamp: new Date().toISOString(),
+        },
+        new Error(error.message),
+        'database'
+      );
     }
-
     // Handle validation errors
-    if (this.isValidationError(error)) {
-      return createValidationError(
+    else if (this.isValidationError(error)) {
+      appError = createValidationError(
         getErrorMessage(error),
         undefined,
         { constraints: [getErrorMessage(error)] }
       );
+      
+      // Log validation error to debug monitor
+      debugWarning(
+        `Validation Error in ${this.serviceName}: ${getErrorMessage(error)}`,
+        this.serviceName,
+        {
+          operation,
+          validationMessage: getErrorMessage(error),
+          timestamp: new Date().toISOString(),
+        },
+        'validation'
+      );
     }
-
     // Handle service errors
-    if (error instanceof Error) {
-      return createServiceError(
+    else if (error instanceof Error) {
+      appError = createServiceError(
         error.message,
         this.serviceName,
         operation
       );
+      
+      // Log service error to debug monitor
+      debugError(
+        `Service Error in ${this.serviceName}: ${error.message}`,
+        this.serviceName,
+        {
+          operation,
+          errorName: error.name,
+          errorStack: error.stack,
+          timestamp: new Date().toISOString(),
+        },
+        error,
+        'service'
+      );
+    }
+    // Handle unknown errors
+    else {
+      const message = getErrorMessage(error);
+      appError = createServiceError(
+        message,
+        this.serviceName,
+        operation
+      );
+      
+      // Log unknown error to debug monitor
+      debugError(
+        `Unknown Error in ${this.serviceName}: ${message}`,
+        this.serviceName,
+        {
+          operation,
+          unknownError: error,
+          errorType: typeof error,
+          timestamp: new Date().toISOString(),
+        },
+        undefined,
+        'service'
+      );
     }
 
-    // Handle unknown errors
-    return createServiceError(
-      getErrorMessage(error),
-      this.serviceName,
-      operation
-    );
+    return appError;
   }
 
   /**
@@ -274,9 +332,68 @@ export abstract class BaseService {
     operation: string,
     fn: () => Promise<T>
   ): Promise<T> {
+    const startTime = Date.now();
+    
     try {
-      return await fn();
+      // Log operation start to debug monitor
+      debugService(
+        `Starting operation: ${operation}`,
+        this.serviceName,
+        {
+          operation,
+          startTime: new Date(startTime).toISOString(),
+        }
+      );
+      
+      const result = await fn();
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      
+      // Log successful operation to debug monitor
+      debugService(
+        `Completed operation: ${operation}`,
+        this.serviceName,
+        {
+          operation,
+          duration,
+          endTime: new Date(endTime).toISOString(),
+          success: true,
+        }
+      );
+      
+      // Warning for slow operations
+      if (duration > 5000) {
+        debugWarning(
+          `Slow operation detected: ${operation} took ${duration}ms`,
+          this.serviceName,
+          {
+            operation,
+            duration,
+            threshold: 5000,
+          },
+          'performance'
+        );
+      }
+      
+      return result;
     } catch (error) {
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      
+      // Log failed operation to debug monitor
+      debugService(
+        `Failed operation: ${operation}`,
+        this.serviceName,
+        {
+          operation,
+          duration,
+          endTime: new Date(endTime).toISOString(),
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        true
+      );
+      
       throw this.handleError(error, operation);
     }
   }
@@ -284,10 +401,16 @@ export abstract class BaseService {
   /**
    * Log service operation for debugging
    */
-  protected logOperation(_operation: string, _data?: unknown): void {
-    if (process.env.NODE_ENV === 'development') {
-      // Service operation logged
-    }
+  protected logOperation(operation: string, data?: unknown): void {
+    debugService(
+      `Service operation: ${operation}`,
+      this.serviceName,
+      {
+        operation,
+        data,
+        timestamp: new Date().toISOString(),
+      }
+    );
   }
 }
 

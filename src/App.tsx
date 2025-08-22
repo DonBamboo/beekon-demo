@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { WorkspaceProvider } from "@/hooks/useWorkspace";
 import { AppStateProvider } from "@/contexts/AppStateContext";
+import { WebsiteStatusProvider } from "@/contexts/WebsiteStatusContext";
 import { OptimizedAppProvider, StateManagementDevTools } from "@/contexts/OptimizedAppProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
@@ -13,6 +14,7 @@ import { Suspense, lazy, useEffect } from "react";
 import { registerSW } from "./lib/serviceWorker";
 import { PageLoading } from "@/components/LoadingStates";
 import AppDashboard from "@/components/AppDashboard";
+import { RealTimeDebugger } from "@/components/debug/RealTimeDebugger";
 
 // Lazy load only non-core pages for code splitting
 const Auth = lazy(() => import("./pages/Auth"));
@@ -49,8 +51,8 @@ const queryClient = new QueryClient({
     mutations: {
       retry: 1,
       // Add better error handling for mutations
-      onError: (error) => {
-        console.warn('Mutation error:', error);
+      onError: () => {
+        // Mutation errors handled silently in production
       },
     },
   },
@@ -137,8 +139,9 @@ const App = () => {
         <Sonner />
         <AuthProvider>
           <AppStateProvider>
-            <WorkspaceProvider>
-              <OptimizedAppProvider>
+            <WebsiteStatusProvider>
+              <WorkspaceProvider>
+                <OptimizedAppProvider>
                 <BrowserRouter>
                 <Suspense fallback={<PageLoading message="Loading application..." />}>
                   <Routes>
@@ -201,9 +204,11 @@ const App = () => {
                   </Routes>
                 </Suspense>
                   <StateManagementDevTools />
+                  <RealTimeDebugger />
                 </BrowserRouter>
-              </OptimizedAppProvider>
-            </WorkspaceProvider>
+                </OptimizedAppProvider>
+              </WorkspaceProvider>
+            </WebsiteStatusProvider>
           </AppStateProvider>
         </AuthProvider>
       </TooltipProvider>

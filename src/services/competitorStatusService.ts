@@ -75,7 +75,6 @@ class CompetitorStatusService {
     // Try real-time first, fallback to polling if needed
     const realtimeSuccess = await this.setupRealtimeSubscription(subscription);
     if (!realtimeSuccess) {
-      console.warn(`Competitor real-time subscription failed for workspace ${workspaceId}, falling back to polling`);
       this.startPollingForWorkspace(subscription);
     }
   }
@@ -119,12 +118,10 @@ class CompetitorStatusService {
         )
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            console.log(`Competitor real-time subscription active for workspace ${subscription.workspaceId}`);
           } else if (status === 'CHANNEL_ERROR') {
             console.error(`Competitor real-time subscription error for workspace ${subscription.workspaceId}`);
             this.handleRealtimeError(subscription);
           } else if (status === 'TIMED_OUT') {
-            console.warn(`Competitor real-time subscription timeout for workspace ${subscription.workspaceId}`);
             this.handleRealtimeError(subscription);
           }
         });
@@ -157,7 +154,6 @@ class CompetitorStatusService {
         }
       }, delay);
     } else {
-      console.warn(`Max reconnection attempts reached for competitor workspace ${subscription.workspaceId}, switching to polling`);
       this.startPollingForWorkspace(subscription);
     }
   }
@@ -280,7 +276,6 @@ class CompetitorStatusService {
           subscription.pollingIntervals.delete(update.competitorId);
         }
         
-        console.log(`Competitor ${update.competitorId} reached terminal state: ${update.status}`);
       }
     } catch (error) {
       console.error('Error handling competitor status update:', error);

@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
 import { AlertCircle, RefreshCw } from 'lucide-react';
+import { debugError } from '@/lib/debug-utils';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -82,6 +83,25 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       console.error('Error caught by ErrorBoundary:', error, errorInfo);
     }
 
+    // Log to debug monitor
+    debugError(
+      `Component Error: ${error.message}`,
+      'ErrorBoundary',
+      {
+        errorName: error.name,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        componentStack: errorInfo.componentStack,
+        errorId: this.state.errorId,
+        props: this.props,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+      },
+      error,
+      'component'
+    );
+
     // In production, you would send this to your error tracking service
     // Example: Sentry, LogRocket, etc.
     try {
@@ -89,6 +109,13 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       // errorTrackingService.captureException(errorData);
     } catch (loggingError) {
       console.error('Failed to log error:', loggingError);
+      debugError(
+        `Failed to log error to external service: ${loggingError}`,
+        'ErrorBoundary',
+        { originalError: error.message, loggingError: String(loggingError) },
+        loggingError instanceof Error ? loggingError : undefined,
+        'component'
+      );
     }
   };
 

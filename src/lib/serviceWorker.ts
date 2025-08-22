@@ -1,5 +1,6 @@
 // Service Worker registration and management utilities
 import React from 'react';
+import { debugError, debugInfo, debugNetwork } from '@/lib/debug-utils';
 
 // Extended Navigator interface for browser features
 interface NavigatorExtended extends Navigator {
@@ -47,11 +48,26 @@ export class ServiceWorkerManager {
   // Register service worker
   async register(): Promise<ServiceWorkerRegistration | null> {
     if (!('serviceWorker' in navigator)) {
-      // Service Worker not supported
+      debugInfo(
+        'Service Worker not supported in this browser',
+        'ServiceWorkerManager',
+        { 
+          userAgent: 'unknown',
+          hasServiceWorker: false
+        },
+        'network'
+      );
       return null;
     }
 
     try {
+      debugInfo(
+        'Attempting Service Worker registration',
+        'ServiceWorkerManager',
+        { swPath: '/sw.js', scope: '/' },
+        'network'
+      );
+
       const registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/',
       });
@@ -60,15 +76,41 @@ export class ServiceWorkerManager {
 
       // Handle updates
       registration.addEventListener('updatefound', () => {
+        debugInfo(
+          'Service Worker update found',
+          'ServiceWorkerManager',
+          { registrationScope: registration.scope },
+          'network'
+        );
+
         const newWorker = registration.installing;
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
+            debugInfo(
+              `Service Worker state changed: ${newWorker.state}`,
+              'ServiceWorkerManager',
+              { state: newWorker.state, scriptURL: newWorker.scriptURL },
+              'network'
+            );
+
             if (newWorker.state === 'installed') {
               if (navigator.serviceWorker.controller) {
                 // New content is available
+                debugInfo(
+                  'New Service Worker content is available',
+                  'ServiceWorkerManager',
+                  {},
+                  'network'
+                );
                 this.config.onUpdate?.(registration);
               } else {
                 // Content is cached for offline use
+                debugInfo(
+                  'Service Worker content is cached for offline use',
+                  'ServiceWorkerManager',
+                  {},
+                  'network'
+                );
                 this.config.onSuccess?.(registration);
               }
             }
@@ -76,10 +118,28 @@ export class ServiceWorkerManager {
         }
       });
 
-      // Service Worker registered successfully
+      debugInfo(
+        'Service Worker registered successfully',
+        'ServiceWorkerManager',
+        { 
+          scope: registration.scope,
+          updateViaCache: registration.updateViaCache,
+        },
+        'network'
+      );
+
       return registration;
     } catch (error) {
-      // Service Worker registration failed
+      debugError(
+        `Service Worker registration failed: ${error instanceof Error ? error.message : String(error)}`,
+        'ServiceWorkerManager',
+        {
+          error: error instanceof Error ? error.stack : String(error),
+          swPath: '/sw.js',
+        },
+        error instanceof Error ? error : undefined,
+        'network'
+      );
       this.config.onError?.(error as Error);
       return null;
     }
@@ -257,11 +317,41 @@ export function useOfflineStatus() {
   const [isOffline, setIsOffline] = React.useState(!navigator.onLine);
 
   React.useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
+    const handleOnline = () => {
+      setIsOffline(false);
+      debugNetwork(
+        'Network connection restored',
+        { 
+          wasOffline: true, 
+          timestamp: new Date().toISOString(),
+          connectionType: 'unknown',
+        }
+      );
+    };
+    
+    const handleOffline = () => {
+      setIsOffline(true);
+      debugNetwork(
+        'Network connection lost',
+        { 
+          wasOnline: true, 
+          timestamp: new Date().toISOString(),
+        },
+        true
+      );
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Initial network status check
+    debugNetwork(
+      'Initial network status',
+      { 
+        isOnline: navigator.onLine,
+        timestamp: new Date().toISOString(),
+      }
+    );
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -286,11 +376,32 @@ export function useNetworkStatus() {
                        (navigator as NavigatorExtended).mozConnection || 
                        (navigator as NavigatorExtended).webkitConnection;
 
-      setNetworkStatus({
+      const newStatus = {
         isOnline: navigator.onLine,
         isSlowConnection: connection ? connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g' : false,
         connectionType: connection ? connection.effectiveType : 'unknown',
-      });
+      };
+
+      // Log network status changes to debug monitor
+      if (newStatus.isOnline !== networkStatus.isOnline || 
+          newStatus.connectionType !== networkStatus.connectionType ||
+          newStatus.isSlowConnection !== networkStatus.isSlowConnection) {
+        
+        debugNetwork(
+          'Network status updated',
+          {
+            ...newStatus,
+            previousStatus: networkStatus,
+            downlink: connection?.downlink,
+            rtt: connection?.rtt,
+            saveData: connection?.saveData,
+            timestamp: new Date().toISOString(),
+          },
+          newStatus.isSlowConnection || !newStatus.isOnline
+        );
+      }
+
+      setNetworkStatus(newStatus);
     };
 
     const handleOnline = () => updateNetworkStatus();
@@ -315,7 +426,7 @@ export function useNetworkStatus() {
         (connection as unknown as EventTarget).removeEventListener('change', updateNetworkStatus);
       }
     };
-  }, []);
+  }, [networkStatus.connectionType, networkStatus.isOnline, networkStatus.isSlowConnection]);
 
   return networkStatus;
 }

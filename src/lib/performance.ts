@@ -1,5 +1,6 @@
 // Performance monitoring utilities
 import React from "react";
+import { debugPerformance, debugWarning } from '@/lib/debug-utils';
 
 // Extended performance interface for memory usage
 interface PerformanceExtended extends Performance {
@@ -211,10 +212,52 @@ export class PerformanceMonitor {
   recordMetric(metric: PerformanceMetrics): void {
     this.metrics.push(metric);
 
+    // Log performance metrics to debug monitor
+    const isSlowPerformance = metric.duration > this.getPerformanceThreshold(metric.type, metric.name);
+    
+    debugPerformance(
+      `Performance metric: ${metric.name}`,
+      {
+        ...metric,
+        isSlowPerformance,
+        threshold: this.getPerformanceThreshold(metric.type, metric.name),
+      },
+      isSlowPerformance
+    );
+
     // Limit metrics array size to prevent memory issues
     if (this.metrics.length > 1000) {
       this.metrics = this.metrics.slice(-500);
+      
+      debugWarning(
+        'Performance metrics array size limit reached, cleaning up',
+        'PerformanceMonitor',
+        { metricsCount: this.metrics.length },
+        'performance'
+      );
     }
+  }
+
+  // Get performance thresholds based on metric type
+  private getPerformanceThreshold(type: string, name: string): number {
+    // Resource loading thresholds
+    if (type === 'resource') {
+      if (name.includes('.js') || name.includes('.css')) return 1000; // 1s for JS/CSS
+      if (name.includes('.jpg') || name.includes('.png') || name.includes('.svg')) return 2000; // 2s for images
+      return 3000; // 3s for other resources
+    }
+    
+    // Navigation thresholds
+    if (type === 'navigation') return 3000; // 3s for navigation
+    
+    // Custom measurement thresholds
+    if (type === 'custom') {
+      if (name.includes('api') || name.includes('fetch')) return 5000; // 5s for API calls
+      if (name.includes('render') || name.includes('component')) return 100; // 100ms for rendering
+      return 1000; // 1s for other custom metrics
+    }
+    
+    return 1000; // Default 1s threshold
   }
 
   // Measure a function execution time

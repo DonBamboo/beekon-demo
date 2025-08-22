@@ -7,6 +7,7 @@ import React, {
   ReactNode,
 } from "react";
 import { Website, Workspace } from "@/hooks/useWorkspace";
+import { debugError, debugInfo, addDebugEvent } from '@/lib/debug-utils';
 
 // Cache entry with expiration and metadata
 interface CacheEntry<T = unknown> {
@@ -330,24 +331,6 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
     case "UPDATE_WEBSITE_STATUS": {
       const { websiteId, status, lastCrawledAt, updatedAt } = action.payload;
       
-      // Enhanced debugging for AppStateContext updates
-      const targetWebsite = state.workspace.websites.find(w => w.id === websiteId);
-      
-      if (targetWebsite) {
-        console.log(`[APPSTATE] 🎯 UPDATING WEBSITE STATUS in AppStateContext:`, {
-          websiteId,
-          oldStatus: targetWebsite.crawl_status,
-          newStatus: status,
-          statusChanged: targetWebsite.crawl_status !== status,
-          oldLastCrawled: targetWebsite.last_crawled_at,
-          newLastCrawled: lastCrawledAt,
-          oldUpdatedAt: targetWebsite.updated_at,
-          newUpdatedAt: updatedAt,
-          timestamp: new Date().toISOString()
-        });
-      } else {
-        console.warn(`[APPSTATE] ⚠️ Website ${websiteId} not found in AppStateContext for status update`);
-      }
       
       const updatedWebsites = state.workspace.websites.map((website) =>
         website.id === websiteId
@@ -360,13 +343,19 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           : website
       );
 
-      console.log(`[APPSTATE] ✅ APPSTATE REDUCER COMPLETED:`, {
-        websiteId,
-        newStatus: status,
-        websitesInState: updatedWebsites.length,
-        updatedWebsite: updatedWebsites.find(w => w.id === websiteId)?.crawl_status,
-        timestamp: new Date().toISOString()
-      });
+      // Force UI refresh by dispatching custom event immediately after state update
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('websiteStatusUpdate', { 
+            detail: { 
+              websiteId, 
+              status, 
+              source: 'app-state-context',
+              timestamp: Date.now()
+            } 
+          }));
+        }
+      }, 0);
 
       return {
         ...state,
@@ -814,7 +803,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       });
     } else {
       // Clear all competitor status - we'll need to implement this as a new action if needed
-      console.log("Clearing all competitor status not yet implemented");
     }
   }, []);
 
@@ -825,23 +813,65 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       lastCrawledAt?: string | null,
       updatedAt?: string
     ) => {
-      dispatch({
-        type: "UPDATE_WEBSITE_STATUS",
-        payload: {
+      try {
+        // Log state update to debug monitor
+        addDebugEvent({
+          type: 'app-state',
+          category: 'ui',
+          source: 'AppStateContext',
+          message: 'Website status updated',
+          details: {
+            websiteId,
+            status,
+            lastCrawledAt,
+            updatedAt: updatedAt || new Date().toISOString(),
+            previousState: state.workspace.websites.find(w => w.id === websiteId)?.crawl_status,
+          },
           websiteId,
-          status,
-          lastCrawledAt,
-          updatedAt: updatedAt || new Date().toISOString(),
-        },
-      });
+          severity: 'low',
+        });
 
-      // Invalidate website-related caches when status updates
-      invalidateDependentCaches(`website_${websiteId}`);
+        dispatch({
+          type: "UPDATE_WEBSITE_STATUS",
+          payload: {
+            websiteId,
+            status,
+            lastCrawledAt,
+            updatedAt: updatedAt || new Date().toISOString(),
+          },
+        });
 
-      // Also clear workspace cache to trigger refresh of website lists
-      clearCache("workspace_");
+        // Invalidate website-related caches when status updates
+        invalidateDependentCaches(`website_${websiteId}`);
+
+        // Also clear workspace cache to trigger refresh of website lists
+        clearCache("workspace_");
+
+        debugInfo(
+          `Website status updated successfully: ${websiteId} -> ${status}`,
+          'AppStateContext',
+          {
+            websiteId,
+            status,
+            cachesInvalidated: true,
+          },
+          'ui'
+        );
+      } catch (error) {
+        debugError(
+          `Failed to update website status: ${error instanceof Error ? error.message : String(error)}`,
+          'AppStateContext',
+          {
+            websiteId,
+            status,
+            error: error instanceof Error ? error.stack : String(error),
+          },
+          error instanceof Error ? error : undefined,
+          'ui'
+        );
+      }
     },
-    [clearCache, invalidateDependentCaches]
+    [clearCache, invalidateDependentCaches, state.workspace.websites]
   );
 
   // Intelligent cache cleanup and optimization
@@ -875,10 +905,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // Only log in development if cleanup actually happened
-      if (process.env.NODE_ENV === "development" && cleanedCount > 0) {
-        console.log(`Cache cleanup: removed ${cleanedCount} entries`);
-      }
     };
 
     const interval = setInterval(cleanup, 120000); // Cleanup every 2 minutes
