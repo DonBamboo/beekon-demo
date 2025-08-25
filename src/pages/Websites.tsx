@@ -34,7 +34,7 @@ import { WorkspaceGuard } from "@/components/WorkspaceGuard";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace, Website } from "@/hooks/useWorkspace";
 import { useWebsitesCoordinated } from "@/hooks/useWebsitesCoordinated";
-import { useSelectedWebsite } from "@/hooks/appStateHooks";
+import { useSelectedWebsite, useAppState } from "@/hooks/appStateHooks";
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { useExportHandler } from "@/lib/export-utils";
@@ -77,6 +77,7 @@ export default function Websites() {
     addWebsiteToMonitoring,
   } = useWorkspace();
   const { selectedWebsiteId, setSelectedWebsite } = useSelectedWebsite();
+  const { updateWebsiteStatus } = useAppState();
   const { handleExport } = useExportHandler();
 
   // Use coordinated websites loading to prevent flickering
@@ -301,30 +302,73 @@ export default function Websites() {
         description: "Website not found.",
         variant: "destructive",
       });
+      setIsAnalyzing(null);
+      return;
     }
 
-    const response = await sendN8nWebhook("webhook/re-analyze", {
-      id: websiteId,
-      website: domain,
-      name: name,
-    });
+    // Get current website status for potential rollback
+    const currentWebsite = websites?.find(w => w.id === websiteId);
+    const previousStatus = currentWebsite?.crawl_status || 'completed';
+    const previousUpdatedAt = currentWebsite?.updated_at || new Date().toISOString();
 
-    if (!response.success) {
+    try {
+      // 1. IMMEDIATE UI UPDATE: Set status to 'crawling' instantly for immediate feedback
+      updateWebsiteStatus(
+        websiteId, 
+        'crawling', 
+        null, 
+        new Date().toISOString()
+      );
+
+      // 2. Send the N8N webhook to start actual re-analysis
+      const response = await sendN8nWebhook("webhook/re-analyze", {
+        id: websiteId,
+        website: domain,
+        name: name,
+      });
+
+      if (!response.success) {
+        // 3. ROLLBACK: If webhook fails, revert to previous status
+        updateWebsiteStatus(
+          websiteId, 
+          previousStatus, 
+          null, 
+          previousUpdatedAt
+        );
+
+        toast({
+          title: "Error",
+          description: "There was an error during re-analysis.",
+          variant: "destructive",
+        });
+
+        setIsAnalyzing(null);
+        return;
+      }
+
+      // 4. SUCCESS: Show success message (status remains 'crawling' until real-time update)
+      toast({
+        title: "Re-analysis Started!",
+        description: `We're analyzing ${domain}. Status will update in real-time.`,
+      });
+      
+    } catch (error) {
+      // 5. ERROR HANDLING: Rollback optimistic update on any error
+      updateWebsiteStatus(
+        websiteId, 
+        previousStatus, 
+        null, 
+        previousUpdatedAt
+      );
+
       toast({
         title: "Error",
         description: "There was an error during re-analysis.",
         variant: "destructive",
       });
-
+    } finally {
       setIsAnalyzing(null);
-      return;
     }
-
-    toast({
-      title: "Website added!",
-      description: `We're in the process of analyzing ${domain}`,
-    });
-    setIsAnalyzing(null);
   };
 
   const handleDeleteWebsite = async (websiteId: string) => {

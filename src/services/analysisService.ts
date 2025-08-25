@@ -625,10 +625,13 @@ export class AnalysisService {
       .in("prompt_id", promptIds);
 
     // Apply server-side filters for better performance
+    // Use analyzed_at as primary date field with created_at as fallback
     if (filters?.dateRange) {
-      llmResultsQuery = llmResultsQuery
-        .gte("created_at", filters.dateRange.start)
-        .lte("created_at", filters.dateRange.end);
+      // First filter by analyzed_at for records that have this field populated
+      const dateFilteredQuery = llmResultsQuery
+        .or(`and(analyzed_at.gte.${filters.dateRange.start},analyzed_at.lte.${filters.dateRange.end}),and(analyzed_at.is.null,created_at.gte.${filters.dateRange.start},created_at.lte.${filters.dateRange.end})`);
+      
+      llmResultsQuery = dateFilteredQuery;
     }
 
     const { data, error } = await llmResultsQuery;
