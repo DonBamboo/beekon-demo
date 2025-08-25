@@ -1,8 +1,6 @@
 import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Badge } from "@/components/ui/badge";
-import {
-  WebsiteStatusIndicator,
-} from "@/components/WebsiteStatusIndicator";
+import { WebsiteStatusIndicator } from "@/components/WebsiteStatusIndicator";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -80,7 +78,6 @@ export default function Websites() {
   } = useWorkspace();
   const { selectedWebsiteId, setSelectedWebsite } = useSelectedWebsite();
   const { handleExport } = useExportHandler();
-  
 
   // Use coordinated websites loading to prevent flickering
   const {
@@ -100,31 +97,35 @@ export default function Websites() {
   }, [websites, selectedWebsiteId, setSelectedWebsite]);
 
   // Debounced modal state handler to prevent rapid open/close cycles
-  const handleModalStateChange = useCallback((open: boolean) => {
-    // Prevent any modal state changes while adding a website
-    if (isAddingWebsite && open) {
-      return;
-    }
-
-    if (modalCloseTimeoutRef.current) {
-      clearTimeout(modalCloseTimeoutRef.current);
-      modalCloseTimeoutRef.current = null;
-    }
-    
-    if (!open) {
-      // Delay modal closure slightly to prevent immediate reopening
-      modalCloseTimeoutRef.current = setTimeout(() => {
-        if (!isAddingWebsite) { // Double-check the state hasn't changed
-          setIsAddDialogOpen(false);
-        }
-      }, 50);
-    } else {
-      // Open immediately but only if not currently adding a website
-      if (!isAddingWebsite) {
-        setIsAddDialogOpen(true);
+  const handleModalStateChange = useCallback(
+    (open: boolean) => {
+      // Prevent any modal state changes while adding a website
+      if (isAddingWebsite && open) {
+        return;
       }
-    }
-  }, [isAddingWebsite]);
+
+      if (modalCloseTimeoutRef.current) {
+        clearTimeout(modalCloseTimeoutRef.current);
+        modalCloseTimeoutRef.current = null;
+      }
+
+      if (!open) {
+        // Delay modal closure slightly to prevent immediate reopening
+        modalCloseTimeoutRef.current = setTimeout(() => {
+          if (!isAddingWebsite) {
+            // Double-check the state hasn't changed
+            setIsAddDialogOpen(false);
+          }
+        }, 50);
+      } else {
+        // Open immediately but only if not currently adding a website
+        if (!isAddingWebsite) {
+          setIsAddDialogOpen(true);
+        }
+      }
+    },
+    [isAddingWebsite]
+  );
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -254,7 +255,8 @@ export default function Websites() {
         console.error("Error during website setup:", error);
         toast({
           title: "Setup Warning",
-          description: "Website added successfully, but monitoring setup may need manual retry.",
+          description:
+            "Website added successfully, but monitoring setup may need manual retry.",
           variant: "default",
         });
       } finally {
@@ -393,7 +395,6 @@ export default function Websites() {
   // Show loading for initial metrics load to prevent flickering stats
   const showMetricsLoading = isLoadingMetrics && isInitialLoad;
 
-
   return (
     <WorkspaceGuard requireWorkspace={true}>
       <div className="space-y-6">
@@ -416,11 +417,22 @@ export default function Websites() {
                 showEstimatedSize={true}
               />
             )}
-            <Dialog open={isAddDialogOpen && !isAddingWebsite} onOpenChange={handleModalStateChange}>
+            <Dialog
+              open={isAddDialogOpen && !isAddingWebsite}
+              onOpenChange={handleModalStateChange}
+            >
               <DialogTrigger asChild>
-                <Button disabled={!currentWorkspace?.id || workspaceLoading || isAddingWebsite}>
+                <Button
+                  disabled={
+                    !currentWorkspace?.id || workspaceLoading || isAddingWebsite
+                  }
+                >
                   <Plus className="h-4 w-4 mr-2" />
-                  {workspaceLoading ? "Loading..." : isAddingWebsite ? "Adding..." : "Add Website"}
+                  {workspaceLoading
+                    ? "Loading..."
+                    : isAddingWebsite
+                    ? "Adding..."
+                    : "Add Website"}
                 </Button>
               </DialogTrigger>
               <DialogContent>
@@ -472,7 +484,6 @@ export default function Websites() {
           </div>
         </div>
 
-
         {/* Empty State */}
         {websites?.length === 0 && !isAddingWebsite && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -485,7 +496,8 @@ export default function Websites() {
               actions={[
                 {
                   label: "Add Your First Website",
-                  onClick: () => !isAddingWebsite && handleModalStateChange(true),
+                  onClick: () =>
+                    !isAddingWebsite && handleModalStateChange(true),
                   variant: "default",
                   icon: Plus,
                   loading: isAddingWebsite,
@@ -555,7 +567,9 @@ export default function Websites() {
                     variant="ghost"
                     size="sm"
                     className="w-full"
-                    onClick={() => !isAddingWebsite && handleModalStateChange(true)}
+                    onClick={() =>
+                      !isAddingWebsite && handleModalStateChange(true)
+                    }
                     disabled={isAddingWebsite}
                   >
                     <Plus className="h-4 w-4 mr-2" />
