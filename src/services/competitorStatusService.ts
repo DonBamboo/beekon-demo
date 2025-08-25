@@ -48,6 +48,70 @@ class CompetitorStatusService {
   private readonly MAX_RECONNECT_ATTEMPTS = 3;
 
   /**
+   * Determine competitor status using proper field priority
+   * Uses analysis_status field as primary source with intelligent fallbacks
+   */
+  private determineCompetitorStatus(competitor: Record<string, unknown>): {
+    status: CompetitorStatus;
+    progress: number;
+    errorMessage: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+  } {
+    // Primary: Use analysis_status if available
+    if (competitor.analysis_status) {
+      const status = competitor.analysis_status as CompetitorStatus;
+      return {
+        status,
+        progress: competitor.analysis_progress || (status === 'completed' ? 100 : status === 'analyzing' ? 50 : 0),
+        errorMessage: competitor.last_error_message || null,
+        startedAt: competitor.analysis_started_at || null,
+        completedAt: competitor.analysis_completed_at || null,
+      };
+    }
+
+    // Fallback: Derive from other fields if analysis_status is null
+    if (competitor.last_error_message) {
+      return {
+        status: 'failed' as CompetitorStatus,
+        progress: 0,
+        errorMessage: competitor.last_error_message,
+        startedAt: competitor.analysis_started_at || competitor.created_at || null,
+        completedAt: null,
+      };
+    }
+
+    if (competitor.analysis_started_at && !competitor.analysis_completed_at && !competitor.last_analyzed_at) {
+      return {
+        status: 'analyzing' as CompetitorStatus,
+        progress: competitor.analysis_progress || 50,
+        errorMessage: null,
+        startedAt: competitor.analysis_started_at,
+        completedAt: null,
+      };
+    }
+
+    if (competitor.analysis_completed_at || competitor.last_analyzed_at) {
+      return {
+        status: 'completed' as CompetitorStatus,
+        progress: 100,
+        errorMessage: null,
+        startedAt: competitor.analysis_started_at || competitor.created_at || null,
+        completedAt: competitor.analysis_completed_at || competitor.last_analyzed_at,
+      };
+    }
+
+    // Default: pending status
+    return {
+      status: 'pending' as CompetitorStatus,
+      progress: 0,
+      errorMessage: null,
+      startedAt: null,
+      completedAt: null,
+    };
+  }
+
+  /**
    * Subscribe to competitor status updates for a workspace
    */
   async subscribeToWorkspace(
@@ -100,17 +164,17 @@ class CompetitorStatusService {
 
             // Only process if this competitor is being monitored
             if (subscription.competitorIds.has(competitor.id)) {
-              // Derive status from last_analyzed_at and other fields
-              const status: CompetitorStatus = competitor.last_analyzed_at ? 'completed' : 'pending';
+              // Use proper status determination logic
+              const statusInfo = this.determineCompetitorStatus(competitor);
               
               this.handleStatusUpdate(subscription, {
                 competitorId: competitor.id,
                 websiteId: competitor.website_id,
-                status: status,
-                progress: competitor.last_analyzed_at ? 100 : 0,
-                errorMessage: null,
-                startedAt: competitor.created_at,
-                completedAt: competitor.last_analyzed_at,
+                status: statusInfo.status,
+                progress: statusInfo.progress,
+                errorMessage: statusInfo.errorMessage,
+                startedAt: statusInfo.startedAt,
+                completedAt: statusInfo.completedAt,
                 updatedAt: competitor.updated_at || new Date().toISOString(),
               });
             }
@@ -118,6 +182,7 @@ class CompetitorStatusService {
         )
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
+            // Successfully subscribed to real-time updates
           } else if (status === 'CHANNEL_ERROR') {
             console.error(`Competitor real-time subscription error for workspace ${subscription.workspaceId}`);
             this.handleRealtimeError(subscription);
@@ -174,9 +239,9 @@ class CompetitorStatusService {
       const { data: competitors, error } = await supabase
         .schema('beekon_data')
         .from('competitors')
-        .select('id, website_id, last_analyzed_at, created_at, updated_at')
+        .select('id, website_id, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_analyzed_at, last_error_message, created_at, updated_at')
         .in('id', Array.from(subscription.competitorIds))
-        .is('last_analyzed_at', null); // Only poll competitors that haven't been analyzed yet
+        .or('analysis_status.eq.pending,analysis_status.eq.analyzing,analysis_status.is.null'); // Poll active analysis states
 
       if (error) {
         console.error('Error polling competitor status:', error);
@@ -193,8 +258,8 @@ class CompetitorStatusService {
       competitors.forEach(competitor => {
         if (!subscription.isActive) return;
         
-        const status: CompetitorStatus = competitor.last_analyzed_at ? 'completed' : 'pending';
-        const interval = this.getPollingInterval(status);
+        const statusInfo = this.determineCompetitorStatus(competitor);
+        const interval = this.getPollingInterval(statusInfo.status);
         
         if (interval > 0) {
           const pollInterval = setInterval(async () => {
@@ -235,23 +300,23 @@ class CompetitorStatusService {
       const { data: competitor, error } = await supabase
         .schema('beekon_data')
         .from('competitors')
-        .select('id, website_id, last_analyzed_at, created_at, updated_at')
+        .select('id, website_id, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_analyzed_at, last_error_message, created_at, updated_at')
         .eq('id', competitorId)
         .single();
 
       if (error || !competitor || !subscription.isActive) return;
 
-      const newStatus: CompetitorStatus = competitor.last_analyzed_at ? 'completed' : 'pending';
+      const statusInfo = this.determineCompetitorStatus(competitor);
       
       // Notify about the status update
       this.handleStatusUpdate(subscription, {
         competitorId: competitor.id,
         websiteId: competitor.website_id,
-        status: newStatus,
-        progress: competitor.last_analyzed_at ? 100 : 0,
-        errorMessage: null,
-        startedAt: competitor.created_at,
-        completedAt: competitor.last_analyzed_at,
+        status: statusInfo.status,
+        progress: statusInfo.progress,
+        errorMessage: statusInfo.errorMessage,
+        startedAt: statusInfo.startedAt,
+        completedAt: statusInfo.completedAt,
         updatedAt: competitor.updated_at || new Date().toISOString(),
       });
 
@@ -300,11 +365,11 @@ class CompetitorStatusService {
       .single();
 
     if (competitor && subscription.isActive) {
-      const status: CompetitorStatus = competitor.last_analyzed_at ? 'completed' : 'pending';
+      const statusInfo = this.determineCompetitorStatus(competitor);
       
       // If it's in an active state, start polling if we don't have real-time
-      if (status === 'pending' && !subscription.realtimeChannel) {
-        const interval = this.getPollingInterval(status);
+      if ((statusInfo.status === 'pending' || statusInfo.status === 'analyzing') && !subscription.realtimeChannel) {
+        const interval = this.getPollingInterval(statusInfo.status);
         if (interval > 0) {
           const pollInterval = setInterval(async () => {
             if (!subscription.isActive) return;
@@ -388,22 +453,55 @@ class CompetitorStatusService {
 
   /**
    * Update competitor analysis status (for external services to call)
+   * Uses proper database status tracking fields
    */
   async updateCompetitorStatus(
     competitorId: string,
     status: CompetitorStatus,
-    _progress?: number,
-    _errorMessage?: string
+    progress?: number,
+    errorMessage?: string
   ): Promise<boolean> {
     try {
-      // Since we don't have status tracking columns, we'll update last_analyzed_at
-      // to indicate completion
       const updateData: Record<string, unknown> = {
+        analysis_status: status,
         updated_at: new Date().toISOString(),
       };
-      
-      if (status === 'completed') {
-        updateData.last_analyzed_at = new Date().toISOString();
+
+      // Set progress if provided
+      if (progress !== undefined) {
+        updateData.analysis_progress = progress;
+      }
+
+      // Handle status-specific fields
+      switch (status) {
+        case 'analyzing':
+          updateData.analysis_started_at = new Date().toISOString();
+          updateData.analysis_completed_at = null;
+          updateData.last_error_message = null;
+          if (progress === undefined) {
+            updateData.analysis_progress = 0;
+          }
+          break;
+        
+        case 'completed':
+          updateData.analysis_completed_at = new Date().toISOString();
+          updateData.last_analyzed_at = new Date().toISOString(); // Keep for backward compatibility
+          updateData.analysis_progress = 100;
+          updateData.last_error_message = null;
+          break;
+        
+        case 'failed':
+          updateData.analysis_completed_at = null;
+          updateData.analysis_progress = 0;
+          updateData.last_error_message = errorMessage || 'Analysis failed';
+          break;
+        
+        case 'pending':
+          updateData.analysis_started_at = null;
+          updateData.analysis_completed_at = null;
+          updateData.analysis_progress = 0;
+          updateData.last_error_message = null;
+          break;
       }
 
       const { error } = await supabase
@@ -435,7 +533,7 @@ class CompetitorStatusService {
       let query = supabase
         .schema('beekon_data')
         .from('competitors')
-        .select('id, website_id, last_analyzed_at, created_at, updated_at')
+        .select('id, website_id, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_analyzed_at, last_error_message, created_at, updated_at')
         .eq('website_id', websiteId);
 
       // Filter by status if provided
@@ -450,15 +548,15 @@ class CompetitorStatusService {
       if (error) throw error;
 
       return (data || []).map((row) => {
-        const derivedStatus: CompetitorStatus = row.last_analyzed_at ? 'completed' : 'pending';
+        const statusInfo = this.determineCompetitorStatus(row);
         return {
           competitorId: row.id,
           websiteId: websiteId,
-          status: derivedStatus,
-          progress: row.last_analyzed_at ? 100 : 0,
-          errorMessage: null,
-          startedAt: row.created_at,
-          completedAt: row.last_analyzed_at,
+          status: statusInfo.status,
+          progress: statusInfo.progress,
+          errorMessage: statusInfo.errorMessage,
+          startedAt: statusInfo.startedAt,
+          completedAt: statusInfo.completedAt,
           updatedAt: row.updated_at || new Date().toISOString(),
         };
       });

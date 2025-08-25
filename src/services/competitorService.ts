@@ -166,7 +166,7 @@ export class OptimizedCompetitorService extends BaseService {
       const { data, error } = await supabase
         .schema("beekon_data")
         .from("competitors")
-        .select("*")
+        .select("*, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_error_message")
         .eq("website_id", websiteId)
         .eq("is_active", true)
         .order("created_at", { ascending: true });
@@ -646,7 +646,7 @@ export class OptimizedCompetitorService extends BaseService {
       const { data: existing } = await supabase
         .schema("beekon_data")
         .from("competitors")
-        .select("*")
+        .select("*, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_error_message")
         .eq("website_id", websiteId)
         .eq("competitor_domain", domain)
         .single();
