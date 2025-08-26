@@ -1,8 +1,6 @@
 import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import { Badge } from "@/components/ui/badge";
-import {
-  WebsiteStatusIndicator,
-} from "@/components/WebsiteStatusIndicator";
+import { WebsiteStatusIndicator } from "@/components/WebsiteStatusIndicator";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -36,7 +34,7 @@ import { WorkspaceGuard } from "@/components/WorkspaceGuard";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace, Website } from "@/hooks/useWorkspace";
 import { useWebsitesCoordinated } from "@/hooks/useWebsitesCoordinated";
-import { useSelectedWebsite } from "@/hooks/appStateHooks";
+import { useSelectedWebsite, useAppState } from "@/hooks/appStateHooks";
 import { supabase } from "@/integrations/supabase/client";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { useExportHandler } from "@/lib/export-utils";
@@ -79,8 +77,8 @@ export default function Websites() {
     addWebsiteToMonitoring,
   } = useWorkspace();
   const { selectedWebsiteId, setSelectedWebsite } = useSelectedWebsite();
+  const { updateWebsiteStatus } = useAppState();
   const { handleExport } = useExportHandler();
-  
 
   // Use coordinated websites loading to prevent flickering
   const {
@@ -100,31 +98,35 @@ export default function Websites() {
   }, [websites, selectedWebsiteId, setSelectedWebsite]);
 
   // Debounced modal state handler to prevent rapid open/close cycles
-  const handleModalStateChange = useCallback((open: boolean) => {
-    // Prevent any modal state changes while adding a website
-    if (isAddingWebsite && open) {
-      return;
-    }
-
-    if (modalCloseTimeoutRef.current) {
-      clearTimeout(modalCloseTimeoutRef.current);
-      modalCloseTimeoutRef.current = null;
-    }
-    
-    if (!open) {
-      // Delay modal closure slightly to prevent immediate reopening
-      modalCloseTimeoutRef.current = setTimeout(() => {
-        if (!isAddingWebsite) { // Double-check the state hasn't changed
-          setIsAddDialogOpen(false);
-        }
-      }, 50);
-    } else {
-      // Open immediately but only if not currently adding a website
-      if (!isAddingWebsite) {
-        setIsAddDialogOpen(true);
+  const handleModalStateChange = useCallback(
+    (open: boolean) => {
+      // Prevent any modal state changes while adding a website
+      if (isAddingWebsite && open) {
+        return;
       }
-    }
-  }, [isAddingWebsite]);
+
+      if (modalCloseTimeoutRef.current) {
+        clearTimeout(modalCloseTimeoutRef.current);
+        modalCloseTimeoutRef.current = null;
+      }
+
+      if (!open) {
+        // Delay modal closure slightly to prevent immediate reopening
+        modalCloseTimeoutRef.current = setTimeout(() => {
+          if (!isAddingWebsite) {
+            // Double-check the state hasn't changed
+            setIsAddDialogOpen(false);
+          }
+        }, 50);
+      } else {
+        // Open immediately but only if not currently adding a website
+        if (!isAddingWebsite) {
+          setIsAddDialogOpen(true);
+        }
+      }
+    },
+    [isAddingWebsite]
+  );
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -254,7 +256,8 @@ export default function Websites() {
         console.error("Error during website setup:", error);
         toast({
           title: "Setup Warning",
-          description: "Website added successfully, but monitoring setup may need manual retry.",
+          description:
+            "Website added successfully, but monitoring setup may need manual retry.",
           variant: "default",
         });
       } finally {
@@ -299,30 +302,73 @@ export default function Websites() {
         description: "Website not found.",
         variant: "destructive",
       });
+      setIsAnalyzing(null);
+      return;
     }
 
-    const response = await sendN8nWebhook("webhook/re-analyze", {
-      id: websiteId,
-      website: domain,
-      name: name,
-    });
+    // Get current website status for potential rollback
+    const currentWebsite = websites?.find(w => w.id === websiteId);
+    const previousStatus = currentWebsite?.crawl_status || 'completed';
+    const previousUpdatedAt = currentWebsite?.updated_at || new Date().toISOString();
 
-    if (!response.success) {
+    try {
+      // 1. IMMEDIATE UI UPDATE: Set status to 'crawling' instantly for immediate feedback
+      updateWebsiteStatus(
+        websiteId, 
+        'crawling', 
+        null, 
+        new Date().toISOString()
+      );
+
+      // 2. Send the N8N webhook to start actual re-analysis
+      const response = await sendN8nWebhook("webhook/re-analyze", {
+        id: websiteId,
+        website: domain,
+        name: name,
+      });
+
+      if (!response.success) {
+        // 3. ROLLBACK: If webhook fails, revert to previous status
+        updateWebsiteStatus(
+          websiteId, 
+          previousStatus, 
+          null, 
+          previousUpdatedAt
+        );
+
+        toast({
+          title: "Error",
+          description: "There was an error during re-analysis.",
+          variant: "destructive",
+        });
+
+        setIsAnalyzing(null);
+        return;
+      }
+
+      // 4. SUCCESS: Show success message (status remains 'crawling' until real-time update)
+      toast({
+        title: "Re-analysis Started!",
+        description: `We're analyzing ${domain}. Status will update in real-time.`,
+      });
+      
+    } catch (error) {
+      // 5. ERROR HANDLING: Rollback optimistic update on any error
+      updateWebsiteStatus(
+        websiteId, 
+        previousStatus, 
+        null, 
+        previousUpdatedAt
+      );
+
       toast({
         title: "Error",
         description: "There was an error during re-analysis.",
         variant: "destructive",
       });
-
+    } finally {
       setIsAnalyzing(null);
-      return;
     }
-
-    toast({
-      title: "Website added!",
-      description: `We're in the process of analyzing ${domain}`,
-    });
-    setIsAnalyzing(null);
   };
 
   const handleDeleteWebsite = async (websiteId: string) => {
@@ -393,7 +439,6 @@ export default function Websites() {
   // Show loading for initial metrics load to prevent flickering stats
   const showMetricsLoading = isLoadingMetrics && isInitialLoad;
 
-
   return (
     <WorkspaceGuard requireWorkspace={true}>
       <div className="space-y-6">
@@ -416,11 +461,22 @@ export default function Websites() {
                 showEstimatedSize={true}
               />
             )}
-            <Dialog open={isAddDialogOpen && !isAddingWebsite} onOpenChange={handleModalStateChange}>
+            <Dialog
+              open={isAddDialogOpen && !isAddingWebsite}
+              onOpenChange={handleModalStateChange}
+            >
               <DialogTrigger asChild>
-                <Button disabled={!currentWorkspace?.id || workspaceLoading || isAddingWebsite}>
+                <Button
+                  disabled={
+                    !currentWorkspace?.id || workspaceLoading || isAddingWebsite
+                  }
+                >
                   <Plus className="h-4 w-4 mr-2" />
-                  {workspaceLoading ? "Loading..." : isAddingWebsite ? "Adding..." : "Add Website"}
+                  {workspaceLoading
+                    ? "Loading..."
+                    : isAddingWebsite
+                    ? "Adding..."
+                    : "Add Website"}
                 </Button>
               </DialogTrigger>
               <DialogContent>
@@ -472,7 +528,6 @@ export default function Websites() {
           </div>
         </div>
 
-
         {/* Empty State */}
         {websites?.length === 0 && !isAddingWebsite && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -485,7 +540,8 @@ export default function Websites() {
               actions={[
                 {
                   label: "Add Your First Website",
-                  onClick: () => !isAddingWebsite && handleModalStateChange(true),
+                  onClick: () =>
+                    !isAddingWebsite && handleModalStateChange(true),
                   variant: "default",
                   icon: Plus,
                   loading: isAddingWebsite,
@@ -555,7 +611,9 @@ export default function Websites() {
                     variant="ghost"
                     size="sm"
                     className="w-full"
-                    onClick={() => !isAddingWebsite && handleModalStateChange(true)}
+                    onClick={() =>
+                      !isAddingWebsite && handleModalStateChange(true)
+                    }
                     disabled={isAddingWebsite}
                   >
                     <Plus className="h-4 w-4 mr-2" />

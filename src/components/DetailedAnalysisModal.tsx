@@ -444,7 +444,8 @@ export function DetailedAnalysisModal({
                   <CardContent>
                     <div className="space-y-3">
                       <div className="p-4 bg-muted/50 rounded-lg">
-                        {llm.data.response && llm.data.response.trim().length > 0 ? (
+                        {llm.data.response &&
+                        llm.data.response.trim().length > 0 ? (
                           <MarkdownRenderer
                             content={llm.data.response}
                             className="text-sm"
