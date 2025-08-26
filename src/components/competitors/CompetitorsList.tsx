@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +37,25 @@ export default function CompetitorsList({
   isDeleting = false,
 }: CompetitorsListProps) {
   const { getCompetitorStatus } = useCompetitorStatus();
+  
+  // Force re-render state for immediate status updates
+  const [forceRenderCounter, setForceRenderCounter] = useState(0);
+  
+  // Listen for competitor status update events for immediate UI refresh
+  useEffect(() => {
+    const handleCompetitorStatusUpdate = () => {
+      // Force component re-render when competitor status updates
+      setForceRenderCounter(prev => prev + 1);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('competitorStatusUpdate', handleCompetitorStatusUpdate as EventListener);
+      return () => {
+        window.removeEventListener('competitorStatusUpdate', handleCompetitorStatusUpdate as EventListener);
+      };
+    }
+    return undefined;
+  }, []);
 
   // Helper function to get market share for a competitor
   const getCompetitorMarketShare = (competitorId: string, competitorName: string): number => {
@@ -110,10 +130,29 @@ export default function CompetitorsList({
             const marketShareValue = getCompetitorMarketShare(competitor.id, competitor.competitor_name || competitor.competitor_domain);
             const TrendIcon = performanceData ? getTrendIcon(performanceData.trend) : () => <div className="w-5 h-5" />;
             
-            // Get real-time status data
+            // PRIORITY: Get real-time status data first (always use if available)
             const realtimeStatus = getCompetitorRealtimeStatus(competitor.id);
-            const currentStatus = realtimeStatus?.status || (competitor.analysisStatus === 'in_progress' ? 'analyzing' : competitor.analysisStatus === 'completed' ? 'completed' : 'pending');
+            
+            // Status determination with real-time priority
+            let currentStatus: 'pending' | 'analyzing' | 'completed' | 'failed';
+            if (realtimeStatus?.status) {
+              // Use real-time status as primary source
+              currentStatus = realtimeStatus.status;
+            } else {
+              // Fallback to cached competitor data  
+              if (competitor.analysisStatus === 'in_progress') {
+                currentStatus = 'analyzing';
+              } else if (competitor.analysisStatus === 'completed') {
+                currentStatus = 'completed';
+              } else {
+                currentStatus = 'pending';
+              }
+            }
+            
             const isAnalyzed = currentStatus === 'completed';
+            
+            // Force component dependency on forceRenderCounter to ensure immediate updates
+            forceRenderCounter; // Ensure dependency
             
             // Debug logging for rank data
             if (performanceData?.averageRank !== null && performanceData?.averageRank !== undefined) {

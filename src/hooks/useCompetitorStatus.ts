@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useAppState } from '@/hooks/appStateHooks';
 import { competitorStatusService, CompetitorStatusUpdate } from '@/services/competitorStatusService';
 import { useSelectedWebsite } from '@/hooks/appStateHooks';
+import { debugError, debugInfo } from '@/lib/debug-utils';
 
 /**
  * Hook for real-time competitor status monitoring
@@ -60,9 +61,27 @@ export function useCompetitorStatus() {
       
       subscriptionRef.current = { workspaceId, websiteIds };
       
-      console.log(`Subscribed to competitor status updates for workspace ${workspaceId}`);
+      debugInfo(
+        'Successfully subscribed to competitor status updates for workspace',
+        'useCompetitorStatus',
+        {
+          workspaceId,
+          websiteIds: state.workspace.websites.map(w => w.id),
+          websiteCount: state.workspace.websites.length
+        },
+        'real-time'
+      );
     } catch (error) {
-      console.error('Failed to subscribe to competitor status updates:', error);
+      debugError(
+        'Failed to subscribe to competitor status updates',
+        'useCompetitorStatus',
+        {
+          workspaceId,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        error instanceof Error ? error : undefined,
+        'real-time'
+      );
     }
   }, [handleStatusUpdate]);
 
@@ -74,9 +93,25 @@ export function useCompetitorStatus() {
         await competitorStatusService.unsubscribeFromWorkspace(workspaceId);
         subscriptionRef.current = { workspaceId: null, websiteIds: [] };
         
-        console.log(`Unsubscribed from competitor status updates for workspace ${workspaceId}`);
+        debugInfo(
+          'Successfully unsubscribed from competitor status updates',
+          'useCompetitorStatus',
+          {
+            workspaceId
+          },
+          'real-time'
+        );
       } catch (error) {
-        console.error('Failed to unsubscribe from competitor status updates:', error);
+        debugError(
+          'Failed to unsubscribe from competitor status updates',
+          'useCompetitorStatus',
+          {
+            workspaceId,
+            errorMessage: error instanceof Error ? error.message : String(error)
+          },
+          error instanceof Error ? error : undefined,
+          'real-time'
+        );
       }
     }
   }, []);
@@ -87,9 +122,27 @@ export function useCompetitorStatus() {
     if (workspaceId) {
       try {
         await competitorStatusService.addCompetitorToMonitoring(workspaceId, competitorId);
-        console.log(`Added competitor ${competitorId} to monitoring`);
+        debugInfo(
+          'Successfully added competitor to real-time monitoring',
+          'useCompetitorStatus',
+          {
+            competitorId,
+            workspaceId: currentWorkspaceId
+          },
+          'real-time'
+        );
       } catch (error) {
-        console.error(`Failed to add competitor ${competitorId} to monitoring:`, error);
+        debugError(
+          'Failed to add competitor to real-time monitoring',
+          'useCompetitorStatus',
+          {
+            competitorId,
+            workspaceId: currentWorkspaceId,
+            errorMessage: error instanceof Error ? error.message : String(error)
+          },
+          error instanceof Error ? error : undefined,
+          'real-time'
+        );
       }
     }
   }, []);
@@ -100,7 +153,15 @@ export function useCompetitorStatus() {
     if (workspaceId) {
       competitorStatusService.removeCompetitorFromMonitoring(workspaceId, competitorId);
       clearCompetitorStatus(competitorId);
-      console.log(`Removed competitor ${competitorId} from monitoring`);
+      debugInfo(
+        'Successfully removed competitor from real-time monitoring',
+        'useCompetitorStatus',
+        {
+          competitorId,
+          workspaceId: currentWorkspaceId
+        },
+        'real-time'
+      );
     }
   }, [clearCompetitorStatus]);
 
@@ -129,12 +190,35 @@ export function useCompetitorStatus() {
       );
       
       if (!success) {
-        console.error(`Failed to update competitor status for ${competitorId}`);
+        debugError(
+          'Failed to update competitor status - service returned false',
+          'useCompetitorStatus',
+          {
+            competitorId,
+            status,
+            progress,
+            errorMessage
+          },
+          undefined,
+          'service'
+        );
       }
       
       return success;
     } catch (error) {
-      console.error(`Error updating competitor status for ${competitorId}:`, error);
+      debugError(
+        'Exception while updating competitor status',
+        'useCompetitorStatus',
+        {
+          competitorId,
+          status,
+          progress,
+          errorMessage,
+          exceptionMessage: error instanceof Error ? error.message : String(error)
+        },
+        error instanceof Error ? error : undefined,
+        'service'
+      );
       return false;
     }
   }, []);

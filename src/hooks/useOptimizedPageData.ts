@@ -946,6 +946,27 @@ export function useOptimizedCompetitorsData() {
     loadCompetitorsData();
   }, [competitorFiltersChanged, selectedWebsiteId, competitorsFilteredCacheKey, getFromCache, transformedFilters, loadCompetitorsData]);
 
+  // Listen for competitor status update events to force data refresh
+  useEffect(() => {
+    const handleCompetitorStatusUpdate = (event: CustomEvent) => {
+      const { websiteId } = event.detail;
+      
+      // Only refresh data if the update is for the current website
+      if (websiteId === selectedWebsiteId) {
+        // Force refresh by clearing caches and reloading data
+        loadCompetitorsData(true);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('competitorStatusUpdate', handleCompetitorStatusUpdate as EventListener);
+      return () => {
+        window.removeEventListener('competitorStatusUpdate', handleCompetitorStatusUpdate as EventListener);
+      };
+    }
+    return undefined;
+  }, [selectedWebsiteId, loadCompetitorsData]);
+
   return {
     // Data
     competitors,

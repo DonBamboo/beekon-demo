@@ -759,11 +759,44 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         },
       });
 
-      // Invalidate competitor-related caches when status updates
+      // Comprehensive cache invalidation for competitor status updates
       invalidateDependentCaches(`competitor_${competitorId}`);
       invalidateDependentCaches(`website_${websiteId}_competitors`);
+      
+      // Invalidate main competitors data cache to force UI refresh
+      clearCache(`competitors_data_${websiteId}`);
+      clearCache(`competitors_performance_${websiteId}`);
+      clearCache(`competitors_analytics_${websiteId}`);
+      
+      // Clear all filtered cache variants for this website
+      const cacheKeys = Object.keys(localStorage).filter(key => 
+        key.startsWith('app_cache_competitors_filtered_' + websiteId)
+      );
+      cacheKeys.forEach(key => {
+        const cacheKey = key.replace('app_cache_', '');
+        clearCache(cacheKey);
+      });
+      
+      // Also invalidate optimized page data caches
+      clearCache(`optimized_competitors_${websiteId}`);
+      
+      // Force immediate UI refresh with custom event
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('competitorStatusUpdate', {
+            detail: {
+              competitorId,
+              websiteId,
+              status,
+              progress,
+              source: 'app-state-context',
+              timestamp: Date.now()
+            }
+          }));
+        }
+      }, 0);
     },
-    [invalidateDependentCaches]
+    [invalidateDependentCaches, clearCache]
   );
 
   const getCompetitorStatus = useCallback(

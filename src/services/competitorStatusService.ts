@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { Competitor } from "@/types/database";
+import { debugError, debugInfo } from "@/lib/debug-utils";
 
 // Competitor analysis status types based on database schema
 export type CompetitorStatus = "pending" | "analyzing" | "completed" | "failed";
@@ -58,15 +59,21 @@ class CompetitorStatusService {
     startedAt: string | null;
     completedAt: string | null;
   } {
+    // Helper to safely cast unknown values
+    const asString = (value: unknown): string | null => 
+      typeof value === 'string' ? value : null;
+    const asNumber = (value: unknown): number => 
+      typeof value === 'number' ? value : 0;
+
     // Primary: Use analysis_status if available
     if (competitor.analysis_status) {
       const status = competitor.analysis_status as CompetitorStatus;
       return {
         status,
-        progress: competitor.analysis_progress || (status === 'completed' ? 100 : status === 'analyzing' ? 50 : 0),
-        errorMessage: competitor.last_error_message || null,
-        startedAt: competitor.analysis_started_at || null,
-        completedAt: competitor.analysis_completed_at || null,
+        progress: asNumber(competitor.analysis_progress) || (status === 'completed' ? 100 : status === 'analyzing' ? 50 : 0),
+        errorMessage: asString(competitor.last_error_message),
+        startedAt: asString(competitor.analysis_started_at),
+        completedAt: asString(competitor.analysis_completed_at),
       };
     }
 
@@ -75,8 +82,8 @@ class CompetitorStatusService {
       return {
         status: 'failed' as CompetitorStatus,
         progress: 0,
-        errorMessage: competitor.last_error_message,
-        startedAt: competitor.analysis_started_at || competitor.created_at || null,
+        errorMessage: asString(competitor.last_error_message),
+        startedAt: asString(competitor.analysis_started_at) || asString(competitor.created_at),
         completedAt: null,
       };
     }
@@ -84,9 +91,9 @@ class CompetitorStatusService {
     if (competitor.analysis_started_at && !competitor.analysis_completed_at && !competitor.last_analyzed_at) {
       return {
         status: 'analyzing' as CompetitorStatus,
-        progress: competitor.analysis_progress || 50,
+        progress: asNumber(competitor.analysis_progress) || 50,
         errorMessage: null,
-        startedAt: competitor.analysis_started_at,
+        startedAt: asString(competitor.analysis_started_at),
         completedAt: null,
       };
     }
@@ -96,8 +103,8 @@ class CompetitorStatusService {
         status: 'completed' as CompetitorStatus,
         progress: 100,
         errorMessage: null,
-        startedAt: competitor.analysis_started_at || competitor.created_at || null,
-        completedAt: competitor.analysis_completed_at || competitor.last_analyzed_at,
+        startedAt: asString(competitor.analysis_started_at) || asString(competitor.created_at),
+        completedAt: asString(competitor.analysis_completed_at) || asString(competitor.last_analyzed_at),
       };
     }
 
@@ -182,11 +189,40 @@ class CompetitorStatusService {
         )
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            // Successfully subscribed to real-time updates
+            debugInfo(
+              'Successfully subscribed to competitor real-time updates',
+              'CompetitorStatusService',
+              {
+                workspaceId: subscription.workspaceId,
+                competitorCount: subscription.competitorIds.size,
+                channelStatus: status
+              },
+              'real-time'
+            );
           } else if (status === 'CHANNEL_ERROR') {
-            console.error(`Competitor real-time subscription error for workspace ${subscription.workspaceId}`);
+            debugError(
+              'Competitor real-time subscription channel error',
+              'CompetitorStatusService',
+              {
+                workspaceId: subscription.workspaceId,
+                channelStatus: status,
+                competitorCount: subscription.competitorIds.size
+              },
+              undefined,
+              'real-time'
+            );
             this.handleRealtimeError(subscription);
           } else if (status === 'TIMED_OUT') {
+            debugError(
+              'Competitor real-time subscription timed out',
+              'CompetitorStatusService',
+              {
+                workspaceId: subscription.workspaceId,
+                channelStatus: status
+              },
+              undefined,
+              'real-time'
+            );
             this.handleRealtimeError(subscription);
           }
         });
@@ -194,7 +230,17 @@ class CompetitorStatusService {
       subscription.realtimeChannel = channel;
       return true;
     } catch (error) {
-      console.error('Failed to setup competitor real-time subscription:', error);
+      debugError(
+        'Failed to setup competitor real-time subscription',
+        'CompetitorStatusService',
+        {
+          workspaceId: subscription.workspaceId,
+          competitorCount: subscription.competitorIds.size,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        error instanceof Error ? error : undefined,
+        'real-time'
+      );
       return false;
     }
   }
@@ -244,7 +290,19 @@ class CompetitorStatusService {
         .or('analysis_status.eq.pending,analysis_status.eq.analyzing,analysis_status.is.null'); // Poll active analysis states
 
       if (error) {
-        console.error('Error polling competitor status:', error);
+        debugError(
+          'Error polling competitor status',
+          'CompetitorStatusService',
+          {
+            workspaceId: subscription.workspaceId,
+            competitorCount: subscription.competitorIds.size,
+            errorCode: error.code,
+            errorMessage: error.message,
+            errorDetails: error.details
+          },
+          undefined,
+          'real-time'
+        );
         return;
       }
 
@@ -273,7 +331,16 @@ class CompetitorStatusService {
       });
 
     } catch (error) {
-      console.error('Error in pollActiveCompetitors:', error);
+      debugError(
+        'Error in pollActiveCompetitors',
+        'CompetitorStatusService',
+        {
+          workspaceId: subscription.workspaceId,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        error instanceof Error ? error : undefined,
+        'real-time'
+      );
     }
   }
 
@@ -321,7 +388,17 @@ class CompetitorStatusService {
       });
 
     } catch (error) {
-      console.error(`Error checking competitor status for ${competitorId}:`, error);
+      debugError(
+        'Error checking individual competitor status',
+        'CompetitorStatusService',
+        {
+          competitorId,
+          workspaceId: subscription.workspaceId,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        error instanceof Error ? error : undefined,
+        'real-time'
+      );
     }
   }
 
@@ -343,7 +420,19 @@ class CompetitorStatusService {
         
       }
     } catch (error) {
-      console.error('Error handling competitor status update:', error);
+      debugError(
+        'Error handling competitor status update',
+        'CompetitorStatusService',
+        {
+          competitorId: update.competitorId,
+          websiteId: update.websiteId,
+          status: update.status,
+          progress: update.progress,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        error instanceof Error ? error : undefined,
+        'real-time'
+      );
     }
   }
 
@@ -511,13 +600,49 @@ class CompetitorStatusService {
         .eq('id', competitorId);
 
       if (error) {
-        console.error('Error updating competitor status:', error);
+        debugError(
+          'Error updating competitor status in database',
+          'CompetitorStatusService',
+          {
+            competitorId,
+            status,
+            progress,
+            errorMessage,
+            errorCode: error.code,
+            errorDetails: error.message
+          },
+          undefined,
+          'database'
+        );
         return false;
       }
 
+      debugInfo(
+        'Competitor status updated successfully in database',
+        'CompetitorStatusService',
+        {
+          competitorId,
+          status,
+          progress,
+          operation: 'updateCompetitorStatus'
+        },
+        'database'
+      );
       return true;
     } catch (error) {
-      console.error('Error updating competitor status:', error);
+      debugError(
+        'Exception while updating competitor status',
+        'CompetitorStatusService',
+        {
+          competitorId,
+          status,
+          progress,
+          errorMessage,
+          exceptionMessage: error instanceof Error ? error.message : String(error)
+        },
+        error instanceof Error ? error : undefined,
+        'database'
+      );
       return false;
     }
   }
@@ -561,7 +686,17 @@ class CompetitorStatusService {
         };
       });
     } catch (error) {
-      console.error('Error getting competitors by status:', error);
+      debugError(
+        'Error getting competitors by status',
+        'CompetitorStatusService',
+        {
+          websiteId,
+          status,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        error instanceof Error ? error : undefined,
+        'database'
+      );
       return [];
     }
   }
@@ -582,7 +717,16 @@ class CompetitorStatusService {
       
       return (data || []).map(c => c.id);
     } catch (error) {
-      console.error('Error getting competitor IDs:', error);
+      debugError(
+        'Error getting competitor IDs',
+        'CompetitorStatusService',
+        {
+          websiteIds,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        error instanceof Error ? error : undefined,
+        'database'
+      );
       return [];
     }
   }
