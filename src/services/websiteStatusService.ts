@@ -14,6 +14,14 @@ export interface WebsiteStatusUpdate {
 
 export type WebsiteStatusCallback = (update: WebsiteStatusUpdate) => void;
 
+// Supabase realtime payload types
+interface SupabaseRealtimePayload {
+  eventType: "INSERT" | "UPDATE" | "DELETE";
+  new: Website | null;
+  old: Website | null;
+  errors: string[] | null;
+}
+
 interface EventSequenceTracker {
   websiteId: string;
   lastEventTimestamp: number;
@@ -121,8 +129,11 @@ class WebsiteStatusService {
 
       const channel = supabase
         .channel(channelName)
-        .on("postgres_changes" as any, subscriptionConfig, (payload: any) => {
-          if (!subscription.isActive) return;
+        .on(
+          "postgres_changes" as any,
+          subscriptionConfig as any,
+          (payload: SupabaseRealtimePayload) => {
+            if (!subscription.isActive) return;
 
           // Handle different event types
           const eventType = payload.eventType;
@@ -188,7 +199,8 @@ class WebsiteStatusService {
             }
             this.handleRealtimeError(subscription);
           }
-        });
+        }
+      );
 
       subscription.realtimeChannel = channel;
       return true;

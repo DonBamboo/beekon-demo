@@ -197,6 +197,19 @@ export function useStatePersistence() {
       .slice(0, 3); // Top 3 most likely destinations
   }, [currentPage]);
 
+  // Prefetch data based on navigation patterns
+  const prefetchDataForPage = useCallback(async (page: string) => {
+    // This would trigger data loading for the destination page
+    // Implementation depends on the specific data needs of each page
+    console.log(`Prefetching data for page: ${page}`);
+
+    // Example: Prefetch shared data that might be needed
+    if (page === "/analysis" || page === "/competitors") {
+      // Trigger topics and LLM providers loading
+      // This would be implemented by the shared data hooks
+    }
+  }, []);
+
   // Enhanced navigation with state management
   const navigateWithState = useCallback(
     (
@@ -233,21 +246,8 @@ export function useStatePersistence() {
       trackNavigation,
       navigateToPage,
       navigate,
-    ]
-  ); // prefetchDataForPage is stable (empty deps)
-
-  // Prefetch data based on navigation patterns
-  const prefetchDataForPage = useCallback(async (page: string) => {
-    // This would trigger data loading for the destination page
-    // Implementation depends on the specific data needs of each page
-    console.log(`Prefetching data for page: ${page}`);
-
-    // Example: Prefetch shared data that might be needed
-    if (page === "/analysis" || page === "/competitors") {
-      // Trigger topics and LLM providers loading
-      // This would be implemented by the shared data hooks
-    }
-  }, []);
+      prefetchDataForPage,
+    ]);
 
   // Auto-save filters when they change
   useEffect(() => {
@@ -307,28 +307,11 @@ export function useStatePersistence() {
     };
   }, [config?.persistScrollPosition, saveScrollPosition]);
 
-  return {
-    // Navigation with state management
-    navigateWithState,
-
-    // State persistence
+  return { 
+    navigateWithPersistence: navigateWithState, 
+    prefetchDataForPage,
     persistFilters: persistFiltersForPage,
     restoreFilters: restoreFiltersForPage,
-
-    // Scroll management
-    saveScrollPosition,
-    restoreScrollPosition,
-
-    // Navigation patterns
-    getNavigationPatterns,
-    trackNavigation,
-
-    // Prefetching
-    prefetchDataForPage,
-
-    // Current page info
-    currentPage,
-    config,
   };
 }
 

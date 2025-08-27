@@ -841,7 +841,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   // Update refs when values change
   useEffect(() => {
     fetchWebsitesRef.current = fetchWebsites;
-  }, [fetchWebsites]);
+  }, [fetchWebsites, syncWebsitesToAppState]);
 
   useEffect(() => {
     websitesRef.current = websites;

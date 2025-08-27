@@ -426,7 +426,7 @@ export function useNetworkStatus() {
         (connection as unknown as EventTarget).removeEventListener('change', updateNetworkStatus);
       }
     };
-  }, [networkStatus.connectionType, networkStatus.isOnline, networkStatus.isSlowConnection]);
+  }, [networkStatus]);
 
   return networkStatus;
 }

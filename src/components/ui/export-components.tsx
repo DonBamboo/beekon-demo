@@ -112,7 +112,8 @@ export function ExportDropdown({
   }, [
     showEstimatedSize, 
     data?.length, // Only depend on data length for stability
-    availableFormats // Now stable due to memoization above
+    availableFormats, // Now stable due to memoization above
+    data, // Add missing dependency
   ]);
 
   return (
@@ -436,6 +437,10 @@ export function AdvancedExportDropdown({
     formats.includes(opt.format)
   );
 
+  // Extract complex expressions to separate variables per ESLint rules
+  const dataLength = data && JSON.stringify(data).length;
+  const formatList = availableFormats.map(f => f.format).join(',');
+
   // FIXED: Memoize export size calculations to prevent infinite loops in AdvancedExportDropdown
   const memoizedSizes = useMemo(() => {
     if (!showEstimatedSize || !data) return {};
@@ -446,8 +451,10 @@ export function AdvancedExportDropdown({
     }, {} as Record<string, string>);
   }, [
     showEstimatedSize, 
-    data && JSON.stringify(data).length, // Only depend on data size, not full object
-    availableFormats.map(f => f.format).join(',') // Stable format list
+    dataLength, // Only depend on data size, not full object
+    formatList, // Stable format list
+    availableFormats, // Add missing dependency
+    data, // Add missing dependency
   ]);
 
   const handleQuickExport = async (format: ExportFormat) => {

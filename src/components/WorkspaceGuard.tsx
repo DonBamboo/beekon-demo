@@ -28,24 +28,31 @@ export function WorkspaceGuard({
     isWorkspaceStateValid 
   } = useWorkspace();
 
+  // Extract complex expressions to separate variables per ESLint rules
+  const hasUser = !!user;
+  const hasCurrentWorkspace = !!currentWorkspace;
+
   // FIXED: Debounce loading state changes to prevent dropdown thrashing during auth flow
   const stableLoadingState = useMemo(() => {
     // Consider stable when both auth and workspace loading are resolved
     return {
       isLoading: authLoading || workspaceLoading,
-      hasUser: !!user,
+      hasUser,
       hasWorkspaces: workspaces && workspaces.length > 0,
-      hasCurrentWorkspace: !!currentWorkspace,
+      hasCurrentWorkspace,
       isStateValid: requireWorkspace ? isWorkspaceStateValid() : true,
     };
   }, [
     authLoading,
     workspaceLoading, 
-    !!user,
+    hasUser,
     workspaces?.length,
-    !!currentWorkspace,
+    hasCurrentWorkspace,
     requireWorkspace,
-    isWorkspaceStateValid
+    isWorkspaceStateValid,
+    currentWorkspace, // Add missing dependency
+    user, // Add missing dependency  
+    workspaces, // Add missing dependency
   ]);
 
   // FIXED: Use stable loading state to prevent rapid re-renders

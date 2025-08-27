@@ -65,6 +65,7 @@ export function useCompetitors(
   const memoizedFilters = useMemo(
     () => filters,
     [
+      filters,
       filters.dateRange?.start,
       filters.dateRange?.end,
       filters.sortBy,

@@ -9,7 +9,7 @@ detectBrowserCompatibility();
 
 // Development helper: Expose supabase client globally for testing
 if (import.meta.env.DEV) {
-  (window as any).supabase = supabase;
+  (window as Window & { supabase?: typeof supabase }).supabase = supabase;
   debugInfo(
     'Development mode: Supabase client exposed globally for testing',
     'ApplicationBootstrap',

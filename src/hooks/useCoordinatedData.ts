@@ -132,7 +132,7 @@ export function useCoordinatedData<T = unknown>({
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [executeAllLoaders, debounceMs]); // Removed debounceTimer from dependencies
+  }, [executeAllLoaders, debounceMs, debounceTimer]);
 
   // Cleanup on unmount
   useEffect(() => {

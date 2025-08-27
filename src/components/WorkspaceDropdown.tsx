@@ -52,6 +52,8 @@ export function WorkspaceDropdown() {
     currentWorkspace?.name,
     currentWorkspace?.subscription_tier,
     currentWorkspace?.credits_remaining,
+    currentWorkspace, // Add the full object as ESLint requires
+    workspaces, // Add workspaces as ESLint requires
   ]);
 
   // FIXED: Don't render dropdown during critical loading states to prevent Radix UI thrashing
