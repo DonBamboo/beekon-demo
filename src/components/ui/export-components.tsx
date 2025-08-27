@@ -95,8 +95,10 @@ export function ExportDropdown({
   className = "",
   showEstimatedSize = false,
 }: ExportButtonProps) {
-  const availableFormats = EXPORT_FORMAT_OPTIONS.filter(opt => 
-    formats.includes(opt.format)
+  // FIXED: Memoize availableFormats to prevent recreation on every render
+  const availableFormats = useMemo(() => 
+    EXPORT_FORMAT_OPTIONS.filter(opt => formats.includes(opt.format)), 
+    [formats]
   );
 
   // FIXED: Memoize export size calculations to prevent infinite loops
@@ -109,8 +111,8 @@ export function ExportDropdown({
     }, {} as Record<string, string>);
   }, [
     showEstimatedSize, 
-    data && JSON.stringify(data).length, // Only depend on data size, not full object
-    availableFormats.map(f => f.format).join(',') // Stable format list
+    data?.length, // Only depend on data length for stability
+    availableFormats // Now stable due to memoization above
   ]);
 
   return (

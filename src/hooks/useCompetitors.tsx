@@ -37,13 +37,14 @@ export function useCompetitors(
 ) {
   const { websites, loading: workspaceLoading } = useWorkspace();
   const { toast } = useToast();
-  const { consumeCreditForCompetitor, restoreCredit } = useSubscriptionEnforcement();
+  const { consumeCreditForCompetitor, restoreCredit } =
+    useSubscriptionEnforcement();
   const {
     competitorStatusMap,
     addCompetitorToMonitoring,
     removeCompetitorFromMonitoring,
     startCompetitorAnalysis,
-    getCompetitorStatus
+    getCompetitorStatus,
   } = useCompetitorStatus();
   const [state, setState] = useState<CompetitorState>({
     competitors: [],
@@ -61,14 +62,16 @@ export function useCompetitors(
   }, [websiteId, websites]);
 
   // Memoize filters to prevent infinite loops
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const memoizedFilters = useMemo(() => filters, [
-    filters.dateRange?.start,
-    filters.dateRange?.end,
-    filters.sortBy,
-    filters.sortOrder,
-    filters.showInactive,
-  ]);
+  const memoizedFilters = useMemo(
+    () => filters,
+    [
+      filters.dateRange?.start,
+      filters.dateRange?.end,
+      filters.sortBy,
+      filters.sortOrder,
+      filters.showInactive,
+    ]
+  );
 
   const loadCompetitorData = useCallback(
     async (isRefresh = false) => {
@@ -178,7 +181,7 @@ export function useCompetitors(
 
         // Start monitoring the new competitor for status updates
         await addCompetitorToMonitoring(newCompetitor.id);
-        
+
         // Trigger initial analysis status if it's pending
         if (newCompetitor.id) {
           await startCompetitorAnalysis(newCompetitor.id);
@@ -186,7 +189,9 @@ export function useCompetitors(
 
         toast({
           title: "Competitor added",
-          description: `${name || domain} has been added to your competitor list and analysis has started.`,
+          description: `${
+            name || domain
+          } has been added to your competitor list and analysis has started.`,
         });
 
         // Refresh performance data
@@ -220,7 +225,15 @@ export function useCompetitors(
         throw error;
       }
     },
-    [targetWebsiteId, loadCompetitorData, toast, consumeCreditForCompetitor, restoreCredit, addCompetitorToMonitoring, startCompetitorAnalysis]
+    [
+      targetWebsiteId,
+      loadCompetitorData,
+      toast,
+      consumeCreditForCompetitor,
+      restoreCredit,
+      addCompetitorToMonitoring,
+      startCompetitorAnalysis,
+    ]
   );
 
   const updateCompetitor = useCallback(

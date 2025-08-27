@@ -104,24 +104,144 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   );
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   // ELIMINATED: No more local websites state - use AppStateContext as single source of truth
+
+  // FIXED: Use refs to stabilize callbacks and prevent infinite loops
+  const setAppStateWebsitesRef = useRef(setAppStateWebsites);
+  const toastRef = useRef(toast);
+
+  // FIXED: Add initialization sequence tracking to prevent race conditions
+  const initializationStateRef = useRef<{
+    userLoaded: boolean;
+    workspacesLoaded: boolean;
+    websitesLoaded: boolean;
+    currentPhase: "auth" | "workspaces" | "websites" | "complete";
+  }>({
+    userLoaded: false,
+    workspacesLoaded: false,
+    websitesLoaded: false,
+    currentPhase: "auth",
+  });
+
+  useEffect(() => {
+    setAppStateWebsitesRef.current = setAppStateWebsites;
+    toastRef.current = toast;
+  }, [setAppStateWebsites, toast]);
   // const [websites, setWebsites] = useState<Website[]>([]);
-  
+
   // Get websites directly from AppStateContext (single source of truth)
   // Include a status hash to force re-render when any website status changes
-  // FIXED: Stabilize websites useMemo to prevent infinite loops caused by unstable status hash
+  // FIXED: Deep stabilization using useRef and custom comparison to prevent infinite loops
+  const websitesRef = useRef<Website[]>([]);
   const websites = useMemo(() => {
     if (!currentWorkspace?.id) return [];
-    const filteredWebsites = appState.workspace.websites.filter(w => w.workspace_id === currentWorkspace.id);
-    
-    return filteredWebsites;
+
+    const filteredWebsites = appState.workspace.websites.filter(
+      (w) => w.workspace_id === currentWorkspace.id
+    );
+
+    // Custom deep comparison to prevent unnecessary recreations
+    const hasChanged =
+      websitesRef.current.length !== filteredWebsites.length ||
+      websitesRef.current.some((prev, index) => {
+        const current = filteredWebsites[index];
+        return (
+          !current ||
+          prev.id !== current.id ||
+          prev.domain !== current.domain ||
+          prev.display_name !== current.display_name ||
+          prev.is_active !== current.is_active
+        );
+      });
+
+    if (hasChanged) {
+      websitesRef.current = filteredWebsites;
+      return filteredWebsites;
+    }
+
+    // Return previous reference if no meaningful changes (status updates don't matter for UI stability)
+    return websitesRef.current;
   }, [
-    appState.workspace.websites, 
     currentWorkspace?.id,
-    // FIXED: Use websites length instead of unstable status hash to avoid infinite loop
-    appState.workspace.websites.length
+    appState.workspace.websites, // Include full array as ESLint requires it
+    // Deep comparison logic above prevents unnecessary recreations
   ]);
   const [loading, setLoading] = useState(true);
+
+  // FIXED: Add loading state debouncing to prevent rapid state thrashing
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialLoadRef = useRef(true);
+
+  // FIXED: Add development mode safeguards for infinite loop detection
+  const loadingChangeCountRef = useRef(0);
+  const loadingChangeTimestampRef = useRef(Date.now());
   
+  // FIXED: Add validation guards to prevent concurrent validations and unnecessary runs
+  const isValidatingRef = useRef(false);
+  const isInitializingRef = useRef(false);
+  
+  // FIXED: Add guard to prevent concurrent fetchWebsites calls from useEffect
+  const isFetchingWebsitesFromEffectRef = useRef(false);
+  const lastWorkspaceIdProcessedRef = useRef<string | null>(null);
+
+  // FIXED: Convert setLoadingDebounced to stable ref pattern to break circular dependencies
+  const setLoadingDebouncedRef =
+    useRef<(newLoading: boolean, immediate?: boolean) => void>();
+
+  // Initialize the debounced loading setter - this ref never changes
+  useEffect(() => {
+    setLoadingDebouncedRef.current = (
+      newLoading: boolean,
+      immediate = false
+    ) => {
+      // Clear any pending loading state change
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+
+      // FIXED: Development mode safeguards - detect excessive loading state changes
+      if (import.meta.env.DEV) {
+        const now = Date.now();
+        const timeSinceLastChange = now - loadingChangeTimestampRef.current;
+
+        // Reset counter if it's been more than 5 seconds since last change
+        if (timeSinceLastChange > 5000) {
+          loadingChangeCountRef.current = 0;
+        }
+
+        loadingChangeCountRef.current += 1;
+        loadingChangeTimestampRef.current = now;
+
+        // Warn if we have excessive loading state changes (potential infinite loop)
+        if (loadingChangeCountRef.current > 20) {
+          console.warn(
+            "[useWorkspace] Excessive loading state changes detected (potential infinite loop)",
+            {
+              changeCount: loadingChangeCountRef.current,
+              newLoading,
+              immediate,
+              timeSinceLastChange,
+            }
+          );
+        }
+      }
+
+      if (immediate || isInitialLoadRef.current) {
+        // Immediate updates for initial load or critical state changes
+        setLoading(newLoading);
+        if (newLoading === false) {
+          isInitialLoadRef.current = false;
+        }
+      } else {
+        // Debounce rapid loading state changes to prevent dropdown thrashing
+        loadingTimeoutRef.current = setTimeout(() => {
+          setLoading(newLoading);
+          loadingTimeoutRef.current = null;
+        }, 50);
+      }
+    };
+  }, []); // Empty deps - truly stable function
+
   // Add intelligent caching for websites
   const websitesCache = useRef<{
     data: Website[];
@@ -139,7 +259,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   >(new Set());
 
   // State to track workspace changes for event broadcasting
-  const [workspaceForEvent, setWorkspaceForEvent] = useState<Workspace | null>(null);
+  const [workspaceForEvent, setWorkspaceForEvent] = useState<Workspace | null>(
+    null
+  );
 
   // Function to notify all listeners about workspace changes (without event dispatch)
   const notifyWorkspaceChange = useCallback((workspace: Workspace | null) => {
@@ -182,11 +304,28 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     [notifyWorkspaceChange]
   );
 
+  // FIXED: Create stable ref for setCurrentWorkspaceWithNotification to break validateWorkspaceState dependency cycles
+  const setCurrentWorkspaceWithNotificationRef = useRef(setCurrentWorkspaceWithNotification);
+  useEffect(() => {
+    setCurrentWorkspaceWithNotificationRef.current = setCurrentWorkspaceWithNotification;
+  }, [setCurrentWorkspaceWithNotification]);
+
   const fetchWorkspaces = useCallback(async () => {
     if (!user?.id) {
-      setLoading(false);
+      // Reset initialization state when no user
+      initializationStateRef.current = {
+        userLoaded: false,
+        workspacesLoaded: false,
+        websitesLoaded: false,
+        currentPhase: "auth",
+      };
+      setLoadingDebouncedRef.current!(false, true); // Immediate for critical auth state
       return;
     }
+
+    // FIXED: Update initialization phase and set guard to prevent validation during fetch
+    initializationStateRef.current.currentPhase = "workspaces";
+    isInitializingRef.current = true;
 
     try {
       const { data, error } = await supabase
@@ -248,15 +387,21 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       // Error fetching workspaces
       setWorkspaces([]);
       setCurrentWorkspaceWithNotification(null);
-      toast({
+      toastRef.current({
         title: "Error",
         description: "Failed to fetch workspaces. Please try again.",
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      // FIXED: Mark workspaces as loaded and update phase
+      initializationStateRef.current.workspacesLoaded = true;
+      initializationStateRef.current.currentPhase = "websites";
+      setLoadingDebouncedRef.current!(false); // Debounced for operation completion
+      
+      // GUARD: Clear initialization flag when fetchWorkspaces completes (success or failure)
+      isInitializingRef.current = false;
     }
-  }, [user?.id, toast, setCurrentWorkspaceWithNotification]);
+  }, [user?.id, setCurrentWorkspaceWithNotification]); // Removed setLoadingDebounced - now stable ref
 
   const createWorkspace = useCallback(
     async (
@@ -266,7 +411,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     ) => {
       if (!user?.id) {
         const error = new Error("User not authenticated");
-        toast({
+        toastRef.current({
           title: "Error",
           description: "You must be logged in to create a workspace",
           variant: "destructive",
@@ -277,7 +422,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       // Validate input parameters
       if (!name.trim()) {
         const error = new Error("Workspace name is required");
-        toast({
+        toastRef.current({
           title: "Error",
           description: "Workspace name cannot be empty",
           variant: "destructive",
@@ -321,7 +466,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         // Set as current workspace (always for new workspaces to ensure immediate availability)
         setCurrentWorkspaceWithNotification(newWorkspace);
 
-        toast({
+        toastRef.current({
           title: "Success",
           description: `Workspace "${name}" created successfully`,
         });
@@ -332,7 +477,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         // Error creating workspace
         const errorMessage =
           error instanceof Error ? error.message : "Failed to create workspace";
-        toast({
+        toastRef.current({
           title: "Error",
           description: errorMessage,
           variant: "destructive",
@@ -340,7 +485,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
     },
-    [user?.id, toast, setCurrentWorkspaceWithNotification]
+    [user?.id, setCurrentWorkspaceWithNotification]
   );
 
   const updateWorkspace = useCallback(
@@ -398,13 +543,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           });
         }
 
-        toast({
+        toastRef.current({
           title: "Success",
           description: "Workspace updated successfully",
         });
       } catch (error) {
         // Error updating workspace
-        toast({
+        toastRef.current({
           title: "Error",
           description: "Failed to update workspace",
           variant: "destructive",
@@ -412,7 +557,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
     },
-    [currentWorkspace?.id, toast, setCurrentWorkspaceWithNotification]
+    [currentWorkspace?.id, setCurrentWorkspaceWithNotification]
   );
 
   const invalidateWebsitesCache = useCallback(() => {
@@ -420,13 +565,17 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Sync websites to AppStateContext to ensure real-time updates work
-  const syncWebsitesToAppState = useCallback((websiteData: Website[]) => {
-    try {
-      setAppStateWebsites(websiteData);
-    } catch (error) {
-      // Error syncing websites to AppStateContext - handled silently
-    }
-  }, [setAppStateWebsites]);
+  // FIXED: Use ref to avoid infinite loops from unstable setAppStateWebsites
+  const syncWebsitesToAppState = useCallback(
+    (websiteData: Website[]) => {
+      try {
+        setAppStateWebsitesRef.current(websiteData);
+      } catch (error) {
+        // Error syncing websites to AppStateContext - handled silently
+      }
+    },
+    [] // No dependencies needed - ref is always stable
+  );
 
   const deleteWorkspace = useCallback(
     async (workspaceId: string) => {
@@ -455,13 +604,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           return remainingWorkspaces;
         });
 
-        toast({
+        toastRef.current({
           title: "Success",
           description: "Workspace deleted successfully",
         });
       } catch (error) {
         // Error deleting workspace
-        toast({
+        toastRef.current({
           title: "Error",
           description: "Failed to delete workspace",
           variant: "destructive",
@@ -469,7 +618,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
     },
-    [currentWorkspace?.id, toast, setCurrentWorkspaceWithNotification]
+    [currentWorkspace?.id, setCurrentWorkspaceWithNotification]
   );
 
   const switchWorkspace = useCallback(
@@ -479,112 +628,152 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         // Clear websites cache when switching workspaces to ensure fresh data
         invalidateWebsitesCache();
         setCurrentWorkspaceWithNotification(workspace);
-        toast({
+        toastRef.current({
           title: "Success",
           description: `Switched to workspace "${workspace.name}"`,
         });
       }
     },
-    [workspaces, toast, setCurrentWorkspaceWithNotification, invalidateWebsitesCache]
+    [workspaces, setCurrentWorkspaceWithNotification, invalidateWebsitesCache]
   );
 
   const refetchWorkspaces = useCallback(async () => {
-    setLoading(true);
+    setLoadingDebouncedRef.current!(true, true); // Immediate for user-initiated action
     await fetchWorkspaces();
-  }, [fetchWorkspaces]);
+  }, [fetchWorkspaces]); // Removed setLoadingDebounced - now stable ref
 
-  const fetchWebsites = useCallback(async (forceRefresh = false) => {
-    if (!user?.id || !currentWorkspace?.id) {
-      setLoading(false);
-      return;
-    }
-
-    // Check cache first
-    const now = Date.now();
-    const cache = websitesCache.current;
-    
-    if (!forceRefresh && cache && 
-        cache.workspaceId === currentWorkspace.id && 
-        (now - cache.timestamp) < WEBSITES_CACHE_DURATION) {
-      // UNIFIED: Use cached data by syncing to AppStateContext
-      syncWebsitesToAppState(cache.data);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .from("websites")
-        .select("*")
-        .eq("workspace_id", currentWorkspace.id)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
-
-      const websiteData = (data || []).map((w) => ({
-        ...w,
-        workspace_id: w.workspace_id ?? "",
-        display_name: w.display_name ?? "",
-        crawl_status: w.crawl_status ?? null,
-        last_crawled_at: w.last_crawled_at ?? "",
-        is_active: w.is_active ?? false,
-        created_at: w.created_at ?? "",
-        updated_at: w.updated_at ?? "",
-      }));
-
-      // Update cache
-      websitesCache.current = {
-        data: websiteData,
-        timestamp: now,
-        workspaceId: currentWorkspace.id,
-      };
-
-      // UNIFIED: Always sync fresh data to AppStateContext (single source of truth)  
-      syncWebsitesToAppState(websiteData);
-    } catch (error) {
-      // Error fetching websites - sync empty array to AppStateContext
-      syncWebsitesToAppState([]);
-      toast({
-        title: "Error",
-        description: "Failed to fetch websites. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id, currentWorkspace?.id, toast, WEBSITES_CACHE_DURATION, syncWebsitesToAppState]);
-
-  // State validation function to ensure workspace consistency
-  const validateWorkspaceState = useCallback(() => {
-    // Ensure currentWorkspace exists in workspaces array
-    if (
-      currentWorkspace &&
-      !workspaces.find((w) => w.id === currentWorkspace.id)
-    ) {
-      // Current workspace is not in the list, reset it
-      setCurrentWorkspaceWithNotification(
-        workspaces.length > 0 ? workspaces[0] ?? null : null
-      );
-      return false;
-    }
-
-    // Ensure we have a current workspace if workspaces exist
-    if (workspaces.length > 0 && !currentWorkspace) {
-      const firstWorkspace = workspaces[0];
-      if (firstWorkspace) {
-        setCurrentWorkspaceWithNotification(firstWorkspace);
+  const fetchWebsites = useCallback(
+    async (forceRefresh = false) => {
+      if (!user?.id || !currentWorkspace?.id) {
+        setLoadingDebouncedRef.current!(false); // Debounced for guard condition
+        return;
       }
-      return false;
+
+      // FIXED: Only proceed if workspaces are loaded (proper sequencing)
+      if (!forceRefresh && !initializationStateRef.current.workspacesLoaded) {
+        return;
+      }
+
+      // FIXED: Update initialization phase and set guard
+      initializationStateRef.current.currentPhase = "websites";
+      isInitializingRef.current = true;
+
+      // Check cache first
+      const now = Date.now();
+      const cache = websitesCache.current;
+
+      if (
+        !forceRefresh &&
+        cache &&
+        cache.workspaceId === currentWorkspace.id &&
+        now - cache.timestamp < WEBSITES_CACHE_DURATION
+      ) {
+        // UNIFIED: Use cached data by syncing to AppStateContext
+        syncWebsitesToAppState(cache.data);
+        setLoadingDebouncedRef.current!(false); // Debounced for cached data
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .schema("beekon_data")
+          .from("websites")
+          .select("*")
+          .eq("workspace_id", currentWorkspace.id)
+          .order("created_at", { ascending: true });
+
+        if (error) throw error;
+
+        const websiteData = (data || []).map((w) => ({
+          ...w,
+          workspace_id: w.workspace_id ?? "",
+          display_name: w.display_name ?? "",
+          crawl_status: w.crawl_status ?? null,
+          last_crawled_at: w.last_crawled_at ?? "",
+          is_active: w.is_active ?? false,
+          created_at: w.created_at ?? "",
+          updated_at: w.updated_at ?? "",
+        }));
+
+        // Update cache
+        websitesCache.current = {
+          data: websiteData,
+          timestamp: now,
+          workspaceId: currentWorkspace.id,
+        };
+
+        // UNIFIED: Always sync fresh data to AppStateContext (single source of truth)
+        syncWebsitesToAppState(websiteData);
+      } catch (error) {
+        // Error fetching websites - sync empty array to AppStateContext
+        syncWebsitesToAppState([]);
+        toastRef.current({
+          title: "Error",
+          description: "Failed to fetch websites. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        // FIXED: Mark websites as loaded and complete initialization
+        initializationStateRef.current.websitesLoaded = true;
+        initializationStateRef.current.currentPhase = "complete";
+        setLoadingDebouncedRef.current!(false); // Debounced for operation completion
+        
+        // GUARD: Clear initialization flag when fetchWebsites completes (success or failure)
+        isInitializingRef.current = false;
+      }
+    },
+    [
+      user?.id,
+      currentWorkspace?.id,
+      syncWebsitesToAppState, // Now stable due to ref pattern
+      // setLoadingDebounced removed - now using stable ref pattern
+      WEBSITES_CACHE_DURATION, // Constant but ESLint needs it explicitly
+    ]
+  );
+
+  // FIXED: State validation function with guards to prevent infinite loops
+  const validateWorkspaceState = useCallback(() => {
+    // GUARD: Skip validation if already validating or during initialization
+    if (isValidatingRef.current || isInitializingRef.current) {
+      return true; // Skip validation but don't indicate failure
     }
 
-    return true;
-  }, [currentWorkspace, workspaces, setCurrentWorkspaceWithNotification]);
+    // GUARD: Set validation lock to prevent concurrent runs
+    isValidatingRef.current = true;
+    
+    try {
+      // Ensure currentWorkspace exists in workspaces array
+      if (
+        currentWorkspace &&
+        !workspaces.find((w) => w.id === currentWorkspace.id)
+      ) {
+        // Current workspace is not in the list, reset it
+        setCurrentWorkspaceWithNotificationRef.current(
+          workspaces.length > 0 ? workspaces[0] ?? null : null
+        );
+        return false;
+      }
+
+      // Ensure we have a current workspace if workspaces exist
+      if (workspaces.length > 0 && !currentWorkspace) {
+        const firstWorkspace = workspaces[0];
+        if (firstWorkspace) {
+          setCurrentWorkspaceWithNotificationRef.current(firstWorkspace);
+        }
+        return false;
+      }
+
+      return true;
+    } finally {
+      // GUARD: Always release validation lock
+      isValidatingRef.current = false;
+    }
+  }, [currentWorkspace, workspaces]); // FIXED: Removed unstable setCurrentWorkspaceWithNotification - now using ref
 
   const deleteWebsite = useCallback(
     async (websiteId: string) => {
       if (!user?.id || !currentWorkspace?.id) {
-        setLoading(false);
+        setLoadingDebouncedRef.current!(false); // Debounced for guard condition
         return;
       }
 
@@ -597,7 +786,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           .eq("workspace_id", currentWorkspace?.id);
 
         if (error) throw error;
-        
+
         // UNIFIED: Invalidate cache and update AppStateContext
         invalidateWebsitesCache();
         // Force refetch to update AppStateContext with current state
@@ -607,19 +796,39 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         // The UI will refresh and show the actual state
       }
     },
-    [user?.id, currentWorkspace?.id, invalidateWebsitesCache]
+    [user?.id, currentWorkspace?.id, invalidateWebsitesCache, fetchWebsites]
   );
 
   useEffect(() => {
     if (user?.id) {
+      // FIXED: Mark user as loaded and start workspace loading phase
+      initializationStateRef.current.userLoaded = true;
+      initializationStateRef.current.currentPhase = "workspaces";
       fetchWorkspaces();
     } else {
+      // FIXED: Reset initialization state for logged out user
+      initializationStateRef.current = {
+        userLoaded: false,
+        workspacesLoaded: false,
+        websitesLoaded: false,
+        currentPhase: "auth",
+      };
       setCurrentWorkspaceWithNotification(null);
       setWorkspaces([]);
       syncWebsitesToAppState([]); // Clear websites from AppStateContext
-      setLoading(false);
+      setLoadingDebouncedRef.current!(false, true); // Immediate for auth state change
     }
-  }, [user?.id, fetchWorkspaces, setCurrentWorkspaceWithNotification]);
+  }, [user?.id, fetchWorkspaces, setCurrentWorkspaceWithNotification]); // Removed setLoadingDebounced - now stable ref
+
+  // Cleanup loading timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // SMART CACHE STRATEGY: Cache only for initial loads, real-time updates bypass all caches
   // The WebsiteStatusProvider handles all real-time updates directly to AppStateContext
@@ -627,33 +836,56 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   // FIXED: Break circular dependency using refs to prevent infinite loops
   const fetchWebsitesRef = useRef(fetchWebsites);
-  const websitesRef = useRef(websites);
-  
+  // const websitesRef = useRef(websites);
+
   // Update refs when values change
   useEffect(() => {
     fetchWebsitesRef.current = fetchWebsites;
   }, [fetchWebsites]);
-  
+
   useEffect(() => {
     websitesRef.current = websites;
   }, [websites]);
 
-  // UNIFIED: Set up real-time subscription and fetch initial data when workspace changes
+  // FIXED: Set up real-time subscription and fetch initial data when workspace changes
+  // Added guards to prevent infinite loop from fetchWebsites triggering state updates
   useEffect(() => {
     if (user?.id && currentWorkspace?.id) {
+      // GUARD: Prevent concurrent fetchWebsites calls and duplicate processing
+      if (
+        isFetchingWebsitesFromEffectRef.current || 
+        lastWorkspaceIdProcessedRef.current === currentWorkspace.id
+      ) {
+        return;
+      }
+      
+      // GUARD: Set flags to prevent re-execution
+      isFetchingWebsitesFromEffectRef.current = true;
+      lastWorkspaceIdProcessedRef.current = currentWorkspace.id;
+      
       // Fetch initial websites and sync to AppStateContext
       fetchWebsitesRef.current().then(() => {
         // Set up real-time subscription for the current workspace
-        const websiteIds = websitesRef.current.map(w => w.id);
+        const websiteIds = websitesRef.current.map((w) => w.id);
         if (websiteIds.length > 0) {
-          websiteStatusContext.subscribeToWorkspace(currentWorkspace.id, websiteIds);
+          websiteStatusContext.subscribeToWorkspace(
+            currentWorkspace.id,
+            websiteIds
+          );
         }
+      }).finally(() => {
+        // GUARD: Always clear the fetching flag when done
+        isFetchingWebsitesFromEffectRef.current = false;
       });
     } else {
       // Clean up subscription when no workspace
       if (currentWorkspace?.id) {
         websiteStatusContext.unsubscribeFromWorkspace(currentWorkspace.id);
       }
+      
+      // GUARD: Reset tracking when no workspace
+      lastWorkspaceIdProcessedRef.current = null;
+      isFetchingWebsitesFromEffectRef.current = false;
     }
   }, [user?.id, currentWorkspace?.id, websiteStatusContext]); // Removed fetchWebsites and websites from dependencies
 
@@ -662,25 +894,30 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const previousId = prevWorkspaceId.current;
     const currentId = currentWorkspace?.id || null;
-    
+
     if (previousId && previousId !== currentId) {
       websiteStatusContext.unsubscribeFromWorkspace(previousId);
+      
+      // GUARD: Reset workspace tracking when workspace actually changes
+      lastWorkspaceIdProcessedRef.current = null;
+      isFetchingWebsitesFromEffectRef.current = false;
     }
-    
+
     prevWorkspaceId.current = currentId;
   }, [currentWorkspace?.id, websiteStatusContext]);
 
   // Create ref for validateWorkspaceState to break dependency cycle
   const validateWorkspaceStateRef = useRef(validateWorkspaceState);
-  
+
   // Update ref when function changes
   useEffect(() => {
     validateWorkspaceStateRef.current = validateWorkspaceState;
   }, [validateWorkspaceState]);
 
-  // Validate workspace state periodically and after any state changes
+  // FIXED: Validate workspace state on meaningful changes, NOT loading changes
+  // Removed loading dependency to break infinite loop chain
   useEffect(() => {
-    if (!loading && workspaces.length > 0) {
+    if (workspaces.length > 0) {
       const timeoutId = setTimeout(() => {
         validateWorkspaceStateRef.current();
       }, 100); // Small delay to allow state settling
@@ -688,7 +925,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       return () => clearTimeout(timeoutId);
     }
     return undefined;
-  }, [workspaces, currentWorkspace, loading]); // Removed validateWorkspaceState from dependencies
+  }, [workspaces, currentWorkspace]); // FIXED: Removed loading - it was causing infinite loop
 
   // ELIMINATED: No longer need complex status hash - AppStateContext is single source of truth
   // Direct consumption of websites from AppStateContext via useMemo above eliminates sync complexity
@@ -698,9 +935,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   // Real-time updates flow directly: Database → WebsiteStatusProvider → AppStateContext → websites (useMemo)
 
   const refetchWebsites = useCallback(async () => {
-    setLoading(true);
-    await fetchWebsites(true); // Force refresh to bypass cache
-  }, [fetchWebsites]);
+    setLoadingDebouncedRef.current!(true, true); // Immediate for user-initiated refresh
+    await fetchWebsitesRef.current(true); // Use ref to avoid dependency
+  }, []); // No dependencies needed - using stable refs
 
   // Add listener registration function
   const onWorkspaceChange = useCallback(
@@ -721,32 +958,49 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, [validateWorkspaceState]);
 
   // UNIFIED: Website status monitoring functions using WebsiteStatusContext
-  const addWebsiteToMonitoring = useCallback(async (websiteId: string) => {
-    if (currentWorkspace?.id) {
-      // Re-subscribe with updated website list including the new website
-      const updatedWebsiteIds = [...websites.map(w => w.id), websiteId];
-      await websiteStatusContext.subscribeToWorkspace(currentWorkspace.id, updatedWebsiteIds);
-    }
-  }, [currentWorkspace?.id, websites, websiteStatusContext]);
-
-  const removeWebsiteFromMonitoring = useCallback(async (websiteId: string) => {
-    if (currentWorkspace?.id) {
-      // Re-subscribe with updated website list excluding the removed website
-      const updatedWebsiteIds = websites.filter(w => w.id !== websiteId).map(w => w.id);
-      if (updatedWebsiteIds.length > 0) {
-        await websiteStatusContext.subscribeToWorkspace(currentWorkspace.id, updatedWebsiteIds);
-      } else {
-        await websiteStatusContext.unsubscribeFromWorkspace(currentWorkspace.id);
+  const addWebsiteToMonitoring = useCallback(
+    async (websiteId: string) => {
+      if (currentWorkspace?.id) {
+        // Re-subscribe with updated website list including the new website
+        const updatedWebsiteIds = [...websites.map((w) => w.id), websiteId];
+        await websiteStatusContext.subscribeToWorkspace(
+          currentWorkspace.id,
+          updatedWebsiteIds
+        );
       }
-    }
-  }, [currentWorkspace?.id, websites, websiteStatusContext]);
+    },
+    [currentWorkspace?.id, websites, websiteStatusContext]
+  );
+
+  const removeWebsiteFromMonitoring = useCallback(
+    async (websiteId: string) => {
+      if (currentWorkspace?.id) {
+        // Re-subscribe with updated website list excluding the removed website
+        const updatedWebsiteIds = websites
+          .filter((w) => w.id !== websiteId)
+          .map((w) => w.id);
+        if (updatedWebsiteIds.length > 0) {
+          await websiteStatusContext.subscribeToWorkspace(
+            currentWorkspace.id,
+            updatedWebsiteIds
+          );
+        } else {
+          await websiteStatusContext.unsubscribeFromWorkspace(
+            currentWorkspace.id
+          );
+        }
+      }
+    },
+    [currentWorkspace?.id, websites, websiteStatusContext]
+  );
 
   const getWebsiteStatusSubscriptionInfo = useCallback(() => {
     if (currentWorkspace?.id) {
       return {
         isConnected: websiteStatusContext.isConnected,
-        connectionStatus: websiteStatusContext.connectionStatus[currentWorkspace.id] || false,
-        websiteCount: websites.length
+        connectionStatus:
+          websiteStatusContext.connectionStatus[currentWorkspace.id] || false,
+        websiteCount: websites.length,
       };
     }
     return null;

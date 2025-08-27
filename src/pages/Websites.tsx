@@ -93,10 +93,10 @@ export default function Websites() {
   // FIXED: Create stable export data to prevent ExportDropdown infinite loop
   const exportWebsitesData = useMemo(() => {
     if (!websites || websites.length === 0) return [];
-    
+
     // Only include essential fields for export to create stable references
     // Exclude frequently changing fields like status updates and timestamps
-    return websites.map(website => ({
+    return websites.map((website) => ({
       id: website.id,
       domain: website.domain,
       display_name: website.display_name,
@@ -105,18 +105,25 @@ export default function Websites() {
       // Exclude crawl_status, last_crawled_at, updated_at as they change frequently
     }));
   }, [
-    websites?.length, 
-    // Only depend on stable identifiers, not the full objects
-    websites?.map(w => `${w.id}-${w.domain}-${w.is_active}`).join(',')
+    websites?.length,
+    // FIXED: Removed unstable string concatenation that created new strings on every render
+    // Only depend on websites length for stability
   ]);
 
   // FIXED: Add data stability check to prevent export UI thrashing
   const isExportDataStable = useMemo(() => {
-    return !isLoadingMetrics && 
-           !workspaceLoading && 
-           exportWebsitesData.length > 0 &&
-           !isAddingWebsite;
-  }, [isLoadingMetrics, workspaceLoading, exportWebsitesData.length, isAddingWebsite]);
+    return (
+      !isLoadingMetrics &&
+      !workspaceLoading &&
+      exportWebsitesData.length > 0 &&
+      !isAddingWebsite
+    );
+  }, [
+    isLoadingMetrics,
+    workspaceLoading,
+    exportWebsitesData.length,
+    isAddingWebsite,
+  ]);
 
   // Ensure a website is selected for global state consistency
   useEffect(() => {
@@ -295,10 +302,11 @@ export default function Websites() {
     }, 100); // Small delay to ensure modal has closed
   };
 
-  const getStatusIndicator = (website: Website) => {
+  // FIXED: Memoize status indicator function to prevent recreation and use stable keys
+  const getStatusIndicator = useCallback((website: Website) => {
     return (
       <WebsiteStatusIndicator
-        key={`status-${website.id}-${website.crawl_status}-${website.updated_at}`}
+        key={`status-${website.id}`} // FIXED: Use only stable website ID as key
         websiteId={website.id}
         variant="badge"
         size="sm"
@@ -306,107 +314,141 @@ export default function Websites() {
         showTimestamp={false}
       />
     );
-  };
+  }, []); // No dependencies needed since websiteId is passed as prop
 
-  const handleOpenSettings = (website: Website) => {
-    setSelectedWebsiteForModal(website);
-    setIsSettingsModalOpen(true);
-  };
+  // FIXED: Stable handler using ref pattern to break circular dependencies
+  const websitesRef = useRef(websites);
+  websitesRef.current = websites;
+  
+  const handleOpenSettings = useCallback(
+    (websiteId: string) => {
+      const website = websitesRef.current?.find((w) => w.id === websiteId);
+      if (website) {
+        setSelectedWebsiteForModal(website);
+        setIsSettingsModalOpen(true);
+      }
+    },
+    [] // No dependencies - uses ref for current data
+  );
 
-  const handleCloseSettings = () => {
-    setIsSettingsModalOpen(false);
-    setSelectedWebsiteForModal(null);
-  };
+  const confirmDelete = useCallback((websiteId: string) => {
+    setWebsiteToDelete(websiteId);
+    setShowDeleteConfirm(true);
+  }, []);
 
-  const handleAnalyzeNow = async (
-    websiteId: string,
-    domain: string,
-    name: string
-  ) => {
-    setIsAnalyzing(websiteId);
-    if (!websiteId) {
-      toast({
-        title: "Error",
-        description: "Website not found.",
-        variant: "destructive",
-      });
-      setIsAnalyzing(null);
-      return;
-    }
+  // FIXED: Stable handler using ref pattern to break circular dependencies
+  const handleAnalyzeNow = useCallback(
+    async (websiteId: string, domain: string, name: string) => {
+      setIsAnalyzing(websiteId);
+      if (!websiteId) {
+        toast({
+          title: "Error",
+          description: "Website not found.",
+          variant: "destructive",
+        });
+        setIsAnalyzing(null);
+        return;
+      }
 
-    // Get current website status for potential rollback
-    const currentWebsite = websites?.find(w => w.id === websiteId);
-    const previousStatus = currentWebsite?.crawl_status || 'completed';
-    const previousUpdatedAt = currentWebsite?.updated_at || new Date().toISOString();
+      // Get current website status for potential rollback using ref
+      const currentWebsite = websitesRef.current?.find((w) => w.id === websiteId);
+      const previousStatus = currentWebsite?.crawl_status || "completed";
+      const previousUpdatedAt =
+        currentWebsite?.updated_at || new Date().toISOString();
 
-    try {
-      // 1. IMMEDIATE UI UPDATE: Set status to 'crawling' instantly for immediate feedback
-      updateWebsiteStatus(
-        websiteId, 
-        'crawling', 
-        null, 
-        new Date().toISOString()
-      );
-
-      // 2. Send the N8N webhook to start actual re-analysis
-      const response = await sendN8nWebhook("webhook/re-analyze", {
-        id: websiteId,
-        website: domain,
-        name: name,
-      });
-
-      if (!response.success) {
-        // 3. ROLLBACK: If webhook fails, revert to previous status
+      try {
+        // 1. IMMEDIATE UI UPDATE: Set status to 'crawling' instantly for immediate feedback
         updateWebsiteStatus(
-          websiteId, 
-          previousStatus, 
-          null, 
-          previousUpdatedAt
+          websiteId,
+          "crawling",
+          null,
+          new Date().toISOString()
         );
+
+        // 2. Send the N8N webhook to start actual re-analysis
+        const response = await sendN8nWebhook("webhook/re-analyze", {
+          id: websiteId,
+          website: domain,
+          name: name,
+        });
+
+        if (!response.success) {
+          // 3. ROLLBACK: If webhook fails, revert to previous status
+          updateWebsiteStatus(
+            websiteId,
+            previousStatus,
+            null,
+            previousUpdatedAt
+          );
+
+          toast({
+            title: "Error",
+            description: "There was an error during re-analysis.",
+            variant: "destructive",
+          });
+
+          setIsAnalyzing(null);
+          return;
+        }
+
+        // 4. SUCCESS: Show success message (status remains 'crawling' until real-time update)
+        toast({
+          title: "Re-analysis Started!",
+          description: `We're analyzing ${domain}. Status will update in real-time.`,
+        });
+      } catch (error) {
+        // 5. ERROR HANDLING: Rollback optimistic update on any error
+        updateWebsiteStatus(websiteId, previousStatus, null, previousUpdatedAt);
 
         toast({
           title: "Error",
           description: "There was an error during re-analysis.",
           variant: "destructive",
         });
-
+      } finally {
         setIsAnalyzing(null);
-        return;
       }
+    },
+    [updateWebsiteStatus, toast] // Removed websites dependency - uses ref instead
+  );
 
-      // 4. SUCCESS: Show success message (status remains 'crawling' until real-time update)
-      toast({
-        title: "Re-analysis Started!",
-        description: `We're analyzing ${domain}. Status will update in real-time.`,
-      });
-      
-    } catch (error) {
-      // 5. ERROR HANDLING: Rollback optimistic update on any error
-      updateWebsiteStatus(
-        websiteId, 
-        previousStatus, 
-        null, 
-        previousUpdatedAt
-      );
+  // FIXED: Create truly stable handler maps using direct function creation
+  const analyzeHandlers = useMemo(() => {
+    const handlers = new Map<string, () => void>();
+    websites?.forEach(website => {
+      handlers.set(website.id, () => handleAnalyzeNow(website.id, website.domain, website.display_name));
+    });
+    return handlers;
+  }, [websites?.length]); // Only depend on length, handlers are stable now
 
-      toast({
-        title: "Error",
-        description: "There was an error during re-analysis.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsAnalyzing(null);
-    }
-  };
+  const settingsHandlers = useMemo(() => {
+    const handlers = new Map<string, () => void>();
+    websites?.forEach(website => {
+      handlers.set(website.id, () => handleOpenSettings(website.id));
+    });
+    return handlers;
+  }, [websites?.length]); // Stable - handlers don't change
 
-  const handleDeleteWebsite = async (websiteId: string) => {
-    deleteWebsite(websiteId);
-  };
+  const deleteHandlers = useMemo(() => {
+    const handlers = new Map<string, () => void>();
+    websites?.forEach(website => {
+      handlers.set(website.id, () => confirmDelete(website.id));
+    });
+    return handlers;
+  }, [websites?.length]); // Stable - handlers don't change
 
-  const confirmDelete = (websiteId: string) => {
-    setWebsiteToDelete(websiteId);
-    setShowDeleteConfirm(true);
-  };
+  const handleCloseSettings = useCallback(() => {
+    setIsSettingsModalOpen(false);
+    setSelectedWebsiteForModal(null);
+  }, []);
+
+  // FIXED: Memoize delete handlers to stabilize dropdown callbacks
+  const handleDeleteWebsite = useCallback(
+    async (websiteId: string) => {
+      deleteWebsite(websiteId);
+    },
+    [deleteWebsite]
+  );
 
   const handleExportData = async (format: ExportFormat) => {
     if (!websites || websites.length === 0) {
@@ -483,7 +525,9 @@ export default function Websites() {
               <ExportDropdown
                 onExport={handleExportData}
                 isLoading={isExporting}
-                disabled={!exportWebsitesData || exportWebsitesData.length === 0}
+                disabled={
+                  !exportWebsitesData || exportWebsitesData.length === 0
+                }
                 formats={["pdf", "csv", "json"]}
                 data={exportWebsitesData}
                 showEstimatedSize={true}
@@ -699,13 +743,7 @@ export default function Websites() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                          onClick={() =>
-                            handleAnalyzeNow(
-                              website.id,
-                              website.domain,
-                              website.display_name
-                            )
-                          }
+                          onClick={analyzeHandlers.get(website.id)}
                           disabled={isAnalyzing === website.id}
                         >
                           <BarChart3 className="h-4 w-4 mr-2" />
@@ -714,14 +752,14 @@ export default function Websites() {
                             : "Analyze Now"}
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => handleOpenSettings(website)}
+                          onClick={settingsHandlers.get(website.id)}
                         >
                           <Settings className="h-4 w-4 mr-2" />
                           Settings
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive"
-                          onClick={() => confirmDelete(website.id)}
+                          onClick={deleteHandlers.get(website.id)}
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
                           Delete
@@ -736,7 +774,7 @@ export default function Websites() {
                   {/* Status Information */}
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <WebsiteStatusIndicator
-                      key={`card-status-${website.id}-${website.crawl_status}-${website.updated_at}`}
+                      key={`card-status-${website.id}`} // FIXED: Use only stable website ID as key
                       websiteId={website.id}
                       variant="card"
                       size="md"

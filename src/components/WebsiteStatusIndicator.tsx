@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/LoadingStates";
 import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
@@ -103,136 +103,79 @@ function formatLastCrawled(lastCrawledAt: string | null): string {
  * No more prop-based status passing - single source of truth
  * FIXED: Force re-renders and eliminate stale closures
  */
-export const WebsiteStatusIndicator = React.memo(function WebsiteStatusIndicator({
-  websiteId,
-  className,
-  showLabel = true,
-  showTimestamp = false,
-  size = "md",
-  variant = "badge",
-}: WebsiteStatusIndicatorProps) {
-  // Force re-render counter to eliminate stale closures
-  const [, setForceRenderCounter] = useState(0);
-  const lastStatusRef = useRef<string | null>(null);
-  
-  // CRITICAL: Read status from unified context - single source of truth
-  const { status: contextStatus, lastCrawledAt } = useWebsiteStatus(websiteId);
-  
-  // Default to 'pending' if no status available
-  const status = contextStatus || 'pending';
-  
-  // Force re-render when status actually changes
-  useEffect(() => {
-    if (lastStatusRef.current !== status) {
-      lastStatusRef.current = status;
-      setForceRenderCounter(prev => prev + 1);
-    }
-  }, [status, websiteId]);
+export const WebsiteStatusIndicator = React.memo(
+  function WebsiteStatusIndicator({
+    websiteId,
+    className,
+    showLabel = true,
+    showTimestamp = false,
+    size = "md",
+    variant = "badge",
+  }: WebsiteStatusIndicatorProps) {
+    // FIXED: Removed forced re-render logic that caused infinite loops
+    // Trust React's natural re-render cycle and memo for optimization
 
-  // Listen for custom website status update events
-  useEffect(() => {
-    const handleCustomStatusUpdate = (event: CustomEvent) => {
-      if (event.detail?.websiteId === websiteId) {
-        setForceRenderCounter(prev => prev + 1);
-      }
-    };
+    // CRITICAL: Read status from unified context - single source of truth
+    const { status: contextStatus, lastCrawledAt } =
+      useWebsiteStatus(websiteId);
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('websiteStatusUpdate', handleCustomStatusUpdate as EventListener);
-      return () => {
-        window.removeEventListener('websiteStatusUpdate', handleCustomStatusUpdate as EventListener);
+    // Default to 'pending' if no status available
+    const status = contextStatus || "pending";
+
+    // FIXED: Keep event listener for manual updates but remove forced re-render
+    // React.memo and context updates will handle re-rendering naturally
+    useEffect(() => {
+      const handleCustomStatusUpdate = () => {
+        // Event handled naturally by context updates and React.memo
+        // No need for forced re-renders that cause infinite loops
       };
+
+      if (typeof window !== "undefined") {
+        window.addEventListener(
+          "websiteStatusUpdate",
+          handleCustomStatusUpdate as EventListener
+        );
+        return () => {
+          window.removeEventListener(
+            "websiteStatusUpdate",
+            handleCustomStatusUpdate as EventListener
+          );
+        };
+      }
+      return undefined;
+    }, [websiteId]);
+
+    const config = statusConfig[status as WebsiteStatusType];
+    const sizeStyles = sizeConfig[size];
+
+    if (!config) {
+      return (
+        <Badge variant="secondary" className={cn("gap-1", className)}>
+          <AlertCircle className="h-3 w-3" />
+          Unknown ({status})
+        </Badge>
+      );
     }
-    return undefined;
-  }, [websiteId]);
-  
-  const config = statusConfig[status as WebsiteStatusType];
-  const sizeStyles = sizeConfig[size];
-  
 
-  if (!config) {
-    return (
-      <Badge variant="secondary" className={cn("gap-1", className)}>
-        <AlertCircle className="h-3 w-3" />
-        Unknown ({status})
-      </Badge>
-    );
-  }
+    const Icon = config.icon;
+    const isAnimated = status === "crawling";
 
-  const Icon = config.icon;
-  const isAnimated = status === "crawling";
-  
-  // Connection status available for debugging if needed
-  // const showConnectionStatus = !isConnected && process.env.NODE_ENV === 'development';
+    // Connection status available for debugging if needed
+    // const showConnectionStatus = !isConnected && process.env.NODE_ENV === 'development';
 
-  // Badge variant
-  if (variant === "badge") {
-    return (
-      <Badge
-        variant={status === "failed" ? "destructive" : "secondary"}
-        className={cn(
-          config.color,
-          sizeStyles.gap,
-          sizeStyles.padding,
-          "transition-all duration-300 ease-in-out",
-          className
-        )}
-      >
-        <Icon
+    // Badge variant
+    if (variant === "badge") {
+      return (
+        <Badge
+          variant={status === "failed" ? "destructive" : "secondary"}
           className={cn(
-            sizeStyles.iconSize,
-            config.iconColor,
-            isAnimated && status === "crawling" && "animate-spin"
+            config.color,
+            sizeStyles.gap,
+            sizeStyles.padding,
+            "transition-all duration-300 ease-in-out",
+            className
           )}
-        />
-        {showLabel && (
-          <span className={sizeStyles.textSize}>{config.label}</span>
-        )}
-        {showTimestamp && lastCrawledAt && (
-          <span className={cn(sizeStyles.textSize, "opacity-75 ml-1")}>
-            • {formatLastCrawled(lastCrawledAt)}
-          </span>
-        )}
-      </Badge>
-    );
-  }
-
-  // Inline variant
-  if (variant === "inline") {
-    return (
-      <div className={cn("flex items-center", sizeStyles.gap, className)}>
-        <Icon
-          className={cn(
-            sizeStyles.iconSize,
-            config.iconColor,
-            isAnimated && status === "crawling" && "animate-spin"
-          )}
-        />
-        {showLabel && (
-          <span className={cn(sizeStyles.textSize, "text-muted-foreground")}>
-            {config.label}
-          </span>
-        )}
-        {showTimestamp && lastCrawledAt && (
-          <span className={cn(sizeStyles.textSize, "opacity-60")}>
-            • {formatLastCrawled(lastCrawledAt)}
-          </span>
-        )}
-      </div>
-    );
-  }
-
-  // Card variant
-  if (variant === "card") {
-    return (
-      <div
-        className={cn(
-          "flex items-center justify-between p-3 rounded-lg border transition-all duration-300",
-          config.color,
-          className
-        )}
-      >
-        <div className={cn("flex items-center", sizeStyles.gap)}>
+        >
           <Icon
             className={cn(
               sizeStyles.iconSize,
@@ -241,37 +184,96 @@ export const WebsiteStatusIndicator = React.memo(function WebsiteStatusIndicator
             )}
           />
           {showLabel && (
-            <div>
-              <div className={cn("font-medium", sizeStyles.textSize)}>
-                {config.label}
+            <span className={sizeStyles.textSize}>{config.label}</span>
+          )}
+          {showTimestamp && lastCrawledAt && (
+            <span className={cn(sizeStyles.textSize, "opacity-75 ml-1")}>
+              • {formatLastCrawled(lastCrawledAt)}
+            </span>
+          )}
+        </Badge>
+      );
+    }
+
+    // Inline variant
+    if (variant === "inline") {
+      return (
+        <div className={cn("flex items-center", sizeStyles.gap, className)}>
+          <Icon
+            className={cn(
+              sizeStyles.iconSize,
+              config.iconColor,
+              isAnimated && status === "crawling" && "animate-spin"
+            )}
+          />
+          {showLabel && (
+            <span className={cn(sizeStyles.textSize, "text-muted-foreground")}>
+              {config.label}
+            </span>
+          )}
+          {showTimestamp && lastCrawledAt && (
+            <span className={cn(sizeStyles.textSize, "opacity-60")}>
+              • {formatLastCrawled(lastCrawledAt)}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    // Card variant
+    if (variant === "card") {
+      return (
+        <div
+          className={cn(
+            "flex items-center justify-between p-3 rounded-lg border transition-all duration-300",
+            config.color,
+            className
+          )}
+        >
+          <div className={cn("flex items-center", sizeStyles.gap)}>
+            <Icon
+              className={cn(
+                sizeStyles.iconSize,
+                config.iconColor,
+                isAnimated && status === "crawling" && "animate-spin"
+              )}
+            />
+            {showLabel && (
+              <div>
+                <div className={cn("font-medium", sizeStyles.textSize)}>
+                  {config.label}
+                </div>
+                <div className={cn("text-xs opacity-75")}>
+                  {config.description}
+                </div>
               </div>
-              <div className={cn("text-xs opacity-75")}>
-                {config.description}
-              </div>
+            )}
+          </div>
+          {showTimestamp && lastCrawledAt && (
+            <div className={cn(sizeStyles.textSize, "opacity-75 text-right")}>
+              <div>Last crawled</div>
+              <div className="text-xs">{formatLastCrawled(lastCrawledAt)}</div>
             </div>
           )}
         </div>
-        {showTimestamp && lastCrawledAt && (
-          <div className={cn(sizeStyles.textSize, "opacity-75 text-right")}>
-            <div>Last crawled</div>
-            <div className="text-xs">{formatLastCrawled(lastCrawledAt)}</div>
-          </div>
-        )}
-      </div>
+      );
+    }
+
+    return null;
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison function for React.memo
+    // Always re-render if websiteId changes, let internal logic handle status changes
+    return (
+      prevProps.websiteId === nextProps.websiteId &&
+      prevProps.className === nextProps.className &&
+      prevProps.showLabel === nextProps.showLabel &&
+      prevProps.showTimestamp === nextProps.showTimestamp &&
+      prevProps.size === nextProps.size &&
+      prevProps.variant === nextProps.variant
     );
   }
-
-  return null;
-}, (prevProps, nextProps) => {
-  // Custom comparison function for React.memo
-  // Always re-render if websiteId changes, let internal logic handle status changes
-  return prevProps.websiteId === nextProps.websiteId &&
-         prevProps.className === nextProps.className &&
-         prevProps.showLabel === nextProps.showLabel &&
-         prevProps.showTimestamp === nextProps.showTimestamp &&
-         prevProps.size === nextProps.size &&
-         prevProps.variant === nextProps.variant;
-});
+);
 
 /**
  * Animated status transition component
@@ -322,7 +324,7 @@ export function StatusHistory({
         // For historical display, we create a temporary div since we don't have websiteId context
         const config = statusConfig[entry.status];
         const Icon = config.icon;
-        
+
         return (
           <div
             key={`${entry.status}-${entry.timestamp}`}

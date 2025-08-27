@@ -2,6 +2,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "./ui/skeleton";
 import { WorkspaceDropdown } from "./WorkspaceDropdown";
+import { useMemo } from "react";
 
 interface WorkspaceGuardProps {
   children: React.ReactNode;
@@ -27,8 +28,28 @@ export function WorkspaceGuard({
     isWorkspaceStateValid 
   } = useWorkspace();
 
-  // Show loading while authentication or workspace data is loading
-  if (authLoading || workspaceLoading) {
+  // FIXED: Debounce loading state changes to prevent dropdown thrashing during auth flow
+  const stableLoadingState = useMemo(() => {
+    // Consider stable when both auth and workspace loading are resolved
+    return {
+      isLoading: authLoading || workspaceLoading,
+      hasUser: !!user,
+      hasWorkspaces: workspaces && workspaces.length > 0,
+      hasCurrentWorkspace: !!currentWorkspace,
+      isStateValid: requireWorkspace ? isWorkspaceStateValid() : true,
+    };
+  }, [
+    authLoading,
+    workspaceLoading, 
+    !!user,
+    workspaces?.length,
+    !!currentWorkspace,
+    requireWorkspace,
+    isWorkspaceStateValid
+  ]);
+
+  // FIXED: Use stable loading state to prevent rapid re-renders
+  if (stableLoadingState.isLoading) {
     return fallback || (
       <div className="flex flex-col items-center justify-center py-8 space-y-4">
         <Skeleton variant="circular" size="lg" />
@@ -38,12 +59,12 @@ export function WorkspaceGuard({
   }
 
   // User must be authenticated
-  if (!user) {
+  if (!stableLoadingState.hasUser) {
     return fallback || null;
   }
 
   // Check if workspace state is valid
-  if (requireWorkspace && !isWorkspaceStateValid()) {
+  if (requireWorkspace && !stableLoadingState.isStateValid) {
     return fallback || (
       <div className="flex flex-col items-center justify-center py-8 space-y-4">
         <Skeleton variant="text" width="250px" height="1rem" />
@@ -53,7 +74,7 @@ export function WorkspaceGuard({
   }
 
   // If workspace is required but none exists, show workspace creation prompt
-  if (requireWorkspace && workspaces.length === 0) {
+  if (requireWorkspace && !stableLoadingState.hasWorkspaces) {
     return fallback || (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
         <h3 className="text-lg font-semibold">Create Your First Workspace</h3>
@@ -66,7 +87,7 @@ export function WorkspaceGuard({
   }
 
   // If workspace is required but current workspace is not set
-  if (requireWorkspace && !currentWorkspace) {
+  if (requireWorkspace && !stableLoadingState.hasCurrentWorkspace) {
     return fallback || (
       <div className="flex flex-col items-center justify-center py-8 space-y-4">
         <p className="text-muted-foreground">
