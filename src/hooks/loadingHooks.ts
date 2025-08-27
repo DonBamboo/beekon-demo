@@ -31,8 +31,10 @@ export function useResourceLoading(resourceId: string) {
   }, [resourceId, setLoadingState]);
   
   const clearError = useCallback(() => {
-    setLoadingState(resourceId, { isLoading: state.isLoading, error: null });
-  }, [resourceId, setLoadingState, state.isLoading]);
+    // Get current state dynamically to avoid dependency on state.isLoading
+    const currentState = getLoadingState(resourceId);
+    setLoadingState(resourceId, { isLoading: currentState.isLoading, error: null });
+  }, [resourceId, setLoadingState, getLoadingState]);
   
   const cleanup = useCallback(() => {
     clearLoadingState(resourceId);

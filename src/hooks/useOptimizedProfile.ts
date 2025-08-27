@@ -32,15 +32,18 @@ export function useOptimizedProfile() {
         return;
       }
 
+      // Get cached data dynamically to avoid dependency on changing cachedProfile
+      const currentCachedProfile = getFromCache<UserProfile>(profileCacheKey);
+
       // Use cached data for instant rendering
-      if (!forceRefresh && cachedProfile) {
-        setProfile(cachedProfile);
+      if (!forceRefresh && currentCachedProfile) {
+        setProfile(currentCachedProfile);
         setIsLoading(false);
         return;
       }
 
       // Show loading only if no cached data
-      if (!cachedProfile) {
+      if (!currentCachedProfile) {
         setIsLoading(true);
       }
       setError(null);
@@ -57,13 +60,15 @@ export function useOptimizedProfile() {
         setIsLoading(false);
       }
     },
-    [user?.id, cachedProfile, setCache, profileCacheKey]
+    [user?.id, getFromCache, setCache, profileCacheKey]
   );
 
-  // Load profile when user changes
+  // Load profile when user changes - FIXED: depend directly on user.id instead of loadProfile function
   useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+    if (user?.id) {
+      loadProfile();
+    }
+  }, [user?.id]); // Only depend on user.id, not the loadProfile function
 
   const updateProfile = useCallback(
     async (updates: Partial<UserProfile>) => {
@@ -108,14 +113,19 @@ export function useOptimizedProfile() {
       setError(null);
       try {
         const avatarUrl = await profileService.uploadAvatar(user.id, file);
-        const updatedProfile = {
-          ...profile,
-          avatar_url: avatarUrl,
-        } as UserProfile;
-        setProfile(updatedProfile);
-
-        // Update cache with new avatar
-        setCache(profileCacheKey, updatedProfile, 15 * 60 * 1000);
+        
+        // Get current profile state to avoid dependency on changing profile
+        setProfile(currentProfile => {
+          const updatedProfile = {
+            ...currentProfile,
+            avatar_url: avatarUrl,
+          } as UserProfile;
+          
+          // Update cache with new avatar
+          setCache(profileCacheKey, updatedProfile, 15 * 60 * 1000);
+          
+          return updatedProfile;
+        });
 
         return avatarUrl;
       } catch (error) {
@@ -125,28 +135,40 @@ export function useOptimizedProfile() {
         setIsLoading(false);
       }
     },
-    [user?.id, profile, setCache, profileCacheKey]
+    [user?.id, setCache, profileCacheKey]
   );
 
   const deleteAvatar = useCallback(async () => {
-    if (!user?.id || !profile?.avatar_url) return;
+    if (!user?.id) return;
 
     setIsLoading(true);
     setError(null);
     try {
-      await profileService.deleteAvatar(user.id, profile.avatar_url);
-      const updatedProfile = { ...profile, avatar_url: null };
-      setProfile(updatedProfile);
-
-      // Update cache without avatar
-      setCache(profileCacheKey, updatedProfile, 15 * 60 * 1000);
+      // Get current profile state to avoid dependency on changing profile
+      setProfile(currentProfile => {
+        if (!currentProfile?.avatar_url) {
+          return currentProfile;
+        }
+        
+        // Delete avatar using current profile data
+        profileService.deleteAvatar(user.id!, currentProfile.avatar_url).catch(() => {
+          // Handle error in the background - we've already removed it from state
+        });
+        
+        const updatedProfile = { ...currentProfile, avatar_url: null };
+        
+        // Update cache without avatar
+        setCache(profileCacheKey, updatedProfile, 15 * 60 * 1000);
+        
+        return updatedProfile;
+      });
     } catch (error) {
       setError("Failed to delete avatar");
       throw error;
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, profile, setCache, profileCacheKey]);
+  }, [user?.id, setCache, profileCacheKey]);
 
   const getInitials = useCallback(() => {
     if (profile?.first_name && profile?.last_name) {

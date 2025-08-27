@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,14 +38,10 @@ export default function CompetitorsList({
 }: CompetitorsListProps) {
   const { getCompetitorStatus } = useCompetitorStatus();
   
-  // Force re-render state for immediate status updates
-  const [forceRenderCounter, setForceRenderCounter] = useState(0);
-  
   // Listen for competitor status update events for immediate UI refresh
   useEffect(() => {
     const handleCompetitorStatusUpdate = () => {
-      // Force component re-render when competitor status updates
-      setForceRenderCounter(prev => prev + 1);
+      // Component will re-render automatically when data changes through context updates
     };
 
     if (typeof window !== 'undefined') {
@@ -150,9 +146,6 @@ export default function CompetitorsList({
             }
             
             const isAnalyzed = currentStatus === 'completed';
-            
-            // Force component dependency on forceRenderCounter to ensure immediate updates
-            forceRenderCounter; // Ensure dependency
             
             // Debug logging for rank data
             if (performanceData?.averageRank !== null && performanceData?.averageRank !== undefined) {

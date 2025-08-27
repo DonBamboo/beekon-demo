@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { profileService } from '@/services/profileService';
 import { UserProfile } from '@/types/database';
@@ -8,34 +8,57 @@ export function useProfile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Stabilize user ID to prevent unnecessary useCallback recreations
+  const stableUserId = useMemo(() => user?.id, [user?.id]);
+  
+  // Ref to prevent concurrent profile loading
+  const isLoadingRef = useRef(false);
+  
+  // Ref to store the latest loadProfile function to break dependency chain
+  const loadProfileRef = useRef<(() => Promise<void>) | null>(null);
 
   const loadProfile = useCallback(async () => {
-    if (!user?.id) {
+    if (!stableUserId) {
       setProfile(null);
       setError(null);
       return;
     }
 
+    // Prevent concurrent profile loading
+    if (isLoadingRef.current) {
+      return;
+    }
+
+    isLoadingRef.current = true;
     setIsLoading(true);
     setError(null);
     try {
-      const profileData = await profileService.getProfile(user.id);
+      const profileData = await profileService.getProfile(stableUserId);
       setProfile(profileData);
     } catch (error) {
       // Failed to load profile
       setError('Failed to load profile');
     } finally {
       setIsLoading(false);
+      isLoadingRef.current = false;
     }
-  }, [user?.id]);
+  }, [stableUserId]);
 
-  // Load profile when user changes
+  // Store the latest loadProfile function in ref to break dependency chain
   useEffect(() => {
-    loadProfile();
+    loadProfileRef.current = loadProfile;
   }, [loadProfile]);
 
+  // Load profile when user ID changes (using ref to avoid dependency chain)
+  useEffect(() => {
+    if (loadProfileRef.current) {
+      loadProfileRef.current();
+    }
+  }, [stableUserId]); // Only depend on stableUserId, not loadProfile
+
   const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
-    if (!user?.id) return;
+    if (!stableUserId) return;
 
     setIsLoading(true);
     setError(null);
@@ -48,7 +71,7 @@ export function useProfile() {
         }
       });
       
-      const updatedProfile = await profileService.updateProfile(user.id, profileUpdates as Record<string, unknown>);
+      const updatedProfile = await profileService.updateProfile(stableUserId, profileUpdates as Record<string, unknown>);
       setProfile(updatedProfile);
       return updatedProfile;
     } catch (error) {
@@ -58,15 +81,15 @@ export function useProfile() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [stableUserId]);
 
   const uploadAvatar = useCallback(async (file: File) => {
-    if (!user?.id) return;
+    if (!stableUserId) return;
 
     setIsLoading(true);
     setError(null);
     try {
-      const avatarUrl = await profileService.uploadAvatar(user.id, file);
+      const avatarUrl = await profileService.uploadAvatar(stableUserId, file);
       setProfile(prev => prev ? { ...prev, avatar_url: avatarUrl } : null);
       return avatarUrl;
     } catch (error) {
@@ -76,15 +99,15 @@ export function useProfile() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [stableUserId]);
 
   const deleteAvatar = useCallback(async () => {
-    if (!user?.id || !profile?.avatar_url) return;
+    if (!stableUserId || !profile?.avatar_url) return;
 
     setIsLoading(true);
     setError(null);
     try {
-      await profileService.deleteAvatar(user.id, profile.avatar_url);
+      await profileService.deleteAvatar(stableUserId, profile.avatar_url);
       setProfile(prev => prev ? { ...prev, avatar_url: null } : null);
     } catch (error) {
       // Failed to delete avatar
@@ -93,7 +116,7 @@ export function useProfile() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, profile?.avatar_url]);
+  }, [stableUserId, profile?.avatar_url]);
 
   const getInitials = useCallback(() => {
     if (profile?.first_name && profile?.last_name) {

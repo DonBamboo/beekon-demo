@@ -60,7 +60,7 @@ function PerformanceMonitor({ children }: { children: React.ReactNode }) {
 // Workspace integration component
 function WorkspaceStateSync({ children }: { children: React.ReactNode }) {
   // Always call hooks first
-  const { dispatch, state } = useAppState();
+  const { dispatch } = useAppState();
   const { websites, currentWorkspace, loading: workspaceLoading } = useWorkspace();
   
   // Add debounced state sync to prevent cascading updates
@@ -119,7 +119,7 @@ function WorkspaceStateSync({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('WorkspaceStateSync sync error:', error);
     }
-  }, [currentWorkspace, websites, workspaceLoading, dispatch, state.workspace.selectedWebsiteId]);
+  }, [currentWorkspace, websites, workspaceLoading, dispatch]);
 
   // Cleanup timeout on unmount
   React.useEffect(() => {

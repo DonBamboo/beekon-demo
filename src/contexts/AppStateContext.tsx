@@ -907,14 +907,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [clearCache, invalidateDependentCaches, state.workspace.websites]
   );
 
-  // Intelligent cache cleanup and optimization
+  // Intelligent cache cleanup and optimization - FIXED: removed state dependencies to prevent infinite loop
   useEffect(() => {
     const cleanup = () => {
       const now = Date.now();
       let cleanedCount = 0;
+      
+      // Use current state reference to avoid dependency on changing state
+      const currentState = stateRef.current;
 
       // Clean expired entries
-      state.cache.expiration.forEach((expiresAt, key) => {
+      currentState.cache.expiration.forEach((expiresAt, key) => {
         if (now > expiresAt) {
           dispatch({ type: "CACHE_DELETE", payload: { key } });
           cleanedCount++;
@@ -922,14 +925,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       });
 
       // Memory management: If cache gets too large (>100 entries), clean oldest entries
-      if (state.cache.memory.size > 100) {
-        const entries = Array.from(state.cache.memory.entries());
+      if (currentState.cache.memory.size > 100) {
+        const entries = Array.from(currentState.cache.memory.entries());
         const sortedByAge = entries.sort(
           ([, a], [, b]) => a.timestamp - b.timestamp
         );
         const toDelete = sortedByAge.slice(
           0,
-          Math.floor(state.cache.memory.size * 0.2)
+          Math.floor(currentState.cache.memory.size * 0.2)
         ); // Remove oldest 20%
 
         toDelete.forEach(([key]) => {
@@ -942,7 +945,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const interval = setInterval(cleanup, 120000); // Cleanup every 2 minutes
     return () => clearInterval(interval);
-  }, [state.cache.expiration, state.cache.memory]);
+  }, []); // Empty dependencies - no longer depends on changing cache state
 
   return (
     <AppStateContext.Provider

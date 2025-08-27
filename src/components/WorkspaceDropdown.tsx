@@ -17,7 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import { WorkspaceModal } from "./WorkspaceModal";
 
@@ -37,6 +37,28 @@ export function WorkspaceDropdown() {
   const [workspaceToDelete, setWorkspaceToDelete] = useState<Workspace | null>(
     null
   );
+
+  // FIXED: Memoize stable props to prevent dropdown from re-rendering during loading transitions
+  const stableProps = useMemo(() => ({
+    hasWorkspaces: workspaces && workspaces.length > 0,
+    hasCurrentWorkspace: !!currentWorkspace,
+    workspaceCount: workspaces?.length || 0,
+    currentWorkspaceName: currentWorkspace?.name || '',
+    currentWorkspaceTier: currentWorkspace?.subscription_tier || null,
+    currentWorkspaceCredits: currentWorkspace?.credits_remaining || 0,
+  }), [
+    workspaces?.length, // Only depend on count, not the full array
+    currentWorkspace?.id, // Only depend on ID, not full object
+    currentWorkspace?.name,
+    currentWorkspace?.subscription_tier,
+    currentWorkspace?.credits_remaining,
+  ]);
+
+  // FIXED: Don't render dropdown during critical loading states to prevent Radix UI thrashing
+  const shouldRenderDropdown = useMemo(() => {
+    // Don't render dropdowns during initial auth or rapid loading state changes
+    return !loading && (stableProps.hasWorkspaces || stableProps.hasCurrentWorkspace);
+  }, [loading, stableProps.hasWorkspaces, stableProps.hasCurrentWorkspace]);
 
   const getTierBadge = (tier: string | null) => {
     if (!tier) return null;
@@ -94,6 +116,11 @@ export function WorkspaceDropdown() {
     return <Skeleton variant="button" size="md" width="120px" />;
   }
 
+  // FIXED: Add guard to prevent rendering dropdown during loading state transitions
+  if (!shouldRenderDropdown) {
+    return <Skeleton variant="button" size="md" width="120px" />;
+  }
+
   if (!currentWorkspace) {
     return (
       <>
@@ -117,7 +144,7 @@ export function WorkspaceDropdown() {
           <Button variant="ghost" size="sm" className="h-9 px-3">
             <Building className="h-4 w-4 mr-2" />
             <span className="max-w-[150px] truncate">
-              {currentWorkspace.name}
+              {stableProps.currentWorkspaceName}
             </span>
             <ChevronDown className="h-4 w-4 ml-2" />
           </Button>
@@ -126,18 +153,18 @@ export function WorkspaceDropdown() {
           <DropdownMenuLabel>
             <div className="flex items-center justify-between">
               <span>Current Workspace</span>
-              {getTierBadge(currentWorkspace.subscription_tier)}
+              {getTierBadge(stableProps.currentWorkspaceTier)}
             </div>
           </DropdownMenuLabel>
           <div className="px-2 py-1 text-sm text-muted-foreground">
-            <div className="font-medium">{currentWorkspace.name}</div>
+            <div className="font-medium">{stableProps.currentWorkspaceName}</div>
             <div className="flex items-center gap-2 mt-1">
-              <span>Credits: {currentWorkspace.credits_remaining || 0}</span>
+              <span>Credits: {stableProps.currentWorkspaceCredits}</span>
             </div>
           </div>
           <DropdownMenuSeparator />
 
-          {workspaces.length > 1 && (
+          {stableProps.workspaceCount > 1 && (
             <>
               <DropdownMenuLabel>Switch Workspace</DropdownMenuLabel>
               {workspaces
@@ -178,7 +205,7 @@ export function WorkspaceDropdown() {
             Workspace Settings
           </DropdownMenuItem>
 
-          {workspaces.length > 1 && currentWorkspace && (
+          {stableProps.workspaceCount > 1 && currentWorkspace && (
             <DropdownMenuItem
               onClick={() => handleDeleteWorkspace(currentWorkspace)}
               className="text-destructive"

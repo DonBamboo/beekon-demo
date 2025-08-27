@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppState } from '@/hooks/appStateHooks';
 import { ApiKey, apiKeyService } from '@/services/apiKeyService';
@@ -11,18 +11,19 @@ export function useOptimizedApiKeys() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Cache key for API keys
-  const apiKeysCacheKey = `api_keys_${user?.id}`;
+  // FIXED: Stabilize cache key to prevent infinite loops
+  const apiKeysCacheKey = useMemo(() => `api_keys_${user?.id}`, [user?.id]);
   
-  // Check if we have cached API keys
-  const cachedApiKeys = getFromCache<ApiKey[]>(apiKeysCacheKey);
-  
-  // Synchronous cache detection for immediate skeleton bypass
-  const hasSyncCache = useCallback(() => {
-    if (!user?.id) return false;
-    const cached = getFromCache<ApiKey[]>(apiKeysCacheKey);
-    return !!cached;
+  // FIXED: Memoize cached API keys to prevent recreation on every render
+  const cachedApiKeys = useMemo(() => {
+    if (!user?.id) return null;
+    return getFromCache<ApiKey[]>(apiKeysCacheKey);
   }, [user?.id, apiKeysCacheKey, getFromCache]);
+  
+  // FIXED: Synchronous cache detection - use stable cached value instead of calling getFromCache
+  const hasSyncCache = useCallback(() => {
+    return !!cachedApiKeys;
+  }, [cachedApiKeys]);
 
   const loadApiKeys = useCallback(async (forceRefresh = false) => {
     if (!user?.id) {
@@ -65,7 +66,7 @@ export function useOptimizedApiKeys() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, cachedApiKeys, setCache, apiKeysCacheKey]);
+  }, [user?.id, cachedApiKeys, setCache, apiKeysCacheKey]); // Dependencies are now stable
 
   // Load API keys when user changes
   useEffect(() => {

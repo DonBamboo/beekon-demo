@@ -24,7 +24,7 @@ export interface DebugEvent {
 
 // Global debug event store
 let globalDebugEvents: DebugEvent[] = [];
-let debugEventListeners: Array<(event: DebugEvent) => void> = [];
+const debugEventListeners: Array<(event: DebugEvent) => void> = [];
 
 /**
  * Check if debug mode is enabled

@@ -44,12 +44,17 @@ export function useCoordinatedData<T = unknown>({
   const [errors, setErrors] = useState<Record<string, Error>>({});
   const [, setIndividualLoadingStates] = useState<Record<string, boolean>>({});
 
-  const loaderIds = loaders.map(l => `${resourceId}-${l.id}`);
+  // FIXED: Stabilize loaderIds to prevent infinite loops
+  const loaderIds = useMemo(() => 
+    loaders.map(l => `${resourceId}-${l.id}`), 
+    [loaders, resourceId]
+  );
+  
   const mainResource = useResourceLoading(resourceId);
   const { areResourcesLoading } = useLoadingContext();
   const coordinated = useMemo(() => ({
     isLoading: areResourcesLoading(loaderIds)
-  }), [areResourcesLoading, loaderIds]);
+  }), [areResourcesLoading, loaderIds]); // Now stable
 
   // Debounced dependency change handler
   const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
@@ -112,7 +117,7 @@ export function useCoordinatedData<T = unknown>({
     }
   }, [loaders, executeLoader]);
 
-  // Handle dependency changes with debouncing  
+  // FIXED: Handle dependency changes with debouncing - removed debounceTimer from dependencies to prevent infinite loop
   useEffect(() => {
     if (debounceTimer) {
       clearTimeout(debounceTimer);
@@ -127,7 +132,7 @@ export function useCoordinatedData<T = unknown>({
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [executeAllLoaders, debounceMs, debounceTimer]);
+  }, [executeAllLoaders, debounceMs]); // Removed debounceTimer from dependencies
 
   // Cleanup on unmount
   useEffect(() => {
