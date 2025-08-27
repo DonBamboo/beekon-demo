@@ -1,4 +1,4 @@
-import { createContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useState, useCallback, ReactNode, useRef } from 'react';
 
 interface LoadingState {
   [key: string]: {
@@ -54,6 +54,9 @@ interface LoadingProviderProps {
 export function LoadingProvider({ children }: LoadingProviderProps) {
   const [loadingStates, setLoadingStates] = useState<LoadingState>({});
   const [resolveCallbacks, setResolveCallbacks] = useState<Map<string, (() => void)[]>>(new Map());
+  
+  // Ref to prevent concurrent state updates that could cause infinite loops
+  const updatingResourcesRef = useRef<Set<string>>(new Set());
 
   const getLoadingState = useCallback((resourceId: string) => {
     const state = loadingStates[resourceId];
@@ -68,36 +71,50 @@ export function LoadingProvider({ children }: LoadingProviderProps) {
     isLoading: boolean;
     error?: Error | null;
   }) => {
-    setLoadingStates(prev => {
-      const existing = prev[resourceId];
-      const updated = {
-        ...existing,
-        isLoading: newState.isLoading,
-        error: newState.error ?? null,
-        isInitialLoad: existing?.isInitialLoad ?? true,
-        lastUpdate: Date.now(),
-      };
+    // Prevent concurrent updates to the same resource
+    if (updatingResourcesRef.current.has(resourceId)) {
+      return;
+    }
 
-      // If loading is complete and this was an initial load, mark it as no longer initial
-      if (!newState.isLoading && existing?.isInitialLoad) {
-        updated.isInitialLoad = false;
-      }
+    updatingResourcesRef.current.add(resourceId);
 
-      return {
-        ...prev,
-        [resourceId]: updated,
-      };
-    });
+    try {
+      setLoadingStates(prev => {
+        const existing = prev[resourceId];
+        const updated = {
+          ...existing,
+          isLoading: newState.isLoading,
+          error: newState.error ?? null,
+          isInitialLoad: existing?.isInitialLoad ?? true,
+          lastUpdate: Date.now(),
+        };
 
-    // Trigger callbacks if loading is complete
-    if (!newState.isLoading) {
-      const callbacks = resolveCallbacks.get(resourceId) || [];
-      callbacks.forEach(callback => callback());
-      setResolveCallbacks(prev => {
-        const updated = new Map(prev);
-        updated.delete(resourceId);
-        return updated;
+        // If loading is complete and this was an initial load, mark it as no longer initial
+        if (!newState.isLoading && existing?.isInitialLoad) {
+          updated.isInitialLoad = false;
+        }
+
+        return {
+          ...prev,
+          [resourceId]: updated,
+        };
       });
+
+      // Trigger callbacks if loading is complete
+      if (!newState.isLoading) {
+        const callbacks = resolveCallbacks.get(resourceId) || [];
+        callbacks.forEach(callback => callback());
+        setResolveCallbacks(prev => {
+          const updated = new Map(prev);
+          updated.delete(resourceId);
+          return updated;
+        });
+      }
+    } finally {
+      // Always remove from updating set to prevent permanent blocking
+      setTimeout(() => {
+        updatingResourcesRef.current.delete(resourceId);
+      }, 0);
     }
   }, [resolveCallbacks]);
 

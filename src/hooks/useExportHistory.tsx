@@ -150,10 +150,20 @@ export function useExportHistory() {
     ]);
   }, []);
 
-  // Initialize data on first load
+  // Initialize data on first load - FIXED: removed refreshAll dependency to prevent infinite loop
   useEffect(() => {
-    refreshAll();
-  }, [refreshAll]);
+    // Call refreshAll directly on mount without depending on the callback reference
+    const initializeData = async () => {
+      await Promise.all([
+        fetchExportHistory(),
+        fetchExportSummary(),
+        fetchExportStatistics(),
+        fetchRecentActivity(),
+      ]);
+    };
+    
+    initializeData();
+  }, []); // Empty dependencies - only run on mount
 
   return {
     exportHistory,

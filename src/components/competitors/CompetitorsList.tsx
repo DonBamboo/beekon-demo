@@ -151,9 +151,6 @@ export default function CompetitorsList({
             
             const isAnalyzed = currentStatus === 'completed';
             
-            // Force component dependency on forceRenderCounter to ensure immediate updates
-            forceRenderCounter; // Ensure dependency
-            
             // Debug logging for rank data
             if (performanceData?.averageRank !== null && performanceData?.averageRank !== undefined) {
               // Debug: competitor rank data available

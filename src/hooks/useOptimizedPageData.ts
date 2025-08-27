@@ -65,6 +65,10 @@ export function useOptimizedAnalysisData() {
   const [hasMore, setHasMore] = useState(true);
   const [cursor, setCursor] = useState<string | null>(null);
 
+  // Refs to store latest functions and prevent infinite loops
+  const loadAnalysisDataRef = useRef<((forceRefresh?: boolean) => Promise<void>) | null>(null);
+  const isLoadingAnalysisRef = useRef(false);
+
   // Transform filters from global state format to service-expected format
   const transformedFilters = useMemo((): AnalysisFilters => {
     const uiFilters = filters as UIAnalysisFilters;
@@ -148,8 +152,16 @@ export function useOptimizedAnalysisData() {
         return;
       }
 
-      // Check smart cache only if not forcing refresh
-      if (!forceRefresh) {
+      // Prevent concurrent analysis data loading
+      if (isLoadingAnalysisRef.current && !forceRefresh) {
+        return;
+      }
+
+      isLoadingAnalysisRef.current = true;
+
+      try {
+        // Check smart cache only if not forcing refresh
+        if (!forceRefresh) {
         const cachedResult = getCachedData();
         if (cachedResult) {
           setAnalysisResults(cachedResult.data);
@@ -188,12 +200,20 @@ export function useOptimizedAnalysisData() {
         
         // Filtered cache (for exact filter match)
         setCache(filteredCacheKey, results, 5 * 60 * 1000); // 5 minutes cache
+        } catch (error) {
+          console.error("Failed to load analysis data:", error);
+          setError(error instanceof Error ? error : new Error("Unknown error"));
+        } finally {
+          setIsLoading(false);
+          setIsInitialLoad(false);
+          isLoadingAnalysisRef.current = false;
+        }
       } catch (error) {
         console.error("Failed to load analysis data:", error);
         setError(error instanceof Error ? error : new Error("Unknown error"));
-      } finally {
         setIsLoading(false);
         setIsInitialLoad(false);
+        isLoadingAnalysisRef.current = false;
       }
     },
     [
@@ -204,6 +224,11 @@ export function useOptimizedAnalysisData() {
       setCache,
     ]
   );
+
+  // Store the latest loadAnalysisData function in ref to break dependency chain
+  useEffect(() => {
+    loadAnalysisDataRef.current = loadAnalysisData;
+  }, [loadAnalysisData]);
 
   // Load more results for infinite scroll
   const loadMoreResults = useCallback(async () => {
@@ -290,7 +315,9 @@ export function useOptimizedAnalysisData() {
     setIsLoadingMore(false); // Reset pagination state when loading fresh data for new website
     setCursor(null); // Reset cursor for fresh data load
     setError(null);
-    loadAnalysisData();
+    if (loadAnalysisDataRef.current) {
+      loadAnalysisDataRef.current();
+    }
     
     if (process.env.NODE_ENV === "development") {
       console.log("Analysis: No cache found, loading fresh data", {
@@ -299,7 +326,7 @@ export function useOptimizedAnalysisData() {
         filteredCacheKey
       });
     }
-  }, [selectedWebsiteId, getCachedData, loadAnalysisData, baseCacheKey, filteredCacheKey]);
+  }, [selectedWebsiteId, getCachedData, baseCacheKey, filteredCacheKey]); // Removed loadAnalysisData dependency
 
   // Separate effect for filter changes - preserves website cache, only reloads if no filtered cache
   useEffect(() => {
@@ -338,8 +365,10 @@ export function useOptimizedAnalysisData() {
     setIsLoadingMore(false); // Reset pagination state when loading fresh data due to filter change
     setCursor(null); // Reset cursor for fresh filtered data load
     setError(null);
-    loadAnalysisData();
-  }, [filtersChanged, selectedWebsiteId, filteredCacheKey, getFromCache, transformedFilters, loadAnalysisData]);
+    if (loadAnalysisDataRef.current) {
+      loadAnalysisDataRef.current();
+    }
+  }, [filtersChanged, selectedWebsiteId, filteredCacheKey, getFromCache, transformedFilters]); // Removed loadAnalysisData dependency
 
   return {
     // Data
@@ -386,6 +415,10 @@ export function useOptimizedDashboardData() {
   // Initialize loading state as true if we have a website to load data for
   const [isLoading, setIsLoading] = useState(!!selectedWebsiteId);
 
+  // Refs to store latest functions and prevent infinite loops
+  const loadDashboardDataRef = useRef<((forceRefresh?: boolean) => Promise<void>) | null>(null);
+  const isLoadingDashboardRef = useRef(false);
+
   // Transform dashboard filters if needed
   const transformedFilters = useMemo(() => {
     const typedFilters = filters as DashboardFilters;
@@ -412,6 +445,13 @@ export function useOptimizedDashboardData() {
   const loadDashboardData = useCallback(
     async (forceRefresh = false) => {
       if (!selectedWebsiteId) return;
+
+      // Prevent concurrent dashboard data loading
+      if (isLoadingDashboardRef.current && !forceRefresh) {
+        return;
+      }
+
+      isLoadingDashboardRef.current = true;
 
       // Get current cache state
       const currentCachedData = getFromCache<Record<string, unknown>>(cacheKey);
@@ -463,6 +503,7 @@ export function useOptimizedDashboardData() {
         setError(error instanceof Error ? error : new Error("Unknown error"));
       } finally {
         setIsLoading(false);
+        isLoadingDashboardRef.current = false;
       }
     },
     [
@@ -474,6 +515,11 @@ export function useOptimizedDashboardData() {
       cacheKey,
     ]
   );
+
+  // Store the latest loadDashboardData function in ref to break dependency chain
+  useEffect(() => {
+    loadDashboardDataRef.current = loadDashboardData;
+  }, [loadDashboardData]);
 
   // Handle initial loading state and cached data
   useEffect(() => {
@@ -492,9 +538,11 @@ export function useOptimizedDashboardData() {
     } else {
       // No cached data, ensure loading state is true and load data
       setIsLoading(true);
-      loadDashboardData();
+      if (loadDashboardDataRef.current) {
+        loadDashboardDataRef.current();
+      }
     }
-  }, [selectedWebsiteId, cacheKey, getFromCache, loadDashboardData]);
+  }, [selectedWebsiteId, cacheKey, getFromCache]); // Removed loadDashboardData dependency
 
   // Detect website changes and reload data immediately
   const { clearCache: clearDashboardCache } = useAppState();
@@ -523,7 +571,9 @@ export function useOptimizedDashboardData() {
       setError(null);
       
       // Always reload data immediately - no complex visibility logic
-      loadDashboardData(true);
+      if (loadDashboardDataRef.current) {
+        loadDashboardDataRef.current(true);
+      }
       
       // Clear global cache for the previous website using pattern matching
       clearDashboardCache(`dashboard_data_${prevWebsiteId}`);
@@ -570,6 +620,10 @@ export function useOptimizedCompetitorsData() {
   const [analytics, setAnalytics] = useState<Record<string, unknown> | null>(null);
   const [isLoading, setIsLoading] = useState(!!selectedWebsiteId);
   const [error, setError] = useState<Error | null>(null);
+
+  // Refs to store latest functions and prevent infinite loops
+  const loadCompetitorsDataRef = useRef<((forceRefresh?: boolean) => Promise<void>) | null>(null);
+  const isLoadingCompetitorsRef = useRef(false);
 
   // Transform competitors filters from global state format to service format
   const transformedFilters = useMemo(() => {
@@ -654,8 +708,16 @@ export function useOptimizedCompetitorsData() {
     async (forceRefresh = false) => {
       if (!selectedWebsiteId) return;
 
-      // Check smart cache only if not forcing refresh
-      if (!forceRefresh) {
+      // Prevent concurrent competitors data loading
+      if (isLoadingCompetitorsRef.current && !forceRefresh) {
+        return;
+      }
+
+      isLoadingCompetitorsRef.current = true;
+
+      try {
+        // Check smart cache only if not forcing refresh
+        if (!forceRefresh) {
         const cachedResult = getCompetitorsCachedData();
         if (cachedResult) {
           const currentCachedData = cachedResult.data;
@@ -782,11 +844,18 @@ export function useOptimizedCompetitorsData() {
         
         // Filtered cache (for exact filter match)
         setCache(competitorsFilteredCacheKey, competitorsData, 5 * 60 * 1000); // 5 minutes cache
+        } catch (error) {
+          console.error("Failed to load competitors data:", error);
+          setError(error instanceof Error ? error : new Error("Unknown error"));
+        } finally {
+          setIsLoading(false);
+          isLoadingCompetitorsRef.current = false;
+        }
       } catch (error) {
         console.error("Failed to load competitors data:", error);
         setError(error instanceof Error ? error : new Error("Unknown error"));
-      } finally {
         setIsLoading(false);
+        isLoadingCompetitorsRef.current = false;
       }
     },
     [
@@ -797,6 +866,11 @@ export function useOptimizedCompetitorsData() {
       setCache
     ]
   );
+
+  // Store the latest loadCompetitorsData function in ref to break dependency chain
+  useEffect(() => {
+    loadCompetitorsDataRef.current = loadCompetitorsData;
+  }, [loadCompetitorsData]);
 
   // Smart cache-first navigation for instant website switching - Competitors
   useEffect(() => {
@@ -943,8 +1017,10 @@ export function useOptimizedCompetitorsData() {
     
     setIsLoading(true);
     setError(null);
-    loadCompetitorsData();
-  }, [competitorFiltersChanged, selectedWebsiteId, competitorsFilteredCacheKey, getFromCache, transformedFilters, loadCompetitorsData]);
+    if (loadCompetitorsDataRef.current) {
+      loadCompetitorsDataRef.current();
+    }
+  }, [competitorFiltersChanged, selectedWebsiteId, competitorsFilteredCacheKey, getFromCache, transformedFilters]); // Removed loadCompetitorsData dependency
 
   // Listen for competitor status update events to force data refresh
   useEffect(() => {
@@ -954,7 +1030,9 @@ export function useOptimizedCompetitorsData() {
       // Only refresh data if the update is for the current website
       if (websiteId === selectedWebsiteId) {
         // Force refresh by clearing caches and reloading data
-        loadCompetitorsData(true);
+        if (loadCompetitorsDataRef.current) {
+          loadCompetitorsDataRef.current(true);
+        }
       }
     };
 

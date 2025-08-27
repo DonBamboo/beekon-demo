@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAppState } from '@/hooks/appStateHooks';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { useWebsiteStatusContext } from '@/contexts/WebsiteStatusContext';
@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Copy, AlertTriangle, Info, AlertCircle } from 'lucide-react';
-import { copyToClipboard, formatDebugData, subscribeToDebugEvents, getDebugEvents, clearDebugEvents, type DebugEvent } from '@/lib/debug-utils';
+import { copyToClipboard, formatDebugData, subscribeToDebugEvents, getDebugEvents, clearDebugEvents, addDebugEvent, type DebugEvent } from '@/lib/debug-utils';
 
 interface LegacyDebugEvent {
   id: string;
@@ -29,68 +29,142 @@ export function RealTimeDebugger() {
   const [categoryFilter, setCategoryFilter] = useState<'all' | DebugEvent['category']>('all');
   const eventsRef = useRef<HTMLDivElement>(null);
   
+  // Use ref to track previous state and avoid infinite loops
+  const previousAppStateRef = useRef<{
+    websiteCount: number;
+    websites: Array<{id: string; domain: string; status: string | null; updated_at: string}>;
+  } | null>(null);
+  
+  // Use refs for batched event processing to prevent infinite loops
+  const batchedEventsRef = useRef<DebugEvent[]>([]);
+  const batchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isProcessingBatchRef = useRef(false);
+  
   const { state: appState } = useAppState();
   const { websites, currentWorkspace } = useWorkspace();
   const websiteStatusContext = useWebsiteStatusContext();
   const { toast } = useToast();
 
-  // Subscribe to global debug events
-  useEffect(() => {
-    const unsubscribe = subscribeToDebugEvents((event: DebugEvent) => {
+  // Batched event processing function to prevent infinite loops
+  const processBatchedEvents = useCallback(() => {
+    if (isProcessingBatchRef.current || batchedEventsRef.current.length === 0) {
+      return;
+    }
+
+    isProcessingBatchRef.current = true;
+    const eventsToProcess = [...batchedEventsRef.current];
+    batchedEventsRef.current = [];
+
+    // Comprehensive filtering to prevent self-referential loops
+    let appStateEventCount = 0;
+    const filteredEvents = eventsToProcess.filter(event => {
+      // Filter out events from debug monitor components
+      if (event.source === 'RealTimeDebugger' || 
+          event.source === 'debug-monitor' || 
+          event.source === 'debug-system') {
+        return false;
+      }
+      
+      // Filter out redundant app-state events during component lifecycle
+      if (event.category === 'component' && event.source === 'app-state-change') {
+        // Allow max 1 app-state event per batch to prevent spam
+        if (appStateEventCount >= 1) {
+          return false;
+        }
+        appStateEventCount++;
+      }
+      
+      // Filter out events with circular references to event processing
+      if (event.message && event.message.includes('Maximum update depth')) {
+        return false;
+      }
+      
+      return true;
+    });
+
+    if (filteredEvents.length > 0) {
       setEvents(prev => {
-        const updated = [...prev, event];
+        const updated = [...prev, ...filteredEvents];
         return updated.slice(-200); // Keep last 200 events
       });
-    });
+    }
 
-    // Load existing events
-    setEvents(getDebugEvents().slice(-200));
-
-    return unsubscribe;
+    isProcessingBatchRef.current = false;
   }, []);
 
-  // Track legacy events for backward compatibility
-  const addEvent = useCallback((event: Omit<LegacyDebugEvent, 'id' | 'timestamp'>) => {
-    const newEvent: LegacyDebugEvent = {
-      ...event,
-      id: `${Date.now()}-${Math.random()}`,
-      timestamp: Date.now(),
+  // Subscribe to global debug events with batched processing
+  useEffect(() => {
+    const unsubscribe = subscribeToDebugEvents((event: DebugEvent) => {
+      // Add to batch instead of immediate setState
+      batchedEventsRef.current.push(event);
+      
+      // Clear existing timeout and set new one
+      if (batchTimeoutRef.current) {
+        clearTimeout(batchTimeoutRef.current);
+      }
+      
+      // Process batch after a short delay to allow for batching
+      batchTimeoutRef.current = setTimeout(() => {
+        processBatchedEvents();
+        batchTimeoutRef.current = null;
+      }, 16); // ~1 frame at 60fps for smooth batching
+    });
+
+    return () => {
+      unsubscribe();
+      if (batchTimeoutRef.current) {
+        clearTimeout(batchTimeoutRef.current);
+      }
     };
-    
-    setEvents(prev => {
-      const updated = [...prev, newEvent];
-      return updated.slice(-200); // Keep last 200 events
-    });
+  }, [processBatchedEvents]);
+
+  // Load existing events separately to avoid initial loop
+  useEffect(() => {
+    const existingEvents = getDebugEvents().slice(-200);
+    if (existingEvents.length > 0) {
+      setEvents(existingEvents);
+    }
   }, []);
 
-  // Filter events based on current filters
-  const filteredEvents = events.filter(event => {
-    // Type filter
-    if (filter !== 'all') {
-      const eventType = 'severity' in event ? 
-        (event.severity === 'high' || event.severity === 'critical' ? 'error' :
-         event.severity === 'medium' ? 'warning' : 'info') :
-        'info';
-      if (eventType !== filter) return false;
-    }
+  // Legacy addEvent function removed - replaced with direct setEvents calls for stable references
 
-    // Category filter
-    if (categoryFilter !== 'all' && 'category' in event) {
-      if (event.category !== categoryFilter) return false;
-    }
+  // Filter events based on current filters (optimized with useMemo)
+  const filteredEvents = useMemo(() => {
+    return events.filter(event => {
+      // Type filter
+      if (filter !== 'all') {
+        const eventType = 'severity' in event ? 
+          (event.severity === 'high' || event.severity === 'critical' ? 'error' :
+           event.severity === 'medium' ? 'warning' : 'info') :
+          'info';
+        if (eventType !== filter) return false;
+      }
 
-    return true;
-  });
+      // Category filter
+      if (categoryFilter !== 'all' && 'category' in event) {
+        if (event.category !== categoryFilter) return false;
+      }
 
-  // Listen for custom events
+      return true;
+    });
+  }, [events, filter, categoryFilter]);
+
+  // Listen for custom events using global debug system
   useEffect(() => {
     const handleWebsiteStatusUpdate = (event: CustomEvent) => {
-      addEvent({
+      // Use global debug system instead of local setEvents
+      addDebugEvent({
         type: 'ui-event',
+        category: 'ui',
         source: 'custom-event',
+        message: 'Website status update event received',
+        details: {
+          websiteId: event.detail?.websiteId,
+          status: event.detail?.status,
+          eventData: event.detail,
+        },
         websiteId: event.detail?.websiteId,
-        status: event.detail?.status,
-        data: event.detail,
+        severity: 'low'
       });
     };
 
@@ -102,24 +176,45 @@ export function RealTimeDebugger() {
       };
     }
     return undefined;
-  }, [addEvent]);
+  }, []); // No dependencies needed
 
-  // Track app state changes
+  // Track app state changes with global debug system
   useEffect(() => {
-    addEvent({
-      type: 'app-state',
-      source: 'app-state-change',
-      data: {
-        websiteCount: appState.workspace.websites.length,
-        websites: appState.workspace.websites.map(w => ({
-          id: w.id,
-          domain: w.domain,
-          status: w.crawl_status,
-          updated_at: w.updated_at
-        }))
-      },
-    });
-  }, [appState.workspace.websites, addEvent]);
+    const currentWebsiteData = {
+      websiteCount: appState.workspace.websites.length,
+      websites: appState.workspace.websites.map(w => ({
+        id: w.id,
+        domain: w.domain,
+        status: w.crawl_status,
+        updated_at: w.updated_at
+      }))
+    };
+
+    // Only log if state actually changed
+    const previousData = previousAppStateRef.current;
+    const hasChanged = !previousData || 
+      previousData.websiteCount !== currentWebsiteData.websiteCount ||
+      JSON.stringify(previousData.websites) !== JSON.stringify(currentWebsiteData.websites);
+
+    if (hasChanged) {
+      // Use global debug system instead of local setEvents
+      addDebugEvent({
+        type: 'app-state',
+        category: 'component',
+        source: 'app-state-change',
+        message: `App state changed: ${currentWebsiteData.websiteCount} websites`,
+        details: {
+          websiteCount: currentWebsiteData.websiteCount,
+          websites: currentWebsiteData.websites,
+          previousCount: previousData?.websiteCount || 0
+        },
+        severity: 'low'
+      });
+      
+      // Update the ref with current data
+      previousAppStateRef.current = currentWebsiteData;
+    }
+  }, [appState.workspace.websites]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -128,12 +223,19 @@ export function RealTimeDebugger() {
     }
   }, [filteredEvents, autoScroll]);
 
-  // Manual refresh function
+  // Manual refresh function using global debug system
   const triggerManualRefresh = useCallback(() => {
-    addEvent({
+    // Use global debug system instead of local setEvents
+    addDebugEvent({
       type: 'manual',
-      source: 'manual-refresh',
-      data: { action: 'force-refresh' },
+      category: 'ui',
+      source: 'RealTimeDebugger',
+      message: 'Manual refresh triggered by user',
+      details: { 
+        action: 'force-refresh',
+        timestamp: Date.now()
+      },
+      severity: 'low'
     });
 
     // Dispatch custom event to force UI refresh
@@ -146,7 +248,7 @@ export function RealTimeDebugger() {
         } 
       }));
     }
-  }, [addEvent]);
+  }, []);
 
   const clearEvents = useCallback(() => {
     clearDebugEvents();
