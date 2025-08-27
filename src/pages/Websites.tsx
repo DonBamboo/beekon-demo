@@ -51,7 +51,7 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 
 export default function Websites() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -89,6 +89,34 @@ export default function Websites() {
     refresh: _refreshMetrics,
     getWebsiteMetrics,
   } = useWebsitesCoordinated();
+
+  // FIXED: Create stable export data to prevent ExportDropdown infinite loop
+  const exportWebsitesData = useMemo(() => {
+    if (!websites || websites.length === 0) return [];
+    
+    // Only include essential fields for export to create stable references
+    // Exclude frequently changing fields like status updates and timestamps
+    return websites.map(website => ({
+      id: website.id,
+      domain: website.domain,
+      display_name: website.display_name,
+      is_active: website.is_active,
+      created_at: website.created_at,
+      // Exclude crawl_status, last_crawled_at, updated_at as they change frequently
+    }));
+  }, [
+    websites?.length, 
+    // Only depend on stable identifiers, not the full objects
+    websites?.map(w => `${w.id}-${w.domain}-${w.is_active}`).join(',')
+  ]);
+
+  // FIXED: Add data stability check to prevent export UI thrashing
+  const isExportDataStable = useMemo(() => {
+    return !isLoadingMetrics && 
+           !workspaceLoading && 
+           exportWebsitesData.length > 0 &&
+           !isAddingWebsite;
+  }, [isLoadingMetrics, workspaceLoading, exportWebsitesData.length, isAddingWebsite]);
 
   // Ensure a website is selected for global state consistency
   useEffect(() => {
@@ -451,13 +479,13 @@ export default function Websites() {
           </div>
 
           <div className="flex items-center space-x-2">
-            {websites && websites.length > 0 && (
+            {isExportDataStable && (
               <ExportDropdown
                 onExport={handleExportData}
                 isLoading={isExporting}
-                disabled={!websites || websites.length === 0}
+                disabled={!exportWebsitesData || exportWebsitesData.length === 0}
                 formats={["pdf", "csv", "json"]}
-                data={websites as unknown as Array<Record<string, unknown>>}
+                data={exportWebsitesData}
                 showEstimatedSize={true}
               />
             )}

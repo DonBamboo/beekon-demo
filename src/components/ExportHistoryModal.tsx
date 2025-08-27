@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +71,9 @@ export function ExportHistoryModal({
 
   const pageSize = 10;
 
+  // Ref to store latest fetchExportHistory function to break dependency chain
+  const fetchExportHistoryRef = useRef<((page?: number) => Promise<void>) | null>(null);
+
   const handleOpenChange = (open: boolean) => {
     setModalOpen(open);
     if (onOpenChange) onOpenChange(open);
@@ -113,6 +116,11 @@ export function ExportHistoryModal({
       setLoading(false);
     }
   }, [searchTerm, statusFilter, typeFilter, formatFilter, sortBy, sortOrder]);
+
+  // Store the latest fetchExportHistory function in ref to break dependency chain
+  useEffect(() => {
+    fetchExportHistoryRef.current = fetchExportHistory;
+  }, [fetchExportHistory]);
 
   const handleRetryExport = async (id: string) => {
     setRetryingId(id);
@@ -220,11 +228,14 @@ export function ExportHistoryModal({
     }
   };
 
+  // FIXED: removed fetchExportHistory dependency to prevent infinite loop
   useEffect(() => {
     if (modalOpen || isOpen) {
-      fetchExportHistory(0);
+      if (fetchExportHistoryRef.current) {
+        fetchExportHistoryRef.current(0);
+      }
     }
-  }, [modalOpen, isOpen, searchTerm, statusFilter, typeFilter, formatFilter, sortBy, sortOrder, fetchExportHistory]);
+  }, [modalOpen, isOpen, searchTerm, statusFilter, typeFilter, formatFilter, sortBy, sortOrder]);
 
   const ExportHistoryContent = () => (
     <div className="space-y-4">

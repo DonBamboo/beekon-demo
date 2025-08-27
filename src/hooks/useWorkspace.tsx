@@ -108,17 +108,17 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   
   // Get websites directly from AppStateContext (single source of truth)
   // Include a status hash to force re-render when any website status changes
+  // FIXED: Stabilize websites useMemo to prevent infinite loops caused by unstable status hash
   const websites = useMemo(() => {
     if (!currentWorkspace?.id) return [];
     const filteredWebsites = appState.workspace.websites.filter(w => w.workspace_id === currentWorkspace.id);
-    
     
     return filteredWebsites;
   }, [
     appState.workspace.websites, 
     currentWorkspace?.id,
-    // Add status hash to trigger re-renders when status changes
-    appState.workspace.websites.map(w => `${w.id}:${w.crawl_status}:${w.updated_at}`).join('|')
+    // FIXED: Use websites length instead of unstable status hash to avoid infinite loop
+    appState.workspace.websites.length
   ]);
   const [loading, setLoading] = useState(true);
   
@@ -625,13 +625,26 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   // The WebsiteStatusProvider handles all real-time updates directly to AppStateContext
   // No need for custom event handlers - unified context manages everything
 
+  // FIXED: Break circular dependency using refs to prevent infinite loops
+  const fetchWebsitesRef = useRef(fetchWebsites);
+  const websitesRef = useRef(websites);
+  
+  // Update refs when values change
+  useEffect(() => {
+    fetchWebsitesRef.current = fetchWebsites;
+  }, [fetchWebsites]);
+  
+  useEffect(() => {
+    websitesRef.current = websites;
+  }, [websites]);
+
   // UNIFIED: Set up real-time subscription and fetch initial data when workspace changes
   useEffect(() => {
     if (user?.id && currentWorkspace?.id) {
       // Fetch initial websites and sync to AppStateContext
-      fetchWebsites().then(() => {
+      fetchWebsitesRef.current().then(() => {
         // Set up real-time subscription for the current workspace
-        const websiteIds = websites.map(w => w.id);
+        const websiteIds = websitesRef.current.map(w => w.id);
         if (websiteIds.length > 0) {
           websiteStatusContext.subscribeToWorkspace(currentWorkspace.id, websiteIds);
         }
@@ -642,7 +655,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         websiteStatusContext.unsubscribeFromWorkspace(currentWorkspace.id);
       }
     }
-  }, [user?.id, currentWorkspace?.id, fetchWebsites, websites, websiteStatusContext]);
+  }, [user?.id, currentWorkspace?.id, websiteStatusContext]); // Removed fetchWebsites and websites from dependencies
 
   // Clean up subscriptions on unmount or workspace change
   const prevWorkspaceId = useRef<string | null>(null);
@@ -657,17 +670,25 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     prevWorkspaceId.current = currentId;
   }, [currentWorkspace?.id, websiteStatusContext]);
 
+  // Create ref for validateWorkspaceState to break dependency cycle
+  const validateWorkspaceStateRef = useRef(validateWorkspaceState);
+  
+  // Update ref when function changes
+  useEffect(() => {
+    validateWorkspaceStateRef.current = validateWorkspaceState;
+  }, [validateWorkspaceState]);
+
   // Validate workspace state periodically and after any state changes
   useEffect(() => {
     if (!loading && workspaces.length > 0) {
       const timeoutId = setTimeout(() => {
-        validateWorkspaceState();
+        validateWorkspaceStateRef.current();
       }, 100); // Small delay to allow state settling
 
       return () => clearTimeout(timeoutId);
     }
     return undefined;
-  }, [workspaces, currentWorkspace, loading, validateWorkspaceState]);
+  }, [workspaces, currentWorkspace, loading]); // Removed validateWorkspaceState from dependencies
 
   // ELIMINATED: No longer need complex status hash - AppStateContext is single source of truth
   // Direct consumption of websites from AppStateContext via useMemo above eliminates sync complexity

@@ -93,7 +93,8 @@ export function usePagination({
     }
   }, [currentPage, pageSize]);
 
-  const actions: PaginationActions = {
+  // FIXED: Memoize actions object to prevent infinite loops
+  const actions: PaginationActions = useMemo(() => ({
     setCurrentPage,
     setPageSize,
     nextPage,
@@ -101,7 +102,7 @@ export function usePagination({
     goToFirstPage,
     goToLastPage,
     setTotalItems,
-  };
+  }), [setCurrentPage, setPageSize, nextPage, previousPage, goToFirstPage, goToLastPage, setTotalItems]);
 
   return [paginationState, actions];
 }
@@ -116,10 +117,10 @@ export function useClientPagination<T>(
     totalItems: data.length,
   });
 
-  // Update total items when data changes
+  // FIXED: Update total items when data changes - use only specific function instead of entire actions object
   useEffect(() => {
     paginationActions.setTotalItems(data.length);
-  }, [data.length, paginationActions]);
+  }, [data.length, paginationActions.setTotalItems]);
 
   // Get current page data
   const currentPageData = useMemo(() => {
@@ -143,6 +144,7 @@ export function useServerPagination<T>(
     initialPageSize: pageSize,
   });
 
+  // FIXED: Use only specific function instead of entire actions object to prevent infinite loops
   const fetchCurrentPage = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -157,7 +159,7 @@ export function useServerPagination<T>(
     } finally {
       setIsLoading(false);
     }
-  }, [fetchData, paginationState.currentPage, paginationState.pageSize, paginationActions]);
+  }, [fetchData, paginationState.currentPage, paginationState.pageSize, paginationActions.setTotalItems]);
 
   // Fetch data when page or page size changes
   useEffect(() => {

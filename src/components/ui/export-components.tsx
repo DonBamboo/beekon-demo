@@ -1,6 +1,6 @@
 // Reusable export UI components for consistent user interface patterns
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Download, FileText, Table, Code, File, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
@@ -99,6 +99,20 @@ export function ExportDropdown({
     formats.includes(opt.format)
   );
 
+  // FIXED: Memoize export size calculations to prevent infinite loops
+  const memoizedSizes = useMemo(() => {
+    if (!showEstimatedSize || !data) return {};
+    
+    return availableFormats.reduce((sizes, formatOption) => {
+      sizes[formatOption.format] = estimateExportSize(data, formatOption.format);
+      return sizes;
+    }, {} as Record<string, string>);
+  }, [
+    showEstimatedSize, 
+    data && JSON.stringify(data).length, // Only depend on data size, not full object
+    availableFormats.map(f => f.format).join(',') // Stable format list
+  ]);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -126,9 +140,9 @@ export function ExportDropdown({
             <div className="flex-1">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{formatOption.label}</span>
-                {showEstimatedSize && data && (
+                {showEstimatedSize && data && memoizedSizes[formatOption.format] && (
                   <Badge variant="secondary" className="ml-2 text-xs">
-                    {estimateExportSize(data, formatOption.format)}
+                    {memoizedSizes[formatOption.format]}
                   </Badge>
                 )}
               </div>
@@ -420,6 +434,20 @@ export function AdvancedExportDropdown({
     formats.includes(opt.format)
   );
 
+  // FIXED: Memoize export size calculations to prevent infinite loops in AdvancedExportDropdown
+  const memoizedSizes = useMemo(() => {
+    if (!showEstimatedSize || !data) return {};
+    
+    return availableFormats.reduce((sizes, formatOption) => {
+      sizes[formatOption.format] = estimateExportSize(data, formatOption.format);
+      return sizes;
+    }, {} as Record<string, string>);
+  }, [
+    showEstimatedSize, 
+    data && JSON.stringify(data).length, // Only depend on data size, not full object
+    availableFormats.map(f => f.format).join(',') // Stable format list
+  ]);
+
   const handleQuickExport = async (format: ExportFormat) => {
     await onExport(format);
   };
@@ -460,9 +488,9 @@ export function AdvancedExportDropdown({
               <div className="flex-1">
                 <div className="flex items-center justify-between">
                   <span className="font-medium">{formatOption.label}</span>
-                  {showEstimatedSize && data && (
+                  {showEstimatedSize && data && memoizedSizes[formatOption.format] && (
                     <Badge variant="secondary" className="ml-2 text-xs">
-                      {estimateExportSize(data, formatOption.format)}
+                      {memoizedSizes[formatOption.format]}
                     </Badge>
                   )}
                 </div>

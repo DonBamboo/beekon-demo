@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppState } from '@/hooks/appStateHooks';
 import type { Topic, LLMProvider, WebsiteMetadata } from '@/contexts/AppStateContext';
 import { analysisService } from '@/services/analysisService';
@@ -23,8 +23,9 @@ export function useTopics(websiteId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const cacheKey = `topics_${websiteId}`;
-  const requestKey = `fetch_topics_${websiteId}`;
+  // FIXED: Use useMemo to stabilize cache and request keys to prevent infinite loops
+  const cacheKey = useMemo(() => `topics_${websiteId}`, [websiteId]);
+  const requestKey = useMemo(() => `fetch_topics_${websiteId}`, [websiteId]);
 
   const loadTopics = useCallback(async (forceRefresh = false) => {
     if (!websiteId) {
@@ -88,12 +89,14 @@ export function useTopics(websiteId: string | null) {
       setLoading(false);
       dispatch({ type: 'REQUEST_END', payload: { key: requestKey } });
     }
-  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast, cacheKey, requestKey]);
+  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast]); // Removed cacheKey, requestKey - they're derived from websiteId
 
-  // Load topics when websiteId changes
+  // Load topics when websiteId changes - FIXED: depend directly on websiteId instead of loadTopics function
   useEffect(() => {
-    loadTopics();
-  }, [loadTopics]);
+    if (websiteId) {
+      loadTopics();
+    }
+  }, [websiteId]); // Only depend on websiteId, not the loadTopics function
 
   // Invalidate cache when website changes
   useEffect(() => {
@@ -124,8 +127,9 @@ export function useLLMProviders(websiteId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const cacheKey = `llm_providers_${websiteId}`;
-  const requestKey = `fetch_llm_providers_${websiteId}`;
+  // FIXED: Use useMemo to stabilize cache and request keys to prevent infinite loops
+  const cacheKey = useMemo(() => `llm_providers_${websiteId}`, [websiteId]);
+  const requestKey = useMemo(() => `fetch_llm_providers_${websiteId}`, [websiteId]);
 
   const loadLLMProviders = useCallback(async (forceRefresh = false) => {
     if (!websiteId) {
@@ -190,12 +194,14 @@ export function useLLMProviders(websiteId: string | null) {
       setLoading(false);
       dispatch({ type: 'REQUEST_END', payload: { key: requestKey } });
     }
-  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast, cacheKey, requestKey]);
+  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast]); // Removed cacheKey, requestKey - they're derived from websiteId
 
-  // Load LLM providers when websiteId changes
+  // Load LLM providers when websiteId changes - FIXED: depend directly on websiteId instead of loadLLMProviders function
   useEffect(() => {
-    loadLLMProviders();
-  }, [loadLLMProviders]);
+    if (websiteId) {
+      loadLLMProviders();
+    }
+  }, [websiteId]); // Only depend on websiteId, not the loadLLMProviders function
 
   return {
     llmProviders,
@@ -217,8 +223,9 @@ export function useWebsiteMetadata(websiteId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const cacheKey = `website_metadata_${websiteId}`;
-  const requestKey = `fetch_website_metadata_${websiteId}`;
+  // FIXED: Use useMemo to stabilize cache and request keys to prevent infinite loops
+  const cacheKey = useMemo(() => `website_metadata_${websiteId}`, [websiteId]);
+  const requestKey = useMemo(() => `fetch_website_metadata_${websiteId}`, [websiteId]);
 
   const loadMetadata = useCallback(async (forceRefresh = false) => {
     if (!websiteId) {
@@ -272,12 +279,14 @@ export function useWebsiteMetadata(websiteId: string | null) {
       setLoading(false);
       dispatch({ type: 'REQUEST_END', payload: { key: requestKey } });
     }
-  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast, cacheKey, requestKey]);
+  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast]); // Removed cacheKey, requestKey - they're derived from websiteId
 
-  // Load metadata when websiteId changes
+  // Load metadata when websiteId changes - FIXED: depend directly on websiteId instead of loadMetadata function
   useEffect(() => {
-    loadMetadata();
-  }, [loadMetadata]);
+    if (websiteId) {
+      loadMetadata();
+    }
+  }, [websiteId]); // Only depend on websiteId, not the loadMetadata function
 
   return {
     metadata,
@@ -300,17 +309,19 @@ export function useWebsiteData(websiteId: string | null) {
   const loading = topics.loading || llmProviders.loading || metadata.loading;
   const hasError = !!(topics.error || llmProviders.error || metadata.error);
 
+  // FIXED: Use only stable refetch functions to prevent infinite loops
   const refetchAll = useCallback(() => {
     topics.refetch();
     llmProviders.refetch();
     metadata.refetch();
-  }, [topics, llmProviders, metadata]);
+  }, [topics.refetch, llmProviders.refetch, metadata.refetch]);
 
+  // FIXED: Use only stable clearError functions to prevent infinite loops
   const clearAllErrors = useCallback(() => {
     topics.clearError();
     llmProviders.clearError();
     metadata.clearError();
-  }, [topics, llmProviders, metadata]);
+  }, [topics.clearError, llmProviders.clearError, metadata.clearError]);
 
   return {
     topics: topics.topics,
