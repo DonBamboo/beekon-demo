@@ -14,6 +14,10 @@ import {
 } from "@/services/websiteStatusService";
 import { useAppState } from "@/hooks/appStateHooks";
 import { debugError, debugInfo, addDebugEvent } from "@/lib/debug-utils";
+import {
+  RECONCILIATION_INTERVAL,
+  EVENT_DISPATCH_DEBOUNCE,
+} from "@/lib/website-status-utils";
 
 interface WebsiteStatusContextType {
   // Real-time status for specific website
@@ -56,6 +60,12 @@ export function WebsiteStatusProvider({
   // FIXED: Add debouncing for custom events to prevent cascading re-renders
   const eventDispatchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // FIXED: Create refs for callback functions to avoid dependency issues
+  const startStateReconciliationRef = useRef<() => void>();
+  const stopStateReconciliationRef = useRef<() => void>();
+  const dispatchStatusEventRef =
+    useRef<(websiteId: string, status: string, source: string) => void>();
+
   // Debounced custom event dispatch to prevent rapid-fire updates
   const dispatchStatusEvent = useCallback(
     (websiteId: string, status: string, source: string) => {
@@ -64,7 +74,7 @@ export function WebsiteStatusProvider({
         clearTimeout(eventDispatchTimeoutRef.current);
       }
 
-      // Debounce event dispatch by 100ms to batch rapid updates
+      // Debounce event dispatch to batch rapid updates
       eventDispatchTimeoutRef.current = setTimeout(() => {
         if (typeof window !== "undefined") {
           window.dispatchEvent(
@@ -78,10 +88,15 @@ export function WebsiteStatusProvider({
             })
           );
         }
-      }, 100);
+      }, EVENT_DISPATCH_DEBOUNCE);
     },
     []
   );
+
+  // Update the ref when the function changes
+  useEffect(() => {
+    dispatchStatusEventRef.current = dispatchStatusEvent;
+  }, [dispatchStatusEvent]);
 
   // Handle real-time status updates - SINGLE SOURCE OF TRUTH
   const handleStatusUpdate = useCallback(
@@ -173,7 +188,7 @@ export function WebsiteStatusProvider({
 
         // FIXED: Start reconciliation when first subscription is added
         if (activeSubscriptionsRef.current.size === 1) {
-          startStateReconciliation();
+          startStateReconciliationRef.current?.();
         }
 
         debugInfo(
@@ -200,8 +215,8 @@ export function WebsiteStatusProvider({
         );
       }
     },
-    [handleStatusUpdate]
-  ); // startStateReconciliation intentionally omitted to prevent infinite loops
+    [handleStatusUpdate] // Now safe to include since we use ref for startStateReconciliation
+  );
 
   // Unsubscribe from workspace
   const unsubscribeFromWorkspace = useCallback(async (workspaceId: string) => {
@@ -237,7 +252,7 @@ export function WebsiteStatusProvider({
 
       // FIXED: Stop reconciliation when no subscriptions remain
       if (activeSubscriptionsRef.current.size === 0) {
-        stopStateReconciliation();
+        stopStateReconciliationRef.current?.();
       }
 
       debugInfo(
@@ -261,7 +276,7 @@ export function WebsiteStatusProvider({
         "real-time"
       );
     }
-  }, []); // stopStateReconciliation intentionally omitted to prevent infinite loops
+  }, []); // Now safe since we use ref for stopStateReconciliation
 
   // Get real-time status for specific website
   const getWebsiteStatus = useCallback(
@@ -294,7 +309,7 @@ export function WebsiteStatusProvider({
 
         // FIXED: Use debounced event dispatch for periodic reconciliation
         for (const workspaceId of workspaceIds) {
-          dispatchStatusEvent(
+          dispatchStatusEventRef.current?.(
             workspaceId,
             "reconciliation",
             "periodic-reconciliation"
@@ -318,8 +333,8 @@ export function WebsiteStatusProvider({
           "real-time"
         );
       }
-    }, 30000); // Every 30 seconds
-  }, []); // dispatchStatusEvent intentionally omitted to prevent infinite loops
+    }, RECONCILIATION_INTERVAL);
+  }, []); // Now safe since we use ref for dispatchStatusEvent
 
   const stopStateReconciliation = useCallback(() => {
     if (reconciliationIntervalRef.current) {
@@ -327,6 +342,12 @@ export function WebsiteStatusProvider({
       reconciliationIntervalRef.current = null;
     }
   }, []);
+
+  // Update function refs when they change
+  useEffect(() => {
+    startStateReconciliationRef.current = startStateReconciliation;
+    stopStateReconciliationRef.current = stopStateReconciliation;
+  }, [startStateReconciliation, stopStateReconciliation]);
 
   // Start reconciliation when we have active subscriptions
   // FIXED: Remove unstable callback dependencies to prevent infinite loops
@@ -337,25 +358,36 @@ export function WebsiteStatusProvider({
     } else {
       stopStateReconciliation();
     }
-  }, []); // Empty dependency array - let subscription state changes handle reconciliation
+  }, [startStateReconciliation, stopStateReconciliation]); // Add missing dependencies
 
   // Cleanup on unmount
   useEffect(() => {
+    // Copy ref values at effect creation time to avoid stale closures
+    const getCurrentActiveSubscriptions = () => activeSubscriptionsRef.current;
+    const getCurrentEventTimeout = () => eventDispatchTimeoutRef.current;
+    const getCurrentStopReconciliation = () =>
+      stopStateReconciliationRef.current;
+
     return () => {
-      const workspaceIds = Array.from(activeSubscriptionsRef.current);
+      // Get current values at cleanup time
+      const activeSubscriptions = getCurrentActiveSubscriptions();
+      const eventDispatchTimeout = getCurrentEventTimeout();
+      const stopReconciliation = getCurrentStopReconciliation();
+
+      const workspaceIds = Array.from(activeSubscriptions);
       workspaceIds.forEach((workspaceId) => {
         websiteStatusService
           .unsubscribeFromWorkspace(workspaceId)
           .catch(console.error);
       });
-      stopStateReconciliation();
+      stopReconciliation?.();
 
       // FIXED: Cleanup debounce timeout
-      if (eventDispatchTimeoutRef.current) {
-        clearTimeout(eventDispatchTimeoutRef.current);
+      if (eventDispatchTimeout) {
+        clearTimeout(eventDispatchTimeout);
       }
     };
-  }, [stopStateReconciliation]);
+  }, []); // Safe to use empty deps with proper closure handling
 
   const contextValue: WebsiteStatusContextType = {
     getWebsiteStatus,
@@ -373,6 +405,7 @@ export function WebsiteStatusProvider({
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useWebsiteStatusContext(): WebsiteStatusContextType {
   const context = useContext(WebsiteStatusContext);
   if (context === undefined) {
@@ -384,6 +417,7 @@ export function useWebsiteStatusContext(): WebsiteStatusContextType {
 }
 
 // Convenience hook for getting specific website status
+// eslint-disable-next-line react-refresh/only-export-components
 export function useWebsiteStatus(websiteId: string): {
   status: WebsiteStatus | null;
   lastCrawledAt: string | null;

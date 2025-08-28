@@ -63,12 +63,12 @@ export function useOptimizedProfile() {
     [user?.id, getFromCache, setCache, profileCacheKey]
   );
 
-  // Load profile when user changes - FIXED: depend directly on user.id instead of loadProfile function
+  // Load profile when user changes
   useEffect(() => {
     if (user?.id) {
       loadProfile();
     }
-  }, [user?.id]); // Only depend on user.id, not the loadProfile function
+  }, [user?.id, loadProfile]);
 
   const updateProfile = useCallback(
     async (updates: Partial<UserProfile>) => {

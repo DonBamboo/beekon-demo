@@ -1996,8 +1996,15 @@ export default function Analysis() {
           isOpen={isHistoryModalOpen}
           onClose={() => setIsHistoryModalOpen(false)}
           websiteId={selectedWebsiteId || undefined}
-          onSelectSession={(_) => {
-            // Future: Navigate to session details or filter by session
+          onSelectSession={(sessionId) => {
+            // Filter analysis page to show only results from the selected session
+            setFilters({ ...(filters || {}), analysisSession: sessionId });
+            
+            // Show toast notification
+            toast({
+              title: "Analysis session selected",
+              description: "The analysis page has been filtered to show results from the selected session.",
+            });
           }}
         />
       </>

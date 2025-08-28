@@ -818,7 +818,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       syncWebsitesToAppState([]); // Clear websites from AppStateContext
       setLoadingDebouncedRef.current!(false, true); // Immediate for auth state change
     }
-  }, [user?.id, fetchWorkspaces, setCurrentWorkspaceWithNotification]); // Removed setLoadingDebounced - now stable ref
+  }, [user?.id, fetchWorkspaces, setCurrentWorkspaceWithNotification, syncWebsitesToAppState]);
 
   // Cleanup loading timeout on unmount
   useEffect(() => {
@@ -841,7 +841,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   // Update refs when values change
   useEffect(() => {
     fetchWebsitesRef.current = fetchWebsites;
-  }, [fetchWebsites]);
+  }, [fetchWebsites, syncWebsitesToAppState]);
 
   useEffect(() => {
     websitesRef.current = websites;

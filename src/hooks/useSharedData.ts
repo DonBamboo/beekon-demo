@@ -89,14 +89,14 @@ export function useTopics(websiteId: string | null) {
       setLoading(false);
       dispatch({ type: 'REQUEST_END', payload: { key: requestKey } });
     }
-  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast]); // Removed cacheKey, requestKey - they're derived from websiteId
+  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast, cacheKey, requestKey]);
 
-  // Load topics when websiteId changes - FIXED: depend directly on websiteId instead of loadTopics function
+  // Load topics when websiteId changes
   useEffect(() => {
     if (websiteId) {
       loadTopics();
     }
-  }, [websiteId]); // Only depend on websiteId, not the loadTopics function
+  }, [websiteId, loadTopics]);
 
   // Invalidate cache when website changes
   useEffect(() => {
@@ -194,14 +194,14 @@ export function useLLMProviders(websiteId: string | null) {
       setLoading(false);
       dispatch({ type: 'REQUEST_END', payload: { key: requestKey } });
     }
-  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast]); // Removed cacheKey, requestKey - they're derived from websiteId
+  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast, cacheKey, requestKey]);
 
-  // Load LLM providers when websiteId changes - FIXED: depend directly on websiteId instead of loadLLMProviders function
+  // Load LLM providers when websiteId changes
   useEffect(() => {
     if (websiteId) {
       loadLLMProviders();
     }
-  }, [websiteId]); // Only depend on websiteId, not the loadLLMProviders function
+  }, [websiteId, loadLLMProviders]);
 
   return {
     llmProviders,
@@ -279,14 +279,14 @@ export function useWebsiteMetadata(websiteId: string | null) {
       setLoading(false);
       dispatch({ type: 'REQUEST_END', payload: { key: requestKey } });
     }
-  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast]); // Removed cacheKey, requestKey - they're derived from websiteId
+  }, [websiteId, getFromCache, setCache, isRequestActive, dispatch, toast, cacheKey, requestKey]);
 
-  // Load metadata when websiteId changes - FIXED: depend directly on websiteId instead of loadMetadata function
+  // Load metadata when websiteId changes
   useEffect(() => {
     if (websiteId) {
       loadMetadata();
     }
-  }, [websiteId]); // Only depend on websiteId, not the loadMetadata function
+  }, [websiteId, loadMetadata]);
 
   return {
     metadata,
@@ -309,19 +309,17 @@ export function useWebsiteData(websiteId: string | null) {
   const loading = topics.loading || llmProviders.loading || metadata.loading;
   const hasError = !!(topics.error || llmProviders.error || metadata.error);
 
-  // FIXED: Use only stable refetch functions to prevent infinite loops
   const refetchAll = useCallback(() => {
     topics.refetch();
     llmProviders.refetch();
     metadata.refetch();
-  }, [topics.refetch, llmProviders.refetch, metadata.refetch]);
+  }, [topics, llmProviders, metadata]);
 
-  // FIXED: Use only stable clearError functions to prevent infinite loops
   const clearAllErrors = useCallback(() => {
     topics.clearError();
     llmProviders.clearError();
     metadata.clearError();
-  }, [topics.clearError, llmProviders.clearError, metadata.clearError]);
+  }, [topics, llmProviders, metadata]);
 
   return {
     topics: topics.topics,

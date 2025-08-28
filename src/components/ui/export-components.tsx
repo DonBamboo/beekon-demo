@@ -110,9 +110,9 @@ export function ExportDropdown({
       return sizes;
     }, {} as Record<string, string>);
   }, [
-    showEstimatedSize, 
-    data?.length, // Only depend on data length for stability
-    availableFormats // Now stable due to memoization above
+    showEstimatedSize,
+    availableFormats,
+    data, // Essential dependency for size calculation
   ]);
 
   return (
@@ -436,6 +436,7 @@ export function AdvancedExportDropdown({
     formats.includes(opt.format)
   );
 
+
   // FIXED: Memoize export size calculations to prevent infinite loops in AdvancedExportDropdown
   const memoizedSizes = useMemo(() => {
     if (!showEstimatedSize || !data) return {};
@@ -445,9 +446,9 @@ export function AdvancedExportDropdown({
       return sizes;
     }, {} as Record<string, string>);
   }, [
-    showEstimatedSize, 
-    data && JSON.stringify(data).length, // Only depend on data size, not full object
-    availableFormats.map(f => f.format).join(',') // Stable format list
+    showEstimatedSize,
+    availableFormats,
+    data, // Essential dependency for size calculation
   ]);
 
   const handleQuickExport = async (format: ExportFormat) => {

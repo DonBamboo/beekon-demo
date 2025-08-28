@@ -83,7 +83,7 @@ export function useCompetitorStatus() {
         'real-time'
       );
     }
-  }, [handleStatusUpdate]);
+  }, [handleStatusUpdate, state.workspace.websites]);
 
   // Unsubscribe from current workspace
   const unsubscribeFromWorkspace = useCallback(async () => {
@@ -145,7 +145,7 @@ export function useCompetitorStatus() {
         );
       }
     }
-  }, []);
+  }, [currentWorkspaceId]);
 
   // Remove a competitor from monitoring
   const removeCompetitorFromMonitoring = useCallback((competitorId: string) => {
@@ -163,7 +163,7 @@ export function useCompetitorStatus() {
         'real-time'
       );
     }
-  }, [clearCompetitorStatus]);
+  }, [clearCompetitorStatus, currentWorkspaceId]);
 
   // Get subscription status for debugging
   const getSubscriptionStatus = useCallback(() => {
