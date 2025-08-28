@@ -14,7 +14,10 @@ import {
 } from "@/services/websiteStatusService";
 import { useAppState } from "@/hooks/appStateHooks";
 import { debugError, debugInfo, addDebugEvent } from "@/lib/debug-utils";
-import { RECONCILIATION_INTERVAL, EVENT_DISPATCH_DEBOUNCE } from "@/lib/website-status-utils";
+import {
+  RECONCILIATION_INTERVAL,
+  EVENT_DISPATCH_DEBOUNCE,
+} from "@/lib/website-status-utils";
 
 interface WebsiteStatusContextType {
   // Real-time status for specific website
@@ -56,11 +59,12 @@ export function WebsiteStatusProvider({
 
   // FIXED: Add debouncing for custom events to prevent cascading re-renders
   const eventDispatchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // FIXED: Create refs for callback functions to avoid dependency issues
   const startStateReconciliationRef = useRef<() => void>();
   const stopStateReconciliationRef = useRef<() => void>();
-  const dispatchStatusEventRef = useRef<(websiteId: string, status: string, source: string) => void>();
+  const dispatchStatusEventRef =
+    useRef<(websiteId: string, status: string, source: string) => void>();
 
   // Debounced custom event dispatch to prevent rapid-fire updates
   const dispatchStatusEvent = useCallback(
@@ -354,16 +358,22 @@ export function WebsiteStatusProvider({
     } else {
       stopStateReconciliation();
     }
-  }, []); // Empty dependency array - let subscription state changes handle reconciliation
+  }, [startStateReconciliation, stopStateReconciliation]); // Add missing dependencies
 
   // Cleanup on unmount
   useEffect(() => {
+    // Copy ref values at effect creation time to avoid stale closures
+    const getCurrentActiveSubscriptions = () => activeSubscriptionsRef.current;
+    const getCurrentEventTimeout = () => eventDispatchTimeoutRef.current;
+    const getCurrentStopReconciliation = () =>
+      stopStateReconciliationRef.current;
+
     return () => {
-      // Copy ref values inside effect to satisfy ESLint warning
-      const activeSubscriptions = activeSubscriptionsRef.current;
-      const eventDispatchTimeout = eventDispatchTimeoutRef.current;
-      const stopReconciliation = stopStateReconciliationRef.current;
-      
+      // Get current values at cleanup time
+      const activeSubscriptions = getCurrentActiveSubscriptions();
+      const eventDispatchTimeout = getCurrentEventTimeout();
+      const stopReconciliation = getCurrentStopReconciliation();
+
       const workspaceIds = Array.from(activeSubscriptions);
       workspaceIds.forEach((workspaceId) => {
         websiteStatusService
@@ -377,7 +387,7 @@ export function WebsiteStatusProvider({
         clearTimeout(eventDispatchTimeout);
       }
     };
-  }, []); // Safe to use empty deps since we copy ref values inside
+  }, []); // Safe to use empty deps with proper closure handling
 
   const contextValue: WebsiteStatusContextType = {
     getWebsiteStatus,
@@ -395,6 +405,7 @@ export function WebsiteStatusProvider({
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useWebsiteStatusContext(): WebsiteStatusContextType {
   const context = useContext(WebsiteStatusContext);
   if (context === undefined) {
@@ -406,6 +417,7 @@ export function useWebsiteStatusContext(): WebsiteStatusContextType {
 }
 
 // Convenience hook for getting specific website status
+// eslint-disable-next-line react-refresh/only-export-components
 export function useWebsiteStatus(websiteId: string): {
   status: WebsiteStatus | null;
   lastCrawledAt: string | null;

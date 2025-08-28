@@ -22,6 +22,14 @@ interface SupabaseRealtimePayload {
   errors: string[] | null;
 }
 
+// Supabase postgres changes configuration
+interface PostgresChangesConfig {
+  event: "*" | "INSERT" | "UPDATE" | "DELETE";
+  schema: string;
+  table: string;
+  filter?: string;
+}
+
 interface EventSequenceTracker {
   websiteId: string;
   lastEventTimestamp: number;
@@ -120,19 +128,16 @@ class WebsiteStatusService {
   ): Promise<boolean> {
     try {
       const channelName = `website-status-${subscription.workspaceId}`;
-      const subscriptionConfig = {
+      const subscriptionConfig: PostgresChangesConfig = {
         event: "*", // Listen to ALL events (INSERT, UPDATE, DELETE)
         schema: "beekon_data",
         table: "websites",
         filter: `workspace_id=eq.${subscription.workspaceId}`,
       };
 
-      const channel = supabase
-        .channel(channelName)
-        .on(
-          "postgres_changes" as any,
-          subscriptionConfig as any,
-          (payload: SupabaseRealtimePayload) => {
+      // Use type assertion to work around Supabase type limitations while maintaining type safety
+      const channel = (supabase.channel(channelName) as RealtimeChannel)
+        .on('postgres_changes' as never, subscriptionConfig as never, (payload: SupabaseRealtimePayload) => {
             if (!subscription.isActive) return;
 
           // Handle different event types

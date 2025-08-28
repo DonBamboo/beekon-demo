@@ -44,15 +44,12 @@ export function WorkspaceGuard({
     };
   }, [
     authLoading,
-    workspaceLoading, 
+    workspaceLoading,
     hasUser,
-    workspaces?.length,
+    workspaces,
     hasCurrentWorkspace,
     requireWorkspace,
     isWorkspaceStateValid,
-    currentWorkspace, // Add missing dependency
-    user, // Add missing dependency  
-    workspaces, // Add missing dependency
   ]);
 
   // FIXED: Use stable loading state to prevent rapid re-renders

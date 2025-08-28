@@ -13,7 +13,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
-import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -26,16 +25,12 @@ import { AdvancedExportDropdown } from "@/components/ui/export-components";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionEnforcement } from "@/hooks/useSubscriptionEnforcement";
 import { useGlobalCache } from "@/hooks/appStateHooks";
-import {
-  analysisService,
-  type AnalysisProgress,
-  type AnalysisSession,
-} from "@/services/analysisService";
+import { analysisService } from "@/services/analysisService";
 import { useExportHandler } from "@/lib/export-utils";
 import { exportService } from "@/services/exportService";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, CheckCircle, Plus, Search, X, Zap } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { AlertCircle, Plus, Search, X, Zap } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { ExportFormat } from "@/types/database";
@@ -85,13 +80,8 @@ export function AnalysisConfigModal({
   const [isExporting, setIsExporting] = useState(false);
   const [customTopic, setCustomTopic] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
-  const [analysisProgress, setAnalysisProgress] =
-    useState<AnalysisProgress | null>(null);
-  const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(
-    null
-  );
-  const [currentAnalysisSession, setCurrentAnalysisSession] =
-    useState<AnalysisSession | null>(null);
+  // Background analysis tracking - no UI state needed
+  const activeAnalysisIds = useRef(new Set<string>());
   const [availableTopics, setAvailableTopics] = useState<
     Array<{ id: string; name: string; resultCount: number }>
   >([]);
@@ -221,21 +211,16 @@ export function AnalysisConfigModal({
 
       // Start the analysis
       const sessionId = await analysisService.createAnalysis(config);
-      setCurrentAnalysisId(sessionId);
 
       // Clear analysis cache for this website since new analysis is being created
       clearCache(`analysis_results_${websiteId}`);
       clearCache(`analysis_metadata_${websiteId}`);
 
-      // Get the created session for display purposes
-      const session = await analysisService.getAnalysisSession(sessionId);
-      setCurrentAnalysisSession(session);
+      // Track this analysis for cleanup
+      activeAnalysisIds.current.add(sessionId);
 
-      // Subscribe to progress updates
+      // Set up background progress monitoring with toast notifications
       analysisService.subscribeToProgress(sessionId, async (progress) => {
-        // UI received progress update
-        setAnalysisProgress(progress);
-
         if (progress.status === "completed") {
           toast({
             title: "Analysis completed!",
@@ -246,11 +231,9 @@ export function AnalysisConfigModal({
           if (websiteId) {
             loadWebsiteTopics();
           }
-
-          // Reset form and close modal after a delay
-          setTimeout(() => {
-            handleClose();
-          }, 2000);
+          
+          // Clean up tracking
+          activeAnalysisIds.current.delete(sessionId);
         } else if (progress.status === "failed") {
           toast({
             title: "Analysis failed",
@@ -261,29 +244,33 @@ export function AnalysisConfigModal({
           });
 
           // Restore credit if analysis failed after starting
-          // Restore credit due to failed analysis
           await restoreCredit();
-
-          setTimeout(() => {
-            handleClose();
-          }, 2000);
+          
+          // Clean up tracking
+          activeAnalysisIds.current.delete(sessionId);
+        } else {
+          // Progress update - only show every few steps to avoid spam
+          if (progress.completedSteps % 3 === 0 || progress.progress > 50) {
+            toast({
+              title: "Analysis in progress",
+              description: `${progress.currentStep} (${progress.completedSteps}/${progress.totalSteps})`,
+            });
+          }
         }
       });
 
+      // Show initial success toast
       toast({
         title: "Analysis started!",
         description: `${data.analysisName} analysis has been queued and will begin shortly.`,
       });
+
+      // Close modal immediately after successful API call
+      handleClose();
     } catch (error) {
       // Failed to start analysis
 
-      // Clean up any partial state
-      if (currentAnalysisId) {
-        analysisService.unsubscribeFromProgress(currentAnalysisId);
-        setCurrentAnalysisId(null);
-      }
-      setAnalysisProgress(null);
-      setCurrentAnalysisSession(null);
+      // Clean up any partial state - nothing to clean up since modal closes immediately on success
 
       // If we consumed a credit but the operation failed, restore it
       if (creditConsumed) {
@@ -304,12 +291,13 @@ export function AnalysisConfigModal({
   };
 
   const handleClose = () => {
-    if (currentAnalysisId) {
-      analysisService.unsubscribeFromProgress(currentAnalysisId);
-      setCurrentAnalysisId(null);
-    }
-    setAnalysisProgress(null);
-    setCurrentAnalysisSession(null);
+    // Clean up any active analysis subscriptions
+    activeAnalysisIds.current.forEach(sessionId => {
+      analysisService.unsubscribeFromProgress(sessionId);
+    });
+    activeAnalysisIds.current.clear();
+    
+    // Reset form state
     setIsLoading(false);
     setTopicError(null);
     setCustomTopic("");
@@ -472,63 +460,7 @@ export function AnalysisConfigModal({
           </div>
         </DialogHeader>
 
-        {/* Analysis Session Info */}
-        {currentAnalysisSession && (
-          <div className="mb-4 p-4 border rounded-lg bg-primary/5">
-            <div className="flex items-center space-x-2 mb-2">
-              <Badge variant="outline" className="text-xs">
-                Session ID: {currentAnalysisSession.id.slice(0, 8)}...
-              </Badge>
-              <Badge variant="outline" className="text-xs">
-                {currentAnalysisSession.analysis_name}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Analysis session created. You can reference this analysis using
-              the session ID.
-            </p>
-          </div>
-        )}
 
-        {/* Progress Tracking */}
-        {analysisProgress && (
-          <div className="mb-4 p-4 border rounded-lg bg-muted/50">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-2">
-                {analysisProgress.status === "completed" ? (
-                  <CheckCircle className="h-4 w-4 text-success" />
-                ) : analysisProgress.status === "failed" ? (
-                  <AlertCircle className="h-4 w-4 text-destructive" />
-                ) : (
-                  <Spinner size="sm" />
-                )}
-                <span className="font-medium">
-                  {analysisProgress.status === "completed"
-                    ? "Analysis Complete"
-                    : analysisProgress.status === "failed"
-                    ? "Analysis Failed"
-                    : "Analysis Running"}
-                </span>
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {analysisProgress.completedSteps} /{" "}
-                {analysisProgress.totalSteps}
-              </span>
-            </div>
-
-            <Progress value={analysisProgress.progress} className="mb-2" />
-
-            <p className="text-sm text-muted-foreground">
-              {analysisProgress.currentStep}
-            </p>
-
-            {analysisProgress.error && (
-              <p className="text-sm text-destructive mt-2">
-                {analysisProgress.error}
-              </p>
-            )}
-          </div>
-        )}
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           {/* Analysis Name */}
@@ -841,28 +773,18 @@ export function AnalysisConfigModal({
               type="button"
               variant="outline"
               onClick={handleClose}
-              disabled={isLoading && analysisProgress?.status === "running"}
+              disabled={isLoading}
             >
-              {analysisProgress?.status === "running" ? "Running..." : "Cancel"}
+              Cancel
             </Button>
             <LoadingButton
               type="submit"
               loading={isLoading}
-              loadingText={
-                analysisProgress?.status === "running"
-                  ? "Analysis Running..."
-                  : "Starting Analysis..."
-              }
+              loadingText="Starting Analysis..."
               icon={<Zap className="h-4 w-4" />}
-              disabled={
-                analysisProgress?.status === "running" ||
-                analysisProgress?.status === "completed" ||
-                !websiteId
-              }
+              disabled={!websiteId}
             >
-              {analysisProgress?.status === "completed"
-                ? "Completed"
-                : "Start Analysis"}
+              Start Analysis
             </LoadingButton>
           </DialogFooter>
         </form>

@@ -104,12 +104,7 @@ export default function Websites() {
       created_at: website.created_at,
       // Exclude crawl_status, last_crawled_at, updated_at as they change frequently
     }));
-  }, [
-    websites,
-    websites?.length,
-    // FIXED: Removed unstable string concatenation that created new strings on every render
-    // Only depend on websites length for stability
-  ]);
+  }, [websites]); // Only depend on websites array itself
 
   // FIXED: Add data stability check to prevent export UI thrashing
   const isExportDataStable = useMemo(() => {
@@ -420,7 +415,7 @@ export default function Websites() {
       handlers.set(website.id, () => handleAnalyzeNow(website.id, website.domain, website.display_name));
     });
     return handlers;
-  }, [websites?.length, handleAnalyzeNow, websites]); // Add missing dependencies
+  }, [handleAnalyzeNow, websites]); // Essential dependencies only
 
   const settingsHandlers = useMemo(() => {
     const handlers = new Map<string, () => void>();
@@ -428,7 +423,7 @@ export default function Websites() {
       handlers.set(website.id, () => handleOpenSettings(website.id));
     });
     return handlers;
-  }, [websites?.length, handleOpenSettings, websites]); // Add missing dependencies
+  }, [handleOpenSettings, websites]); // Essential dependencies only
 
   const deleteHandlers = useMemo(() => {
     const handlers = new Map<string, () => void>();
@@ -436,7 +431,7 @@ export default function Websites() {
       handlers.set(website.id, () => confirmDelete(website.id));
     });
     return handlers;
-  }, [websites?.length, confirmDelete, websites]); // Add missing dependencies
+  }, [confirmDelete, websites]); // Essential dependencies only
 
   const handleCloseSettings = useCallback(() => {
     setIsSettingsModalOpen(false);

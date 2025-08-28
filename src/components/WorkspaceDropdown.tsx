@@ -47,13 +47,8 @@ export function WorkspaceDropdown() {
     currentWorkspaceTier: currentWorkspace?.subscription_tier || null,
     currentWorkspaceCredits: currentWorkspace?.credits_remaining || 0,
   }), [
-    workspaces?.length, // Only depend on count, not the full array
-    currentWorkspace?.id, // Only depend on ID, not full object
-    currentWorkspace?.name,
-    currentWorkspace?.subscription_tier,
-    currentWorkspace?.credits_remaining,
-    currentWorkspace, // Add the full object as ESLint requires
-    workspaces, // Add workspaces as ESLint requires
+    workspaces,
+    currentWorkspace,
   ]);
 
   // FIXED: Don't render dropdown during critical loading states to prevent Radix UI thrashing

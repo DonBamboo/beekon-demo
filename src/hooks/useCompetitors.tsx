@@ -64,14 +64,7 @@ export function useCompetitors(
   // Memoize filters to prevent infinite loops
   const memoizedFilters = useMemo(
     () => filters,
-    [
-      filters,
-      filters.dateRange?.start,
-      filters.dateRange?.end,
-      filters.sortBy,
-      filters.sortOrder,
-      filters.showInactive,
-    ]
+    [filters] // Only depend on the filters object itself
   );
 
   const loadCompetitorData = useCallback(
