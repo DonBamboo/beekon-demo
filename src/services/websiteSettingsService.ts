@@ -15,6 +15,8 @@ export interface WebsiteSettingsUpdateData {
   data_retention?: "30" | "90" | "180" | "365";
   export_enabled?: boolean;
   description?: string;
+  country_code?: string; // ISO 3166-1 alpha-3 country code
+  country_name?: string; // Full country name
 }
 
 // Type guard for settings JSON
@@ -30,6 +32,8 @@ function isValidSettingsJson(json: Json): json is {
   api_access?: boolean;
   data_retention?: string;
   export_enabled?: boolean;
+  country_code?: string;
+  country_name?: string;
 } {
   return json !== null && typeof json === 'object' && !Array.isArray(json);
 }
@@ -79,6 +83,8 @@ export class WebsiteSettingsService {
         api_access: settings.api_access ?? false,
         data_retention: (settings.data_retention as WebsiteSettingsUpdateData['data_retention']) || "90",
         export_enabled: settings.export_enabled ?? true,
+        country_code: settings.country_code || undefined,
+        country_name: settings.country_name || undefined,
         created_at: settingsData.created_at || undefined,
         updated_at: settingsData.updated_at || undefined,
       };
@@ -99,6 +105,8 @@ export class WebsiteSettingsService {
       api_access: false,
       data_retention: "90",
       export_enabled: true,
+      country_code: undefined,
+      country_name: undefined,
     };
   }
 
@@ -128,6 +136,11 @@ export class WebsiteSettingsService {
     websiteId: string,
     updates: WebsiteSettingsUpdateData
   ): Promise<WebsiteSettings> {
+    // Only proceed if country is selected
+    if (!updates.country_code || !updates.country_name) {
+      throw new Error("Website settings can only be saved when a country is selected");
+    }
+
     // First, check if settings record exists
     const { data: existingSettings } = await supabase
       .schema("beekon_data")
@@ -148,6 +161,8 @@ export class WebsiteSettingsService {
       api_access: updates.api_access,
       data_retention: updates.data_retention,
       export_enabled: updates.export_enabled,
+      country_code: updates.country_code,
+      country_name: updates.country_name,
     };
 
     let data;
@@ -195,6 +210,8 @@ export class WebsiteSettingsService {
       api_access: settings.api_access ?? false,
       data_retention: (settings.data_retention as WebsiteSettingsUpdateData['data_retention']) || "90",
       export_enabled: settings.export_enabled ?? true,
+      country_code: settings.country_code || undefined,
+      country_name: settings.country_name || undefined,
       created_at: data.created_at || undefined,
       updated_at: data.updated_at || undefined,
     };

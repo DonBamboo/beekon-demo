@@ -26,6 +26,8 @@ export interface WebsiteDisplay {
   apiAccess: boolean;
   dataRetention: "30" | "90" | "180" | "365";
   exportEnabled: boolean;
+  countryCode?: string; // ISO 3166-1 alpha-3 country code
+  countryName?: string; // Full country name
   createdAt?: string;
   updatedAt?: string;
   workspaceId?: string;
@@ -35,12 +37,16 @@ export interface WebsiteCreateRequest {
   domain: string;
   display_name?: string;
   workspace_id: string;
+  country_code?: string; // ISO 3166-1 alpha-3 country code (e.g., "USA")
+  country_name?: string; // Full country name (e.g., "United States")
 }
 
 export interface WebsiteUpdateRequest
   extends Partial<Omit<Website, "id" | "created_at" | "updated_at">> {
   domain?: string;
   display_name?: string;
+  country_code?: string; // ISO 3166-1 alpha-3 country code
+  country_name?: string; // Full country name
 }
 
 export interface WebsiteAnalysisResult {
@@ -94,4 +100,6 @@ export interface WebsiteSettings {
   created_at?: string;
   updated_at?: string;
   description?: string;
+  country_code?: string; // ISO 3166-1 alpha-3 country code
+  country_name?: string; // Full country name
 }

@@ -30,11 +30,13 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ExportDropdown } from "@/components/ui/export-components";
+import { CountrySelect } from "@/components/CountrySelect";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { websiteSettingsService } from "@/services/websiteSettingsService";
 import type { Website } from "@/types/website";
 import { ExportFormat, useExportHandler } from "@/lib/export-utils";
+import { Country, getCountryByCode } from "@/lib/countries";
 import { exportService } from "@/services/exportService";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -56,6 +58,8 @@ const websiteSettingsSchema = z.object({
   domain: z.string(),
   status: z.enum(["active", "pending", "paused"]),
   description: z.string().optional(),
+  countryCode: z.string().optional(),
+  countryName: z.string().optional(),
   analysisFrequency: z.enum(["daily", "weekly", "bi-weekly", "monthly"]),
   autoAnalysis: z.boolean(),
   notifications: z.boolean(),
@@ -87,6 +91,7 @@ export function WebsiteSettingsModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const { refetchWebsites } = useWorkspace();
   const { handleExport } = useExportHandler();
 
@@ -97,6 +102,8 @@ export function WebsiteSettingsModal({
       domain: website?.domain || "",
       status: website?.is_active ? "active" : "paused",
       description: "",
+      countryCode: "",
+      countryName: "",
       analysisFrequency: "weekly",
       autoAnalysis: true,
       notifications: true,
@@ -127,6 +134,8 @@ export function WebsiteSettingsModal({
             domain: website.domain || "",
             status: website.is_active ? "active" : "paused",
             description: settings.description,
+            countryCode: settings.country_code || "",
+            countryName: settings.country_name || "",
             analysisFrequency: settings.analysis_frequency,
             autoAnalysis: settings.auto_analysis,
             notifications: settings.notifications,
@@ -139,6 +148,12 @@ export function WebsiteSettingsModal({
             dataRetention: settings.data_retention,
             exportEnabled: settings.export_enabled,
           });
+          
+          // Set selected country for CountrySelect component
+          if (settings.country_code) {
+            const country = getCountryByCode(settings.country_code);
+            setSelectedCountry(country || null);
+          }
         }
       } catch (error) {
         // Failed to load website settings
@@ -166,6 +181,16 @@ export function WebsiteSettingsModal({
   const onSubmit = async (data: WebsiteSettingsFormData) => {
     if (!website?.id) return;
 
+    // Validate that country is selected before saving settings
+    if (!data.countryCode || !data.countryName || !selectedCountry) {
+      toast({
+        title: "Country Required",
+        description: "Please select a country before saving settings.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSaving(true);
     try {
       await websiteSettingsService.updateWebsiteSettings(website.id, {
@@ -181,6 +206,8 @@ export function WebsiteSettingsModal({
         data_retention: data.dataRetention,
         export_enabled: data.exportEnabled,
         description: data.description,
+        country_code: data.countryCode,
+        country_name: data.countryName,
       });
 
       await websiteSettingsService.updateWebsite(website.id, {
@@ -419,6 +446,28 @@ export function WebsiteSettingsModal({
                             className="focus-ring"
                             rows={3}
                           />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="country">Country <span className="text-destructive">*</span></Label>
+                          <p className="text-xs text-muted-foreground">
+                            Country selection is required to save settings
+                          </p>
+                          <CountrySelect
+                            value={selectedCountry?.code}
+                            onChange={(country) => {
+                              setSelectedCountry(country);
+                              form.setValue("countryCode", country?.code || "");
+                              form.setValue("countryName", country?.name || "");
+                            }}
+                            placeholder="Select country..."
+                            disabled={isSaving}
+                          />
+                          {selectedCountry && (
+                            <p className="text-xs text-muted-foreground">
+                              Selected: {selectedCountry.flag} {selectedCountry.name}
+                            </p>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
