@@ -135,10 +135,24 @@ class WebsiteStatusService {
         filter: `workspace_id=eq.${subscription.workspaceId}`,
       };
 
+      console.log(`[REALTIME-DEBUG] Setting up channel: ${channelName}`, {
+        schema: subscriptionConfig.schema,
+        table: subscriptionConfig.table,
+        filter: subscriptionConfig.filter,
+        workspaceId: subscription.workspaceId,
+      });
+
       // Use type assertion to work around Supabase type limitations while maintaining type safety
       const channel = (supabase.channel(channelName) as RealtimeChannel)
         .on('postgres_changes' as never, subscriptionConfig as never, (payload: SupabaseRealtimePayload) => {
             if (!subscription.isActive) return;
+
+          console.log(`[REALTIME-DEBUG] Received event on channel ${channelName}:`, {
+            eventType: payload.eventType,
+            newData: payload.new ? { id: payload.new.id, crawl_status: payload.new.crawl_status } : null,
+            oldData: payload.old ? { id: payload.old.id, crawl_status: payload.old.crawl_status } : null,
+            timestamp: new Date().toISOString(),
+          });
 
           // Handle different event types
           const eventType = payload.eventType;
@@ -182,7 +196,14 @@ class WebsiteStatusService {
           });
         })
         .subscribe((status) => {
+          console.log(`[REALTIME-DEBUG] Channel ${channelName} status changed:`, {
+            status,
+            workspaceId: subscription.workspaceId,
+            timestamp: new Date().toISOString(),
+          });
+
           if (status === "SUBSCRIBED") {
+            console.log(`[REALTIME-SUCCESS] ✅ Successfully subscribed to workspace: ${subscription.workspaceId}`);
             // Mark connection as healthy
             const health = this.connectionHealth.get(subscription.workspaceId);
             if (health) {
@@ -190,6 +211,7 @@ class WebsiteStatusService {
               health.lastSeen = Date.now();
             }
           } else if (status === "CHANNEL_ERROR") {
+            console.error(`[REALTIME-ERROR] ❌ Channel error for workspace: ${subscription.workspaceId}`);
             // Mark connection as unhealthy
             const health = this.connectionHealth.get(subscription.workspaceId);
             if (health) {
@@ -197,6 +219,7 @@ class WebsiteStatusService {
             }
             this.handleRealtimeError(subscription);
           } else if (status === "TIMED_OUT") {
+            console.error(`[REALTIME-ERROR] ⏰ Channel timeout for workspace: ${subscription.workspaceId}`);
             // Mark connection as unhealthy
             const health = this.connectionHealth.get(subscription.workspaceId);
             if (health) {
@@ -210,6 +233,7 @@ class WebsiteStatusService {
       subscription.realtimeChannel = channel;
       return true;
     } catch (error) {
+      console.error(`[REALTIME-ERROR] ❌ Failed to setup real-time subscription for workspace ${subscription.workspaceId}:`, error);
       return false;
     }
   }
@@ -712,12 +736,26 @@ class WebsiteStatusService {
       const dbStatus = website.crawl_status;
       const isInSync = realtimeStatus === dbStatus;
 
+      console.log(`[DB-SYNC] ${isInSync ? '✅' : '❌'} Sync check for website ${websiteId}:`, {
+        websiteId,
+        websiteDomain: website.domain,
+        realtimeStatus,
+        databaseStatus: dbStatus,
+        isInSync,
+        timestamp: new Date().toISOString(),
+      });
+
       if (!isInSync) {
         console.error(`[DB-SYNC] 🚨 DATA DESYNC DETECTED!`, {
           websiteId,
+          websiteDomain: website.domain,
           realtimeStatus,
           actualDatabaseStatus: dbStatus,
+          lastCrawledAt: website.last_crawled_at,
+          updatedAt: website.updated_at,
+          workspaceId: website.workspace_id,
           message: "Real-time data does not match database state!",
+          timestamp: new Date().toISOString(),
         });
 
         // AUTOMATIC SYNC RECOVERY: Force a fresh status update with correct database data

@@ -40,6 +40,8 @@ import { sendN8nWebhook } from "@/lib/http-request";
 import { useExportHandler } from "@/lib/export-utils";
 import { addProtocol } from "@/lib/utils";
 import type { ExportFormat } from "@/types/database";
+import { CountrySelect } from "@/components/CountrySelect";
+import { Country } from "@/lib/countries";
 import {
   BarChart3,
   Calendar,
@@ -60,6 +62,7 @@ export default function Websites() {
     useState<Website | null>(null);
   const [domain, setDomain] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [websiteToDelete, setWebsiteToDelete] = useState<string | null>(null);
@@ -193,6 +196,7 @@ export default function Websites() {
       return;
     }
 
+
     // Validate domain format
     const domainRegex =
       /^(https?:\/\/)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(\/.*)?$/i;
@@ -225,6 +229,8 @@ export default function Websites() {
       website: addProtocol(domain),
       display_name: displayName,
       workspace_id: currentWorkspace.id,
+      country_code: selectedCountry?.code,
+      country_name: selectedCountry?.name,
     });
 
     if (!response.success) {
@@ -244,10 +250,17 @@ export default function Websites() {
       description: `Analysis started for ${domain}`,
     });
 
+    // Capture country data before clearing form state
+    const countryData = selectedCountry ? {
+      code: selectedCountry.code,
+      name: selectedCountry.name
+    } : null;
+
     // Close modal immediately after successful webhook response
     // This prevents race conditions with state updates
     setDomain("");
     setDisplayName("");
+    setSelectedCountry(null);
     setProcessing(false);
     handleModalStateChange(false);
 
@@ -572,6 +585,20 @@ export default function Websites() {
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="country">Country (Optional)</Label>
+                    <CountrySelect
+                      value={selectedCountry?.code}
+                      onChange={setSelectedCountry}
+                      placeholder="Select country..."
+                      disabled={processing || isAddingWebsite}
+                    />
+                    {selectedCountry && (
+                      <p className="text-xs text-muted-foreground">
+                        Selected: {selectedCountry.flag} {selectedCountry.name}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <DialogFooter>
