@@ -219,12 +219,9 @@ export function useWebsiteStatus(
    * Remove a website from monitoring (e.g., when a website is deleted)
    */
   const removeWebsiteFromMonitoring = useCallback(
-    (workspaceId: string, websiteId: string) => {
+    (_workspaceId: string, websiteId: string) => {
       try {
-        websiteStatusService.removeWebsiteFromMonitoring(
-          workspaceId,
-          websiteId
-        );
+        websiteStatusService.stopMonitoringWebsite(websiteId);
 
         // Clean up previous status tracking for this website
         previousStatusRef.current.delete(websiteId);

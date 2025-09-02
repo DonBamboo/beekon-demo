@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { Website } from "@/types/database";
+import { debugError, debugInfo, addDebugEvent } from "@/lib/debug-utils";
 
 // Website status types based on database schema
 export type WebsiteStatus = "pending" | "crawling" | "completed" | "failed";
@@ -30,607 +31,615 @@ interface PostgresChangesConfig {
   filter?: string;
 }
 
-interface EventSequenceTracker {
+// Simplified website subscription interface - single monitoring approach
+interface WebsiteSubscription {
   websiteId: string;
-  lastEventTimestamp: number;
-  eventCount: number;
-  missedEventCount: number;
-  lastStatus: string;
-  eventHistory: Array<{
-    eventType: string;
-    status: string;
-    timestamp: number;
-    sequenceNumber: number;
-  }>;
-}
-
-interface StatusSubscription {
   workspaceId: string;
-  websiteIds: Set<string>;
   callback: WebsiteStatusCallback;
-  pollingIntervals: Map<string, NodeJS.Timeout>;
   realtimeChannel?: RealtimeChannel;
+  pollingInterval?: NodeJS.Timeout;
   isActive: boolean;
-  eventTrackers: Map<string, EventSequenceTracker>; // websiteId -> tracker
+  currentStatus: WebsiteStatus;
+  createdAt: number;
+  lastEventTimestamp: number;
 }
 
 /**
- * Website Status Service
+ * Website Status Service - Simplified Per-Website Monitoring
  *
- * Provides real-time website crawling status updates using a hybrid approach:
- * - Primary: Supabase real-time subscriptions for instant updates
- * - Fallback: Smart polling with context-aware intervals
- *
- * Features:
- * - Automatic cleanup when websites reach terminal states
- * - Smart polling intervals based on status
- * - Connection management and graceful fallback
- * - Memory leak prevention
+ * Provides real-time website crawling status updates using a streamlined approach:
+ * - Primary: Supabase real-time subscriptions for crawling websites only
+ * - Fallback: Smart polling with 3-second intervals
+ * - Automatic cleanup when websites complete or fail
+ * - Simple, reliable monitoring without complex recovery systems
  */
 class WebsiteStatusService {
-  private subscriptions: Map<string, StatusSubscription> = new Map();
-  private reconnectAttempts: Map<string, number> = new Map();
-  private readonly MAX_RECONNECT_ATTEMPTS = 5;
-  private connectionHealth: Map<
-    string,
-    { lastSeen: number; isHealthy: boolean }
-  > = new Map();
-  private readonly CONNECTION_TIMEOUT = 30000; // 30 seconds
-  private healthCheckInterval?: NodeJS.Timeout;
-  private syncCheckInterval?: NodeJS.Timeout;
+  private websiteSubscriptions: Map<string, WebsiteSubscription> = new Map();
+  private readonly POLLING_INTERVAL = 3000; // 3 seconds for crawling websites
+  private readonly RECONCILIATION_INTERVAL = 30000; // 30 seconds for periodic sync
+  private reconciliationInterval?: NodeJS.Timeout;
 
   /**
-   * Subscribe to website status updates for a workspace
+   * Start monitoring a specific website (only if status is "crawling")
+   */
+  async startMonitoringWebsite(
+    websiteId: string,
+    workspaceId: string,
+    callback: WebsiteStatusCallback
+  ): Promise<void> {
+    // Check if already monitoring this website
+    if (this.websiteSubscriptions.has(websiteId)) {
+      console.log(`[WEBSITE-MONITOR] Already monitoring website: ${websiteId}`);
+      return;
+    }
+
+    // Get current website status from database
+    const { data: website, error } = await supabase
+      .schema("beekon_data")
+      .from("websites")
+      .select("id, crawl_status, last_crawled_at, updated_at, workspace_id")
+      .eq("id", websiteId)
+      .single();
+
+    if (error || !website) {
+      console.error(`[WEBSITE-MONITOR] ❌ Failed to get website ${websiteId}:`, error);
+      return;
+    }
+
+    const currentStatus = website.crawl_status as WebsiteStatus;
+    
+    // Only monitor websites that are actively crawling
+    if (currentStatus !== "crawling") {
+      console.log(`[WEBSITE-MONITOR] Skipping monitoring for website ${websiteId} - status: ${currentStatus}`);
+      return;
+    }
+
+    console.log(`[WEBSITE-MONITOR] 🎯 Starting targeted monitoring for website: ${websiteId} (status: ${currentStatus})`);
+
+    // Create simplified website subscription
+    const websiteSubscription: WebsiteSubscription = {
+      websiteId,
+      workspaceId,
+      callback,
+      isActive: true,
+      currentStatus,
+      createdAt: Date.now(),
+      lastEventTimestamp: Date.now(),
+    };
+
+    this.websiteSubscriptions.set(websiteId, websiteSubscription);
+
+    // Add debug event for subscription start
+    addDebugEvent({
+      type: 'real-time',
+      category: 'real-time',
+      source: 'WebsiteStatusService',
+      message: `Started monitoring crawling website`,
+      details: {
+        websiteId,
+        workspaceId,
+        currentStatus,
+        totalSubscriptions: this.websiteSubscriptions.size,
+        monitoringMethod: 'per-website-realtime',
+      },
+      websiteId,
+      severity: 'medium',
+    });
+
+    // Start reconciliation interval if this is the first subscription
+    if (this.websiteSubscriptions.size === 1) {
+      this.startReconciliation();
+    }
+
+    // Setup real-time subscription for this specific website
+    const realtimeSuccess = await this.setupWebsiteRealtimeSubscription(websiteSubscription);
+    if (!realtimeSuccess) {
+      // Fallback to polling if real-time fails
+      this.startWebsitePolling(websiteSubscription);
+    }
+  }
+
+  /**
+   * Stop monitoring a specific website
+   */
+  async stopMonitoringWebsite(websiteId: string): Promise<void> {
+    const subscription = this.websiteSubscriptions.get(websiteId);
+    if (!subscription) {
+      return;
+    }
+
+    console.log(`[WEBSITE-MONITOR] 🛑 Stopping monitoring for website: ${websiteId} (reason: status completed/failed)`);
+
+    // Add debug event for subscription stop
+    addDebugEvent({
+      type: 'real-time',
+      category: 'real-time',
+      source: 'WebsiteStatusService',
+      message: `Stopped monitoring website (completed/failed)`,
+      details: {
+        websiteId,
+        workspaceId: subscription.workspaceId,
+        previousStatus: subscription.currentStatus,
+        monitoringDuration: Date.now() - subscription.createdAt,
+        totalSubscriptionsRemaining: this.websiteSubscriptions.size - 1,
+      },
+      websiteId,
+      severity: 'low',
+    });
+
+    // Mark as inactive
+    subscription.isActive = false;
+
+    // Clean up real-time channel
+    if (subscription.realtimeChannel) {
+      await supabase.removeChannel(subscription.realtimeChannel);
+    }
+
+    // Clean up polling interval
+    if (subscription.pollingInterval) {
+      clearInterval(subscription.pollingInterval);
+    }
+
+    // Remove from tracking
+    this.websiteSubscriptions.delete(websiteId);
+
+    // Stop reconciliation if no more subscriptions
+    if (this.websiteSubscriptions.size === 0) {
+      this.stopReconciliation();
+    }
+  }
+
+  /**
+   * Subscribe to workspace updates (DEPRECATED - use startMonitoringWebsite instead)
+   * Kept for backward compatibility during transition
    */
   async subscribeToWorkspace(
     workspaceId: string,
     websiteIds: string[],
     callback: WebsiteStatusCallback
   ): Promise<void> {
-    // Clean up any existing subscription
-    await this.unsubscribeFromWorkspace(workspaceId);
-
-    const subscription: StatusSubscription = {
-      workspaceId,
-      websiteIds: new Set(websiteIds),
-      callback,
-      pollingIntervals: new Map(),
-      isActive: true,
-      eventTrackers: new Map(), // Initialize event tracking
-    };
-
-    this.subscriptions.set(workspaceId, subscription);
-
-    // Initialize connection health tracking
-    this.connectionHealth.set(workspaceId, {
-      lastSeen: Date.now(),
-      isHealthy: false,
-    });
-
-    // Try real-time first, fallback to polling if needed
-    const realtimeSuccess = await this.setupRealtimeSubscription(subscription);
-    if (!realtimeSuccess) {
-      this.startPollingForWorkspace(subscription);
-    }
-
-    // Start connection health monitoring
-    this.startHealthMonitoring();
-
-    // Start periodic sync verification
-    this.startSyncMonitoring();
+    console.warn('[DEPRECATED] subscribeToWorkspace is deprecated. Use monitorCrawlingWebsites instead.');
+    await this.monitorCrawlingWebsites(workspaceId, websiteIds, callback);
   }
 
   /**
-   * Setup Supabase real-time subscription
+   * Setup Supabase real-time subscription for a specific website
    */
-  private async setupRealtimeSubscription(
-    subscription: StatusSubscription
+  private async setupWebsiteRealtimeSubscription(
+    subscription: WebsiteSubscription
   ): Promise<boolean> {
     try {
-      const channelName = `website-status-${subscription.workspaceId}`;
+      const channelName = `website-status-${subscription.websiteId}`;
       const subscriptionConfig: PostgresChangesConfig = {
-        event: "*", // Listen to ALL events (INSERT, UPDATE, DELETE)
+        event: "UPDATE", // Only listen to UPDATE events for efficiency
         schema: "beekon_data",
         table: "websites",
-        filter: `workspace_id=eq.${subscription.workspaceId}`,
+        filter: `id=eq.${subscription.websiteId}`, // Target specific website
       };
 
-      console.log(`[REALTIME-DEBUG] Setting up channel: ${channelName}`, {
+      console.log(`[WEBSITE-REALTIME] Setting up targeted channel: ${channelName}`, {
+        websiteId: subscription.websiteId,
+        currentStatus: subscription.currentStatus,
         schema: subscriptionConfig.schema,
         table: subscriptionConfig.table,
         filter: subscriptionConfig.filter,
-        workspaceId: subscription.workspaceId,
       });
 
-      // Use type assertion to work around Supabase type limitations while maintaining type safety
       const channel = (supabase.channel(channelName) as RealtimeChannel)
         .on('postgres_changes' as never, subscriptionConfig as never, (payload: SupabaseRealtimePayload) => {
-            if (!subscription.isActive) return;
+          if (!subscription.isActive) return;
 
-          console.log(`[REALTIME-DEBUG] Received event on channel ${channelName}:`, {
+          console.log(`[WEBSITE-REALTIME] Received targeted event for website ${subscription.websiteId}:`, {
             eventType: payload.eventType,
             newData: payload.new ? { id: payload.new.id, crawl_status: payload.new.crawl_status } : null,
             oldData: payload.old ? { id: payload.old.id, crawl_status: payload.old.crawl_status } : null,
             timestamp: new Date().toISOString(),
           });
 
-          // Handle different event types
-          const eventType = payload.eventType;
-          let website: Website | null = null;
-          let websiteId: string | null = null;
+          // Process the status update
+          if (payload.eventType === "UPDATE" && payload.new) {
+            const website = payload.new as Website;
+            const newStatus = website.crawl_status as WebsiteStatus;
+            const oldStatus = subscription.currentStatus;
 
-          if (eventType === "INSERT" || eventType === "UPDATE") {
-            website = payload.new as Website;
-            websiteId = website?.id;
-          } else if (eventType === "DELETE") {
-            website = payload.old as Website;
-            websiteId = website?.id;
+            // Update current status
+            subscription.currentStatus = newStatus;
+
+            // Add debug event for realtime status change detection
+            addDebugEvent({
+              type: 'real-time',
+              category: 'real-time',
+              source: 'WebsiteStatusService',
+              message: `Status change detected via realtime`,
+              details: {
+                websiteId: subscription.websiteId,
+                oldStatus,
+                newStatus,
+                detectionMethod: 'supabase-realtime',
+                lastCrawledAt: website.last_crawled_at,
+              },
+              websiteId: subscription.websiteId,
+              severity: 'medium',
+            });
+            
+            // Handle the status update
+            this.handleWebsiteStatusUpdate(subscription, {
+              websiteId: subscription.websiteId,
+              status: newStatus,
+              lastCrawledAt: website.last_crawled_at,
+              updatedAt: website.updated_at || new Date().toISOString(),
+            });
+
+            // FIXED: Immediate cleanup for terminal states - no race conditions
+            if (newStatus === "completed" || newStatus === "failed") {
+              console.log(`[WEBSITE-REALTIME] ✅ Website ${subscription.websiteId} completed (${oldStatus} → ${newStatus}). Stopping monitoring.`);
+              // Immediate synchronous cleanup to prevent race conditions
+              this.stopMonitoringWebsite(subscription.websiteId);
+            }
           }
-
-          if (!website || !websiteId) {
-            return;
-          }
-
-          // Skip processing DELETE events for status updates
-          if (eventType === "DELETE") {
-            return;
-          }
-
-          // Track event sequence for missing event detection
-          this.trackEventSequence(
-            subscription,
-            websiteId,
-            eventType,
-            website.crawl_status || "unknown"
-          );
-
-          // Compare with direct database query to detect data lag for INSERT/UPDATE events
-          this.verifyDatabaseSync(websiteId, website.crawl_status || "unknown");
-
-          // Process website updates
-          this.handleStatusUpdate(subscription, {
-            websiteId: websiteId,
-            status: website.crawl_status as WebsiteStatus,
-            lastCrawledAt: website.last_crawled_at,
-            updatedAt: website.updated_at || new Date().toISOString(),
-          });
         })
         .subscribe((status) => {
-          console.log(`[REALTIME-DEBUG] Channel ${channelName} status changed:`, {
+          console.log(`[WEBSITE-REALTIME] Channel ${channelName} status:`, {
             status,
-            workspaceId: subscription.workspaceId,
+            websiteId: subscription.websiteId,
             timestamp: new Date().toISOString(),
           });
 
           if (status === "SUBSCRIBED") {
-            console.log(`[REALTIME-SUCCESS] ✅ Successfully subscribed to workspace: ${subscription.workspaceId}`);
-            // Mark connection as healthy
-            const health = this.connectionHealth.get(subscription.workspaceId);
-            if (health) {
-              health.isHealthy = true;
-              health.lastSeen = Date.now();
-            }
-          } else if (status === "CHANNEL_ERROR") {
-            console.error(`[REALTIME-ERROR] ❌ Channel error for workspace: ${subscription.workspaceId}`);
-            // Mark connection as unhealthy
-            const health = this.connectionHealth.get(subscription.workspaceId);
-            if (health) {
-              health.isHealthy = false;
-            }
-            this.handleRealtimeError(subscription);
-          } else if (status === "TIMED_OUT") {
-            console.error(`[REALTIME-ERROR] ⏰ Channel timeout for workspace: ${subscription.workspaceId}`);
-            // Mark connection as unhealthy
-            const health = this.connectionHealth.get(subscription.workspaceId);
-            if (health) {
-              health.isHealthy = false;
-            }
-            this.handleRealtimeError(subscription);
+            console.log(`[WEBSITE-REALTIME] ✅ Successfully subscribed to website: ${subscription.websiteId}`);
+            
+            // Add debug event for successful real-time subscription
+            addDebugEvent({
+              type: 'real-time',
+              category: 'real-time',
+              source: 'WebsiteStatusService',
+              message: `Real-time subscription established`,
+              details: {
+                websiteId: subscription.websiteId,
+                workspaceId: subscription.workspaceId,
+                channelName,
+                subscriptionType: 'supabase-realtime',
+                currentStatus: subscription.currentStatus,
+              },
+              websiteId: subscription.websiteId,
+              severity: 'medium',
+            });
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.error(`[WEBSITE-REALTIME] ❌ Connection issue for website ${subscription.websiteId}:`, status);
+            
+            // Add debug event for connection issues
+            addDebugEvent({
+              type: 'real-time',
+              category: 'real-time',
+              source: 'WebsiteStatusService',
+              message: `Real-time connection issue detected`,
+              details: {
+                websiteId: subscription.websiteId,
+                workspaceId: subscription.workspaceId,
+                connectionStatus: status,
+                fallbackMethod: 'polling',
+              },
+              websiteId: subscription.websiteId,
+              severity: 'high',
+            });
+            
+            // Fallback to polling for this specific website
+            this.startWebsitePolling(subscription);
           }
-        }
-      );
+        });
 
       subscription.realtimeChannel = channel;
       return true;
     } catch (error) {
-      console.error(`[REALTIME-ERROR] ❌ Failed to setup real-time subscription for workspace ${subscription.workspaceId}:`, error);
+      console.error(`[WEBSITE-REALTIME] ❌ Failed to setup real-time for website ${subscription.websiteId}:`, error);
       return false;
     }
   }
 
   /**
-   * Handle real-time connection errors with enhanced reconnection logic
+   * Start polling for a specific website
    */
-  private async handleRealtimeError(
-    subscription: StatusSubscription
-  ): Promise<void> {
-    const attempts = this.reconnectAttempts.get(subscription.workspaceId) || 0;
-
-    if (attempts < this.MAX_RECONNECT_ATTEMPTS) {
-      this.reconnectAttempts.set(subscription.workspaceId, attempts + 1);
-
-      // Enhanced exponential backoff: 1s, 2s, 4s, 8s, 16s with jitter
-      const baseDelay = Math.pow(2, attempts) * 1000;
-      const jitter = Math.random() * 1000; // Add randomness to prevent thundering herd
-      const delay = baseDelay + jitter;
-
-      setTimeout(async () => {
-        if (subscription.isActive) {
-          // Clean up old channel before reconnecting
-          if (subscription.realtimeChannel) {
-            await supabase.removeChannel(subscription.realtimeChannel);
-            subscription.realtimeChannel = undefined;
-          }
-
-          const success = await this.setupRealtimeSubscription(subscription);
-          if (!success) {
-            this.startPollingForWorkspace(subscription);
-          } else {
-            // Reset attempt counter on successful reconnection
-            this.reconnectAttempts.set(subscription.workspaceId, 0);
-          }
-        }
-      }, delay);
-    } else {
-      this.startPollingForWorkspace(subscription);
+  private startWebsitePolling(subscription: WebsiteSubscription): void {
+    if (subscription.pollingInterval) {
+      clearInterval(subscription.pollingInterval);
     }
-  }
 
-  /**
-   * Start smart polling for websites that need monitoring
-   */
-  private startPollingForWorkspace(subscription: StatusSubscription): void {
-    // Only poll websites that are in active crawling states
-    this.pollActiveWebsites(subscription);
-  }
+    console.log(`[WEBSITE-POLLING] Starting polling for website: ${subscription.websiteId}`);
 
-  /**
-   * Poll websites with smart intervals based on status
-   */
-  private async pollActiveWebsites(
-    subscription: StatusSubscription
-  ): Promise<void> {
-    try {
-      const { data: websites, error } = await supabase
-        .schema("beekon_data")
-        .from("websites")
-        .select("id, crawl_status, last_crawled_at, updated_at")
-        .in("id", Array.from(subscription.websiteIds))
-        .in("crawl_status", ["pending", "crawling"]); // Only poll active states
+    // Add debug event for polling fallback
+    addDebugEvent({
+      type: 'real-time',
+      category: 'real-time',
+      source: 'WebsiteStatusService',
+      message: `Started polling fallback for website`,
+      details: {
+        websiteId: subscription.websiteId,
+        workspaceId: subscription.workspaceId,
+        pollingInterval: this.POLLING_INTERVAL,
+        reason: 'realtime-fallback',
+        currentStatus: subscription.currentStatus,
+      },
+      websiteId: subscription.websiteId,
+      severity: 'medium',
+    });
 
-      if (error) {
+    const pollInterval = setInterval(async () => {
+      if (!subscription.isActive) {
+        clearInterval(pollInterval);
         return;
       }
 
-      if (!websites || !subscription.isActive) return;
+      try {
+        const { data: website, error } = await supabase
+          .schema("beekon_data")
+          .from("websites")
+          .select("id, crawl_status, last_crawled_at, updated_at")
+          .eq("id", subscription.websiteId)
+          .single();
 
-      // Clear existing intervals
-      subscription.pollingIntervals.forEach((interval) =>
-        clearInterval(interval)
-      );
-      subscription.pollingIntervals.clear();
+        if (error || !website) return;
 
-      // Setup polling for each active website
-      websites.forEach((website) => {
-        if (!subscription.isActive) return;
+        const newStatus = website.crawl_status as WebsiteStatus;
+        const oldStatus = subscription.currentStatus;
 
-        const interval = this.getPollingInterval(
-          website.crawl_status as WebsiteStatus
-        );
+        // Only process if status changed
+        if (newStatus !== oldStatus) {
+          console.log(`[WEBSITE-POLLING] Status change detected for ${subscription.websiteId}: ${oldStatus} → ${newStatus}`);
+          
+          // Add debug event for polling status change detection
+          addDebugEvent({
+            type: 'real-time',
+            category: 'real-time',
+            source: 'WebsiteStatusService',
+            message: `Status change detected via polling`,
+            details: {
+              websiteId: subscription.websiteId,
+              oldStatus,
+              newStatus,
+              detectionMethod: 'polling',
+              lastCrawledAt: website.last_crawled_at,
+            },
+            websiteId: subscription.websiteId,
+            severity: 'medium',
+          });
+          
+          subscription.currentStatus = newStatus;
 
-        if (interval > 0) {
-          const pollInterval = setInterval(async () => {
-            if (!subscription.isActive) return;
+          this.handleWebsiteStatusUpdate(subscription, {
+            websiteId: subscription.websiteId,
+            status: newStatus,
+            lastCrawledAt: website.last_crawled_at,
+            updatedAt: website.updated_at || new Date().toISOString(),
+          });
 
-            await this.checkWebsiteStatus(subscription, website.id);
-          }, interval);
-
-          subscription.pollingIntervals.set(website.id, pollInterval);
+          // FIXED: Immediate cleanup for terminal states - no race conditions
+          if (newStatus === "completed" || newStatus === "failed") {
+            console.log(`[WEBSITE-POLLING] ✅ Website ${subscription.websiteId} completed via polling. Stopping monitoring.`);
+            // Immediate synchronous cleanup to prevent race conditions
+            this.stopMonitoringWebsite(subscription.websiteId);
+          }
         }
-      });
-    } catch (error) {
-      console.error("An error occurred: " + error);
-    }
+      } catch (error) {
+        console.error(`[WEBSITE-POLLING] Error polling website ${subscription.websiteId}:`, error);
+      }
+    }, this.POLLING_INTERVAL); // Poll every 3 seconds for crawling websites
+
+    subscription.pollingInterval = pollInterval;
   }
 
   /**
-   * Get polling interval based on website status
+   * Handle website status update
    */
-  private getPollingInterval(status: WebsiteStatus): number {
-    switch (status) {
-      case "crawling":
-        return 2000; // 2 seconds - active monitoring
-      case "pending":
-        return 30000; // 30 seconds - slower check
-      case "completed":
-      case "failed":
-        return 0; // No polling for terminal states
-      default:
-        return 30000; // Default fallback
-    }
-  }
-
-  /**
-   * Check individual website status
-   */
-  private async checkWebsiteStatus(
-    subscription: StatusSubscription,
-    websiteId: string
-  ): Promise<void> {
-    try {
-      const { data: website, error } = await supabase
-        .schema("beekon_data")
-        .from("websites")
-        .select("id, crawl_status, last_crawled_at, updated_at")
-        .eq("id", websiteId)
-        .single();
-
-      if (error || !website || !subscription.isActive) return;
-
-      const newStatus = website.crawl_status as WebsiteStatus;
-
-      // Notify about the status update
-      this.handleStatusUpdate(subscription, {
-        websiteId: website.id,
-        status: newStatus,
-        lastCrawledAt: website.last_crawled_at,
-        updatedAt: website.updated_at || new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error("An error occurred: " + error);
-    }
-  }
-
-  /**
-   * Handle status updates from either real-time or polling
-   */
-  private handleStatusUpdate(
-    subscription: StatusSubscription,
+  private handleWebsiteStatusUpdate(
+    subscription: WebsiteSubscription,
     update: WebsiteStatusUpdate
   ): void {
     try {
-      // Update connection health (we received activity)
-      const health = this.connectionHealth.get(subscription.workspaceId);
-      if (health) {
-        health.lastSeen = Date.now();
-        health.isHealthy = true;
-      }
-
       // Call the callback with the update
       subscription.callback(update);
-
-      // Clean up polling for websites that reached terminal states
-      if (update.status === "completed" || update.status === "failed") {
-        const interval = subscription.pollingIntervals.get(update.websiteId);
-        if (interval) {
-          clearInterval(interval);
-          subscription.pollingIntervals.delete(update.websiteId);
-        }
-      }
     } catch (error) {
-      console.error("An error occurred: " + error);
+      console.error(`[WEBSITE-MONITOR] Error handling status update for ${subscription.websiteId}:`, error);
+    }
+  }
+
+
+
+
+
+
+
+
+  /**
+   * Monitor crawling websites from a list of website IDs
+   */
+  async monitorCrawlingWebsites(
+    workspaceId: string,
+    websiteIds: string[],
+    callback: WebsiteStatusCallback
+  ): Promise<void> {
+    console.log(`[WEBSITE-MONITOR] 🔍 Checking ${websiteIds.length} websites for crawling status in workspace: ${workspaceId}`);
+
+    // Query database to find which websites are currently crawling
+    const { data: crawlingWebsites, error } = await supabase
+      .schema("beekon_data")
+      .from("websites")
+      .select("id, crawl_status, workspace_id")
+      .in("id", websiteIds)
+      .eq("crawl_status", "crawling");
+
+    if (error) {
+      console.error(`[WEBSITE-MONITOR] ❌ Failed to query crawling websites:`, error);
+      return;
+    }
+
+    if (!crawlingWebsites || crawlingWebsites.length === 0) {
+      console.log(`[WEBSITE-MONITOR] No crawling websites found to monitor`);
+      return;
+    }
+
+    console.log(`[WEBSITE-MONITOR] Found ${crawlingWebsites.length} crawling websites to monitor:`, 
+      crawlingWebsites.map(w => `${w.id} (${w.crawl_status})`));
+
+    // Add debug event for batch monitoring start
+    addDebugEvent({
+      type: 'real-time',
+      category: 'real-time',
+      source: 'WebsiteStatusService',
+      message: `Started batch monitoring of crawling websites`,
+      details: {
+        workspaceId,
+        totalWebsitesRequested: websiteIds.length,
+        crawlingWebsitesFound: crawlingWebsites.length,
+        skippedWebsites: websiteIds.length - crawlingWebsites.length,
+        crawlingWebsites: crawlingWebsites.map(w => ({ id: w.id, status: w.crawl_status })),
+      },
+      severity: 'medium',
+    });
+
+    // Start monitoring each crawling website
+    for (const website of crawlingWebsites) {
+      await this.startMonitoringWebsite(website.id, workspaceId, callback);
     }
   }
 
   /**
-   * Add website to monitoring
+   * Get monitoring status for debugging
+   */
+  getMonitoringStatus(): {
+    totalWebsitesMonitored: number;
+    websitesBeingMonitored: Array<{
+      websiteId: string;
+      workspaceId: string;
+      currentStatus: WebsiteStatus;
+      hasRealtime: boolean;
+      hasPolling: boolean;
+      monitoringDuration: number;
+    }>;
+  } {
+    const websites = Array.from(this.websiteSubscriptions.values()).map(sub => ({
+      websiteId: sub.websiteId,
+      workspaceId: sub.workspaceId,
+      currentStatus: sub.currentStatus,
+      hasRealtime: !!sub.realtimeChannel,
+      hasPolling: !!sub.pollingInterval,
+      monitoringDuration: Date.now() - sub.createdAt,
+    }));
+
+    return {
+      totalWebsitesMonitored: this.websiteSubscriptions.size,
+      websitesBeingMonitored: websites,
+    };
+  }
+
+  /**
+   * Add website to monitoring (UPDATED to use new per-website monitoring)
    */
   async addWebsiteToMonitoring(
     workspaceId: string,
     websiteId: string
   ): Promise<void> {
-    const subscription = this.subscriptions.get(workspaceId);
-    if (!subscription) return;
-
-    subscription.websiteIds.add(websiteId);
-
-    // Start monitoring the new website
-    const { data: website } = await supabase
-      .schema("beekon_data")
-      .from("websites")
-      .select("id, crawl_status, last_crawled_at, updated_at")
-      .eq("id", websiteId)
-      .single();
-
-    if (website && subscription.isActive) {
-      const status = website.crawl_status as WebsiteStatus;
-
-      // If it's in an active state, start polling if we don't have real-time
-      if (
-        (status === "pending" || status === "crawling") &&
-        !subscription.realtimeChannel
-      ) {
-        const interval = this.getPollingInterval(status);
-        if (interval > 0) {
-          const pollInterval = setInterval(async () => {
-            if (!subscription.isActive) return;
-            await this.checkWebsiteStatus(subscription, websiteId);
-          }, interval);
-
-          subscription.pollingIntervals.set(websiteId, pollInterval);
-        }
+    // Use the new per-website monitoring system
+    await this.startMonitoringWebsite(websiteId, workspaceId, (update) => {
+      // Default callback that triggers context updates
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("websiteStatusUpdate", {
+            detail: {
+              websiteId: update.websiteId,
+              status: update.status,
+              source: "per-website-monitoring",
+              timestamp: Date.now(),
+            },
+          })
+        );
       }
-    }
+    });
   }
 
-  /**
-   * Remove website from monitoring
-   */
-  removeWebsiteFromMonitoring(workspaceId: string, websiteId: string): void {
-    const subscription = this.subscriptions.get(workspaceId);
-    if (!subscription) return;
 
-    subscription.websiteIds.delete(websiteId);
-
-    // Clean up polling interval
-    const interval = subscription.pollingIntervals.get(websiteId);
-    if (interval) {
-      clearInterval(interval);
-      subscription.pollingIntervals.delete(websiteId);
-    }
-  }
 
   /**
-   * Unsubscribe from workspace updates
+   * Unsubscribe from workspace updates (DEPRECATED - kept for backward compatibility)
    */
   async unsubscribeFromWorkspace(workspaceId: string): Promise<void> {
-    const subscription = this.subscriptions.get(workspaceId);
-    if (!subscription) return;
-
-    // Mark as inactive
-    subscription.isActive = false;
-
-    // Clean up real-time subscription
-    if (subscription.realtimeChannel) {
-      await supabase.removeChannel(subscription.realtimeChannel);
+    console.log(`[DEPRECATED] unsubscribeFromWorkspace called for ${workspaceId}. Stopping all website monitoring in workspace.`);
+    
+    // Stop monitoring all websites in this workspace
+    const websitesToStop = Array.from(this.websiteSubscriptions.values())
+      .filter(sub => sub.workspaceId === workspaceId);
+    
+    for (const subscription of websitesToStop) {
+      await this.stopMonitoringWebsite(subscription.websiteId);
     }
-
-    // Clean up polling intervals
-    subscription.pollingIntervals.forEach((interval) =>
-      clearInterval(interval)
-    );
-    subscription.pollingIntervals.clear();
-
-    // Remove from maps
-    this.subscriptions.delete(workspaceId);
-    this.reconnectAttempts.delete(workspaceId);
-    this.connectionHealth.delete(workspaceId);
   }
 
+
+
   /**
-   * Start connection health monitoring
+   * Start simplified reconciliation - periodically check database for missed updates
    */
-  private startHealthMonitoring(): void {
-    if (this.healthCheckInterval) {
+  private startReconciliation(): void {
+    if (this.reconciliationInterval) {
       return; // Already running
     }
 
-    this.healthCheckInterval = setInterval(() => {
-      const now = Date.now();
-
-      this.connectionHealth.forEach((health, workspaceId) => {
-        const timeSinceLastSeen = now - health.lastSeen;
-        const wasHealthy = health.isHealthy;
-
-        // Mark unhealthy if no activity for CONNECTION_TIMEOUT
-        if (timeSinceLastSeen > this.CONNECTION_TIMEOUT) {
-          health.isHealthy = false;
-
-          if (wasHealthy) {
-            // Attempt to reconnect stale connections
-            const subscription = this.subscriptions.get(workspaceId);
-            if (subscription) {
-              this.handleRealtimeError(subscription);
-            }
-          }
-        }
-      });
-    }, this.CONNECTION_TIMEOUT / 2); // Check every 15 seconds
-  }
-
-  /**
-   * Stop connection health monitoring
-   */
-  private stopHealthMonitoring(): void {
-    if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval);
-      this.healthCheckInterval = undefined;
-    }
-  }
-
-  /**
-   * Start intelligent sync monitoring with fallback polling
-   */
-  private startSyncMonitoring(): void {
-    if (this.syncCheckInterval) {
-      return; // Already running
-    }
-
-    this.syncCheckInterval = setInterval(async () => {
-      // Check sync for all monitored websites
-      for (const [workspaceId, subscription] of this.subscriptions) {
+    console.log('[RECONCILIATION] Starting periodic reconciliation');
+    
+    this.reconciliationInterval = setInterval(async () => {
+      // Check all monitored websites for status changes
+      for (const subscription of this.websiteSubscriptions.values()) {
         if (!subscription.isActive) continue;
 
         try {
-          // Query all websites for this workspace
-          const { data: websites, error } = await supabase
-            .schema("beekon_data")
-            .from("websites")
-            .select(
-              "id, crawl_status, last_crawled_at, updated_at, domain, workspace_id"
-            )
-            .eq("workspace_id", workspaceId);
+          const { data: website, error } = await supabase
+            .schema('beekon_data')
+            .from('websites')
+            .select('id, crawl_status, last_crawled_at, updated_at')
+            .eq('id', subscription.websiteId)
+            .single();
 
-          if (error) {
-            continue;
+          if (error || !website) continue;
+
+          const newStatus = website.crawl_status as WebsiteStatus;
+          
+          // Only process if status changed or if it's been too long since last update
+          const timeSinceLastUpdate = Date.now() - subscription.lastEventTimestamp;
+          
+          if (newStatus !== subscription.currentStatus || timeSinceLastUpdate > 60000) {
+            console.log(`[RECONCILIATION] Status sync for ${subscription.websiteId}: ${subscription.currentStatus} → ${newStatus}`);
+            
+            subscription.currentStatus = newStatus;
+            subscription.lastEventTimestamp = Date.now();
+            
+            // Handle the status update
+            this.handleWebsiteStatusUpdate(subscription, {
+              websiteId: subscription.websiteId,
+              status: newStatus,
+              lastCrawledAt: website.last_crawled_at,
+              updatedAt: website.updated_at || new Date().toISOString(),
+            });
+
+            // Stop monitoring if completed
+            if (newStatus === 'completed' || newStatus === 'failed') {
+              console.log(`[RECONCILIATION] Website ${subscription.websiteId} completed via reconciliation. Stopping monitoring.`);
+              this.stopMonitoringWebsite(subscription.websiteId);
+            }
           }
-
-          if (!websites) continue;
-
-          // Check for stale real-time connections and perform intelligent fallback
-          const connectionHealth = this.connectionHealth.get(workspaceId);
-          const isConnectionStale =
-            !connectionHealth?.isHealthy ||
-            Date.now() - (connectionHealth?.lastSeen || 0) > 120000; // 2 minutes
-
-          websites.forEach((website) => {
-            // INTELLIGENT POLLING FALLBACK: If connection is stale and website is in active status, force update
-            if (
-              isConnectionStale &&
-              (website.crawl_status === "crawling" ||
-                website.crawl_status === "pending")
-            ) {
-              // Force status update since real-time may be missing events
-              this.handleStatusUpdate(subscription, {
-                websiteId: website.id,
-                status: website.crawl_status as WebsiteStatus,
-                lastCrawledAt: website.last_crawled_at,
-                updatedAt: website.updated_at || new Date().toISOString(),
-              });
-            }
-
-            // Also check if website completed but we missed the event
-            const tracker = subscription.eventTrackers.get(website.id);
-            if (
-              tracker &&
-              tracker.lastStatus === "crawling" &&
-              website.crawl_status === "completed"
-            ) {
-              // CRITICAL: Trigger immediate UI refresh for missed events
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("websiteStatusUpdate", {
-                    detail: {
-                      websiteId: website.id,
-                      status: "completed",
-                      source: "missed-event-recovery",
-                    },
-                  })
-                );
-              }
-
-              this.handleStatusUpdate(subscription, {
-                websiteId: website.id,
-                status: "completed",
-                lastCrawledAt: website.last_crawled_at,
-                updatedAt: website.updated_at || new Date().toISOString(),
-              });
-            }
-          });
         } catch (error) {
-          console.error("An error occurred: " + error);
+          console.error(`[RECONCILIATION] Error checking website ${subscription.websiteId}:`, error);
         }
       }
-    }, 30000); // Check every 30 seconds for more responsive fallback
+    }, this.RECONCILIATION_INTERVAL);
   }
 
   /**
-   * Stop periodic sync monitoring
+   * Stop reconciliation
    */
-  private stopSyncMonitoring(): void {
-    if (this.syncCheckInterval) {
-      clearInterval(this.syncCheckInterval);
-      this.syncCheckInterval = undefined;
+  private stopReconciliation(): void {
+    if (this.reconciliationInterval) {
+      console.log('[RECONCILIATION] Stopping periodic reconciliation');
+      clearInterval(this.reconciliationInterval);
+      this.reconciliationInterval = undefined;
     }
   }
 
@@ -638,163 +647,18 @@ class WebsiteStatusService {
    * Clean up all subscriptions (call on app unmount)
    */
   async cleanup(): Promise<void> {
-    this.stopHealthMonitoring();
-    this.stopSyncMonitoring();
-    this.connectionHealth.clear();
-    const workspaceIds = Array.from(this.subscriptions.keys());
+    console.log('[CLEANUP] Cleaning up all website monitoring');
+    
+    this.stopReconciliation();
+    
+    // Stop all website monitoring
+    const websiteIds = Array.from(this.websiteSubscriptions.keys());
     await Promise.all(
-      workspaceIds.map((id) => this.unsubscribeFromWorkspace(id))
+      websiteIds.map((id) => this.stopMonitoringWebsite(id))
     );
   }
 
-  /**
-   * Track event sequence to detect missing events
-   */
-  private trackEventSequence(
-    subscription: StatusSubscription,
-    websiteId: string,
-    eventType: string,
-    currentStatus: string
-  ): void {
-    const now = Date.now();
-    let tracker = subscription.eventTrackers.get(websiteId);
 
-    if (!tracker) {
-      // Initialize new tracker
-      tracker = {
-        websiteId,
-        lastEventTimestamp: now,
-        eventCount: 0,
-        missedEventCount: 0,
-        lastStatus: currentStatus,
-        eventHistory: [],
-      };
-      subscription.eventTrackers.set(websiteId, tracker);
-    }
-
-    // Increment event count
-    tracker.eventCount++;
-    const sequenceNumber = tracker.eventCount;
-
-    // Check for potential missed events based on status progression
-    let potentialMissedEvents = 0;
-    if (tracker.lastStatus && tracker.lastStatus !== currentStatus) {
-      // Detect logical status progression gaps
-      const statusProgression = ["pending", "crawling", "completed", "failed"];
-      const lastIndex = statusProgression.indexOf(tracker.lastStatus);
-      const currentIndex = statusProgression.indexOf(currentStatus);
-
-      if (lastIndex !== -1 && currentIndex !== -1) {
-        if (currentIndex > lastIndex + 1) {
-          potentialMissedEvents = currentIndex - lastIndex - 1;
-          tracker.missedEventCount += potentialMissedEvents;
-        }
-      }
-    }
-
-    // Add to event history (keep last 10 events)
-    tracker.eventHistory.push({
-      eventType,
-      status: currentStatus,
-      timestamp: now,
-      sequenceNumber,
-    });
-    if (tracker.eventHistory.length > 10) {
-      tracker.eventHistory.shift();
-    }
-
-    // Update tracker
-    tracker.lastEventTimestamp = now;
-    tracker.lastStatus = currentStatus;
-  }
-
-  /**
-   * Verify database sync by comparing real-time data with direct database query
-   */
-  private async verifyDatabaseSync(
-    websiteId: string,
-    realtimeStatus: string | null
-  ): Promise<void> {
-    try {
-      const { data: website, error } = await supabase
-        .schema("beekon_data")
-        .from("websites")
-        .select(
-          "id, crawl_status, last_crawled_at, updated_at, domain, workspace_id"
-        )
-        .eq("id", websiteId)
-        .single();
-
-      if (error) {
-        return;
-      }
-
-      if (!website) {
-        return;
-      }
-
-      const dbStatus = website.crawl_status;
-      const isInSync = realtimeStatus === dbStatus;
-
-      console.log(`[DB-SYNC] ${isInSync ? '✅' : '❌'} Sync check for website ${websiteId}:`, {
-        websiteId,
-        websiteDomain: website.domain,
-        realtimeStatus,
-        databaseStatus: dbStatus,
-        isInSync,
-        timestamp: new Date().toISOString(),
-      });
-
-      if (!isInSync) {
-        console.error(`[DB-SYNC] 🚨 DATA DESYNC DETECTED!`, {
-          websiteId,
-          websiteDomain: website.domain,
-          realtimeStatus,
-          actualDatabaseStatus: dbStatus,
-          lastCrawledAt: website.last_crawled_at,
-          updatedAt: website.updated_at,
-          workspaceId: website.workspace_id,
-          message: "Real-time data does not match database state!",
-          timestamp: new Date().toISOString(),
-        });
-
-        // AUTOMATIC SYNC RECOVERY: Force a fresh status update with correct database data
-
-        // Find the subscription for this website's workspace
-        const websiteWorkspaceId = website.workspace_id;
-        const subscription = this.subscriptions.get(websiteWorkspaceId);
-
-        if (subscription && subscription.isActive) {
-          // Force update with correct database status
-
-          // CRITICAL: Trigger immediate UI refresh by dispatching custom event
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(
-              new CustomEvent("websiteStatusUpdate", {
-                detail: {
-                  websiteId: websiteId,
-                  status: dbStatus,
-                  source: "sync-recovery",
-                },
-              })
-            );
-          }
-
-          this.handleStatusUpdate(subscription, {
-            websiteId: websiteId,
-            status: dbStatus as WebsiteStatus,
-            lastCrawledAt: website.last_crawled_at,
-            updatedAt: website.updated_at || new Date().toISOString(),
-          });
-        }
-      }
-    } catch (error) {
-      console.error(
-        `[DB-SYNC] ❌ Failed to verify database sync for website ${websiteId}:`,
-        error
-      );
-    }
-  }
 
   /**
    * Direct database query to get current website status (for debugging)
@@ -835,37 +699,24 @@ class WebsiteStatusService {
   }
 
   /**
-   * Get current subscription status
+   * Get current subscription status for a workspace (DEPRECATED)
    */
   getSubscriptionStatus(workspaceId: string): {
     isActive: boolean;
     hasRealtime: boolean;
     monitoredWebsites: number;
     pollingWebsites: number;
-    connectionHealth?: {
-      isHealthy: boolean;
-      lastSeenAgo: number;
-      reconnectAttempts: number;
-    };
   } | null {
-    const subscription = this.subscriptions.get(workspaceId);
-    if (!subscription) return null;
-
-    const health = this.connectionHealth.get(workspaceId);
-    const reconnectAttempts = this.reconnectAttempts.get(workspaceId) || 0;
+    const websitesInWorkspace = Array.from(this.websiteSubscriptions.values())
+      .filter(sub => sub.workspaceId === workspaceId);
+    
+    if (websitesInWorkspace.length === 0) return null;
 
     return {
-      isActive: subscription.isActive,
-      hasRealtime: !!subscription.realtimeChannel,
-      monitoredWebsites: subscription.websiteIds.size,
-      pollingWebsites: subscription.pollingIntervals.size,
-      connectionHealth: health
-        ? {
-            isHealthy: health.isHealthy,
-            lastSeenAgo: Date.now() - health.lastSeen,
-            reconnectAttempts,
-          }
-        : undefined,
+      isActive: websitesInWorkspace.some(sub => sub.isActive),
+      hasRealtime: websitesInWorkspace.some(sub => !!sub.realtimeChannel),
+      monitoredWebsites: websitesInWorkspace.length,
+      pollingWebsites: websitesInWorkspace.filter(sub => !!sub.pollingInterval).length,
     };
   }
 }

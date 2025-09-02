@@ -91,6 +91,7 @@ export default function Websites() {
     isInitialLoad,
     refresh: _refreshMetrics,
     getWebsiteMetrics,
+    isWebsiteRefreshingMetrics,
   } = useWebsitesCoordinated();
 
   // FIXED: Create stable export data to prevent ExportDropdown infinite loop
@@ -250,11 +251,7 @@ export default function Websites() {
       description: `Analysis started for ${domain}`,
     });
 
-    // Capture country data before clearing form state
-    const countryData = selectedCountry ? {
-      code: selectedCountry.code,
-      name: selectedCountry.name
-    } : null;
+    // Clear form state after successful submission
 
     // Close modal immediately after successful webhook response
     // This prevents race conditions with state updates
@@ -824,7 +821,7 @@ export default function Websites() {
                       <div>
                         <p className="text-sm font-medium">Total Topics</p>
                         <p className="text-sm text-muted-foreground">
-                          {showMetricsLoading
+                          {showMetricsLoading || isWebsiteRefreshingMetrics(website.id)
                             ? "..."
                             : getWebsiteMetrics(website.id)?.totalTopics || 0}
                         </p>
@@ -835,7 +832,7 @@ export default function Websites() {
                       <div>
                         <p className="text-sm font-medium">Avg Visibility</p>
                         <p className="text-sm text-muted-foreground">
-                          {showMetricsLoading
+                          {showMetricsLoading || isWebsiteRefreshingMetrics(website.id)
                             ? "..."
                             : `${Math.round(
                                 getWebsiteMetrics(website.id)?.avgVisibility ||

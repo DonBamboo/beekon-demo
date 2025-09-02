@@ -15,7 +15,6 @@ import {
 import { useAppState } from "@/hooks/appStateHooks";
 import { debugError, debugInfo, addDebugEvent } from "@/lib/debug-utils";
 import {
-  RECONCILIATION_INTERVAL,
   EVENT_DISPATCH_DEBOUNCE,
 } from "@/lib/website-status-utils";
 
@@ -32,6 +31,12 @@ interface WebsiteStatusContextType {
     websiteIds: string[]
   ) => Promise<void>;
   unsubscribeFromWorkspace: (workspaceId: string) => Promise<void>;
+
+  // NEW: Refresh-aware monitoring restoration
+  restoreMonitoringAfterRefresh: (
+    workspaceId: string,
+    websiteIds: string[]
+  ) => Promise<void>;
 
   // Connection status
   isConnected: boolean;
@@ -55,14 +60,11 @@ export function WebsiteStatusProvider({
     Record<string, boolean>
   >({});
   const activeSubscriptionsRef = useRef<Set<string>>(new Set());
-  const reconciliationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // FIXED: Add debouncing for custom events to prevent cascading re-renders
   const eventDispatchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // FIXED: Create refs for callback functions to avoid dependency issues
-  const startStateReconciliationRef = useRef<() => void>();
-  const stopStateReconciliationRef = useRef<() => void>();
+  // SIMPLIFIED: Remove complex reconciliation refs - service handles this internally
   const dispatchStatusEventRef =
     useRef<(websiteId: string, status: string, source: string) => void>();
 
@@ -126,12 +128,24 @@ export function WebsiteStatusProvider({
           update.updatedAt
         );
 
-        // FIXED: Use debounced event dispatch instead of immediate setTimeout
-        dispatchStatusEvent(
-          update.websiteId,
-          update.status,
-          "website-status-context"
-        );
+        // Enhanced event dispatch for completion transitions
+        if (update.status === 'completed') {
+          console.log(`[WEBSITE-STATUS-CONTEXT] Website completed: ${update.websiteId}`);
+          
+          // Dispatch completion-specific event
+          dispatchStatusEvent(
+            update.websiteId,
+            update.status,
+            "website-status-context-completion"
+          );
+        } else {
+          // Regular status update event
+          dispatchStatusEvent(
+            update.websiteId,
+            update.status,
+            "website-status-context"
+          );
+        }
       } catch (error) {
         console.error(
           "[WebsiteStatusContext] Error handling status update:",
@@ -155,7 +169,7 @@ export function WebsiteStatusProvider({
     [updateWebsiteStatus, dispatchStatusEvent]
   );
 
-  // Subscribe to workspace real-time updates
+  // Subscribe to workspace real-time updates (SIMPLIFIED - uses monitorCrawlingWebsites)
   const subscribeToWorkspace = useCallback(
     async (workspaceId: string, websiteIds: string[]) => {
       if (activeSubscriptionsRef.current.has(workspaceId)) {
@@ -170,13 +184,14 @@ export function WebsiteStatusProvider({
 
       try {
         debugInfo(
-          `Subscribing to workspace: ${workspaceId}`,
+          `Starting simplified monitoring for workspace: ${workspaceId}`,
           "WebsiteStatusContext",
           { workspaceId, websiteIds, websiteCount: websiteIds.length },
           "real-time"
         );
 
-        await websiteStatusService.subscribeToWorkspace(
+        // Use simplified per-website monitoring that only monitors "crawling" websites
+        await websiteStatusService.monitorCrawlingWebsites(
           workspaceId,
           websiteIds,
           handleStatusUpdate
@@ -186,17 +201,14 @@ export function WebsiteStatusProvider({
         setConnectionStatus((prev) => ({ ...prev, [workspaceId]: true }));
         setIsConnected(true);
 
-        // FIXED: Start reconciliation when first subscription is added
-        if (activeSubscriptionsRef.current.size === 1) {
-          startStateReconciliationRef.current?.();
-        }
-
+        // Log monitoring status
+        const monitoringStatus = websiteStatusService.getMonitoringStatus();
         debugInfo(
-          `Successfully subscribed to workspace: ${workspaceId}`,
+          `Successfully started simplified monitoring for workspace: ${workspaceId}`,
           "WebsiteStatusContext",
           {
             workspaceId,
-            activeSubscriptions: activeSubscriptionsRef.current.size,
+            websitesCurrentlyMonitored: monitoringStatus.totalWebsitesMonitored,
           },
           "real-time"
         );
@@ -215,10 +227,10 @@ export function WebsiteStatusProvider({
         );
       }
     },
-    [handleStatusUpdate] // Now safe to include since we use ref for startStateReconciliation
+    [handleStatusUpdate]
   );
 
-  // Unsubscribe from workspace
+  // Unsubscribe from workspace (SIMPLIFIED - uses service's unsubscribeFromWorkspace)
   const unsubscribeFromWorkspace = useCallback(async (workspaceId: string) => {
     if (!activeSubscriptionsRef.current.has(workspaceId)) {
       debugInfo(
@@ -232,12 +244,13 @@ export function WebsiteStatusProvider({
 
     try {
       debugInfo(
-        `Unsubscribing from workspace: ${workspaceId}`,
+        `Stopping simplified monitoring for workspace: ${workspaceId}`,
         "WebsiteStatusContext",
         { workspaceId },
         "real-time"
       );
 
+      // Use simplified service method that stops all websites in workspace
       await websiteStatusService.unsubscribeFromWorkspace(workspaceId);
 
       activeSubscriptionsRef.current.delete(workspaceId);
@@ -249,11 +262,6 @@ export function WebsiteStatusProvider({
 
       // Update overall connection status
       setIsConnected(activeSubscriptionsRef.current.size > 0);
-
-      // FIXED: Stop reconciliation when no subscriptions remain
-      if (activeSubscriptionsRef.current.size === 0) {
-        stopStateReconciliationRef.current?.();
-      }
 
       debugInfo(
         `Successfully unsubscribed from workspace: ${workspaceId}`,
@@ -276,7 +284,61 @@ export function WebsiteStatusProvider({
         "real-time"
       );
     }
-  }, []); // Now safe since we use ref for stopStateReconciliation
+  }, []);
+
+  // Restore monitoring after page refresh (SIMPLIFIED - same as subscribeToWorkspace)
+  const restoreMonitoringAfterRefresh = useCallback(
+    async (workspaceId: string, websiteIds: string[]) => {
+      try {
+        debugInfo(
+          `Restoring simplified monitoring after page refresh for workspace: ${workspaceId}`,
+          "WebsiteStatusContext",
+          { workspaceId, websiteIds, websiteCount: websiteIds.length },
+          "real-time"
+        );
+
+        // Use simplified per-website monitoring that only monitors "crawling" websites
+        await websiteStatusService.monitorCrawlingWebsites(
+          workspaceId,
+          websiteIds,
+          handleStatusUpdate
+        );
+
+        // Mark workspace as having active subscription
+        activeSubscriptionsRef.current.add(workspaceId);
+        setConnectionStatus((prev) => ({ ...prev, [workspaceId]: true }));
+        setIsConnected(true);
+
+        // Log monitoring status
+        const monitoringStatus = websiteStatusService.getMonitoringStatus();
+        debugInfo(
+          `Successfully restored simplified monitoring for workspace: ${workspaceId}`,
+          "WebsiteStatusContext",
+          {
+            workspaceId,
+            totalWebsitesInWorkspace: websiteIds.length,
+            websitesCurrentlyMonitored: monitoringStatus.totalWebsitesMonitored,
+          },
+          "real-time"
+        );
+
+      } catch (error) {
+        setConnectionStatus((prev) => ({ ...prev, [workspaceId]: false }));
+        debugError(
+          `Failed to restore monitoring for workspace: ${workspaceId}`,
+          "WebsiteStatusContext",
+          {
+            workspaceId,
+            websiteIds,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          error instanceof Error ? error : undefined,
+          "real-time"
+        );
+      }
+    },
+    [handleStatusUpdate]
+  );
 
   // Get real-time status for specific website
   const getWebsiteStatus = useCallback(
@@ -289,111 +351,32 @@ export function WebsiteStatusProvider({
     [appState.workspace.websites]
   );
 
-  // Periodic state reconciliation to ensure UI stays in sync
-  const startStateReconciliation = useCallback(() => {
-    if (reconciliationIntervalRef.current) {
-      clearInterval(reconciliationIntervalRef.current);
-    }
+  // SIMPLIFIED: No complex reconciliation - the service handles periodic checks internally
 
-    reconciliationIntervalRef.current = setInterval(async () => {
-      try {
-        // Force UI refresh for all monitored websites
-        const workspaceIds = Array.from(activeSubscriptionsRef.current);
-
-        debugInfo(
-          `Performing periodic reconciliation`,
-          "WebsiteStatusContext",
-          { workspaceCount: workspaceIds.length },
-          "real-time"
-        );
-
-        // FIXED: Use debounced event dispatch for periodic reconciliation
-        for (const workspaceId of workspaceIds) {
-          dispatchStatusEventRef.current?.(
-            workspaceId,
-            "reconciliation",
-            "periodic-reconciliation"
-          );
-        }
-      } catch (error) {
-        console.error(
-          "[WebsiteStatusContext] Error during state reconciliation:",
-          error
-        );
-        debugError(
-          `Error during periodic reconciliation: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          "WebsiteStatusContext",
-          {
-            error: error instanceof Error ? error.stack : String(error),
-            activeSubscriptions: activeSubscriptionsRef.current.size,
-          },
-          error instanceof Error ? error : undefined,
-          "real-time"
-        );
-      }
-    }, RECONCILIATION_INTERVAL);
-  }, []); // Now safe since we use ref for dispatchStatusEvent
-
-  const stopStateReconciliation = useCallback(() => {
-    if (reconciliationIntervalRef.current) {
-      clearInterval(reconciliationIntervalRef.current);
-      reconciliationIntervalRef.current = null;
-    }
-  }, []);
-
-  // Update function refs when they change
+  // Cleanup on unmount (SIMPLIFIED)
   useEffect(() => {
-    startStateReconciliationRef.current = startStateReconciliation;
-    stopStateReconciliationRef.current = stopStateReconciliation;
-  }, [startStateReconciliation, stopStateReconciliation]);
-
-  // Start reconciliation when we have active subscriptions
-  // FIXED: Remove unstable callback dependencies to prevent infinite loops
-  // Note: We manually trigger reconciliation in subscription/unsubscription functions
-  useEffect(() => {
-    if (activeSubscriptionsRef.current.size > 0) {
-      startStateReconciliation();
-    } else {
-      stopStateReconciliation();
-    }
-  }, [startStateReconciliation, stopStateReconciliation]); // Add missing dependencies
-
-  // Cleanup on unmount
-  useEffect(() => {
-    // Copy ref values at effect creation time to avoid stale closures
-    const getCurrentActiveSubscriptions = () => activeSubscriptionsRef.current;
-    const getCurrentEventTimeout = () => eventDispatchTimeoutRef.current;
-    const getCurrentStopReconciliation = () =>
-      stopStateReconciliationRef.current;
-
     return () => {
-      // Get current values at cleanup time
-      const activeSubscriptions = getCurrentActiveSubscriptions();
-      const eventDispatchTimeout = getCurrentEventTimeout();
-      const stopReconciliation = getCurrentStopReconciliation();
-
-      const workspaceIds = Array.from(activeSubscriptions);
+      // Cleanup all subscriptions
+      const workspaceIds = Array.from(activeSubscriptionsRef.current);
       workspaceIds.forEach((workspaceId) => {
         websiteStatusService
           .unsubscribeFromWorkspace(workspaceId)
           .catch(console.error);
       });
-      stopReconciliation?.();
 
-      // FIXED: Cleanup debounce timeout
-      if (eventDispatchTimeout) {
-        clearTimeout(eventDispatchTimeout);
+      // Cleanup debounce timeout
+      if (eventDispatchTimeoutRef.current) {
+        clearTimeout(eventDispatchTimeoutRef.current);
       }
     };
-  }, []); // Safe to use empty deps with proper closure handling
+  }, []);
 
   const contextValue: WebsiteStatusContextType = {
     getWebsiteStatus,
     websites: appState.workspace.websites, // SINGLE SOURCE OF TRUTH
     subscribeToWorkspace,
     unsubscribeFromWorkspace,
+    restoreMonitoringAfterRefresh,
     isConnected,
     connectionStatus,
   };

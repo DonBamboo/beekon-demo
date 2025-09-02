@@ -18,6 +18,17 @@ interface WebsiteWithMetrics {
   monitoring_enabled: boolean;
   created_at: string;
   metrics: WebsiteMetrics;
+  isRefreshingMetrics?: boolean; // Add loading state for individual websites
+}
+
+interface WebsiteWithMetrics {
+  id: string;
+  domain: string;
+  display_name: string;
+  is_active: boolean;
+  monitoring_enabled: boolean;
+  created_at: string;
+  metrics: WebsiteMetrics;
 }
 
 interface WebsitesData {
@@ -48,6 +59,7 @@ export function useWebsitesCoordinated() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [refreshingWebsites, setRefreshingWebsites] = useState<Set<string>>(new Set());
 
   const loadWebsiteMetrics = useCallback(
     async (websiteId: string): Promise<WebsiteMetrics> => {
@@ -131,26 +143,32 @@ export function useWebsitesCoordinated() {
 
         const websitesWithMetrics = await Promise.all(metricsPromises);
 
+        // Add loading state property to each website (initially false)
+        const websitesWithLoadingState = websitesWithMetrics.map(website => ({
+          ...website,
+          isRefreshingMetrics: false,
+        }));
+
         // Calculate total metrics
         const totalMetrics = {
-          totalWebsites: websitesWithMetrics.length,
-          activeWebsites: websitesWithMetrics.filter((w) => w.is_active).length,
-          totalTopics: websitesWithMetrics.reduce(
+          totalWebsites: websitesWithLoadingState.length,
+          activeWebsites: websitesWithLoadingState.filter((w) => w.is_active).length,
+          totalTopics: websitesWithLoadingState.reduce(
             (sum, w) => sum + w.metrics.totalTopics,
             0
           ),
           avgVisibilityAcrossAll:
-            websitesWithMetrics.length > 0
-              ? websitesWithMetrics.reduce(
+            websitesWithLoadingState.length > 0
+              ? websitesWithLoadingState.reduce(
                   (sum, w) => sum + w.metrics.avgVisibility,
                   0
-                ) / websitesWithMetrics.length
+                ) / websitesWithLoadingState.length
               : 0,
         };
 
         // Set all data at once to prevent multiple re-renders
         setData({
-          websites: websitesWithMetrics,
+          websites: websitesWithLoadingState,
           totalMetrics,
         });
 
@@ -202,6 +220,81 @@ export function useWebsitesCoordinated() {
     setError(null);
   }, []);
 
+  // Check if a specific website is currently refreshing metrics
+  const isWebsiteRefreshingMetrics = useCallback((websiteId: string) => {
+    const website = data.websites.find(w => w.id === websiteId);
+    return website?.isRefreshingMetrics || refreshingWebsites.has(websiteId);
+  }, [data.websites, refreshingWebsites]);
+
+  // Refresh individual website metrics when status changes to completed
+  const refreshWebsiteMetrics = useCallback(async (websiteId: string) => {
+    try {
+      console.log(`[METRICS-REFRESH] Refreshing metrics for website: ${websiteId}`);
+      
+      // Set loading state for this specific website
+      setRefreshingWebsites(prev => new Set([...prev, websiteId]));
+      
+      // Update website with loading state
+      setData(prevData => ({
+        ...prevData,
+        websites: prevData.websites.map(website => 
+          website.id === websiteId 
+            ? { ...website, isRefreshingMetrics: true }
+            : website
+        ),
+      }));
+      
+      // Load fresh metrics for this specific website
+      const metrics = await loadWebsiteMetrics(websiteId);
+      
+      // Update the website in our data with new metrics and remove loading state
+      setData(prevData => {
+        const updatedWebsites = prevData.websites.map(website => 
+          website.id === websiteId 
+            ? { ...website, metrics, isRefreshingMetrics: false }
+            : website
+        );
+        
+        // Recalculate total metrics
+        const totalMetrics = {
+          totalWebsites: updatedWebsites.length,
+          activeWebsites: updatedWebsites.filter(w => w.is_active).length,
+          totalTopics: updatedWebsites.reduce((sum, w) => sum + w.metrics.totalTopics, 0),
+          avgVisibilityAcrossAll: 
+            updatedWebsites.length > 0
+              ? updatedWebsites.reduce((sum, w) => sum + w.metrics.avgVisibility, 0) / updatedWebsites.length
+              : 0,
+        };
+        
+        return {
+          websites: updatedWebsites,
+          totalMetrics,
+        };
+      });
+      
+      console.log(`[METRICS-REFRESH] Successfully updated metrics for website: ${websiteId}`);
+    } catch (error) {
+      console.error(`[METRICS-REFRESH] Failed to refresh metrics for website: ${websiteId}`, error);
+      
+      // Remove loading state on error
+      setData(prevData => ({
+        ...prevData,
+        websites: prevData.websites.map(website => 
+          website.id === websiteId 
+            ? { ...website, isRefreshingMetrics: false }
+            : website
+        ),
+      }));
+    } finally {
+      // Clean up loading state
+      setRefreshingWebsites(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(websiteId);
+        return newSet;
+      });
+    }
+  }, [loadWebsiteMetrics]);
+
   // Load data when websites change, with debouncing
   useEffect(() => {
     if (!websites || websites.length === 0) {
@@ -224,6 +317,33 @@ export function useWebsitesCoordinated() {
 
     return () => clearTimeout(timeoutId);
   }, [websites]); // Removed loadAllData from dependencies
+
+  // Listen for real-time website status updates to refresh metrics
+  useEffect(() => {
+    const handleWebsiteStatusUpdate = (event: CustomEvent) => {
+      const { websiteId, status, source } = event.detail;
+      
+      // Only refresh metrics when status changes to "completed"
+      if (status === 'completed') {
+        console.log(`[METRICS-REFRESH] Website completed detected: ${websiteId} from ${source}`);
+        
+        // Small delay to ensure database has been updated
+        setTimeout(() => {
+          refreshWebsiteMetrics(websiteId);
+        }, 1000);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('websiteStatusUpdate', handleWebsiteStatusUpdate as EventListener);
+      
+      return () => {
+        window.removeEventListener('websiteStatusUpdate', handleWebsiteStatusUpdate as EventListener);
+      };
+    }
+    
+    return undefined;
+  }, [refreshWebsiteMetrics]);
 
   const hasData = useMemo(() => {
     return data.websites.length > 0;
@@ -254,5 +374,7 @@ export function useWebsitesCoordinated() {
     refresh,
     clearError,
     getWebsiteMetrics,
+    refreshWebsiteMetrics, // Expose for manual refresh if needed
+    isWebsiteRefreshingMetrics, // Expose loading state checker
   };
 }

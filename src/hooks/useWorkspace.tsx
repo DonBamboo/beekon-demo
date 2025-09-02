@@ -864,14 +864,25 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       lastWorkspaceIdProcessedRef.current = currentWorkspace.id;
       
       // Fetch initial websites and sync to AppStateContext
-      fetchWebsitesRef.current().then(() => {
-        // Set up real-time subscription for the current workspace
+      fetchWebsitesRef.current().then(async () => {
+        // Set up targeted real-time monitoring for crawling websites only (NEW SYSTEM)
         const websiteIds = websitesRef.current.map((w) => w.id);
         if (websiteIds.length > 0) {
-          websiteStatusContext.subscribeToWorkspace(
+          console.log(`[REFRESH-RESTORE] Starting targeted monitoring restoration for ${websiteIds.length} websites in workspace: ${currentWorkspace.id}`);
+          
+          // Use simplified per-website monitoring system for page refresh restoration
+          await websiteStatusContext.restoreMonitoringAfterRefresh(
             currentWorkspace.id,
             websiteIds
           );
+          
+          // Log final monitoring status
+          const { websiteStatusService } = await import("@/services/websiteStatusService");
+          const monitoringStatus = websiteStatusService.getMonitoringStatus();
+          console.log(`[REFRESH-RESTORE] Simplified monitoring restoration complete:`, {
+            totalWebsitesInWorkspace: websiteIds.length,
+            websitesCurrentlyMonitored: monitoringStatus.totalWebsitesMonitored,
+          });
         }
       }).finally(() => {
         // GUARD: Always clear the fetching flag when done
@@ -957,41 +968,45 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return validateWorkspaceState();
   }, [validateWorkspaceState]);
 
-  // UNIFIED: Website status monitoring functions using WebsiteStatusContext
+  // SIMPLIFIED: Website monitoring functions using simplified service approach
   const addWebsiteToMonitoring = useCallback(
     async (websiteId: string) => {
       if (currentWorkspace?.id) {
-        // Re-subscribe with updated website list including the new website
-        const updatedWebsiteIds = [...websites.map((w) => w.id), websiteId];
-        await websiteStatusContext.subscribeToWorkspace(
+        // Use simplified service to start monitoring this specific website
+        const { websiteStatusService } = await import("@/services/websiteStatusService");
+        await websiteStatusService.startMonitoringWebsite(
+          websiteId,
           currentWorkspace.id,
-          updatedWebsiteIds
+          (update) => {
+            // Dispatch update event for context integration
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("websiteStatusUpdate", {
+                  detail: {
+                    websiteId: update.websiteId,
+                    status: update.status,
+                    source: "add-website-monitoring",
+                    timestamp: Date.now(),
+                  },
+                })
+              );
+            }
+          }
         );
       }
     },
-    [currentWorkspace?.id, websites, websiteStatusContext]
+    [currentWorkspace?.id]
   );
 
   const removeWebsiteFromMonitoring = useCallback(
     async (websiteId: string) => {
       if (currentWorkspace?.id) {
-        // Re-subscribe with updated website list excluding the removed website
-        const updatedWebsiteIds = websites
-          .filter((w) => w.id !== websiteId)
-          .map((w) => w.id);
-        if (updatedWebsiteIds.length > 0) {
-          await websiteStatusContext.subscribeToWorkspace(
-            currentWorkspace.id,
-            updatedWebsiteIds
-          );
-        } else {
-          await websiteStatusContext.unsubscribeFromWorkspace(
-            currentWorkspace.id
-          );
-        }
+        // Use simplified service to stop monitoring this specific website
+        const { websiteStatusService } = await import("@/services/websiteStatusService");
+        await websiteStatusService.stopMonitoringWebsite(websiteId);
       }
     },
-    [currentWorkspace?.id, websites, websiteStatusContext]
+    [currentWorkspace?.id]
   );
 
   const getWebsiteStatusSubscriptionInfo = useCallback(() => {

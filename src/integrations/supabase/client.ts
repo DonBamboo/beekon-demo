@@ -15,6 +15,6 @@ export const supabase = createClient<Database>(URL, PUBLISHABLE_KEY, {
     autoRefreshToken: true,
   },
   db: {
-    schema: "beekon_data",
+    schema: "beekon_data" as "public",
   },
 });
