@@ -20,7 +20,7 @@ class ContextErrorBoundary extends React.Component<
   }
 
   override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Context Error Boundary caught an error:', error, errorInfo);
+    // Context Error Boundary caught an error - handled by error boundary UI
   }
 
   override render() {
@@ -117,7 +117,7 @@ function WorkspaceStateSync({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (error) {
-      console.error('WorkspaceStateSync sync error:', error);
+      // WorkspaceStateSync sync error - handled silently
     }
   }, [currentWorkspace, websites, workspaceLoading, dispatch]);
 
@@ -146,7 +146,7 @@ function CacheWarmer({ children }: { children: React.ReactNode }) {
         // Cache warming happens silently
       }
     } catch (error) {
-      console.error('CacheWarmer warming error:', error);
+      // CacheWarmer warming error - handled silently
     }
   }, [state, state?.workspace.websites, state?.workspace.loading, state?.workspace.selectedWebsiteId]);
 
@@ -203,7 +203,7 @@ export function StateManagementDevTools() {
             contextAvailable,
           });
         } catch (error) {
-          console.error('StateManagementDevTools stats update error:', error);
+          // StateManagementDevTools stats update error - handled silently
         }
       };
 

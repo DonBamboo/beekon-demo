@@ -284,7 +284,7 @@ self.addEventListener('sync', (event) => {
 async function doBackgroundSync() {
   // Implement background sync logic here
   // This could include sending queued API requests when back online
-  console.log('Background sync triggered');
+  // Background sync triggered - console removed for security
 }
 
 // Push notification handler
@@ -316,12 +316,12 @@ self.addEventListener('notificationclick', (event) => {
 
 // Error handler
 self.addEventListener('error', (event) => {
-  console.error('Service Worker error:', event.error);
+  // Service Worker error handling - console removed for security
 });
 
 // Unhandled rejection handler
 self.addEventListener('unhandledrejection', (event) => {
-  console.error('Service Worker unhandled rejection:', event.reason);
+  // Service Worker unhandled rejection - console removed for security
 });
 
 // Helper function to log cache statistics
@@ -335,7 +335,7 @@ async function logCacheStats() {
     stats[cacheName] = keys.length;
   }
   
-  console.log('Cache statistics:', stats);
+  // Cache statistics - console removed for security
 }
 
 // Periodic cleanup of expired cache entries

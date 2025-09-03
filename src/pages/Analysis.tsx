@@ -387,7 +387,7 @@ export default function Analysis() {
       ];
       setAvailableAnalysisSessions(sessionsWithAll);
     } catch (error) {
-      console.error("Failed to load analysis sessions:", error);
+      // Failed to load analysis sessions
     }
   }, [selectedWebsiteId]);
 
@@ -996,13 +996,7 @@ export default function Analysis() {
                   <Select
                     value={selectedWebsiteId || ""}
                     onValueChange={(value) => {
-                      if (process.env.NODE_ENV === "development") {
-                        console.log("Analysis: Optimistic website change", {
-                          from: selectedWebsiteId,
-                          to: value,
-                          timestamp: Date.now(),
-                        });
-                      }
+                      // Optimistic website change for instant UI feedback
                       // Immediate optimistic update - UI responds instantly
                       setSelectedWebsite(value);
 

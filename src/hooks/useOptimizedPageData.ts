@@ -201,7 +201,7 @@ export function useOptimizedAnalysisData() {
         // Filtered cache (for exact filter match)
         setCache(filteredCacheKey, results, 5 * 60 * 1000); // 5 minutes cache
         } catch (error) {
-          console.error("Failed to load analysis data:", error);
+          // Failed to load analysis data
           setError(error instanceof Error ? error : new Error("Unknown error"));
         } finally {
           setIsLoading(false);
@@ -209,7 +209,7 @@ export function useOptimizedAnalysisData() {
           isLoadingAnalysisRef.current = false;
         }
       } catch (error) {
-        console.error("Failed to load analysis data:", error);
+        // Failed to load analysis data
         setError(error instanceof Error ? error : new Error("Unknown error"));
         setIsLoading(false);
         setIsInitialLoad(false);
@@ -259,7 +259,7 @@ export function useOptimizedAnalysisData() {
       setCache(baseCacheKey, newResults, 10 * 60 * 1000);
       setCache(filteredCacheKey, newResults, 5 * 60 * 1000);
     } catch (error) {
-      console.error("Failed to load more results:", error);
+      // Failed to load more results
       setError(
         error instanceof Error ? error : new Error("Failed to load more")
       );
@@ -299,14 +299,7 @@ export function useOptimizedAnalysisData() {
       setIsLoading(false);
       setError(null);
       
-      if (process.env.NODE_ENV === "development") {
-        console.log("Analysis: Using cached data for instant navigation", {
-          websiteId: selectedWebsiteId,
-          cachedResults: cachedResult.data.length,
-          source: cachedResult.source,
-          cacheKey: cachedResult.key
-        });
-      }
+      // Using cached data for instant navigation
       return;
     }
 
@@ -319,13 +312,7 @@ export function useOptimizedAnalysisData() {
       loadAnalysisDataRef.current();
     }
     
-    if (process.env.NODE_ENV === "development") {
-      console.log("Analysis: No cache found, loading fresh data", {
-        websiteId: selectedWebsiteId,
-        baseCacheKey,
-        filteredCacheKey
-      });
-    }
+    // No cache found, loading fresh data
   }, [selectedWebsiteId, getCachedData, baseCacheKey, filteredCacheKey]); // Removed loadAnalysisData dependency
 
   // Separate effect for filter changes - preserves website cache, only reloads if no filtered cache
@@ -342,24 +329,12 @@ export function useOptimizedAnalysisData() {
       setIsLoadingMore(false);
       setError(null);
       
-      if (process.env.NODE_ENV === "development") {
-        console.log("Analysis: Using filtered cache for filter change", {
-          websiteId: selectedWebsiteId,
-          filteredResults: filteredCache.length,
-          filteredCacheKey
-        });
-      }
+      // Using filtered cache for filter change
       return;
     }
 
     // No filtered cache found - need to reload with new filters
-    if (process.env.NODE_ENV === "development") {
-      console.log("Analysis: No filtered cache, reloading with new filters", {
-        websiteId: selectedWebsiteId,
-        filters: transformedFilters,
-        filteredCacheKey
-      });
-    }
+    // No filtered cache, reloading with new filters
     
     setIsLoading(true);
     setIsLoadingMore(false); // Reset pagination state when loading fresh data due to filter change
@@ -499,7 +474,7 @@ export function useOptimizedDashboardData() {
 
         setCache(cacheKey, dashboardData, 10 * 60 * 1000); // 10 minutes cache
       } catch (error) {
-        console.error("Failed to load dashboard data:", error);
+        // Failed to load dashboard data
         setError(error instanceof Error ? error : new Error("Unknown error"));
       } finally {
         setIsLoading(false);
@@ -557,12 +532,7 @@ export function useOptimizedDashboardData() {
       selectedWebsiteId &&
       prevWebsiteId !== selectedWebsiteId
     ) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("Dashboard: Website changed, reloading data immediately", {
-          from: prevWebsiteId,
-          to: selectedWebsiteId,
-        });
-      }
+      // Website changed, reloading data immediately
       
       // Clear local state first to prevent showing stale data
       setMetrics(null);
@@ -766,14 +736,7 @@ export function useOptimizedCompetitorsData() {
           setAnalytics(validatedAnalytics);
           setIsLoading(false);
           
-          if (process.env.NODE_ENV === "development") {
-            console.log("Competitors: Using cached data for instant navigation", {
-              websiteId: selectedWebsiteId,
-              cachedCompetitors: competitorsWithStatus.length,
-              source: cachedResult.source,
-              cacheKey: cachedResult.key
-            });
-          }
+          // Using cached data for instant navigation
           return;
         }
       }
@@ -845,14 +808,14 @@ export function useOptimizedCompetitorsData() {
         // Filtered cache (for exact filter match)
         setCache(competitorsFilteredCacheKey, competitorsData, 5 * 60 * 1000); // 5 minutes cache
         } catch (error) {
-          console.error("Failed to load competitors data:", error);
+          // Failed to load competitors data
           setError(error instanceof Error ? error : new Error("Unknown error"));
         } finally {
           setIsLoading(false);
           isLoadingCompetitorsRef.current = false;
         }
       } catch (error) {
-        console.error("Failed to load competitors data:", error);
+        // Failed to load competitors data
         setError(error instanceof Error ? error : new Error("Unknown error"));
         setIsLoading(false);
         isLoadingCompetitorsRef.current = false;
@@ -932,14 +895,7 @@ export function useOptimizedCompetitorsData() {
       setIsLoading(false);
       setError(null);
       
-      if (process.env.NODE_ENV === "development") {
-        console.log("Competitors: Using cached data for instant navigation", {
-          websiteId: selectedWebsiteId,
-          cachedCompetitors: competitorsWithStatus.length,
-          source: cachedResult.source,
-          cacheKey: cachedResult.key
-        });
-      }
+      // Using cached data for instant navigation
       return;
     }
 
@@ -948,13 +904,7 @@ export function useOptimizedCompetitorsData() {
     setError(null);
     loadCompetitorsData();
     
-    if (process.env.NODE_ENV === "development") {
-      console.log("Competitors: No cache found, loading fresh data", {
-        websiteId: selectedWebsiteId,
-        baseCacheKey: competitorsBaseCacheKey,
-        filteredCacheKey: competitorsFilteredCacheKey
-      });
-    }
+    // No cache found, loading fresh data
   }, [selectedWebsiteId, getCompetitorsCachedData, loadCompetitorsData, competitorsBaseCacheKey, competitorsFilteredCacheKey]);
 
   // Separate effect for competitor filter changes - preserves website cache, only reloads if no filtered cache
@@ -996,24 +946,12 @@ export function useOptimizedCompetitorsData() {
       setIsLoading(false);
       setError(null);
       
-      if (process.env.NODE_ENV === "development") {
-        console.log("Competitors: Using filtered cache for filter change", {
-          websiteId: selectedWebsiteId,
-          filteredCompetitors: competitorsWithStatus.length,
-          competitorsFilteredCacheKey
-        });
-      }
+      // Using filtered cache for filter change
       return;
     }
 
     // No filtered cache found - need to reload with new filters
-    if (process.env.NODE_ENV === "development") {
-      console.log("Competitors: No filtered cache, reloading with new filters", {
-        websiteId: selectedWebsiteId,
-        filters: transformedFilters,
-        competitorsFilteredCacheKey
-      });
-    }
+    // No filtered cache, reloading with new filters
     
     setIsLoading(true);
     setError(null);

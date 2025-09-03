@@ -95,13 +95,7 @@ export default function CompetitorsHeader({
         <Select
           value={selectedWebsiteId || ""}
           onValueChange={(value) => {
-            if (process.env.NODE_ENV === "development") {
-              console.log('Competitors: Optimistic website change', {
-                from: selectedWebsiteId, 
-                to: value,
-                timestamp: Date.now()
-              });
-            }
+            // Optimistic website change for instant UI feedback
             // Immediate optimistic update - UI responds instantly
             setSelectedWebsite(value);
           }}

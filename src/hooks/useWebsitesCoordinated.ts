@@ -229,7 +229,7 @@ export function useWebsitesCoordinated() {
   // Refresh individual website metrics when status changes to completed
   const refreshWebsiteMetrics = useCallback(async (websiteId: string) => {
     try {
-      console.log(`[METRICS-REFRESH] Refreshing metrics for website: ${websiteId}`);
+      // Refreshing metrics for website
       
       // Set loading state for this specific website
       setRefreshingWebsites(prev => new Set([...prev, websiteId]));
@@ -272,9 +272,9 @@ export function useWebsitesCoordinated() {
         };
       });
       
-      console.log(`[METRICS-REFRESH] Successfully updated metrics for website: ${websiteId}`);
+      // Successfully updated metrics for website
     } catch (error) {
-      console.error(`[METRICS-REFRESH] Failed to refresh metrics for website: ${websiteId}`, error);
+      // Failed to refresh metrics for website
       
       // Remove loading state on error
       setData(prevData => ({
@@ -325,7 +325,7 @@ export function useWebsitesCoordinated() {
       
       // Only refresh metrics when status changes to "completed"
       if (status === 'completed') {
-        console.log(`[METRICS-REFRESH] Website completed detected: ${websiteId} from ${source}`);
+        // Website completed detected - refresh metrics after short delay
         
         // Small delay to ensure database has been updated
         setTimeout(() => {

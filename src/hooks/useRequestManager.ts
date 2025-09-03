@@ -85,7 +85,7 @@ export function useRequestManager() {
 
     // Check if request is already active (deduplication)
     if (state.requests.active.has(requestKey)) {
-      console.log(`🔄 Request deduplicated: ${requestKey}`);
+      // Request deduplicated
       
       // Update stats inline
       const current = statsRef.current.get(requestKey) || {
@@ -197,7 +197,7 @@ export function useRequestManager() {
         if (!isAborted && attempt < maxRetries) {
           // Retry with exponential backoff
           const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
-          console.log(`🔄 Retrying request ${requestKey} (attempt ${attempt + 1}) after ${delay}ms`);
+          // Retrying request with exponential backoff
           
           await new Promise(resolve => setTimeout(resolve, delay));
           metadata.retries = attempt + 1;

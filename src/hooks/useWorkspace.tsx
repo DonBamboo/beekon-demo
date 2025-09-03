@@ -214,15 +214,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
         // Warn if we have excessive loading state changes (potential infinite loop)
         if (loadingChangeCountRef.current > 20) {
-          console.warn(
-            "[useWorkspace] Excessive loading state changes detected (potential infinite loop)",
-            {
-              changeCount: loadingChangeCountRef.current,
-              newLoading,
-              immediate,
-              timeSinceLastChange,
-            }
-          );
+          // Excessive loading state changes detected - potential infinite loop
         }
       }
 
@@ -868,7 +860,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         // Set up real-time monitoring for all websites in workspace
         const websiteIds = websitesRef.current.map((w) => w.id);
         if (websiteIds.length > 0) {
-          console.log(`[WORKSPACE-MONITORING] Starting real-time monitoring for ${websiteIds.length} websites in workspace: ${currentWorkspace.id}`);
+          // Starting real-time monitoring for websites in workspace
           
           // Establish active monitoring subscription for all websites (will filter to crawling ones)
           await websiteStatusContext.subscribeToWorkspace(
@@ -879,15 +871,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           // Log final monitoring status
           const { websiteStatusService } = await import("@/services/websiteStatusService");
           const monitoringStatus = websiteStatusService.getMonitoringStatus();
-          console.log(`[WORKSPACE-MONITORING] Real-time monitoring established:`, {
-            totalWebsitesInWorkspace: websiteIds.length,
-            crawlingWebsitesMonitored: monitoringStatus.totalWebsitesMonitored,
-            monitoredWebsites: monitoringStatus.websitesBeingMonitored.map(w => ({
-              websiteId: w.websiteId.slice(0, 8) + '...',
-              status: w.currentStatus,
-              hasRealtime: w.hasRealtime
-            }))
-          });
+          // Real-time monitoring established for crawling websites
         }
       }).finally(() => {
         // GUARD: Always clear the fetching flag when done

@@ -14,9 +14,6 @@ import {
 } from "@/services/websiteStatusService";
 import { useAppState } from "@/hooks/appStateHooks";
 import { debugError, debugInfo, addDebugEvent } from "@/lib/debug-utils";
-import {
-  EVENT_DISPATCH_DEBOUNCE,
-} from "@/lib/website-status-utils";
 
 interface WebsiteStatusContextType {
   // Real-time status for specific website
@@ -61,44 +58,8 @@ export function WebsiteStatusProvider({
   >({});
   const activeSubscriptionsRef = useRef<Set<string>>(new Set());
 
-  // FIXED: Add debouncing for custom events to prevent cascading re-renders
-  const eventDispatchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // SIMPLIFIED: Remove complex reconciliation refs - service handles this internally
-  const dispatchStatusEventRef =
-    useRef<(websiteId: string, status: string, source: string) => void>();
-
-  // Debounced custom event dispatch to prevent rapid-fire updates
-  const dispatchStatusEvent = useCallback(
-    (websiteId: string, status: string, source: string) => {
-      // Clear any pending dispatch
-      if (eventDispatchTimeoutRef.current) {
-        clearTimeout(eventDispatchTimeoutRef.current);
-      }
-
-      // Debounce event dispatch to batch rapid updates
-      eventDispatchTimeoutRef.current = setTimeout(() => {
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(
-            new CustomEvent("websiteStatusUpdate", {
-              detail: {
-                websiteId,
-                status,
-                source,
-                timestamp: Date.now(),
-              },
-            })
-          );
-        }
-      }, EVENT_DISPATCH_DEBOUNCE);
-    },
-    []
-  );
-
-  // Update the ref when the function changes
-  useEffect(() => {
-    dispatchStatusEventRef.current = dispatchStatusEvent;
-  }, [dispatchStatusEvent]);
+  // CRITICAL FIX: Removed competing event dispatch system
+  // All events now flow through AppStateContext only for unified event handling
 
   // Handle real-time status updates - SINGLE SOURCE OF TRUTH
   const handleStatusUpdate = useCallback(
@@ -134,7 +95,7 @@ export function WebsiteStatusProvider({
         const currentWorkspaceId = appState.workspace.current?.id;
         
         if (update.status === 'crawling' && previousStatus !== 'crawling' && currentWorkspaceId) {
-          console.log(`[WEBSITE-STATUS-CONTEXT] Website started crawling: ${update.websiteId} (${previousStatus} → ${update.status})`);
+          // Website started crawling - start dynamic monitoring
           
           // Dynamically start monitoring for this newly crawling website
           websiteStatusService.startMonitoringWebsite(
@@ -142,7 +103,7 @@ export function WebsiteStatusProvider({
             currentWorkspaceId,
             handleStatusUpdate
           ).catch(error => {
-            console.error(`[WEBSITE-STATUS-CONTEXT] Failed to start dynamic monitoring for ${update.websiteId}:`, error);
+            // Dynamic monitoring start failed - handled silently
           });
           
           addDebugEvent({
@@ -162,29 +123,11 @@ export function WebsiteStatusProvider({
           });
         }
 
-        // Enhanced event dispatch for completion transitions
-        if (update.status === 'completed') {
-          console.log(`[WEBSITE-STATUS-CONTEXT] Website completed: ${update.websiteId}`);
-          
-          // Dispatch completion-specific event
-          dispatchStatusEvent(
-            update.websiteId,
-            update.status,
-            "website-status-context-completion"
-          );
-        } else {
-          // Regular status update event
-          dispatchStatusEvent(
-            update.websiteId,
-            update.status,
-            "website-status-context"
-          );
-        }
+        // CRITICAL FIX: Unified event system - rely solely on AppStateContext
+        // The updateWebsiteStatus call above already handles all necessary event dispatching
+        // Remove competing event systems to prevent conflicts and race conditions
       } catch (error) {
-        console.error(
-          "[WebsiteStatusContext] Error handling status update:",
-          error
-        );
+        // Error handling status update
         debugError(
           `Failed to handle status update: ${
             error instanceof Error ? error.message : String(error)
@@ -200,7 +143,7 @@ export function WebsiteStatusProvider({
         );
       }
     },
-    [updateWebsiteStatus, dispatchStatusEvent, appState.workspace]
+    [updateWebsiteStatus, appState.workspace]
   );
 
   // Subscribe to workspace real-time updates (SIMPLIFIED - uses monitorCrawlingWebsites)
@@ -461,13 +404,10 @@ export function WebsiteStatusProvider({
       workspaceIds.forEach((workspaceId) => {
         websiteStatusService
           .unsubscribeFromWorkspace(workspaceId)
-          .catch(console.error);
+          .catch(() => {});
       });
 
-      // Cleanup debounce timeout
-      if (eventDispatchTimeoutRef.current) {
-        clearTimeout(eventDispatchTimeoutRef.current);
-      }
+      // CRITICAL FIX: Cleanup code removed as part of unified event system
     };
   }, []);
 

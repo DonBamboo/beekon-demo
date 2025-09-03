@@ -44,8 +44,7 @@ export class AnalysisErrorBoundary extends React.Component<
       errorInfo,
     });
     
-    // Log error to monitoring service
-    console.error("Analysis Error Boundary caught an error:", error, errorInfo);
+    // Log error to monitoring service - console removed for security
     
     // Log to debug monitor
     debugError(

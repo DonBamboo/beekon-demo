@@ -170,7 +170,7 @@ class BatchService {
         basicMetrics,
       };
     } catch (error) {
-      console.error('Failed to fetch website init data:', error);
+      // Error handling - console removed for security
       throw new Error(`Failed to initialize data for website ${websiteId}`);
     }
   }
@@ -227,7 +227,7 @@ class BatchService {
         metadata,
       };
     } catch (error) {
-      console.error('Failed to fetch analysis page data:', error);
+      // Error handling - console removed for security
       throw new Error(`Failed to load analysis data for website ${websiteId}`);
     }
   }
@@ -256,7 +256,7 @@ class BatchService {
         topics,
       };
     } catch (error) {
-      console.error('Failed to fetch competitors page data:', error);
+      // Error handling - console removed for security
       throw new Error(`Failed to load competitors data for website ${websiteId}`);
     }
   }
@@ -316,7 +316,7 @@ class BatchService {
         })),
       };
     } catch (error) {
-      console.error('Failed to fetch dashboard page data:', error);
+      // Error handling - console removed for security
       throw new Error('Failed to load dashboard data');
     }
   }
@@ -480,7 +480,7 @@ class BatchService {
         summary: result.reporting_text || undefined,
       }));
     } catch (error) {
-      console.warn('Failed to fetch recent analyses:', error);
+      // Error handling - console removed for security
       return [];
     }
   }

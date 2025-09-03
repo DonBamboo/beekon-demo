@@ -20,7 +20,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    console.log("Starting materialized view refresh...");
+    // Starting materialized view refresh - console removed for security
 
     // Refresh all competitor materialized views
     // Method 1: Using schema-specific RPC call
@@ -32,7 +32,7 @@ serve(async (req) => {
     // const { data, error } = await supabase.sql`SELECT beekon_data.refresh_competitor_performance_views();`
 
     if (error) {
-      console.error("Error refreshing materialized views:", error);
+      // Error refreshing materialized views - console removed for security
       return new Response(
         JSON.stringify({
           success: false,
@@ -46,7 +46,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Materialized views refreshed successfully");
+    // Materialized views refreshed successfully - console removed for security
 
     return new Response(
       JSON.stringify({
@@ -66,7 +66,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Unexpected error in refresh function:", error);
+    // Unexpected error in refresh function - console removed for security
 
     return new Response(
       JSON.stringify({

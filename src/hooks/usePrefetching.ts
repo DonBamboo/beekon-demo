@@ -203,11 +203,7 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
 
       if (timeSinceLastPrefetch < minRefreshTime) return;
 
-      console.log(
-        `🚀 Prefetching data for ${target.page} (probability: ${(
-          target.probability * 100
-        ).toFixed(1)}%)`
-      );
+      // Prefetching data for page with calculated probability
 
       try {
         let prefetchPromise: Promise<unknown>;
@@ -252,9 +248,9 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
         target.lastPrefetch = Date.now();
         prefetchCacheRef.current.set(prefetchKey, target);
 
-        console.log(`✅ Prefetch completed for ${target.page}`);
+        // Prefetch completed successfully
       } catch (error) {
-        console.warn(`❌ Prefetch failed for ${target.page}:`, error);
+        // Prefetch failed - handled silently
       } finally {
         activePrefetches.current.delete(prefetchKey);
       }
@@ -335,7 +331,7 @@ export function usePrefetching(config: Partial<PrefetchConfig> = {}) {
         // Check if data is still fresh (5 minutes)
         const age = Date.now() - cached.lastPrefetch;
         if (age < 5 * 60 * 1000) {
-          console.log(`⚡ Using prefetched data for ${page}`);
+          // Using prefetched data
           return cached.data;
         }
       }

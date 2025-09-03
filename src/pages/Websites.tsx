@@ -293,7 +293,7 @@ export default function Websites() {
         }
       } catch (error) {
         // Handle any errors during post-modal operations
-        console.error("Error during website setup:", error);
+        // Error during website setup - monitoring setup may need manual retry
         toast({
           title: "Setup Warning",
           description:

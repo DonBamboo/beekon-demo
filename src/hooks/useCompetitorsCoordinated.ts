@@ -252,7 +252,7 @@ export function useCompetitorsCoordinated(
         // Load data immediately - no debouncing for website changes
         loadAllData().catch((err) => {
           if (err?.name !== "AbortError") {
-            console.error("Failed to load competitors data:", err);
+            // Failed to load competitors data - error handled by component
           }
         });
       } else {
@@ -260,7 +260,7 @@ export function useCompetitorsCoordinated(
         // The request deduplication will handle rapid changes automatically
         loadAllData().catch((err) => {
           if (err?.name !== "AbortError") {
-            console.error("Failed to load competitors data:", err);
+            // Failed to load competitors data - error handled by component
           }
         });
       }

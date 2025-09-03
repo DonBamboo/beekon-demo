@@ -528,14 +528,14 @@ export function RealTimeDebugger() {
                     onClick={async () => {
                       const testWebsiteId = websites?.[0]?.id;
                       if (testWebsiteId) {
-                        console.log('[DEBUG] Testing end-to-end validation for:', testWebsiteId);
+                        // Testing end-to-end validation
                         const { websiteStatusService } = await import("@/services/websiteStatusService");
                         const success = await websiteStatusService.validateStatusUpdateChain(
                           testWebsiteId, 
                           'crawling', 
                           5000
                         );
-                        console.log('[DEBUG] Validation result:', success);
+                        // Validation test completed
                       }
                     }}
                     className="text-xs bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 px-2 py-1 rounded text-left"

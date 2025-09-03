@@ -78,10 +78,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   private logErrorToService = (error: Error, errorInfo: React.ErrorInfo) => {
-    // Log to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error caught by ErrorBoundary:', error, errorInfo);
-    }
+    // Skip console logging for security
 
     // Log to debug monitor
     debugError(
@@ -108,7 +105,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       // Send to error tracking service
       // errorTrackingService.captureException(errorData);
     } catch (loggingError) {
-      console.error('Failed to log error:', loggingError);
       debugError(
         `Failed to log error to external service: ${loggingError}`,
         'ErrorBoundary',
