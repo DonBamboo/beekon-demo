@@ -86,7 +86,7 @@ export function useStatePersistence() {
         filters
       );
       if (!success) {
-        console.warn(`Failed to persist filters for page: ${page}`);
+        // Failed to persist filters for page - storage may not be available
       }
     },
     []
@@ -201,7 +201,7 @@ export function useStatePersistence() {
   const prefetchDataForPage = useCallback(async (page: string) => {
     // This would trigger data loading for the destination page
     // Implementation depends on the specific data needs of each page
-    console.log(`Prefetching data for page: ${page}`);
+    // Prefetching data for navigation optimization
 
     // Example: Prefetch shared data that might be needed
     if (page === "/analysis" || page === "/competitors") {
@@ -265,7 +265,7 @@ export function useStatePersistence() {
     const savedFilters = restoreFiltersForPage(currentPage);
     if (savedFilters) {
       // This would need to be handled by the AppStateContext
-      console.log(`Restoring filters for ${currentPage}:`, savedFilters);
+      // Restoring saved filters for current page
     }
 
     // Restore scroll position

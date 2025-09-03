@@ -49,8 +49,8 @@ class CompetitorStatusService {
   private readonly MAX_RECONNECT_ATTEMPTS = 3;
 
   /**
-   * Determine competitor status using proper field priority
-   * Uses analysis_status field as primary source with intelligent fallbacks
+   * CRITICAL FIX: Simplified competitor status determination - trust database directly
+   * Eliminates complex fallback logic that may cause inconsistencies with actual DB state
    */
   private determineCompetitorStatus(competitor: Record<string, unknown>): {
     status: CompetitorStatus;
@@ -65,56 +65,38 @@ class CompetitorStatusService {
     const asNumber = (value: unknown): number => 
       typeof value === 'number' ? value : 0;
 
-    // Primary: Use analysis_status if available
-    if (competitor.analysis_status) {
-      const status = competitor.analysis_status as CompetitorStatus;
-      return {
-        status,
-        progress: asNumber(competitor.analysis_progress) || (status === 'completed' ? 100 : status === 'analyzing' ? 50 : 0),
-        errorMessage: asString(competitor.last_error_message),
-        startedAt: asString(competitor.analysis_started_at),
-        completedAt: asString(competitor.analysis_completed_at),
-      };
-    }
+    // SIMPLIFIED: Trust the database analysis_status field directly
+    // This is the single source of truth - no complex derivation logic
+    const dbStatus = competitor.analysis_status as CompetitorStatus;
+    const status = dbStatus || 'pending'; // Default to pending if null
+    
+    // Simple progress calculation based on status
+    let progress = 0;
+    if (status === 'completed') progress = 100;
+    else if (status === 'analyzing') progress = asNumber(competitor.analysis_progress) || 50;
+    else if (status === 'failed') progress = 0;
+    else progress = 0; // pending
+    
+    debugInfo(
+      'Simplified competitor status determination',
+      'CompetitorStatusService',
+      {
+        competitorId: competitor.id,
+        dbAnalysisStatus: competitor.analysis_status,
+        determinedStatus: status,
+        progress,
+        hasError: !!competitor.last_error_message,
+        trustingDatabase: true
+      },
+      'real-time'
+    );
 
-    // Fallback: Derive from other fields if analysis_status is null
-    if (competitor.last_error_message) {
-      return {
-        status: 'failed' as CompetitorStatus,
-        progress: 0,
-        errorMessage: asString(competitor.last_error_message),
-        startedAt: asString(competitor.analysis_started_at) || asString(competitor.created_at),
-        completedAt: null,
-      };
-    }
-
-    if (competitor.analysis_started_at && !competitor.analysis_completed_at && !competitor.last_analyzed_at) {
-      return {
-        status: 'analyzing' as CompetitorStatus,
-        progress: asNumber(competitor.analysis_progress) || 50,
-        errorMessage: null,
-        startedAt: asString(competitor.analysis_started_at),
-        completedAt: null,
-      };
-    }
-
-    if (competitor.analysis_completed_at || competitor.last_analyzed_at) {
-      return {
-        status: 'completed' as CompetitorStatus,
-        progress: 100,
-        errorMessage: null,
-        startedAt: asString(competitor.analysis_started_at) || asString(competitor.created_at),
-        completedAt: asString(competitor.analysis_completed_at) || asString(competitor.last_analyzed_at),
-      };
-    }
-
-    // Default: pending status
     return {
-      status: 'pending' as CompetitorStatus,
-      progress: 0,
-      errorMessage: null,
-      startedAt: null,
-      completedAt: null,
+      status,
+      progress,
+      errorMessage: asString(competitor.last_error_message),
+      startedAt: asString(competitor.analysis_started_at),
+      completedAt: asString(competitor.analysis_completed_at),
     };
   }
 
@@ -155,6 +137,38 @@ class CompetitorStatusService {
    */
   private async setupRealtimeSubscription(subscription: CompetitorStatusSubscription): Promise<boolean> {
     try {
+      // CRITICAL FIX: Add authentication context validation for RLS compatibility
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        debugError(
+          'No authenticated user for competitor real-time subscription',
+          'CompetitorStatusService',
+          {
+            workspaceId: subscription.workspaceId,
+            authError: authError?.message,
+            hasUser: !!user
+          },
+          authError || undefined,
+          'real-time'
+        );
+        return false;
+      }
+
+      // CRITICAL FIX: Add database-level filtering to prevent receiving ALL competitor updates
+      const websiteIds = Array.from(subscription.websiteIds);
+      
+      debugInfo(
+        'Setting up filtered competitor real-time subscription',
+        'CompetitorStatusService',
+        {
+          workspaceId: subscription.workspaceId,
+          websiteIds,
+          competitorIds: Array.from(subscription.competitorIds),
+          filterType: 'database-level-website-filtering'
+        },
+        'real-time'
+      );
+
       const channel = supabase
         .channel(`competitor-status-${subscription.workspaceId}`)
         .on(
@@ -163,13 +177,28 @@ class CompetitorStatusService {
             event: 'UPDATE',
             schema: 'beekon_data',
             table: 'competitors',
+            // ✅ CRITICAL FIX: Add database-level filtering by website_id to prevent global competitor updates
+            filter: `website_id=in.(${websiteIds.join(',')})`,
           },
           (payload) => {
             if (!subscription.isActive) return;
 
             const competitor = payload.new as Competitor;
 
-            // Only process if this competitor is being monitored
+            debugInfo(
+              '🔥 Competitor real-time event received (filtered)',
+              'CompetitorStatusService', 
+              {
+                competitorId: competitor.id,
+                websiteId: competitor.website_id,
+                analysisStatus: competitor.analysis_status,
+                isMonitored: subscription.competitorIds.has(competitor.id),
+                eventSource: 'supabase-realtime-filtered'
+              },
+              'real-time'
+            );
+
+            // Additional safety check: Only process if this competitor is being monitored
             if (subscription.competitorIds.has(competitor.id)) {
               // Use proper status determination logic
               const statusInfo = this.determineCompetitorStatus(competitor);
@@ -184,6 +213,17 @@ class CompetitorStatusService {
                 completedAt: statusInfo.completedAt,
                 updatedAt: competitor.updated_at || new Date().toISOString(),
               });
+            } else {
+              debugInfo(
+                'Competitor not in monitored set (filtered out)',
+                'CompetitorStatusService',
+                {
+                  competitorId: competitor.id,
+                  websiteId: competitor.website_id,
+                  monitoredCompetitors: Array.from(subscription.competitorIds)
+                },
+                'real-time'
+              );
             }
           }
         )

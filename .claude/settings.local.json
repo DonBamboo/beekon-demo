@@ -34,7 +34,9 @@
       "WebSearch",
       "WebFetch(domain:supabase.com)",
       "Bash(cp:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(git checkout:*)",
+      "Bash(perl:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

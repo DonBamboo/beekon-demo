@@ -331,6 +331,9 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
     case "UPDATE_WEBSITE_STATUS": {
       const { websiteId, status, lastCrawledAt, updatedAt } = action.payload;
       
+      // Get current website to track status transitions
+      const currentWebsite = state.workspace.websites.find(w => w.id === websiteId);
+      const previousStatus = currentWebsite?.crawl_status;
       
       const updatedWebsites = state.workspace.websites.map((website) =>
         website.id === websiteId
@@ -343,13 +346,15 @@ function appStateReducer(state: AppState, action: AppStateAction): AppState {
           : website
       );
 
-      // Force UI refresh by dispatching custom event immediately after state update
+      // Enhanced event dispatch with transition information
       setTimeout(() => {
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('websiteStatusUpdate', { 
             detail: { 
               websiteId, 
               status, 
+              previousStatus,
+              isCompletion: (previousStatus === 'crawling' && status === 'completed'),
               source: 'app-state-context',
               timestamp: Date.now()
             } 
@@ -847,21 +852,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       updatedAt?: string
     ) => {
       try {
-        // Log state update to debug monitor
+        // Get current website to track transitions
+        const currentWebsite = state.workspace.websites.find(w => w.id === websiteId);
+        const previousStatus = currentWebsite?.crawl_status;
+        const isCompletion = previousStatus === 'crawling' && status === 'completed';
+        
+        // Log state update to debug monitor with transition info
         addDebugEvent({
           type: 'app-state',
           category: 'ui',
           source: 'AppStateContext',
-          message: 'Website status updated',
+          message: isCompletion ? 'Website analysis completed' : 'Website status updated',
           details: {
             websiteId,
             status,
+            previousStatus,
+            isCompletion,
             lastCrawledAt,
             updatedAt: updatedAt || new Date().toISOString(),
-            previousState: state.workspace.websites.find(w => w.id === websiteId)?.crawl_status,
           },
           websiteId,
-          severity: 'low',
+          severity: isCompletion ? 'medium' : 'low',
         });
 
         dispatch({

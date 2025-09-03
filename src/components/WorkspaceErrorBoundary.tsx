@@ -28,7 +28,7 @@ export class WorkspaceErrorBoundary extends React.Component<
   }
 
   override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("WorkspaceErrorBoundary caught an error:", error, errorInfo);
+    // Error logging removed for security
     
     // Log to debug monitor
     debugError(
@@ -109,7 +109,6 @@ export function useWorkspaceErrorHandler() {
   const resetError = () => setError(null);
 
   const handleError = (error: Error) => {
-    console.error("Workspace error:", error);
     setError(error);
     
     // Log to debug monitor

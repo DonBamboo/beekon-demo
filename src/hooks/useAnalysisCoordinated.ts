@@ -368,7 +368,7 @@ export function useAnalysisCoordinated(
         // Load data immediately - no debouncing for website changes
         loadInitialResults().catch(err => {
           if (err?.name !== 'AbortError') {
-            console.error('Failed to load analysis data:', err);
+            // Failed to load analysis data - error handled by component
           }
         });
       } else {
@@ -376,7 +376,7 @@ export function useAnalysisCoordinated(
         // The request deduplication will handle rapid changes automatically
         loadInitialResults().catch(err => {
           if (err?.name !== 'AbortError') {
-            console.error('Failed to load analysis data:', err);
+            // Failed to load analysis data - error handled by component
           }
         });
       }

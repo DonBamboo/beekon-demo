@@ -117,7 +117,7 @@ export function useAnalysisAnalytics() {
       // Cache the analytics for 10 minutes
       setCache(analyticsCacheKey, analyticsData, 10 * 60 * 1000);
     } catch (err) {
-      console.error('Failed to load analysis analytics:', err);
+      // Failed to load analysis analytics
       setError(err instanceof Error ? err : new Error('Failed to load analytics'));
     } finally {
       setIsLoading(false);

@@ -56,7 +56,7 @@ class StorageManager {
       this.localStorage.setItem(key, JSON.stringify(storedData));
       return true;
     } catch (error) {
-      console.warn('Failed to store data in localStorage:', error);
+      // Failed to store data in localStorage
       return false;
     }
   }
@@ -87,7 +87,7 @@ class StorageManager {
 
       return storedData.data;
     } catch (error) {
-      console.warn('Failed to retrieve data from localStorage:', error);
+      // Failed to retrieve data from localStorage
       return null;
     }
   }
@@ -109,7 +109,7 @@ class StorageManager {
       this.sessionStorage.setItem(key, JSON.stringify(storedData));
       return true;
     } catch (error) {
-      console.warn('Failed to store data in sessionStorage:', error);
+      // Failed to store data in sessionStorage
       return false;
     }
   }
@@ -140,7 +140,7 @@ class StorageManager {
 
       return storedData.data;
     } catch (error) {
-      console.warn('Failed to retrieve data from sessionStorage:', error);
+      // Failed to retrieve data from sessionStorage
       return null;
     }
   }
@@ -155,7 +155,7 @@ class StorageManager {
       this.localStorage.removeItem(key);
       return true;
     } catch (error) {
-      console.warn('Failed to remove data from localStorage:', error);
+      // Failed to remove data from localStorage
       return false;
     }
   }
@@ -170,7 +170,7 @@ class StorageManager {
       this.sessionStorage.removeItem(key);
       return true;
     } catch (error) {
-      console.warn('Failed to remove data from sessionStorage:', error);
+      // Failed to remove data from sessionStorage
       return false;
     }
   }
@@ -190,7 +190,7 @@ class StorageManager {
       }
       return true;
     } catch (error) {
-      console.warn('Failed to clear localStorage:', error);
+      // Failed to clear localStorage
       return false;
     }
   }
@@ -210,7 +210,7 @@ class StorageManager {
       }
       return true;
     } catch (error) {
-      console.warn('Failed to clear sessionStorage:', error);
+      // Failed to clear sessionStorage
       return false;
     }
   }

@@ -162,10 +162,12 @@ You can create a simple health check by calling the function manually and verify
 To enable more verbose logging, modify the function to include debug statements:
 
 ```typescript
-console.log('Debug: Environment check', {
+// Debug: Environment check - console removed for security
+// Use proper logging service instead of console for production
+const debugInfo = {
   hasUrl: !!Deno.env.get('SUPABASE_URL'),
   hasKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-})
+}
 ```
 
 ## Cost Considerations

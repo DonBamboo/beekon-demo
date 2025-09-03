@@ -191,7 +191,7 @@ class AnalyticsService {
       // Calculate analytics from complete dataset
       return this.calculateAnalysisAnalytics((results || []) as AnalysisResultData[]);
     } catch (error) {
-      console.error("Failed to get analysis analytics:", error);
+      // Error handling - console removed for security
       throw error;
     }
   }
@@ -215,7 +215,7 @@ class AnalyticsService {
 
       return this.calculateCompetitorAnalytics(competitorData || []);
     } catch (error) {
-      console.error("Failed to get competitor analytics:", error);
+      // Error handling - console removed for security
       throw error;
     }
   }
@@ -239,7 +239,7 @@ class AnalyticsService {
 
       return this.calculateDashboardAnalytics(dashboardData || []);
     } catch (error) {
-      console.error("Failed to get dashboard analytics:", error);
+      // Error handling - console removed for security
       throw error;
     }
   }

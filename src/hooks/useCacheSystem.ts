@@ -252,7 +252,7 @@ export function useCacheSystem() {
           setMultiLevel(key, data, config);
         }
       } catch (error) {
-        console.warn(`Cache warm-up failed for key ${key}:`, error);
+        // Cache warm-up failed for key - handled silently
       }
     });
 
@@ -280,7 +280,7 @@ export function useCacheSystem() {
       statsRef.current.delete(key);
     });
 
-    console.log(`Cache cleanup removed ${lowUsageKeys.length} low-usage entries`);
+    // Cache cleanup completed - removed low-usage entries
   }, [getCacheStats, clearCache]);
 
   // Periodic cleanup

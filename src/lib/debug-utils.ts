@@ -75,7 +75,7 @@ export const addDebugEvent = (event: Omit<DebugEvent, 'id' | 'timestamp'>): void
     try {
       listener(fullEvent);
     } catch (error) {
-      console.error('Error in debug event listener:', error);
+      // Error in debug event listener - silently ignore
     }
   });
 };
@@ -409,7 +409,7 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
     
     return success;
   } catch (error) {
-    console.error('Failed to copy to clipboard:', error);
+    // Failed to copy to clipboard
     return false;
   }
 };
