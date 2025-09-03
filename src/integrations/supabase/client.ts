@@ -14,7 +14,9 @@ export const supabase = createClient<Database>(URL, PUBLISHABLE_KEY, {
     persistSession: true,
     autoRefreshToken: true,
   },
-  db: {
-    schema: "beekon_data" as "public",
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
   },
 });

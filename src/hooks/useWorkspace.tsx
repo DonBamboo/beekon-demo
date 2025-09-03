@@ -865,13 +865,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       
       // Fetch initial websites and sync to AppStateContext
       fetchWebsitesRef.current().then(async () => {
-        // Set up targeted real-time monitoring for crawling websites only (NEW SYSTEM)
+        // Set up real-time monitoring for all websites in workspace
         const websiteIds = websitesRef.current.map((w) => w.id);
         if (websiteIds.length > 0) {
-          console.log(`[REFRESH-RESTORE] Starting targeted monitoring restoration for ${websiteIds.length} websites in workspace: ${currentWorkspace.id}`);
+          console.log(`[WORKSPACE-MONITORING] Starting real-time monitoring for ${websiteIds.length} websites in workspace: ${currentWorkspace.id}`);
           
-          // Use simplified per-website monitoring system for page refresh restoration
-          await websiteStatusContext.restoreMonitoringAfterRefresh(
+          // Establish active monitoring subscription for all websites (will filter to crawling ones)
+          await websiteStatusContext.subscribeToWorkspace(
             currentWorkspace.id,
             websiteIds
           );
@@ -879,9 +879,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           // Log final monitoring status
           const { websiteStatusService } = await import("@/services/websiteStatusService");
           const monitoringStatus = websiteStatusService.getMonitoringStatus();
-          console.log(`[REFRESH-RESTORE] Simplified monitoring restoration complete:`, {
+          console.log(`[WORKSPACE-MONITORING] Real-time monitoring established:`, {
             totalWebsitesInWorkspace: websiteIds.length,
-            websitesCurrentlyMonitored: monitoringStatus.totalWebsitesMonitored,
+            crawlingWebsitesMonitored: monitoringStatus.totalWebsitesMonitored,
+            monitoredWebsites: monitoringStatus.websitesBeingMonitored.map(w => ({
+              websiteId: w.websiteId.slice(0, 8) + '...',
+              status: w.currentStatus,
+              hasRealtime: w.hasRealtime
+            }))
           });
         }
       }).finally(() => {

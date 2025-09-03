@@ -197,7 +197,6 @@ export default function Websites() {
       return;
     }
 
-
     // Validate domain format
     const domainRegex =
       /^(https?:\/\/)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(\/.*)?$/i;
@@ -325,7 +324,7 @@ export default function Websites() {
   // FIXED: Stable handler using ref pattern to break circular dependencies
   const websitesRef = useRef(websites);
   websitesRef.current = websites;
-  
+
   const handleOpenSettings = useCallback(
     (websiteId: string) => {
       const website = websitesRef.current?.find((w) => w.id === websiteId);
@@ -357,7 +356,9 @@ export default function Websites() {
       }
 
       // Get current website status for potential rollback using ref
-      const currentWebsite = websitesRef.current?.find((w) => w.id === websiteId);
+      const currentWebsite = websitesRef.current?.find(
+        (w) => w.id === websiteId
+      );
       const previousStatus = currentWebsite?.crawl_status || "completed";
       const previousUpdatedAt =
         currentWebsite?.updated_at || new Date().toISOString();
@@ -421,15 +422,17 @@ export default function Websites() {
   // FIXED: Create truly stable handler maps using direct function creation
   const analyzeHandlers = useMemo(() => {
     const handlers = new Map<string, () => void>();
-    websites?.forEach(website => {
-      handlers.set(website.id, () => handleAnalyzeNow(website.id, website.domain, website.display_name));
+    websites?.forEach((website) => {
+      handlers.set(website.id, () =>
+        handleAnalyzeNow(website.id, website.domain, website.display_name)
+      );
     });
     return handlers;
   }, [handleAnalyzeNow, websites]); // Essential dependencies only
 
   const settingsHandlers = useMemo(() => {
     const handlers = new Map<string, () => void>();
-    websites?.forEach(website => {
+    websites?.forEach((website) => {
       handlers.set(website.id, () => handleOpenSettings(website.id));
     });
     return handlers;
@@ -437,7 +440,7 @@ export default function Websites() {
 
   const deleteHandlers = useMemo(() => {
     const handlers = new Map<string, () => void>();
-    websites?.forEach(website => {
+    websites?.forEach((website) => {
       handlers.set(website.id, () => confirmDelete(website.id));
     });
     return handlers;
@@ -811,7 +814,9 @@ export default function Websites() {
                         <p className="text-sm font-medium">Last Analyzed</p>
                         <p className="text-sm text-muted-foreground">
                           {website.last_crawled_at
-                            ? new Date(website.created_at).toLocaleDateString()
+                            ? new Date(
+                                website.last_crawled_at
+                              ).toLocaleDateString()
                             : new Date(website.created_at).toLocaleDateString()}
                         </p>
                       </div>
@@ -821,7 +826,8 @@ export default function Websites() {
                       <div>
                         <p className="text-sm font-medium">Total Topics</p>
                         <p className="text-sm text-muted-foreground">
-                          {showMetricsLoading || isWebsiteRefreshingMetrics(website.id)
+                          {showMetricsLoading ||
+                          isWebsiteRefreshingMetrics(website.id)
                             ? "..."
                             : getWebsiteMetrics(website.id)?.totalTopics || 0}
                         </p>
@@ -832,7 +838,8 @@ export default function Websites() {
                       <div>
                         <p className="text-sm font-medium">Avg Visibility</p>
                         <p className="text-sm text-muted-foreground">
-                          {showMetricsLoading || isWebsiteRefreshingMetrics(website.id)
+                          {showMetricsLoading ||
+                          isWebsiteRefreshingMetrics(website.id)
                             ? "..."
                             : `${Math.round(
                                 getWebsiteMetrics(website.id)?.avgVisibility ||

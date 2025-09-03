@@ -128,6 +128,40 @@ export function WebsiteStatusProvider({
           update.updatedAt
         );
 
+        // Dynamic monitoring logic: Start monitoring when website transitions TO "crawling"
+        const currentWebsite = appState.workspace.websites.find(w => w.id === update.websiteId);
+        const previousStatus = currentWebsite?.crawl_status;
+        const currentWorkspaceId = appState.workspace.current?.id;
+        
+        if (update.status === 'crawling' && previousStatus !== 'crawling' && currentWorkspaceId) {
+          console.log(`[WEBSITE-STATUS-CONTEXT] Website started crawling: ${update.websiteId} (${previousStatus} → ${update.status})`);
+          
+          // Dynamically start monitoring for this newly crawling website
+          websiteStatusService.startMonitoringWebsite(
+            update.websiteId,
+            currentWorkspaceId,
+            handleStatusUpdate
+          ).catch(error => {
+            console.error(`[WEBSITE-STATUS-CONTEXT] Failed to start dynamic monitoring for ${update.websiteId}:`, error);
+          });
+          
+          addDebugEvent({
+            type: "real-time",
+            category: "real-time",
+            source: "WebsiteStatusContext",
+            message: `Dynamic monitoring started for newly crawling website`,
+            details: {
+              websiteId: update.websiteId,
+              previousStatus,
+              newStatus: update.status,
+              workspaceId: currentWorkspaceId,
+              reason: 'status-transition-to-crawling'
+            },
+            websiteId: update.websiteId,
+            severity: "medium",
+          });
+        }
+
         // Enhanced event dispatch for completion transitions
         if (update.status === 'completed') {
           console.log(`[WEBSITE-STATUS-CONTEXT] Website completed: ${update.websiteId}`);
@@ -166,7 +200,7 @@ export function WebsiteStatusProvider({
         );
       }
     },
-    [updateWebsiteStatus, dispatchStatusEvent]
+    [updateWebsiteStatus, dispatchStatusEvent, appState.workspace]
   );
 
   // Subscribe to workspace real-time updates (SIMPLIFIED - uses monitorCrawlingWebsites)
@@ -201,8 +235,29 @@ export function WebsiteStatusProvider({
         setConnectionStatus((prev) => ({ ...prev, [workspaceId]: true }));
         setIsConnected(true);
 
-        // Log monitoring status
+        // Log monitoring status with detailed info
         const monitoringStatus = websiteStatusService.getMonitoringStatus();
+        
+        addDebugEvent({
+          type: 'real-time',
+          category: 'real-time',
+          source: 'WebsiteStatusContext',
+          message: `Workspace monitoring established`,
+          details: {
+            workspaceId,
+            totalWebsitesRequested: websiteIds.length,
+            crawlingWebsitesFound: monitoringStatus.totalWebsitesMonitored,
+            monitoredWebsites: monitoringStatus.websitesBeingMonitored.map(w => ({
+              websiteId: w.websiteId,
+              currentStatus: w.currentStatus,
+              hasRealtime: w.hasRealtime,
+              hasPolling: w.hasPolling,
+            })),
+            activeContextSubscriptions: activeSubscriptionsRef.current.size,
+          },
+          severity: 'medium',
+        });
+        
         debugInfo(
           `Successfully started simplified monitoring for workspace: ${workspaceId}`,
           "WebsiteStatusContext",
@@ -250,6 +305,11 @@ export function WebsiteStatusProvider({
         "real-time"
       );
 
+      // Get current monitoring status before cleanup for logging
+      const monitoringStatusBefore = websiteStatusService.getMonitoringStatus();
+      const websitesInWorkspace = monitoringStatusBefore.websitesBeingMonitored
+        .filter(w => w.workspaceId === workspaceId);
+
       // Use simplified service method that stops all websites in workspace
       await websiteStatusService.unsubscribeFromWorkspace(workspaceId);
 
@@ -262,6 +322,25 @@ export function WebsiteStatusProvider({
 
       // Update overall connection status
       setIsConnected(activeSubscriptionsRef.current.size > 0);
+      
+      // Add debug event for unsubscribe
+      addDebugEvent({
+        type: 'real-time',
+        category: 'real-time',
+        source: 'WebsiteStatusContext',
+        message: `Workspace monitoring stopped`,
+        details: {
+          workspaceId,
+          websitesStopped: websitesInWorkspace.length,
+          stoppedWebsites: websitesInWorkspace.map(w => ({
+            websiteId: w.websiteId,
+            currentStatus: w.currentStatus,
+            monitoringDuration: w.monitoringDuration,
+          })),
+          remainingContextSubscriptions: activeSubscriptionsRef.current.size,
+        },
+        severity: 'low',
+      });
 
       debugInfo(
         `Successfully unsubscribed from workspace: ${workspaceId}`,
@@ -309,8 +388,29 @@ export function WebsiteStatusProvider({
         setConnectionStatus((prev) => ({ ...prev, [workspaceId]: true }));
         setIsConnected(true);
 
-        // Log monitoring status
+        // Log monitoring status with detailed info
         const monitoringStatus = websiteStatusService.getMonitoringStatus();
+        
+        addDebugEvent({
+          type: 'real-time',
+          category: 'real-time',
+          source: 'WebsiteStatusContext',
+          message: `Workspace monitoring restored after refresh`,
+          details: {
+            workspaceId,
+            totalWebsitesInWorkspace: websiteIds.length,
+            crawlingWebsitesFound: monitoringStatus.totalWebsitesMonitored,
+            monitoredWebsites: monitoringStatus.websitesBeingMonitored.map(w => ({
+              websiteId: w.websiteId,
+              currentStatus: w.currentStatus,
+              hasRealtime: w.hasRealtime,
+              hasPolling: w.hasPolling,
+            })),
+            restorationReason: 'page-refresh',
+          },
+          severity: 'medium',
+        });
+        
         debugInfo(
           `Successfully restored simplified monitoring for workspace: ${workspaceId}`,
           "WebsiteStatusContext",
