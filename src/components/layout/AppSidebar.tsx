@@ -30,12 +30,7 @@ export function AppSidebar() {
   const handleNavClick = useCallback((event: React.MouseEvent, path: string) => {
     event.preventDefault(); // Prevent any default behavior
     
-    if (process.env.NODE_ENV === 'development') {
-      console.log('📌 Sidebar navigation (true instant):', {
-        from: currentPage,
-        to: path
-      });
-    }
+    // Sidebar navigation - console removed for security
     
     navigateTo(path);
   }, [navigateTo, currentPage]);

@@ -33,6 +33,7 @@ import { WebsiteSettingsModal } from "@/components/WebsiteSettingsModal";
 import { WorkspaceGuard } from "@/components/WorkspaceGuard";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace, Website } from "@/hooks/useWorkspace";
+import { useSubscriptionEnforcement } from "@/hooks/useSubscriptionEnforcement";
 import { useWebsitesCoordinated } from "@/hooks/useWebsitesCoordinated";
 import { useSelectedWebsite, useAppState } from "@/hooks/appStateHooks";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,6 +72,7 @@ export default function Websites() {
   const [isAddingWebsite, setIsAddingWebsite] = useState(false);
   const modalCloseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+  const { consumeCreditForWebsite, restoreCredit } = useSubscriptionEnforcement();
   const {
     websites,
     deleteWebsite,
@@ -225,6 +227,14 @@ export default function Websites() {
       return;
     }
 
+    // Check and consume credit for website addition
+    const canConsume = await consumeCreditForWebsite();
+    if (!canConsume) {
+      setProcessing(false);
+      setIsAddingWebsite(false);
+      return;
+    }
+
     const response = await sendN8nWebhook("webhook/website-onboarding", {
       website: addProtocol(domain),
       display_name: displayName,
@@ -234,6 +244,9 @@ export default function Websites() {
     });
 
     if (!response.success) {
+      // Restore credit on webhook failure
+      await restoreCredit();
+      
       toast({
         title: "Error",
         description: "Website crawl failed. Website not found.",

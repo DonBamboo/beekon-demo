@@ -36,7 +36,7 @@ const workspaceSchema = z.object({
     .min(1, "Workspace name is required")
     .max(50, "Name must be 50 characters or less"),
   subscriptionTier: z.enum(["free", "starter", "pro", "professional", "enterprise"]) as z.ZodEnum<["free", "starter", "pro", "professional", "enterprise"]>,
-  creditLimit: z.number().min(1, "Credit limit must be at least 1").optional(),
+  creditLimit: z.number().min(1, "Credit limit must be at least 1").max(999, "Credit limit cannot exceed 999").optional(),
 });
 
 type WorkspaceFormData = z.infer<typeof workspaceSchema>;
@@ -65,8 +65,8 @@ const subscriptionTiers = [
   {
     value: "enterprise" as const,
     label: "Enterprise",
-    description: "1000 website analyses per month",
-    credits: 1000,
+    description: "999 website analyses per month",
+    credits: 999,
     color: "bg-orange-500",
   },
 ];

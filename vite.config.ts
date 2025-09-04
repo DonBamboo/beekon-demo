@@ -7,12 +7,49 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => {
   const isDevelopment = mode === 'development';
   
+  // Validate critical environment variables are not using placeholder values
+  const validateEnvVars = () => {
+    const criticalVars = ['VITE_SUPABASE_URL', 'VITE_N8N_URL'];
+    const placeholderPattern = /YOUR_.*_HERE/;
+    
+    for (const varName of criticalVars) {
+      const value = process.env[varName];
+      if (!value || placeholderPattern.test(value)) {
+        if (mode === 'production') {
+          throw new Error(`Production build requires valid ${varName}. Please update your environment configuration.`);
+        } else {
+          console.warn(`Warning: ${varName} is not properly configured. Application may not function correctly.`);
+        }
+      }
+    }
+  };
+  
+  validateEnvVars();
+  
   return {
     server: {
       host: "::",
       port: 8080,
       open: false,
-      cors: true,
+      cors: {
+        origin: isDevelopment ? true : ['https://lovable.dev'], // Restrict CORS in production
+        credentials: false,
+      },
+      headers: isDevelopment ? {
+        // Development: Basic security headers without strict restrictions
+        'X-Content-Type-Options': 'nosniff',
+        'Referrer-Policy': 'no-referrer-when-downgrade',
+      } : {
+        // Production: Full security headers
+        'X-Frame-Options': 'DENY',
+        'X-Content-Type-Options': 'nosniff',
+        'X-XSS-Protection': '1; mode=block',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+        'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+        'X-DNS-Prefetch-Control': 'off',
+        'X-Download-Options': 'noopen',
+      },
       hmr: {
         overlay: true,
       },
@@ -30,9 +67,17 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       sourcemap: isDevelopment ? 'inline' : false,
-      minify: 'esbuild',
+      minify: mode === 'production' ? 'esbuild' : false,
       chunkSizeWarningLimit: 500, // Smaller chunks for better caching
       target: 'es2015',
+      // Security: Remove sensitive information from build
+      define: mode === 'production' ? {
+        'process.env.NODE_ENV': '"production"',
+        __DEV__: 'false',
+        'console.log': '(() => {})',
+        'console.warn': '(() => {})',
+        'console.error': '(() => {})',
+      } : undefined,
       rollupOptions: {
         treeshake: {
           moduleSideEffects: false,
@@ -135,6 +180,11 @@ export default defineConfig(({ mode }) => {
     },
     esbuild: {
       drop: mode === 'production' ? ['console', 'debugger'] : [],
+      // Security: Minify and obfuscate in production
+      legalComments: mode === 'production' ? 'none' : 'inline',
     },
+    // Environment variable filtering - prevent exposure of sensitive vars
+    envPrefix: ['VITE_'],
+    envDir: '.',
   };
 });

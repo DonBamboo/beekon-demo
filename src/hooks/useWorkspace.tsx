@@ -422,6 +422,18 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
 
+      // Validate credit limit
+      const finalCreditLimit = creditLimit || getDefaultCredits(subscriptionTier);
+      if (finalCreditLimit > 999) {
+        const error = new Error("Credit limit exceeds maximum allowed");
+        toastRef.current({
+          title: "Error",
+          description: "Credit limit cannot exceed 999",
+          variant: "destructive",
+        });
+        throw error;
+      }
+
       try {
         const { data, error } = await supabase
           .schema("beekon_data")
@@ -430,8 +442,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             name: name.trim(),
             owner_id: user.id,
             subscription_tier: subscriptionTier,
-            credits_remaining:
-              creditLimit || getDefaultCredits(subscriptionTier),
+            credits_remaining: finalCreditLimit,
           })
           .select()
           .single();
@@ -1053,9 +1064,9 @@ function getDefaultCredits(tier: SubscriptionTier): number {
     case "starter":
       return 50;
     case "professional":
-      return 1000;
+      return 999; // Capped at 999
     case "enterprise":
-      return 10000;
+      return 999; // Capped at 999
     default:
       return 5;
   }

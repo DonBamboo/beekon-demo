@@ -71,13 +71,24 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Skip non-GET requests
+  // Security: Skip non-GET requests and invalid protocols
   if (request.method !== 'GET') {
     return;
   }
 
-  // Skip chrome-extension requests
-  if (url.protocol === 'chrome-extension:') {
+  // Skip chrome-extension and other non-http protocols
+  if (url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:' || url.protocol === 'ms-browser-extension:') {
+    return;
+  }
+
+  // Security: Only cache HTTPS requests (except localhost for development)
+  const isDevelopment = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname.includes('localhost');
+  if (url.protocol === 'http:' && !isDevelopment && !url.hostname.includes('localhost') && !url.hostname.includes('127.0.0.1')) {
+    return;
+  }
+
+  // Security: Validate URL to prevent malicious requests
+  if (!isValidUrl(url)) {
     return;
   }
 
@@ -92,6 +103,60 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(handleNavigationRequest(request));
   }
 });
+
+// Security: Validate URL to prevent malicious requests
+function isValidUrl(url) {
+  // Check if we're in development mode
+  const isDevelopment = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname.includes('localhost');
+  
+  // Allow only specific hosts in production
+  const allowedHosts = [
+    'localhost',
+    '127.0.0.1',
+    'lovable.dev',
+    'playground.prospana.com',
+    'apzyfnqlajvbgaejfzfm.supabase.co',
+    'fonts.googleapis.com',
+    'fonts.gstatic.com'
+  ];
+  
+  // In development, be more permissive
+  if (isDevelopment) {
+    // Allow any localhost variations and common development patterns
+    if (url.hostname === 'localhost' || 
+        url.hostname === '127.0.0.1' || 
+        url.hostname.startsWith('192.168.') ||
+        url.hostname.endsWith('.local') ||
+        allowedHosts.some(host => url.hostname === host || url.hostname.endsWith('.' + host))) {
+      return true;
+    }
+  }
+
+  // Check if hostname is in allowed list or is a subdomain of allowed hosts
+  const isAllowed = allowedHosts.some(host => 
+    url.hostname === host || 
+    url.hostname.endsWith('.' + host) ||
+    (host.includes('.') && url.hostname.endsWith(host))
+  );
+
+  if (!isAllowed) {
+    return false;
+  }
+
+  // Prevent path traversal attacks
+  if (url.pathname.includes('..') || url.pathname.includes('%2e%2e')) {
+    return false;
+  }
+
+  // Block suspicious query parameters
+  const suspiciousParams = ['<script', 'javascript:', 'vbscript:', 'onload=', 'onerror='];
+  const queryString = url.search.toLowerCase();
+  if (suspiciousParams.some(param => queryString.includes(param))) {
+    return false;
+  }
+
+  return true;
+}
 
 // Check if request is for a static file
 function isStaticFile(url) {

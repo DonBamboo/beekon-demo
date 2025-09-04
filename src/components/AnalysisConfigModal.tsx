@@ -75,7 +75,7 @@ export function AnalysisConfigModal({
   websiteId,
 }: AnalysisConfigModalProps) {
   const { toast } = useToast();
-  const { consumeCredit, restoreCredit } = useSubscriptionEnforcement();
+  const { consumeCreditForAnalysis, restoreCredit } = useSubscriptionEnforcement();
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [customTopic, setCustomTopic] = useState("");
@@ -188,7 +188,7 @@ export function AnalysisConfigModal({
 
     try {
       // Check if user can consume credits
-      const canConsume = await consumeCredit();
+      const canConsume = await consumeCreditForAnalysis();
       if (!canConsume) {
         setIsLoading(false);
         return;
