@@ -247,6 +247,52 @@ export function useSubscriptionEnforcement() {
     return await consumeCredit();
   };
 
+  const consumeCreditForWebsite = async (): Promise<boolean> => {
+    if (!currentWorkspace) {
+      toast({
+        title: "Workspace Required",
+        description: "Please create a workspace to add websites.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    const credits = currentWorkspace.credits_remaining || 0;
+    if (credits <= 0) {
+      toast({
+        title: "No Credits Remaining",
+        description: "You have no credits remaining to add new websites.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    return await consumeCredit();
+  };
+
+  const consumeCreditForAnalysis = async (): Promise<boolean> => {
+    if (!currentWorkspace) {
+      toast({
+        title: "Workspace Required",
+        description: "Please create a workspace to run analysis.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    const credits = currentWorkspace.credits_remaining || 0;
+    if (credits <= 0) {
+      toast({
+        title: "No Credits Remaining", 
+        description: "You have no analysis credits remaining for this month.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    return await consumeCredit();
+  };
+
   const restoreCredit = async (): Promise<boolean> => {
     if (!currentWorkspace) {
       // Cannot restore credit: No workspace available
@@ -301,6 +347,8 @@ export function useSubscriptionEnforcement() {
     enforceLimit,
     consumeCredit,
     consumeCreditForCompetitor,
+    consumeCreditForWebsite,
+    consumeCreditForAnalysis,
     restoreCredit,
     getRemainingCredits,
     getSubscriptionTier,
