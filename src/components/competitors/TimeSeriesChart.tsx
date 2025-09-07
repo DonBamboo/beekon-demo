@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CompetitorTimeSeriesData } from '@/services/competitorService';
-import { getCompetitorColor, getColorInfo, getCompetitorColorIndex } from '@/lib/color-utils';
+import { getCompetitorColor, getColorInfo, getCompetitorColorIndex, validateAllColorAssignments, autoFixColorConflicts } from '@/lib/color-utils';
 import { ColorLegend } from '@/components/ui/color-indicator';
 import { Info } from 'lucide-react';
 
@@ -11,6 +11,12 @@ interface TimeSeriesChartProps {
 
 export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
   if (!data || data.length === 0) return null;
+
+  // Validate color assignments to ensure consistency across all competitor components
+  const colorValidation = validateAllColorAssignments();
+  if (!colorValidation.isValid) {
+    autoFixColorConflicts({ logResults: false });
+  }
 
   // Get competitors from first data point for legend
   const competitors = data[0]?.competitors || [];

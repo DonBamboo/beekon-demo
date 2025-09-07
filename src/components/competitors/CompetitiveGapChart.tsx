@@ -49,9 +49,14 @@ import {
   generateGapSummary,
 } from "@/lib/gap-analysis-utils";
 import {
-  getCompetitorColorIndex,
+  getCompetitorColorIndexStandardized,
+  getCompetitorColorStandardized,
+  getYourBrandColor,
   getColorInfo,
+  createStableCompetitorIndexMap,
+  generateCompetitorKey,
   validateAllColorAssignments,
+  autoFixColorConflicts,
 } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
 
@@ -135,6 +140,12 @@ export default function CompetitiveGapChart({
   const processedData = useMemo(() => {
     if (!gapAnalysis || gapAnalysis.length === 0) return null;
 
+    // Validate color assignments and fix conflicts if needed
+    const colorValidation = validateAllColorAssignments();
+    if (!colorValidation.isValid) {
+      autoFixColorConflicts({ logResults: false });
+    }
+
     // Process gap analysis with service-layer utilities
     const gapClassification = processGapAnalysis(gapAnalysis);
     const opportunityMatrix = generateOpportunityMatrix(gapAnalysis);
@@ -181,43 +192,91 @@ export default function CompetitiveGapChart({
       });
     });
 
-    // Create competitor info array for rendering with consistent color assignment
-    const competitorInfo = Array.from(competitorKeys).map((key, index) => {
-      // Get competitor name and ID from first data point that has this competitor
+    // Extract all unique competitors for standardized mapping
+    const allCompetitors: Array<{
+      competitorId: string;
+      name: string;
+      key: string;
+    }> = [];
+    
+    Array.from(competitorKeys).forEach((key) => {
       const sampleData = barChartData.find((item) => item[`${key}_name`]);
-      const competitorName = safeString(
-        sampleData?.[`${key}_name`],
-        `Competitor ${index + 1}`
-      );
       const competitorId = safeString(sampleData?.[`${key}_id`]);
-
-      // Use competitorId as primary key for consistent colors across all charts
-      // This ensures the same competitor gets the same color in all visualizations
-      const colorIndex = getCompetitorColorIndex(
+      const competitorName = safeString(sampleData?.[`${key}_name`], `Competitor ${allCompetitors.length + 1}`);
+      
+      allCompetitors.push({
         competitorId,
-        competitorName,
-        0
-      );
+        name: competitorName,
+        key
+      });
+    });
+
+    // Create standardized stable competitor index mapping
+    const competitorIndexMap = createStableCompetitorIndexMap(
+      allCompetitors.map(comp => ({
+        competitorId: comp.competitorId,
+        name: comp.name
+      }))
+    );
+
+    // Create competitor info array for rendering with standardized color assignment
+    const competitorInfo = allCompetitors.map((comp) => {
+      // Generate standardized competitor key and get stable index
+      const competitorKey = generateCompetitorKey({
+        competitorId: comp.competitorId,
+        name: comp.name
+      });
+      const stableIndex = competitorIndexMap.get(competitorKey) || 0;
+      
+      // Use standardized color assignment
+      const colorIndex = getCompetitorColorIndexStandardized({
+        competitorId: comp.competitorId,
+        name: comp.name
+      }, stableIndex);
+      
+      const color = getCompetitorColorStandardized({
+        competitorId: comp.competitorId,
+        name: comp.name
+      }, stableIndex);
 
       return {
-        key,
-        name: competitorName,
-        competitorId,
+        key: comp.key,
+        name: comp.name,
+        competitorId: comp.competitorId,
         colorIndex,
+        color,
       };
     });
 
-    // Radar chart data with individual competitors
+    // Radar chart data with individual competitors using proper identifiers
     const radarData = validatedGapAnalysis.map((gap) => {
       const data: Record<string, number | string> = {
         topic: gap.topicName,
         yourBrand: gap.yourBrandScore,
       };
-      gap.competitorData.forEach(
-        (comp: { score: string | number }, index: number) => {
-          data[`competitor${index + 1}`] = comp.score;
+      
+      // Map competitor data to proper competitor keys for consistent coloring
+      gap.competitorData.forEach((comp: { 
+        score: string | number; 
+        competitorId?: string; 
+        name?: string; 
+      }, compIndex: number) => {
+        // Find matching competitor info for proper key assignment
+        const matchingCompetitor = competitorInfo.find(
+          (info) => 
+            info.competitorId === comp.competitorId || 
+            info.name === comp.name ||
+            info.name.includes(String(comp.name || ''))
+        );
+        
+        if (matchingCompetitor) {
+          data[matchingCompetitor.key] = comp.score;
+        } else {
+          // Fallback to generic key if no match found
+          data[`competitor${compIndex + 1}`] = comp.score;
         }
-      );
+      });
+      
       return data;
     });
 
@@ -379,17 +438,35 @@ export default function CompetitiveGapChart({
                   <Bar
                     dataKey="yourBrand"
                     name="Your Brand"
-                    fill="hsl(var(--primary))"
+                    fill={getYourBrandColor()}
                     radius={[4, 4, 0, 0]}
-                  />
+                  >
+                    {processedData.barChartData.map((_, index) => (
+                      <Cell 
+                        key={`your-brand-cell-${index}`}
+                        fill={getYourBrandColor()}
+                        stroke={getYourBrandColor()}
+                        strokeWidth={1}
+                      />
+                    ))}
+                  </Bar>
                   {processedData.competitorInfo.map((competitor) => (
                     <Bar
                       key={competitor.key}
                       dataKey={competitor.key}
                       name={competitor.name}
-                      fill={`hsl(var(--chart-${competitor.colorIndex}))`}
+                      fill={competitor.color}
                       radius={[4, 4, 0, 0]}
-                    />
+                    >
+                      {processedData.barChartData.map((_, index) => (
+                        <Cell 
+                          key={`${competitor.key}-cell-${index}`}
+                          fill={competitor.color}
+                          stroke={competitor.color}
+                          strokeWidth={1}
+                        />
+                      ))}
+                    </Bar>
                   ))}
                 </BarChart>
               </ResponsiveContainer>
@@ -406,12 +483,12 @@ export default function CompetitiveGapChart({
                   items={[
                     {
                       name: "Your Brand",
-                      color: "hsl(var(--primary))",
+                      color: getYourBrandColor(),
                       colorName: "Primary",
                     },
                     ...processedData.competitorInfo.map((competitor) => ({
                       name: competitor.name,
-                      color: `hsl(var(--chart-${competitor.colorIndex}))`,
+                      color: competitor.color,
                       colorName: getColorInfo(competitor.colorIndex).name,
                     })),
                   ]}
@@ -437,8 +514,8 @@ export default function CompetitiveGapChart({
                   <Radar
                     name="Your Brand"
                     dataKey="yourBrand"
-                    stroke="hsl(var(--primary))"
-                    fill="hsl(var(--primary))"
+                    stroke={getYourBrandColor()}
+                    fill={getYourBrandColor()}
                     fillOpacity={0.3}
                   />
                   {processedData.competitorInfo.map((competitor) => (
@@ -446,8 +523,8 @@ export default function CompetitiveGapChart({
                       key={competitor.key}
                       name={competitor.name}
                       dataKey={competitor.key}
-                      stroke={`hsl(var(--chart-${competitor.colorIndex}))`}
-                      fill={`hsl(var(--chart-${competitor.colorIndex}))`}
+                      stroke={competitor.color}
+                      fill={competitor.color}
                       fillOpacity={0.2}
                     />
                   ))}
@@ -635,10 +712,32 @@ export default function CompetitiveGapChart({
                         : String(label);
                     }}
                   />
-                  <Scatter name="Topics" dataKey="y" fill="hsl(var(--primary))">
-                    {processedData.opportunityMatrix.map((_, index) => (
-                      <Cell key={`cell-${index}`} />
-                    ))}
+                  <Scatter name="Topics" dataKey="y" fill={getYourBrandColor()}>
+                    {processedData.opportunityMatrix.map((entry, index) => {
+                      // Color points based on performance vs market competitiveness
+                      const performanceLevel = entry.y > 70 ? 'high' : entry.y > 40 ? 'medium' : 'low';
+                      const competitivenessLevel = entry.x > 70 ? 'high' : entry.x > 40 ? 'medium' : 'low';
+                      
+                      let fillColor = getYourBrandColor(); // Default to your brand color
+                      
+                      // Color coding based on opportunity/threat assessment
+                      if (performanceLevel === 'low' && competitivenessLevel === 'high') {
+                        fillColor = 'hsl(var(--destructive))'; // Red for threats (low performance, high competition)
+                      } else if (performanceLevel === 'high' && competitivenessLevel === 'low') {
+                        fillColor = 'hsl(var(--success))'; // Green for strong positions
+                      } else if (performanceLevel === 'low' && competitivenessLevel === 'low') {
+                        fillColor = 'hsl(var(--warning))'; // Orange for opportunities (low performance, low competition)
+                      }
+                      
+                      return (
+                        <Cell 
+                          key={`cell-${index}`}
+                          fill={fillColor}
+                          stroke={fillColor}
+                          strokeWidth={2}
+                        />
+                      );
+                    })}
                   </Scatter>
                 </ScatterChart>
               </ResponsiveContainer>

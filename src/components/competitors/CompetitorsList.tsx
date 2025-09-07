@@ -8,6 +8,7 @@ import { CompetitorPerformance } from '@/services/competitorService';
 import { CompetitorWithStatus } from '@/hooks/useCompetitorsQuery';
 import { CompetitorStatusIndicator } from './CompetitorStatusIndicator';
 import { useCompetitorStatus } from '@/hooks/useCompetitorStatus';
+import { getCompetitorColor, validateAllColorAssignments, autoFixColorConflicts } from '@/lib/color-utils';
 
 interface MarketShareItem {
   name: string;
@@ -37,6 +38,12 @@ export default function CompetitorsList({
   isDeleting = false,
 }: CompetitorsListProps) {
   const { getCompetitorStatus } = useCompetitorStatus();
+  
+  // Validate color assignments to ensure consistency across all competitor components
+  const colorValidation = validateAllColorAssignments();
+  if (!colorValidation.isValid) {
+    autoFixColorConflicts({ logResults: false });
+  }
   
   // Listen for competitor status update events for immediate UI refresh
   useEffect(() => {
@@ -155,8 +162,20 @@ export default function CompetitorsList({
             return (
               <div key={competitor.id} className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors ${!isAnalyzed ? 'opacity-75' : ''} ${currentStatus === 'analyzing' ? 'border-blue-200 bg-blue-50/30' : ''} ${currentStatus === 'failed' ? 'border-red-200 bg-red-50/30' : ''}`}>
                 <div className="flex items-center space-x-4">
-                  <div className="flex items-center justify-center w-10 h-10 bg-muted rounded-lg">
+                  <div className="relative flex items-center justify-center w-10 h-10 bg-muted rounded-lg">
                     <Globe className="h-5 w-5 text-muted-foreground" />
+                    {/* Color indicator for competitor */}
+                    <div 
+                      className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white shadow-sm"
+                      style={{ 
+                        backgroundColor: getCompetitorColor(
+                          competitor.id, 
+                          competitor.competitor_name || competitor.competitor_domain, 
+                          competitorsWithStatus.indexOf(competitor)
+                        )
+                      }}
+                      title={`Competitor color: ${competitor.competitor_name || competitor.competitor_domain}`}
+                    />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">

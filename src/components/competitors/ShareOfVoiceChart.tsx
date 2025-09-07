@@ -28,10 +28,14 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import {
-  getCompetitorColor,
+  getCompetitorColorStandardized,
   getYourBrandColor,
   getColorInfo,
-  getCompetitorColorIndex,
+  getCompetitorColorIndexStandardized,
+  createStableCompetitorIndexMap,
+  generateCompetitorKey,
+  validateAllColorAssignments,
+  autoFixColorConflicts,
 } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
 
@@ -92,18 +96,50 @@ export default function ShareOfVoiceChart({
 }: ShareOfVoiceChartProps) {
   // Enhanced data processing with validation
   const chartData = useMemo(() => {
+    // Validate color assignments and fix conflicts if needed
+    const colorValidation = validateAllColorAssignments();
+    if (!colorValidation.isValid) {
+      autoFixColorConflicts({ logResults: false });
+    }
+
+    // Filter out "Your Brand" for competitor processing
+    const competitorData = data.filter(item => item.name !== "Your Brand");
+    
+    // Create standardized stable competitor index mapping
+    const competitorIndexMap = createStableCompetitorIndexMap(
+      competitorData.map(item => ({
+        competitorId: item.competitorId,
+        name: item.name
+      }))
+    );
+
     // Validate and sanitize data
-    const validatedData = data.map((item, index) => {
+    const validatedData = data.map((item) => {
       // Ensure value is a valid number and not negative
       const sanitizedValue = Math.max(0, isNaN(item.value) ? 0 : item.value);
+      
+      let fillColor: string;
+      if (item.name === "Your Brand") {
+        fillColor = getYourBrandColor();
+      } else {
+        // Generate standardized competitor key and get stable index
+        const competitorKey = generateCompetitorKey({
+          competitorId: item.competitorId,
+          name: item.name
+        });
+        const stableIndex = competitorIndexMap.get(competitorKey) || 0;
+        
+        // Use standardized color assignment
+        fillColor = getCompetitorColorStandardized({
+          competitorId: item.competitorId,
+          name: item.name
+        }, stableIndex);
+      }
 
       return {
         ...item,
         value: sanitizedValue,
-        fill:
-          item.name === "Your Brand"
-            ? getYourBrandColor()
-            : getCompetitorColor(item.competitorId, item.name, index),
+        fill: fillColor,
       };
     });
 
@@ -457,13 +493,18 @@ export default function ShareOfVoiceChart({
                       key={index}
                       className="relative group cursor-pointer transition-all duration-300 hover:brightness-110 hover:scale-y-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       style={{
-                        background: isYourBrand
-                          ? "linear-gradient(135deg, #3b82f6, #1d4ed8)"
+                        backgroundColor: isYourBrand
+                          ? "hsl(var(--primary))"
                           : isOthers
-                          ? "linear-gradient(135deg, #94a3b8, #64748b)"
-                          : `linear-gradient(135deg, ${item.fill}, ${item.fill}dd)`,
+                          ? "#94a3b8"
+                          : item.fill,
                         width: `${width}%`,
                         minWidth: "20px", // Minimum width for visibility
+                        border: `1px solid ${isYourBrand 
+                          ? "hsl(var(--primary))" 
+                          : isOthers 
+                          ? "#64748b" 
+                          : item.fill}`,
                       }}
                       title={
                         isOthers
@@ -604,11 +645,11 @@ export default function ShareOfVoiceChart({
                       <div
                         className="w-4 h-4 rounded-full border-2 border-white shadow-sm"
                         style={{
-                          background: isYourBrand
-                            ? "linear-gradient(135deg, #3b82f6, #1d4ed8)"
+                          backgroundColor: isYourBrand
+                            ? "hsl(var(--primary))"
                             : isOthers
-                            ? "linear-gradient(135deg, #94a3b8, #64748b)"
-                            : `linear-gradient(135deg, ${item.fill}, ${item.fill}dd)`,
+                            ? "#94a3b8"
+                            : item.fill,
                         }}
                       />
                       <div className="flex-1">
@@ -711,7 +752,7 @@ export default function ShareOfVoiceChart({
                       key={`cell-${index}`}
                       fill={entry.fill}
                       stroke={entry.fill}
-                      strokeWidth={1}
+                      strokeWidth={2}
                     />
                   ))}
                 </Bar>
@@ -761,7 +802,12 @@ export default function ShareOfVoiceChart({
                   strokeWidth={2}
                 >
                   {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.fill}
+                      stroke={entry.fill}
+                      strokeWidth={1}
+                    />
                   ))}
                 </Pie>
                 <Tooltip
@@ -803,21 +849,26 @@ export default function ShareOfVoiceChart({
               Color Legend
             </h4>
             <ColorLegend
-              items={chartData.map((item, index) => ({
-                name: item.name,
-                color: item.fill,
-                colorName:
-                  item.name === "Your Brand"
-                    ? "Primary"
-                    : (() => {
-                        const colorIndex = getCompetitorColorIndex(
-                          item.competitorId,
-                          item.name,
-                          index
-                        );
-                        return getColorInfo(colorIndex).name;
-                      })(),
-              }))}
+              items={chartData.map((item) => {
+                if (item.name === "Your Brand") {
+                  return {
+                    name: item.name,
+                    color: item.fill,
+                    colorName: "Primary"
+                  };
+                } else {
+                  // Use standardized color index retrieval for consistent legend names
+                  const colorIndex = getCompetitorColorIndexStandardized({
+                    competitorId: item.competitorId,
+                    name: item.name
+                  });
+                  return {
+                    name: item.name,
+                    color: item.fill,
+                    colorName: getColorInfo(colorIndex).name
+                  };
+                }
+              })}
             />
           </div>
         </div>

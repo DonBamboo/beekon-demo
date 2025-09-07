@@ -55,6 +55,103 @@ function simpleHash(str: string): number {
 }
 
 /**
+ * Generate a standardized competitor key for consistent color assignment
+ * @param competitorData - Object containing competitor identification data
+ * @returns Standardized key for color assignment
+ */
+export function generateCompetitorKey(competitorData: {
+  id?: string;
+  competitorId?: string; 
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}): string {
+  // Priority order: competitorId > id > competitor_name > name > competitor_domain
+  const identifier = competitorData.competitorId || 
+                    competitorData.id || 
+                    competitorData.competitor_name || 
+                    competitorData.name || 
+                    competitorData.competitor_domain;
+                    
+  if (!identifier) {
+    throw new Error('Competitor data must contain at least one identifier');
+  }
+  
+  return identifier;
+}
+
+/**
+ * Create a stable competitor index mapping for consistent color assignments
+ * @param competitors - Array of competitor objects
+ * @returns Map of competitor keys to stable indices
+ */
+export function createStableCompetitorIndexMap<T extends {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}>(competitors: T[]): Map<string, number> {
+  const indexMap = new Map<string, number>();
+  let counter = 0;
+  
+  // Sort competitors by their generated key to ensure consistent ordering
+  const sortedCompetitors = competitors
+    .map(comp => ({ competitor: comp, key: generateCompetitorKey(comp) }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  
+  sortedCompetitors.forEach(({ key }) => {
+    if (!indexMap.has(key)) {
+      indexMap.set(key, counter);
+      counter++;
+    }
+  });
+  
+  return indexMap;
+}
+
+/**
+ * Get a consistent color index for a competitor using standardized key generation
+ * @param competitorData - Object containing competitor identification data
+ * @param stableIndex - Optional stable index from createStableCompetitorIndexMap
+ * @returns Chart color index (2-25)
+ */
+export function getCompetitorColorIndexStandardized(
+  competitorData: {
+    id?: string;
+    competitorId?: string;
+    name?: string;
+    competitor_name?: string;
+    competitor_domain?: string;
+  },
+  stableIndex?: number
+): number {
+  const key = generateCompetitorKey(competitorData);
+  
+  // Check cache first for stable assignment
+  if (competitorColorCache.has(key)) {
+    return competitorColorCache.get(key)!;
+  }
+  
+  // Generate consistent color index based on key
+  let colorIndex: number;
+  
+  if (stableIndex !== undefined) {
+    // Use provided stable index for consistent ordering across charts
+    colorIndex = AVAILABLE_CHART_COLORS[stableIndex % AVAILABLE_CHART_COLORS.length] ?? 0;
+  } else {
+    // Hash-based assignment for stable colors across sessions
+    const hash = simpleHash(key);
+    colorIndex = AVAILABLE_CHART_COLORS[hash % AVAILABLE_CHART_COLORS.length] ?? 0;
+  }
+  
+  // Cache the assignment
+  competitorColorCache.set(key, colorIndex);
+  
+  return colorIndex;
+}
+
+/**
  * Get a consistent color index for a competitor
  * @param competitorId - Unique identifier for the competitor
  * @param competitorName - Display name (used as fallback for hashing)
@@ -90,6 +187,26 @@ export function getCompetitorColorIndex(
   competitorColorCache.set(key, colorIndex);
   
   return colorIndex;
+}
+
+/**
+ * Get CSS color value for a competitor using standardized key generation
+ * @param competitorData - Object containing competitor identification data
+ * @param stableIndex - Optional stable index from createStableCompetitorIndexMap
+ * @returns CSS hsl() color value
+ */
+export function getCompetitorColorStandardized(
+  competitorData: {
+    id?: string;
+    competitorId?: string;
+    name?: string;
+    competitor_name?: string;
+    competitor_domain?: string;
+  },
+  stableIndex?: number
+): string {
+  const colorIndex = getCompetitorColorIndexStandardized(competitorData, stableIndex);
+  return `hsl(var(--chart-${colorIndex}))`;
 }
 
 /**
