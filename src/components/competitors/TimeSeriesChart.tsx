@@ -24,12 +24,18 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={data}>
+        <ResponsiveContainer width="100%" height={350}>
+          <LineChart 
+            data={data}
+            margin={{ bottom: 60, left: 20, right: 20, top: 20 }}
+          >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis 
               dataKey="date" 
               tickFormatter={(value) => new Date(value).toLocaleDateString()}
+              height={60}
+              tick={{ fontSize: 12 }}
+              interval="preserveStartEnd"
             />
             <YAxis domain={[0, 100]} />
             <Tooltip 

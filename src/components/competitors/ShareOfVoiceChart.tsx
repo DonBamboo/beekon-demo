@@ -35,6 +35,30 @@ import {
 } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
 
+// Custom Tick Component for competitor name truncation with hover
+const CustomCompetitorTick = ({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) => {
+  const maxLength = 20; // Maximum characters to display
+  const text = payload?.value || '';
+  const displayText = text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
+  
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={4}
+        textAnchor="end"
+        fill="currentColor"
+        fontSize="12"
+        className="cursor-help"
+      >
+        {text.length > maxLength && <title>{text}</title>}
+        {displayText}
+      </text>
+    </g>
+  );
+};
+
 interface ShareOfVoiceData {
   name: string;
   value: number;
@@ -646,11 +670,12 @@ export default function ShareOfVoiceChart({
                   : "Percentage of total brand mentions (hover for details)"}
               </p>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={350}>
               <BarChart
                 data={chartData}
                 layout="horizontal"
                 barCategoryGap={20}
+                margin={{ top: 20, right: 30, bottom: 20, left: 150 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
@@ -661,7 +686,13 @@ export default function ShareOfVoiceChart({
                   ]}
                   tickFormatter={(value) => `${value}%`}
                 />
-                <YAxis dataKey="name" type="category" width={120} />
+                <YAxis 
+                  dataKey="name" 
+                  type="category" 
+                  width={150}
+                  tick={<CustomCompetitorTick />}
+                  interval={0}
+                />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar
                   dataKey="value"

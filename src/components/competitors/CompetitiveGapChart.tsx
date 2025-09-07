@@ -55,6 +55,66 @@ import {
 } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
 
+// Custom X-Axis Tick Component with multi-line text wrapping
+const CustomXAxisTick = ({
+  x,
+  y,
+  payload,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value: string };
+}) => {
+  const text = payload?.value || "";
+  const maxCharsPerLine = 20; // Characters per line to prevent overlap
+
+  // Split text into lines based on words and character limit
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+
+  words.forEach((word) => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    if (testLine.length <= maxCharsPerLine) {
+      currentLine = testLine;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        // Handle single word longer than maxCharsPerLine
+        lines.push(word.substring(0, maxCharsPerLine - 3) + "...");
+        currentLine = "";
+      }
+    }
+  });
+
+  if (currentLine) lines.push(currentLine);
+
+  // Limit to 2 lines maximum to prevent excessive height
+  const displayLines = lines.slice(0, 2);
+  if (lines.length > 2 && displayLines[1]) {
+    displayLines[1] = displayLines[1].substring(0, 20) + "...";
+  }
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        textAnchor="middle"
+        fill="currentColor"
+        fontSize="13.5"
+        className="select-none"
+      >
+        {displayLines.map((line, index) => (
+          <tspan key={index} x={0} dy={index === 0 ? 12 : 14}>
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  );
+};
+
 // Helper function for safe string extraction
 function safeString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -296,18 +356,23 @@ export default function CompetitiveGapChart({
               role="img"
               aria-label="Bar chart showing competitive gap analysis across topics"
             >
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={processedData.barChartData} accessibilityLayer>
+              <ResponsiveContainer width="100%" height={430}>
+                <BarChart
+                  data={processedData.barChartData}
+                  accessibilityLayer
+                  margin={{ bottom: 20, left: 20, right: 20, top: 20 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="topic"
-                    angle={-45}
-                    textAnchor="end"
+                    tick={<CustomXAxisTick />}
+                    interval={0}
                     height={100}
                     aria-label="Topics"
                   />
                   <YAxis
                     domain={[0, 100]}
+                    tickFormatter={(value) => `${value}%`}
                     aria-label="Performance score percentage"
                   />
                   <RechartsTooltip content={<CustomTooltip />} />
@@ -360,8 +425,12 @@ export default function CompetitiveGapChart({
               role="img"
               aria-label="Radar chart showing competitive performance across all topics"
             >
-              <ResponsiveContainer width="100%" height={400}>
-                <RadarChart data={processedData.radarData} accessibilityLayer>
+              <ResponsiveContainer width="100%" height={450}>
+                <RadarChart
+                  data={processedData.radarData}
+                  accessibilityLayer
+                  margin={{ top: 20, right: 80, bottom: 20, left: 80 }}
+                >
                   <PolarGrid />
                   <PolarAngleAxis dataKey="topic" />
                   <PolarRadiusAxis angle={90} domain={[0, 100]} />
@@ -516,10 +585,11 @@ export default function CompetitiveGapChart({
               role="img"
               aria-label="Opportunity matrix scatter chart showing topics by market competitiveness versus your performance"
             >
-              <ResponsiveContainer width="100%" height={400}>
+              <ResponsiveContainer width="100%" height={450}>
                 <ScatterChart
                   data={processedData.opportunityMatrix}
                   accessibilityLayer
+                  margin={{ bottom: 60, left: 60, right: 20, top: 20 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
@@ -556,8 +626,13 @@ export default function CompetitiveGapChart({
                         : "Market Size",
                     ]}
                     labelFormatter={(label: unknown, payload: unknown) => {
-                      const data = Array.isArray(payload) && payload.length > 0 ? payload[0]?.payload : undefined;
-                      return data?.topic ? `Topic: ${data.topic}` : String(label);
+                      const data =
+                        Array.isArray(payload) && payload.length > 0
+                          ? payload[0]?.payload
+                          : undefined;
+                      return data?.topic
+                        ? `Topic: ${data.topic}`
+                        : String(label);
                     }}
                   />
                   <Scatter name="Topics" dataKey="y" fill="hsl(var(--primary))">
