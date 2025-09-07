@@ -8,7 +8,13 @@ import { CompetitorPerformance } from '@/services/competitorService';
 import { CompetitorWithStatus } from '@/hooks/useCompetitorsQuery';
 import { CompetitorStatusIndicator } from './CompetitorStatusIndicator';
 import { useCompetitorStatus } from '@/hooks/useCompetitorStatus';
-import { getCompetitorColor, validateAllColorAssignments, autoFixColorConflicts } from '@/lib/color-utils';
+import { 
+  getCompetitorColorStandardized,
+  registerCompetitorsGlobally,
+  getGlobalStableIndex,
+  validateAllColorAssignments, 
+  autoFixColorConflicts 
+} from '@/lib/color-utils';
 
 interface MarketShareItem {
   name: string;
@@ -44,6 +50,17 @@ export default function CompetitorsList({
   if (!colorValidation.isValid) {
     autoFixColorConflicts({ logResults: false });
   }
+  
+  // Register all competitors in global registry for consistent coloring
+  registerCompetitorsGlobally(
+    competitorsWithStatus.map(competitor => ({
+      id: competitor.id,
+      competitorId: competitor.id,
+      competitor_name: competitor.competitor_name,
+      name: competitor.competitor_name || competitor.competitor_domain,
+      competitor_domain: competitor.competitor_domain
+    }))
+  );
   
   // Listen for competitor status update events for immediate UI refresh
   useEffect(() => {
@@ -168,11 +185,19 @@ export default function CompetitorsList({
                     <div 
                       className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white shadow-sm"
                       style={{ 
-                        backgroundColor: getCompetitorColor(
-                          competitor.id, 
-                          competitor.competitor_name || competitor.competitor_domain, 
-                          competitorsWithStatus.indexOf(competitor)
-                        )
+                        backgroundColor: getCompetitorColorStandardized({
+                          id: competitor.id,
+                          competitorId: competitor.id,
+                          competitor_name: competitor.competitor_name,
+                          name: competitor.competitor_name || competitor.competitor_domain,
+                          competitor_domain: competitor.competitor_domain
+                        }, getGlobalStableIndex({
+                          id: competitor.id,
+                          competitorId: competitor.id,
+                          competitor_name: competitor.competitor_name,
+                          name: competitor.competitor_name || competitor.competitor_domain,
+                          competitor_domain: competitor.competitor_domain
+                        }))
                       }}
                       title={`Competitor color: ${competitor.competitor_name || competitor.competitor_domain}`}
                     />

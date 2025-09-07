@@ -1,7 +1,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CompetitorTimeSeriesData } from '@/services/competitorService';
-import { getCompetitorColor, getColorInfo, getCompetitorColorIndex, validateAllColorAssignments, autoFixColorConflicts } from '@/lib/color-utils';
+import { 
+  getCompetitorColorStandardized,
+  getCompetitorColorIndexStandardized,
+  getColorInfo, 
+  registerCompetitorsGlobally,
+  getGlobalStableIndex,
+  validateAllColorAssignments, 
+  autoFixColorConflicts 
+} from '@/lib/color-utils';
 import { ColorLegend } from '@/components/ui/color-indicator';
 import { Info } from 'lucide-react';
 
@@ -20,6 +28,14 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
 
   // Get competitors from first data point for legend
   const competitors = data[0]?.competitors || [];
+
+  // Register all competitors in global registry for consistent coloring
+  registerCompetitorsGlobally(
+    competitors.map(comp => ({
+      competitorId: comp.competitorId,
+      name: comp.name
+    }))
+  );
 
   return (
     <Card>
@@ -48,17 +64,30 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
               labelFormatter={(value) => new Date(value).toLocaleDateString()}
               formatter={(value, name) => [`${value}%`, name]}
             />
-            {competitors.map((comp, index) => (
-              <Line 
-                key={comp.competitorId}
-                type="monotone" 
-                dataKey={`competitors[${index}].shareOfVoice`}
-                stroke={getCompetitorColor(comp.competitorId, comp.name, index)}
-                strokeWidth={2}
-                name={comp.name}
-                dot={{ r: 3 }}
-              />
-            ))}
+            {competitors.map((comp, index) => {
+              // Get global stable index for consistent coloring across all charts
+              const globalStableIndex = getGlobalStableIndex({
+                competitorId: comp.competitorId,
+                name: comp.name
+              });
+              
+              const color = getCompetitorColorStandardized({
+                competitorId: comp.competitorId,
+                name: comp.name
+              }, globalStableIndex);
+              
+              return (
+                <Line 
+                  key={comp.competitorId}
+                  type="monotone" 
+                  dataKey={`competitors[${index}].shareOfVoice`}
+                  stroke={color}
+                  strokeWidth={2}
+                  name={comp.name}
+                  dot={{ r: 3 }}
+                />
+              );
+            })}
           </LineChart>
         </ResponsiveContainer>
 
@@ -70,11 +99,26 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
               Color Legend
             </h4>
             <ColorLegend 
-              items={competitors.map((comp, index) => {
-                const colorIndex = getCompetitorColorIndex(comp.competitorId, comp.name, index);
+              items={competitors.map((comp) => {
+                // Get global stable index for consistent color legend names
+                const globalStableIndex = getGlobalStableIndex({
+                  competitorId: comp.competitorId,
+                  name: comp.name
+                });
+                
+                const colorIndex = getCompetitorColorIndexStandardized({
+                  competitorId: comp.competitorId,
+                  name: comp.name
+                }, globalStableIndex);
+                
+                const color = getCompetitorColorStandardized({
+                  competitorId: comp.competitorId,
+                  name: comp.name
+                }, globalStableIndex);
+                
                 return {
                   name: comp.name,
-                  color: getCompetitorColor(comp.competitorId, comp.name, index),
+                  color: color,
                   colorName: getColorInfo(colorIndex).name
                 };
               })}

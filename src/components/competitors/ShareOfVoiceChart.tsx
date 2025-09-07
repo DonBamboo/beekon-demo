@@ -32,8 +32,8 @@ import {
   getYourBrandColor,
   getColorInfo,
   getCompetitorColorIndexStandardized,
-  createStableCompetitorIndexMap,
-  generateCompetitorKey,
+  registerCompetitorsGlobally,
+  getGlobalStableIndex,
   validateAllColorAssignments,
   autoFixColorConflicts,
 } from "@/lib/color-utils";
@@ -81,6 +81,8 @@ interface ShareOfVoiceData {
   // For grouped data
   isOthersGroup?: boolean;
   competitors?: ShareOfVoiceData[];
+  // For color consistency
+  colorIndex?: number; // Pre-computed color index for legend generation
 }
 
 interface ShareOfVoiceChartProps {
@@ -105,8 +107,8 @@ export default function ShareOfVoiceChart({
     // Filter out "Your Brand" for competitor processing
     const competitorData = data.filter(item => item.name !== "Your Brand");
     
-    // Create standardized stable competitor index mapping
-    const competitorIndexMap = createStableCompetitorIndexMap(
+    // Register all competitors in the global registry to ensure consistent ordering
+    registerCompetitorsGlobally(
       competitorData.map(item => ({
         competitorId: item.competitorId,
         name: item.name
@@ -119,27 +121,36 @@ export default function ShareOfVoiceChart({
       const sanitizedValue = Math.max(0, isNaN(item.value) ? 0 : item.value);
       
       let fillColor: string;
+      let colorIndex: number | undefined;
+      
       if (item.name === "Your Brand") {
         fillColor = getYourBrandColor();
+        // colorIndex remains undefined for "Your Brand"
       } else {
-        // Generate standardized competitor key and get stable index
-        const competitorKey = generateCompetitorKey({
+        // Get global stable index for consistent coloring across all charts
+        const globalStableIndex = getGlobalStableIndex({
           competitorId: item.competitorId,
           name: item.name
         });
-        const stableIndex = competitorIndexMap.get(competitorKey) || 0;
         
-        // Use standardized color assignment
+        // Pre-compute color index for consistent legend generation
+        colorIndex = getCompetitorColorIndexStandardized({
+          competitorId: item.competitorId,
+          name: item.name
+        }, globalStableIndex);
+        
+        // Use standardized color assignment with global stable index
         fillColor = getCompetitorColorStandardized({
           competitorId: item.competitorId,
           name: item.name
-        }, stableIndex);
+        }, globalStableIndex);
       }
 
       return {
         ...item,
         value: sanitizedValue,
         fill: fillColor,
+        colorIndex, // Store pre-computed color index
       };
     });
 
@@ -202,6 +213,7 @@ export default function ShareOfVoiceChart({
           fill: "#94a3b8", // Neutral gray color
           isOthersGroup: true,
           competitors: smallCompetitors,
+          colorIndex: undefined, // Others group doesn't have a specific color index
         });
       }
     }
@@ -857,15 +869,11 @@ export default function ShareOfVoiceChart({
                     colorName: "Primary"
                   };
                 } else {
-                  // Use standardized color index retrieval for consistent legend names
-                  const colorIndex = getCompetitorColorIndexStandardized({
-                    competitorId: item.competitorId,
-                    name: item.name
-                  });
+                  // Use pre-computed color index for consistent legend names
                   return {
                     name: item.name,
                     color: item.fill,
-                    colorName: getColorInfo(colorIndex).name
+                    colorName: item.colorIndex !== undefined ? getColorInfo(item.colorIndex).name : "Unknown"
                   };
                 }
               })}

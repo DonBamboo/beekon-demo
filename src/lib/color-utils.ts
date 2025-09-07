@@ -41,6 +41,10 @@ export const CHART_COLOR_INFO = {
 // Cache for stable competitor color assignments
 const competitorColorCache = new Map<string, number>();
 
+// Global competitor registry for consistent ordering across all charts
+const globalCompetitorRegistry = new Map<string, number>();
+let globalCompetitorCounter = 0;
+
 /**
  * Simple hash function for consistent color assignment based on string
  */
@@ -81,9 +85,61 @@ export function generateCompetitorKey(competitorData: {
 }
 
 /**
+ * Register competitors in the global registry to ensure consistent ordering across all charts
+ * @param competitors - Array of competitor objects
+ */
+export function registerCompetitorsGlobally<T extends {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}>(competitors: T[]): void {
+  // Sort competitors by their generated key to ensure consistent ordering
+  const sortedCompetitors = competitors
+    .map(comp => ({ competitor: comp, key: generateCompetitorKey(comp) }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  
+  // Register each competitor in the global registry if not already present
+  sortedCompetitors.forEach(({ key }) => {
+    if (!globalCompetitorRegistry.has(key)) {
+      globalCompetitorRegistry.set(key, globalCompetitorCounter);
+      globalCompetitorCounter++;
+    }
+  });
+}
+
+/**
+ * Get the global stable index for a competitor
+ * @param competitorData - Object containing competitor identification data
+ * @returns Global stable index for the competitor
+ */
+export function getGlobalStableIndex(competitorData: {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}): number {
+  const key = generateCompetitorKey(competitorData);
+  const index = globalCompetitorRegistry.get(key);
+  
+  if (index === undefined) {
+    // If competitor is not registered, register it now
+    globalCompetitorRegistry.set(key, globalCompetitorCounter);
+    const newIndex = globalCompetitorCounter;
+    globalCompetitorCounter++;
+    return newIndex;
+  }
+  
+  return index;
+}
+
+/**
  * Create a stable competitor index mapping for consistent color assignments
  * @param competitors - Array of competitor objects
  * @returns Map of competitor keys to stable indices
+ * @deprecated Use registerCompetitorsGlobally and getGlobalStableIndex instead
  */
 export function createStableCompetitorIndexMap<T extends {
   id?: string;
@@ -277,6 +333,14 @@ export function generateCompetitorColorScheme<T extends { id?: string; name?: st
  */
 export function clearCompetitorColorCache(): void {
   competitorColorCache.clear();
+}
+
+/**
+ * Clear the global competitor registry (useful for testing or reset scenarios)
+ */
+export function clearGlobalCompetitorRegistry(): void {
+  globalCompetitorRegistry.clear();
+  globalCompetitorCounter = 0;
 }
 
 /**

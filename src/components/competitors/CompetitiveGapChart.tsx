@@ -53,8 +53,8 @@ import {
   getCompetitorColorStandardized,
   getYourBrandColor,
   getColorInfo,
-  createStableCompetitorIndexMap,
-  generateCompetitorKey,
+  registerCompetitorsGlobally,
+  getGlobalStableIndex,
   validateAllColorAssignments,
   autoFixColorConflicts,
 } from "@/lib/color-utils";
@@ -211,8 +211,8 @@ export default function CompetitiveGapChart({
       });
     });
 
-    // Create standardized stable competitor index mapping
-    const competitorIndexMap = createStableCompetitorIndexMap(
+    // Register all competitors in the global registry to ensure consistent ordering
+    registerCompetitorsGlobally(
       allCompetitors.map(comp => ({
         competitorId: comp.competitorId,
         name: comp.name
@@ -221,23 +221,22 @@ export default function CompetitiveGapChart({
 
     // Create competitor info array for rendering with standardized color assignment
     const competitorInfo = allCompetitors.map((comp) => {
-      // Generate standardized competitor key and get stable index
-      const competitorKey = generateCompetitorKey({
+      // Get global stable index for consistent coloring across all charts
+      const globalStableIndex = getGlobalStableIndex({
         competitorId: comp.competitorId,
         name: comp.name
       });
-      const stableIndex = competitorIndexMap.get(competitorKey) || 0;
       
-      // Use standardized color assignment
+      // Use standardized color assignment with global stable index
       const colorIndex = getCompetitorColorIndexStandardized({
         competitorId: comp.competitorId,
         name: comp.name
-      }, stableIndex);
+      }, globalStableIndex);
       
       const color = getCompetitorColorStandardized({
         competitorId: comp.competitorId,
         name: comp.name
-      }, stableIndex);
+      }, globalStableIndex);
 
       return {
         key: comp.key,
