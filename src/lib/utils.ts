@@ -33,6 +33,11 @@ export function addProtocol(domain: string): string {
     const domainPart = urlParts[0];
     const pathPart = urlParts.length > 1 ? '/' + urlParts.slice(1).join('/') : '';
     
+    // Ensure we have a domain part
+    if (!domainPart || domainPart.trim() === '') {
+      throw new Error('Invalid domain format');
+    }
+    
     // Basic domain validation - allow domain with optional port and paths
     // Domain must have at least one dot, valid TLD (2+ characters), and no consecutive dots
     if (!/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])*(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])*)+(:[0-9]+)?$/.test(domainPart)) {
