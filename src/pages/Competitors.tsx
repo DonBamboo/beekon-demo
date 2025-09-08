@@ -37,10 +37,9 @@ import CompetitorInsights from "@/components/competitors/CompetitorInsights";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { addProtocol } from "@/lib/utils";
 import { 
-  getCompetitorColorStandardized,
+  getCompetitorFixedColor,
   getYourBrandColor,
-  registerCompetitorsGlobally,
-  getGlobalStableIndex
+  registerCompetitorsInFixedSlots
 } from "@/lib/color-utils";
 
 export default function Competitors() {
@@ -88,9 +87,9 @@ export default function Competitors() {
   const shareOfVoiceChartData = useMemo(() => {
     const rawData = (analytics?.shareOfVoiceData as Record<string, unknown>[]) || [];
     
-    // Filter out "Your Brand" for competitor processing and register all competitors globally
+    // Filter out "Your Brand" for competitor processing and register all competitors in fixed slots
     const competitorData = rawData.filter(item => item.name !== "Your Brand");
-    registerCompetitorsGlobally(
+    registerCompetitorsInFixedSlots(
       competitorData.map(item => ({
         competitorId: item.competitorId as string,
         name: item.name as string
@@ -108,13 +107,10 @@ export default function Competitors() {
       dataType: (item.dataType as string) === "market_share" ? "market_share" as const : "share_of_voice" as const,
       fill: item.name === "Your Brand"
         ? getYourBrandColor()
-        : getCompetitorColorStandardized({
+        : getCompetitorFixedColor({
             competitorId: item.competitorId as string,
             name: item.name as string
-          }, getGlobalStableIndex({
-            competitorId: item.competitorId as string,
-            name: item.name as string
-          })),
+          }),
     }));
   }, [analytics?.shareOfVoiceData]);
 

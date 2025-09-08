@@ -2,11 +2,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CompetitorTimeSeriesData } from '@/services/competitorService';
 import { 
-  getCompetitorColorStandardized,
-  getCompetitorColorIndexStandardized,
-  getColorInfo, 
-  registerCompetitorsGlobally,
-  getGlobalStableIndex,
+  getCompetitorFixedColor,
+  getCompetitorFixedColorInfo,
+  registerCompetitorsInFixedSlots,
   validateAllColorAssignments, 
   autoFixColorConflicts 
 } from '@/lib/color-utils';
@@ -29,8 +27,8 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
   // Get competitors from first data point for legend
   const competitors = data[0]?.competitors || [];
 
-  // Register all competitors in global registry for consistent coloring
-  registerCompetitorsGlobally(
+  // Register all competitors in fixed color slots for predictable coloring
+  registerCompetitorsInFixedSlots(
     competitors.map(comp => ({
       competitorId: comp.competitorId,
       name: comp.name
@@ -65,16 +63,11 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
               formatter={(value, name) => [`${value}%`, name]}
             />
             {competitors.map((comp, index) => {
-              // Get global stable index for consistent coloring across all charts
-              const globalStableIndex = getGlobalStableIndex({
+              // Get fixed color slot for predictable competitor coloring
+              const color = getCompetitorFixedColor({
                 competitorId: comp.competitorId,
                 name: comp.name
               });
-              
-              const color = getCompetitorColorStandardized({
-                competitorId: comp.competitorId,
-                name: comp.name
-              }, globalStableIndex);
               
               return (
                 <Line 
@@ -100,26 +93,21 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
             </h4>
             <ColorLegend 
               items={competitors.map((comp) => {
-                // Get global stable index for consistent color legend names
-                const globalStableIndex = getGlobalStableIndex({
+                // Get fixed color slot for consistent color legend names
+                const colorInfo = getCompetitorFixedColorInfo({
                   competitorId: comp.competitorId,
                   name: comp.name
                 });
                 
-                const colorIndex = getCompetitorColorIndexStandardized({
+                const color = getCompetitorFixedColor({
                   competitorId: comp.competitorId,
                   name: comp.name
-                }, globalStableIndex);
-                
-                const color = getCompetitorColorStandardized({
-                  competitorId: comp.competitorId,
-                  name: comp.name
-                }, globalStableIndex);
+                });
                 
                 return {
                   name: comp.name,
                   color: color,
-                  colorName: getColorInfo(colorIndex).name
+                  colorName: colorInfo.name
                 };
               })}
             />

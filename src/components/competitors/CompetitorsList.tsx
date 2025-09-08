@@ -9,9 +9,8 @@ import { CompetitorWithStatus } from '@/hooks/useCompetitorsQuery';
 import { CompetitorStatusIndicator } from './CompetitorStatusIndicator';
 import { useCompetitorStatus } from '@/hooks/useCompetitorStatus';
 import { 
-  getCompetitorColorStandardized,
-  registerCompetitorsGlobally,
-  getGlobalStableIndex,
+  getCompetitorFixedColor,
+  registerCompetitorsInFixedSlots,
   validateAllColorAssignments, 
   autoFixColorConflicts 
 } from '@/lib/color-utils';
@@ -51,8 +50,8 @@ export default function CompetitorsList({
     autoFixColorConflicts({ logResults: false });
   }
   
-  // Register all competitors in global registry for consistent coloring
-  registerCompetitorsGlobally(
+  // Register all competitors in fixed color slots for predictable coloring
+  registerCompetitorsInFixedSlots(
     competitorsWithStatus.map(competitor => ({
       id: competitor.id,
       competitorId: competitor.id,
@@ -185,19 +184,13 @@ export default function CompetitorsList({
                     <div 
                       className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white shadow-sm"
                       style={{ 
-                        backgroundColor: getCompetitorColorStandardized({
+                        backgroundColor: getCompetitorFixedColor({
                           id: competitor.id,
                           competitorId: competitor.id,
                           competitor_name: competitor.competitor_name,
                           name: competitor.competitor_name || competitor.competitor_domain,
                           competitor_domain: competitor.competitor_domain
-                        }, getGlobalStableIndex({
-                          id: competitor.id,
-                          competitorId: competitor.id,
-                          competitor_name: competitor.competitor_name,
-                          name: competitor.competitor_name || competitor.competitor_domain,
-                          competitor_domain: competitor.competitor_domain
-                        }))
+                        })
                       }}
                       title={`Competitor color: ${competitor.competitor_name || competitor.competitor_domain}`}
                     />

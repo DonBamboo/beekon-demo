@@ -45,6 +45,12 @@ const competitorColorCache = new Map<string, number>();
 const globalCompetitorRegistry = new Map<string, number>();
 let globalCompetitorCounter = 0;
 
+// Fixed color slot assignment system for predictable competitor colors
+const FIXED_COLOR_SLOTS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
+const fixedColorSlotRegistry = new Map<string, number>(); // competitorKey -> colorSlot
+const usedColorSlots = new Set<number>(); // Track which slots are in use
+let nextAvailableSlot = 0; // Index into FIXED_COLOR_SLOTS array
+
 /**
  * Simple hash function for consistent color assignment based on string
  */
@@ -341,6 +347,198 @@ export function clearCompetitorColorCache(): void {
 export function clearGlobalCompetitorRegistry(): void {
   globalCompetitorRegistry.clear();
   globalCompetitorCounter = 0;
+}
+
+/**
+ * Load competitor color assignments from localStorage
+ */
+function loadFixedColorAssignments(): void {
+  try {
+    const stored = localStorage.getItem('beekon-competitor-colors');
+    if (stored) {
+      const data = JSON.parse(stored) as { assignments: Array<[string, number]>; nextSlot: number };
+      
+      // Restore assignments
+      fixedColorSlotRegistry.clear();
+      usedColorSlots.clear();
+      
+      data.assignments.forEach(([key, colorSlot]) => {
+        fixedColorSlotRegistry.set(key, colorSlot);
+        usedColorSlots.add(colorSlot);
+      });
+      
+      nextAvailableSlot = data.nextSlot;
+    }
+  } catch (error) {
+    // If loading fails, start fresh
+    console.warn('Failed to load competitor color assignments:', error);
+  }
+}
+
+/**
+ * Save competitor color assignments to localStorage
+ */
+function saveFixedColorAssignments(): void {
+  try {
+    const data = {
+      assignments: Array.from(fixedColorSlotRegistry.entries()),
+      nextSlot: nextAvailableSlot
+    };
+    localStorage.setItem('beekon-competitor-colors', JSON.stringify(data));
+  } catch (error) {
+    console.warn('Failed to save competitor color assignments:', error);
+  }
+}
+
+/**
+ * Get the next available fixed color slot for a competitor
+ * @returns Color slot number (2-25) or null if all slots are used
+ */
+function getNextAvailableColorSlot(): number | null {
+  // Find first unused slot
+  for (let i = 0; i < FIXED_COLOR_SLOTS.length; i++) {
+    const slot = FIXED_COLOR_SLOTS[i];
+    if (!usedColorSlots.has(slot)) {
+      return slot;
+    }
+  }
+  return null; // All slots are used
+}
+
+/**
+ * Assign a fixed color slot to a competitor
+ * @param competitorKey - Standardized competitor key
+ * @returns Assigned color slot number
+ */
+function assignFixedColorSlot(competitorKey: string): number {
+  // Check if already assigned
+  if (fixedColorSlotRegistry.has(competitorKey)) {
+    return fixedColorSlotRegistry.get(competitorKey)!;
+  }
+  
+  // Get next available slot
+  const colorSlot = getNextAvailableColorSlot();
+  if (colorSlot === null) {
+    // All slots used, cycle back to first slot (fallback)
+    console.warn('All competitor color slots are used. Cycling back to first slot.');
+    const fallbackSlot = FIXED_COLOR_SLOTS[0];
+    fixedColorSlotRegistry.set(competitorKey, fallbackSlot);
+    return fallbackSlot;
+  }
+  
+  // Assign the slot
+  fixedColorSlotRegistry.set(competitorKey, colorSlot);
+  usedColorSlots.add(colorSlot);
+  
+  // Save to persistence
+  saveFixedColorAssignments();
+  
+  return colorSlot;
+}
+
+/**
+ * Get fixed color slot for a competitor (assigns one if not exists)
+ * @param competitorData - Object containing competitor identification data
+ * @returns Fixed color slot number (2-25)
+ */
+export function getCompetitorFixedColorSlot(competitorData: {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}): number {
+  // Generate standardized competitor key
+  const key = generateCompetitorKey(competitorData);
+  
+  // Load assignments if not already loaded
+  if (fixedColorSlotRegistry.size === 0 && nextAvailableSlot === 0) {
+    loadFixedColorAssignments();
+  }
+  
+  // Get or assign fixed color slot
+  return assignFixedColorSlot(key);
+}
+
+/**
+ * Clear all fixed color assignments (useful for reset scenarios)
+ */
+export function clearFixedColorAssignments(): void {
+  fixedColorSlotRegistry.clear();
+  usedColorSlots.clear();
+  nextAvailableSlot = 0;
+  
+  try {
+    localStorage.removeItem('beekon-competitor-colors');
+  } catch (error) {
+    console.warn('Failed to clear competitor color assignments from storage:', error);
+  }
+}
+
+/**
+ * Get all current fixed color assignments (useful for debugging/admin)
+ */
+export function getFixedColorAssignments(): Array<{ key: string; colorSlot: number; colorName: string }> {
+  return Array.from(fixedColorSlotRegistry.entries()).map(([key, colorSlot]) => ({
+    key,
+    colorSlot,
+    colorName: getColorInfo(colorSlot).name
+  }));
+}
+
+/**
+ * Get CSS color value for a competitor using fixed color slots
+ * @param competitorData - Object containing competitor identification data  
+ * @returns CSS hsl() color value
+ */
+export function getCompetitorFixedColor(competitorData: {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}): string {
+  const colorSlot = getCompetitorFixedColorSlot(competitorData);
+  return `hsl(var(--chart-${colorSlot}))`;
+}
+
+/**
+ * Get color info for a competitor using fixed color slots
+ * @param competitorData - Object containing competitor identification data
+ * @returns Color information including name and hex value
+ */
+export function getCompetitorFixedColorInfo(competitorData: {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}): { name: string; hex: string; colorSlot: number } {
+  const colorSlot = getCompetitorFixedColorSlot(competitorData);
+  const colorInfo = getColorInfo(colorSlot);
+  return {
+    name: colorInfo.name,
+    hex: colorInfo.hex,
+    colorSlot
+  };
+}
+
+/**
+ * Register competitors in fixed color slot system (replaces global registry for components)
+ * @param competitors - Array of competitor objects
+ */
+export function registerCompetitorsInFixedSlots<T extends {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}>(competitors: T[]): void {
+  // Simply iterate through competitors to assign them fixed slots
+  // The assignment happens automatically when getCompetitorFixedColorSlot is called
+  competitors.forEach(competitor => {
+    getCompetitorFixedColorSlot(competitor);
+  });
 }
 
 /**

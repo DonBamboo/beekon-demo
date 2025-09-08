@@ -28,12 +28,10 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import {
-  getCompetitorColorStandardized,
+  getCompetitorFixedColor,
+  getCompetitorFixedColorInfo,
   getYourBrandColor,
-  getColorInfo,
-  getCompetitorColorIndexStandardized,
-  registerCompetitorsGlobally,
-  getGlobalStableIndex,
+  registerCompetitorsInFixedSlots,
   validateAllColorAssignments,
   autoFixColorConflicts,
 } from "@/lib/color-utils";
@@ -107,8 +105,8 @@ export default function ShareOfVoiceChart({
     // Filter out "Your Brand" for competitor processing
     const competitorData = data.filter(item => item.name !== "Your Brand");
     
-    // Register all competitors in the global registry to ensure consistent ordering
-    registerCompetitorsGlobally(
+    // Register all competitors in fixed color slots for predictable color assignment
+    registerCompetitorsInFixedSlots(
       competitorData.map(item => ({
         competitorId: item.competitorId,
         name: item.name
@@ -127,23 +125,18 @@ export default function ShareOfVoiceChart({
         fillColor = getYourBrandColor();
         // colorIndex remains undefined for "Your Brand"
       } else {
-        // Get global stable index for consistent coloring across all charts
-        const globalStableIndex = getGlobalStableIndex({
+        // Get fixed color slot for predictable competitor coloring
+        const colorInfo = getCompetitorFixedColorInfo({
           competitorId: item.competitorId,
           name: item.name
         });
         
-        // Pre-compute color index for consistent legend generation
-        colorIndex = getCompetitorColorIndexStandardized({
+        // Use fixed color slot information
+        colorIndex = colorInfo.colorSlot;
+        fillColor = getCompetitorFixedColor({
           competitorId: item.competitorId,
           name: item.name
-        }, globalStableIndex);
-        
-        // Use standardized color assignment with global stable index
-        fillColor = getCompetitorColorStandardized({
-          competitorId: item.competitorId,
-          name: item.name
-        }, globalStableIndex);
+        });
       }
 
       return {
@@ -869,11 +862,15 @@ export default function ShareOfVoiceChart({
                     colorName: "Primary"
                   };
                 } else {
-                  // Use pre-computed color index for consistent legend names
+                  // Use fixed color slot for consistent legend names
+                  const colorInfo = getCompetitorFixedColorInfo({
+                    competitorId: item.competitorId,
+                    name: item.name
+                  });
                   return {
                     name: item.name,
                     color: item.fill,
-                    colorName: item.colorIndex !== undefined ? getColorInfo(item.colorIndex).name : "Unknown"
+                    colorName: colorInfo.name
                   };
                 }
               })}

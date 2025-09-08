@@ -49,12 +49,10 @@ import {
   generateGapSummary,
 } from "@/lib/gap-analysis-utils";
 import {
-  getCompetitorColorIndexStandardized,
-  getCompetitorColorStandardized,
+  getCompetitorFixedColor,
+  getCompetitorFixedColorInfo,
   getYourBrandColor,
-  getColorInfo,
-  registerCompetitorsGlobally,
-  getGlobalStableIndex,
+  registerCompetitorsInFixedSlots,
   validateAllColorAssignments,
   autoFixColorConflicts,
 } from "@/lib/color-utils";
@@ -125,6 +123,33 @@ function safeString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+// Helper function to extract competitor ID with multiple fallbacks
+function extractCompetitorId(comp: any): string {
+  // Try multiple possible ID fields in order of preference
+  return (
+    safeString(comp.competitorId) ||
+    safeString(comp.competitor_id) ||
+    safeString(comp.id) ||
+    safeString(comp.domain) ||
+    safeString(comp.competitor_domain) ||
+    safeString(comp.name) ||
+    safeString(comp.competitor_name) ||
+    `competitor_${Math.random().toString(36).substr(2, 9)}` // Generate unique fallback
+  );
+}
+
+// Helper function to extract competitor name with fallbacks
+function extractCompetitorName(comp: any, fallbackIndex: number): string {
+  return (
+    safeString(comp.competitor_name) ||
+    safeString(comp.name) ||
+    safeString(comp.domain) ||
+    safeString(comp.competitor_domain) ||
+    safeString(comp.competitorId) ||
+    `Competitor ${fallbackIndex + 1}`
+  );
+}
+
 interface CompetitiveGapChartProps {
   gapAnalysis: CompetitiveGapAnalysis[];
   analytics: CompetitorAnalytics | null;
@@ -173,10 +198,15 @@ export default function CompetitiveGapChart({
         topic: gap.topicName,
         yourBrand: gap.yourBrandScore,
       };
+      
       gap.competitorData.forEach((comp, index) => {
+        // Use robust competitor identification
+        const competitorId = extractCompetitorId(comp);
+        const competitorName = extractCompetitorName(comp, index);
+        
         data[`competitor${index + 1}`] = comp.score;
-        data[`competitor${index + 1}_name`] = comp.competitor_name;
-        data[`competitor${index + 1}_id`] = comp.competitorId;
+        data[`competitor${index + 1}_name`] = competitorName;
+        data[`competitor${index + 1}_id`] = competitorId;
       });
       return data;
     });
@@ -198,51 +228,49 @@ export default function CompetitiveGapChart({
       name: string;
       key: string;
     }> = [];
-    
+
     Array.from(competitorKeys).forEach((key) => {
       const sampleData = barChartData.find((item) => item[`${key}_name`]);
       const competitorId = safeString(sampleData?.[`${key}_id`]);
-      const competitorName = safeString(sampleData?.[`${key}_name`], `Competitor ${allCompetitors.length + 1}`);
-      
+      const competitorName = safeString(
+        sampleData?.[`${key}_name`],
+        `Competitor ${allCompetitors.length + 1}`
+      );
+
       allCompetitors.push({
         competitorId,
         name: competitorName,
-        key
+        key,
       });
     });
 
-    // Register all competitors in the global registry to ensure consistent ordering
-    registerCompetitorsGlobally(
-      allCompetitors.map(comp => ({
+    // Register all competitors in fixed color slots for predictable color assignment
+    registerCompetitorsInFixedSlots(
+      allCompetitors.map((comp) => ({
         competitorId: comp.competitorId,
-        name: comp.name
+        name: comp.name,
       }))
     );
 
-    // Create competitor info array for rendering with standardized color assignment
+    // Create competitor info array for rendering with fixed color assignment
     const competitorInfo = allCompetitors.map((comp) => {
-      // Get global stable index for consistent coloring across all charts
-      const globalStableIndex = getGlobalStableIndex({
+      // Get fixed color slot for predictable competitor coloring
+      const colorInfo = getCompetitorFixedColorInfo({
         competitorId: comp.competitorId,
-        name: comp.name
+        name: comp.name,
       });
-      
-      // Use standardized color assignment with global stable index
-      const colorIndex = getCompetitorColorIndexStandardized({
+
+      const color = getCompetitorFixedColor({
         competitorId: comp.competitorId,
-        name: comp.name
-      }, globalStableIndex);
-      
-      const color = getCompetitorColorStandardized({
-        competitorId: comp.competitorId,
-        name: comp.name
-      }, globalStableIndex);
+        name: comp.name,
+      });
+
 
       return {
         key: comp.key,
         name: comp.name,
         competitorId: comp.competitorId,
-        colorIndex,
+        colorIndex: colorInfo.colorSlot,
         color,
       };
     });
@@ -253,29 +281,34 @@ export default function CompetitiveGapChart({
         topic: gap.topicName,
         yourBrand: gap.yourBrandScore,
       };
-      
+
       // Map competitor data to proper competitor keys for consistent coloring
-      gap.competitorData.forEach((comp: { 
-        score: string | number; 
-        competitorId?: string; 
-        name?: string; 
-      }, compIndex: number) => {
-        // Find matching competitor info for proper key assignment
-        const matchingCompetitor = competitorInfo.find(
-          (info) => 
-            info.competitorId === comp.competitorId || 
-            info.name === comp.name ||
-            info.name.includes(String(comp.name || ''))
-        );
-        
-        if (matchingCompetitor) {
-          data[matchingCompetitor.key] = comp.score;
-        } else {
-          // Fallback to generic key if no match found
-          data[`competitor${compIndex + 1}`] = comp.score;
+      gap.competitorData.forEach(
+        (
+          comp: {
+            score: string | number;
+            competitorId?: string;
+            name?: string;
+          },
+          compIndex: number
+        ) => {
+          // Find matching competitor info for proper key assignment
+          const matchingCompetitor = competitorInfo.find(
+            (info) =>
+              info.competitorId === comp.competitorId ||
+              info.name === comp.name ||
+              info.name.includes(String(comp.name || ""))
+          );
+
+          if (matchingCompetitor) {
+            data[matchingCompetitor.key] = comp.score;
+          } else {
+            // Fallback to generic key if no match found
+            data[`competitor${compIndex + 1}`] = comp.score;
+          }
         }
-      });
-      
+      );
+
       return data;
     });
 
@@ -441,7 +474,7 @@ export default function CompetitiveGapChart({
                     radius={[4, 4, 0, 0]}
                   >
                     {processedData.barChartData.map((_, index) => (
-                      <Cell 
+                      <Cell
                         key={`your-brand-cell-${index}`}
                         fill={getYourBrandColor()}
                         stroke={getYourBrandColor()}
@@ -458,7 +491,7 @@ export default function CompetitiveGapChart({
                       radius={[4, 4, 0, 0]}
                     >
                       {processedData.barChartData.map((_, index) => (
-                        <Cell 
+                        <Cell
                           key={`${competitor.key}-cell-${index}`}
                           fill={competitor.color}
                           stroke={competitor.color}
@@ -485,11 +518,18 @@ export default function CompetitiveGapChart({
                       color: getYourBrandColor(),
                       colorName: "Primary",
                     },
-                    ...processedData.competitorInfo.map((competitor) => ({
-                      name: competitor.name,
-                      color: competitor.color,
-                      colorName: getColorInfo(competitor.colorIndex).name,
-                    })),
+                    ...processedData.competitorInfo.map((competitor) => {
+                      // Get color info using fixed color slot system
+                      const colorInfo = getCompetitorFixedColorInfo({
+                        competitorId: competitor.competitorId,
+                        name: competitor.name,
+                      });
+                      return {
+                        name: competitor.name,
+                        color: competitor.color,
+                        colorName: colorInfo.name,
+                      };
+                    }),
                   ]}
                 />
               </div>
@@ -714,22 +754,33 @@ export default function CompetitiveGapChart({
                   <Scatter name="Topics" dataKey="y" fill={getYourBrandColor()}>
                     {processedData.opportunityMatrix.map((entry, index) => {
                       // Color points based on performance vs market competitiveness
-                      const performanceLevel = entry.y > 70 ? 'high' : entry.y > 40 ? 'medium' : 'low';
-                      const competitivenessLevel = entry.x > 70 ? 'high' : entry.x > 40 ? 'medium' : 'low';
-                      
+                      const performanceLevel =
+                        entry.y > 70 ? "high" : entry.y > 40 ? "medium" : "low";
+                      const competitivenessLevel =
+                        entry.x > 70 ? "high" : entry.x > 40 ? "medium" : "low";
+
                       let fillColor = getYourBrandColor(); // Default to your brand color
-                      
+
                       // Color coding based on opportunity/threat assessment
-                      if (performanceLevel === 'low' && competitivenessLevel === 'high') {
-                        fillColor = 'hsl(var(--destructive))'; // Red for threats (low performance, high competition)
-                      } else if (performanceLevel === 'high' && competitivenessLevel === 'low') {
-                        fillColor = 'hsl(var(--success))'; // Green for strong positions
-                      } else if (performanceLevel === 'low' && competitivenessLevel === 'low') {
-                        fillColor = 'hsl(var(--warning))'; // Orange for opportunities (low performance, low competition)
+                      if (
+                        performanceLevel === "low" &&
+                        competitivenessLevel === "high"
+                      ) {
+                        fillColor = "hsl(var(--destructive))"; // Red for threats (low performance, high competition)
+                      } else if (
+                        performanceLevel === "high" &&
+                        competitivenessLevel === "low"
+                      ) {
+                        fillColor = "hsl(var(--success))"; // Green for strong positions
+                      } else if (
+                        performanceLevel === "low" &&
+                        competitivenessLevel === "low"
+                      ) {
+                        fillColor = "hsl(var(--warning))"; // Orange for opportunities (low performance, low competition)
                       }
-                      
+
                       return (
-                        <Cell 
+                        <Cell
                           key={`cell-${index}`}
                           fill={fillColor}
                           stroke={fillColor}
