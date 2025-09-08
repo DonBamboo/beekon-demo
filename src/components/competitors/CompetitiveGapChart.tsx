@@ -123,28 +123,32 @@ function safeString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+// Interface for competitor data from gap analysis
+interface CompetitorData {
+  competitorId: string;
+  competitor_name: string;
+  competitorDomain: string;
+  score: number;
+  avgRankPosition: number | null;
+  totalMentions: number;
+}
+
 // Helper function to extract competitor ID with multiple fallbacks
-function extractCompetitorId(comp: any): string {
+function extractCompetitorId(comp: CompetitorData): string {
   // Try multiple possible ID fields in order of preference
   return (
     safeString(comp.competitorId) ||
-    safeString(comp.competitor_id) ||
-    safeString(comp.id) ||
-    safeString(comp.domain) ||
-    safeString(comp.competitor_domain) ||
-    safeString(comp.name) ||
     safeString(comp.competitor_name) ||
+    safeString(comp.competitorDomain) ||
     `competitor_${Math.random().toString(36).substr(2, 9)}` // Generate unique fallback
   );
 }
 
 // Helper function to extract competitor name with fallbacks
-function extractCompetitorName(comp: any, fallbackIndex: number): string {
+function extractCompetitorName(comp: CompetitorData, fallbackIndex: number): string {
   return (
     safeString(comp.competitor_name) ||
-    safeString(comp.name) ||
-    safeString(comp.domain) ||
-    safeString(comp.competitor_domain) ||
+    safeString(comp.competitorDomain) ||
     safeString(comp.competitorId) ||
     `Competitor ${fallbackIndex + 1}`
   );

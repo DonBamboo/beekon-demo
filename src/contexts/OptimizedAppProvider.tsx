@@ -19,7 +19,7 @@ class ContextErrorBoundary extends React.Component<
     return { hasError: true, error };
   }
 
-  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  override componentDidCatch(_error: Error, _errorInfo: React.ErrorInfo) {
     // Context Error Boundary caught an error - handled by error boundary UI
   }
 

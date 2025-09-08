@@ -55,7 +55,7 @@ export default function CompetitorsList({
     competitorsWithStatus.map(competitor => ({
       id: competitor.id,
       competitorId: competitor.id,
-      competitor_name: competitor.competitor_name,
+      competitor_name: competitor.competitor_name || undefined,
       name: competitor.competitor_name || competitor.competitor_domain,
       competitor_domain: competitor.competitor_domain
     }))
@@ -187,7 +187,7 @@ export default function CompetitorsList({
                         backgroundColor: getCompetitorFixedColor({
                           id: competitor.id,
                           competitorId: competitor.id,
-                          competitor_name: competitor.competitor_name,
+                          competitor_name: competitor.competitor_name || undefined,
                           name: competitor.competitor_name || competitor.competitor_domain,
                           competitor_domain: competitor.competitor_domain
                         })

@@ -879,9 +879,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             websiteIds
           );
           
-          // Log final monitoring status
-          const { websiteStatusService } = await import("@/services/websiteStatusService");
-          const monitoringStatus = websiteStatusService.getMonitoringStatus();
           // Real-time monitoring established for crawling websites
         }
       }).finally(() => {
@@ -977,7 +974,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         await websiteStatusService.startMonitoringWebsite(
           websiteId,
           currentWorkspace.id,
-          (update) => {
+          (update: { websiteId: string; status: string; lastCrawledAt?: string | null; updatedAt: string }) => {
             // Dispatch update event for context integration
             if (typeof window !== "undefined") {
               window.dispatchEvent(

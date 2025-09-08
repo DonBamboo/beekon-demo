@@ -44,7 +44,7 @@ export function validateApiEndpoint(endpoint: string): boolean {
   if (!endpoint || typeof endpoint !== 'string') return false;
   
   // Allow only alphanumeric, hyphens, underscores, and forward slashes
-  const validPattern = /^[a-zA-Z0-9\-_\/]+$/;
+  const validPattern = /^[a-zA-Z0-9\-_/]+$/;
   return validPattern.test(endpoint) && endpoint.length <= 200;
 }
 

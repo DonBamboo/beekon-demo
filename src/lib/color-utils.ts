@@ -49,7 +49,6 @@ let globalCompetitorCounter = 0;
 const FIXED_COLOR_SLOTS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
 const fixedColorSlotRegistry = new Map<string, number>(); // competitorKey -> colorSlot
 const usedColorSlots = new Set<number>(); // Track which slots are in use
-let nextAvailableSlot = 0; // Index into FIXED_COLOR_SLOTS array
 
 /**
  * Simple hash function for consistent color assignment based on string
@@ -356,7 +355,7 @@ function loadFixedColorAssignments(): void {
   try {
     const stored = localStorage.getItem('beekon-competitor-colors');
     if (stored) {
-      const data = JSON.parse(stored) as { assignments: Array<[string, number]>; nextSlot: number };
+      const data = JSON.parse(stored) as { assignments: Array<[string, number]> };
       
       // Restore assignments
       fixedColorSlotRegistry.clear();
@@ -366,8 +365,6 @@ function loadFixedColorAssignments(): void {
         fixedColorSlotRegistry.set(key, colorSlot);
         usedColorSlots.add(colorSlot);
       });
-      
-      nextAvailableSlot = data.nextSlot;
     }
   } catch (error) {
     // If loading fails, start fresh
@@ -381,8 +378,7 @@ function loadFixedColorAssignments(): void {
 function saveFixedColorAssignments(): void {
   try {
     const data = {
-      assignments: Array.from(fixedColorSlotRegistry.entries()),
-      nextSlot: nextAvailableSlot
+      assignments: Array.from(fixedColorSlotRegistry.entries())
     };
     localStorage.setItem('beekon-competitor-colors', JSON.stringify(data));
   } catch (error) {
@@ -397,7 +393,7 @@ function saveFixedColorAssignments(): void {
 function getNextAvailableColorSlot(): number | null {
   // Find first unused slot
   for (let i = 0; i < FIXED_COLOR_SLOTS.length; i++) {
-    const slot = FIXED_COLOR_SLOTS[i];
+    const slot = FIXED_COLOR_SLOTS[i]!; // We know this exists since i < length
     if (!usedColorSlots.has(slot)) {
       return slot;
     }
@@ -421,7 +417,7 @@ function assignFixedColorSlot(competitorKey: string): number {
   if (colorSlot === null) {
     // All slots used, cycle back to first slot (fallback)
     console.warn('All competitor color slots are used. Cycling back to first slot.');
-    const fallbackSlot = FIXED_COLOR_SLOTS[0];
+    const fallbackSlot = FIXED_COLOR_SLOTS[0]!; // We know the array has elements
     fixedColorSlotRegistry.set(competitorKey, fallbackSlot);
     return fallbackSlot;
   }
@@ -452,7 +448,7 @@ export function getCompetitorFixedColorSlot(competitorData: {
   const key = generateCompetitorKey(competitorData);
   
   // Load assignments if not already loaded
-  if (fixedColorSlotRegistry.size === 0 && nextAvailableSlot === 0) {
+  if (fixedColorSlotRegistry.size === 0) {
     loadFixedColorAssignments();
   }
   
@@ -466,7 +462,6 @@ export function getCompetitorFixedColorSlot(competitorData: {
 export function clearFixedColorAssignments(): void {
   fixedColorSlotRegistry.clear();
   usedColorSlots.clear();
-  nextAvailableSlot = 0;
   
   try {
     localStorage.removeItem('beekon-competitor-colors');
