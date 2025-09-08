@@ -33,7 +33,7 @@ export interface CompetitiveGapAnalysis {
   topicName: string;
   yourBrandScore: number;
   competitorData: Array<{
-    competitorId: string;
+    competitor_id: string;
     competitor_name: string;
     competitorDomain: string;
     score: number;
@@ -232,7 +232,7 @@ export class CompetitorAnalysisService extends BaseService {
       yourBrandScore: Number(row.your_brand_score || 0),
       competitorData: Array.isArray(row.competitor_data)
         ? (row.competitor_data as Array<{
-            competitorId: string;
+            competitor_id: string;
             competitor_name: string;
             competitorDomain: string;
             score: number;
@@ -346,7 +346,7 @@ export class CompetitorAnalysisService extends BaseService {
         )}%`,
         impact: topic.yourBrandScore < 20 ? "high" : "medium",
         topicId: topic.topicId,
-        competitorId: topCompetitor.competitorId,
+        competitorId: topCompetitor.competitor_id,
         recommendations: [
           "Create more comprehensive content on this topic",
           "Optimize for better ranking positions",
