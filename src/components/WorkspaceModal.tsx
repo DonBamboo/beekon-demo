@@ -23,10 +23,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
-import {
-  useWorkspace,
-  Workspace,
-} from "@/hooks/useWorkspace";
+import { useWorkspace, Workspace } from "@/hooks/useWorkspace";
 import { isValidSubscriptionTier } from "@/utils/typeGuards";
 import { Building, Plus, Save } from "lucide-react";
 
@@ -35,8 +32,18 @@ const workspaceSchema = z.object({
     .string()
     .min(1, "Workspace name is required")
     .max(50, "Name must be 50 characters or less"),
-  subscriptionTier: z.enum(["free", "starter", "pro", "professional", "enterprise"]) as z.ZodEnum<["free", "starter", "pro", "professional", "enterprise"]>,
-  creditLimit: z.number().min(1, "Credit limit must be at least 1").max(999, "Credit limit cannot exceed 999").optional(),
+  subscriptionTier: z.enum([
+    "free",
+    "starter",
+    "pro",
+    "professional",
+    "enterprise",
+  ]) as z.ZodEnum<["free", "starter", "pro", "professional", "enterprise"]>,
+  creditLimit: z
+    .number()
+    .min(1, "Credit limit must be at least 1")
+    .max(999, "Credit limit cannot exceed 999")
+    .optional(),
 });
 
 type WorkspaceFormData = z.infer<typeof workspaceSchema>;

@@ -36,7 +36,11 @@ import NoAnalyticsState from "@/components/competitors/NoAnalyticsState";
 import CompetitorInsights from "@/components/competitors/CompetitorInsights";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { addProtocol } from "@/lib/utils";
-import { getCompetitorColor, getYourBrandColor } from "@/lib/color-utils";
+import { 
+  getCompetitorFixedColor,
+  getYourBrandColor,
+  registerCompetitorsInFixedSlots
+} from "@/lib/color-utils";
 
 export default function Competitors() {
   const { currentWorkspace, loading: workspaceLoading } = useWorkspace();
@@ -81,24 +85,33 @@ export default function Competitors() {
   // Market Share Data is handled by ShareOfVoiceChart component directly
   // Share of Voice Data (raw percentages)
   const shareOfVoiceChartData = useMemo(() => {
-    return (
-      (analytics?.shareOfVoiceData as Record<string, unknown>[])?.map(
-        (item: Record<string, unknown>, index: number) => ({
-          name: item.name as string,
-          value: item.shareOfVoice as number,
-          shareOfVoice: item.shareOfVoice as number,
-          totalMentions: item.totalMentions as number,
-          totalAnalyses: item.totalAnalyses as number,
-          avgRank: item.avgRank as number,
-          competitorId: item.competitorId as string,
-          dataType: (item.dataType as string) === "market_share" ? "market_share" as const : "share_of_voice" as const,
-          fill:
-            item.name === "Your Brand"
-              ? getYourBrandColor()
-              : getCompetitorColor(item.competitorId as string, item.name as string, index),
-        })
-      ) || []
+    const rawData = (analytics?.shareOfVoiceData as Record<string, unknown>[]) || [];
+    
+    // Filter out "Your Brand" for competitor processing and register all competitors in fixed slots
+    const competitorData = rawData.filter(item => item.name !== "Your Brand");
+    registerCompetitorsInFixedSlots(
+      competitorData.map(item => ({
+        competitorId: item.competitorId as string,
+        name: item.name as string
+      }))
     );
+    
+    return rawData.map((item: Record<string, unknown>) => ({
+      name: item.name as string,
+      value: item.shareOfVoice as number,
+      shareOfVoice: item.shareOfVoice as number,
+      totalMentions: item.totalMentions as number,
+      totalAnalyses: item.totalAnalyses as number,
+      avgRank: item.avgRank as number,
+      competitorId: item.competitorId as string,
+      dataType: (item.dataType as string) === "market_share" ? "market_share" as const : "share_of_voice" as const,
+      fill: item.name === "Your Brand"
+        ? getYourBrandColor()
+        : getCompetitorFixedColor({
+            competitorId: item.competitorId as string,
+            name: item.name as string
+          }),
+    }));
   }, [analytics?.shareOfVoiceData]);
 
   // Derive additional data for backward compatibility

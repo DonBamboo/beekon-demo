@@ -139,61 +139,56 @@ class AnalyticsService {
     websiteId: string,
     filters?: AnalysisFilters
   ): Promise<AnalysisAnalytics> {
-    try {
-      // Build base query for complete dataset
-      let query = supabase
-        .schema("beekon_data")
-        .from("llm_analysis_results")
-        .select(
-          `
-          *,
-          prompts!inner (
-            id,
-            prompt_text,
-            topic_id,
-            created_at,
-            topics!inner (
-              id,
-              topic_name,
-              website_id
-            )
-          )
+    // Build base query for complete dataset
+    let query = supabase
+      .schema("beekon_data")
+      .from("llm_analysis_results")
+      .select(
         `
+        *,
+        prompts!inner (
+          id,
+          prompt_text,
+          topic_id,
+          created_at,
+          topics!inner (
+            id,
+            topic_name,
+            website_id
+          )
         )
-        .eq("website_id", websiteId);
+      `
+      )
+      .eq("website_id", websiteId);
 
-      // Apply filters without pagination
-      if (filters) {
-        if (filters.dateRange && typeof filters.dateRange === "object") {
-          query = query
-            .gte("created_at", filters.dateRange.start)
-            .lte("created_at", filters.dateRange.end);
-        }
-
-        if (filters.topic && filters.topic !== "all") {
-          query = query.eq("prompts.topics.topic_name", filters.topic);
-        }
-
-        if (filters.llmProvider && filters.llmProvider !== "all") {
-          query = query.eq("llm_provider", filters.llmProvider);
-        }
-
-        if (filters.searchQuery) {
-          // Apply search query to relevant text fields
-          query = query.or(`summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%`);
-        }
+    // Apply filters without pagination
+    if (filters) {
+      if (filters.dateRange && typeof filters.dateRange === "object") {
+        query = query
+          .gte("created_at", filters.dateRange.start)
+          .lte("created_at", filters.dateRange.end);
       }
 
-      const { data: results, error } = await query;
+      if (filters.topic && filters.topic !== "all") {
+        query = query.eq("prompts.topics.topic_name", filters.topic);
+      }
 
-      if (error) throw error;
+      if (filters.llmProvider && filters.llmProvider !== "all") {
+        query = query.eq("llm_provider", filters.llmProvider);
+      }
 
-      // Calculate analytics from complete dataset
-      return this.calculateAnalysisAnalytics((results || []) as AnalysisResultData[]);
-    } catch (error) {
-      // Error handling - console removed for security
-      throw error;
+      if (filters.searchQuery) {
+        // Apply search query to relevant text fields
+        query = query.or(`summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%`);
+      }
     }
+
+    const { data: results, error } = await query;
+
+    if (error) throw error;
+
+    // Calculate analytics from complete dataset
+    return this.calculateAnalysisAnalytics((results || []) as AnalysisResultData[]);
   }
 
   /**
@@ -203,21 +198,16 @@ class AnalyticsService {
     websiteId: string,
     _filters?: Record<string, unknown>
   ): Promise<CompetitorAnalytics> {
-    try {
-      // Get complete competitor data with analysis results
-      const { data: competitorData, error } = await supabase
-        .schema("beekon_data")
-        .from("mv_competitor_performance")
-        .select("*")
-        .eq("website_id", websiteId);
+    // Get complete competitor data with analysis results
+    const { data: competitorData, error } = await supabase
+      .schema("beekon_data")
+      .from("mv_competitor_performance")
+      .select("*")
+      .eq("website_id", websiteId);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      return this.calculateCompetitorAnalytics(competitorData || []);
-    } catch (error) {
-      // Error handling - console removed for security
-      throw error;
-    }
+    return this.calculateCompetitorAnalytics(competitorData || []);
   }
 
   /**
@@ -227,21 +217,16 @@ class AnalyticsService {
     websiteIds: string[],
     _filters?: Record<string, unknown>
   ): Promise<DashboardAnalytics> {
-    try {
-      // Get aggregated data across all websites
-      const { data: dashboardData, error } = await supabase
-        .schema("beekon_data")
-        .from("llm_analysis_results")
-        .select("*")
-        .in("website_id", websiteIds);
+    // Get aggregated data across all websites
+    const { data: dashboardData, error } = await supabase
+      .schema("beekon_data")
+      .from("llm_analysis_results")
+      .select("*")
+      .in("website_id", websiteIds);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      return this.calculateDashboardAnalytics(dashboardData || []);
-    } catch (error) {
-      // Error handling - console removed for security
-      throw error;
-    }
+    return this.calculateDashboardAnalytics(dashboardData || []);
   }
 
   /**

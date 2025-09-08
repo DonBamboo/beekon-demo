@@ -199,9 +199,9 @@ export default function Websites() {
       return;
     }
 
-    // Validate domain format
+    // Validate domain format - allow domains with paths, query params, and trailing slashes
     const domainRegex =
-      /^(https?:\/\/)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(\/.*)?$/i;
+      /^(https?:\/\/)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(:[0-9]+)?(\/.*)?\/?$/i;
 
     if (!domainRegex.test(domain)) {
       toast({

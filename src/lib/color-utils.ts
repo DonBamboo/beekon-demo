@@ -41,6 +41,15 @@ export const CHART_COLOR_INFO = {
 // Cache for stable competitor color assignments
 const competitorColorCache = new Map<string, number>();
 
+// Global competitor registry for consistent ordering across all charts
+const globalCompetitorRegistry = new Map<string, number>();
+let globalCompetitorCounter = 0;
+
+// Fixed color slot assignment system for predictable competitor colors
+const FIXED_COLOR_SLOTS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
+const fixedColorSlotRegistry = new Map<string, number>(); // competitorKey -> colorSlot
+const usedColorSlots = new Set<number>(); // Track which slots are in use
+
 /**
  * Simple hash function for consistent color assignment based on string
  */
@@ -52,6 +61,155 @@ function simpleHash(str: string): number {
     hash = hash & hash; // Convert to 32bit integer
   }
   return Math.abs(hash);
+}
+
+/**
+ * Generate a standardized competitor key for consistent color assignment
+ * @param competitorData - Object containing competitor identification data
+ * @returns Standardized key for color assignment
+ */
+export function generateCompetitorKey(competitorData: {
+  id?: string;
+  competitorId?: string; 
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}): string {
+  // Priority order: competitorId > id > competitor_name > name > competitor_domain
+  const identifier = competitorData.competitorId || 
+                    competitorData.id || 
+                    competitorData.competitor_name || 
+                    competitorData.name || 
+                    competitorData.competitor_domain;
+                    
+  if (!identifier) {
+    throw new Error('Competitor data must contain at least one identifier');
+  }
+  
+  return identifier;
+}
+
+/**
+ * Register competitors in the global registry to ensure consistent ordering across all charts
+ * @param competitors - Array of competitor objects
+ */
+export function registerCompetitorsGlobally<T extends {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}>(competitors: T[]): void {
+  // Sort competitors by their generated key to ensure consistent ordering
+  const sortedCompetitors = competitors
+    .map(comp => ({ competitor: comp, key: generateCompetitorKey(comp) }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  
+  // Register each competitor in the global registry if not already present
+  sortedCompetitors.forEach(({ key }) => {
+    if (!globalCompetitorRegistry.has(key)) {
+      globalCompetitorRegistry.set(key, globalCompetitorCounter);
+      globalCompetitorCounter++;
+    }
+  });
+}
+
+/**
+ * Get the global stable index for a competitor
+ * @param competitorData - Object containing competitor identification data
+ * @returns Global stable index for the competitor
+ */
+export function getGlobalStableIndex(competitorData: {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}): number {
+  const key = generateCompetitorKey(competitorData);
+  const index = globalCompetitorRegistry.get(key);
+  
+  if (index === undefined) {
+    // If competitor is not registered, register it now
+    globalCompetitorRegistry.set(key, globalCompetitorCounter);
+    const newIndex = globalCompetitorCounter;
+    globalCompetitorCounter++;
+    return newIndex;
+  }
+  
+  return index;
+}
+
+/**
+ * Create a stable competitor index mapping for consistent color assignments
+ * @param competitors - Array of competitor objects
+ * @returns Map of competitor keys to stable indices
+ * @deprecated Use registerCompetitorsGlobally and getGlobalStableIndex instead
+ */
+export function createStableCompetitorIndexMap<T extends {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}>(competitors: T[]): Map<string, number> {
+  const indexMap = new Map<string, number>();
+  let counter = 0;
+  
+  // Sort competitors by their generated key to ensure consistent ordering
+  const sortedCompetitors = competitors
+    .map(comp => ({ competitor: comp, key: generateCompetitorKey(comp) }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  
+  sortedCompetitors.forEach(({ key }) => {
+    if (!indexMap.has(key)) {
+      indexMap.set(key, counter);
+      counter++;
+    }
+  });
+  
+  return indexMap;
+}
+
+/**
+ * Get a consistent color index for a competitor using standardized key generation
+ * @param competitorData - Object containing competitor identification data
+ * @param stableIndex - Optional stable index from createStableCompetitorIndexMap
+ * @returns Chart color index (2-25)
+ */
+export function getCompetitorColorIndexStandardized(
+  competitorData: {
+    id?: string;
+    competitorId?: string;
+    name?: string;
+    competitor_name?: string;
+    competitor_domain?: string;
+  },
+  stableIndex?: number
+): number {
+  const key = generateCompetitorKey(competitorData);
+  
+  // Check cache first for stable assignment
+  if (competitorColorCache.has(key)) {
+    return competitorColorCache.get(key)!;
+  }
+  
+  // Generate consistent color index based on key
+  let colorIndex: number;
+  
+  if (stableIndex !== undefined) {
+    // Use provided stable index for consistent ordering across charts
+    colorIndex = AVAILABLE_CHART_COLORS[stableIndex % AVAILABLE_CHART_COLORS.length] ?? 0;
+  } else {
+    // Hash-based assignment for stable colors across sessions
+    const hash = simpleHash(key);
+    colorIndex = AVAILABLE_CHART_COLORS[hash % AVAILABLE_CHART_COLORS.length] ?? 0;
+  }
+  
+  // Cache the assignment
+  competitorColorCache.set(key, colorIndex);
+  
+  return colorIndex;
 }
 
 /**
@@ -90,6 +248,26 @@ export function getCompetitorColorIndex(
   competitorColorCache.set(key, colorIndex);
   
   return colorIndex;
+}
+
+/**
+ * Get CSS color value for a competitor using standardized key generation
+ * @param competitorData - Object containing competitor identification data
+ * @param stableIndex - Optional stable index from createStableCompetitorIndexMap
+ * @returns CSS hsl() color value
+ */
+export function getCompetitorColorStandardized(
+  competitorData: {
+    id?: string;
+    competitorId?: string;
+    name?: string;
+    competitor_name?: string;
+    competitor_domain?: string;
+  },
+  stableIndex?: number
+): string {
+  const colorIndex = getCompetitorColorIndexStandardized(competitorData, stableIndex);
+  return `hsl(var(--chart-${colorIndex}))`;
 }
 
 /**
@@ -160,6 +338,202 @@ export function generateCompetitorColorScheme<T extends { id?: string; name?: st
  */
 export function clearCompetitorColorCache(): void {
   competitorColorCache.clear();
+}
+
+/**
+ * Clear the global competitor registry (useful for testing or reset scenarios)
+ */
+export function clearGlobalCompetitorRegistry(): void {
+  globalCompetitorRegistry.clear();
+  globalCompetitorCounter = 0;
+}
+
+/**
+ * Load competitor color assignments from localStorage
+ */
+function loadFixedColorAssignments(): void {
+  try {
+    const stored = localStorage.getItem('beekon-competitor-colors');
+    if (stored) {
+      const data = JSON.parse(stored) as { assignments: Array<[string, number]> };
+      
+      // Restore assignments
+      fixedColorSlotRegistry.clear();
+      usedColorSlots.clear();
+      
+      data.assignments.forEach(([key, colorSlot]) => {
+        fixedColorSlotRegistry.set(key, colorSlot);
+        usedColorSlots.add(colorSlot);
+      });
+    }
+  } catch (error) {
+    // If loading fails, start fresh
+    console.warn('Failed to load competitor color assignments:', error);
+  }
+}
+
+/**
+ * Save competitor color assignments to localStorage
+ */
+function saveFixedColorAssignments(): void {
+  try {
+    const data = {
+      assignments: Array.from(fixedColorSlotRegistry.entries())
+    };
+    localStorage.setItem('beekon-competitor-colors', JSON.stringify(data));
+  } catch (error) {
+    console.warn('Failed to save competitor color assignments:', error);
+  }
+}
+
+/**
+ * Get the next available fixed color slot for a competitor
+ * @returns Color slot number (2-25) or null if all slots are used
+ */
+function getNextAvailableColorSlot(): number | null {
+  // Find first unused slot
+  for (let i = 0; i < FIXED_COLOR_SLOTS.length; i++) {
+    const slot = FIXED_COLOR_SLOTS[i]!; // We know this exists since i < length
+    if (!usedColorSlots.has(slot)) {
+      return slot;
+    }
+  }
+  return null; // All slots are used
+}
+
+/**
+ * Assign a fixed color slot to a competitor
+ * @param competitorKey - Standardized competitor key
+ * @returns Assigned color slot number
+ */
+function assignFixedColorSlot(competitorKey: string): number {
+  // Check if already assigned
+  if (fixedColorSlotRegistry.has(competitorKey)) {
+    return fixedColorSlotRegistry.get(competitorKey)!;
+  }
+  
+  // Get next available slot
+  const colorSlot = getNextAvailableColorSlot();
+  if (colorSlot === null) {
+    // All slots used, cycle back to first slot (fallback)
+    console.warn('All competitor color slots are used. Cycling back to first slot.');
+    const fallbackSlot = FIXED_COLOR_SLOTS[0]!; // We know the array has elements
+    fixedColorSlotRegistry.set(competitorKey, fallbackSlot);
+    return fallbackSlot;
+  }
+  
+  // Assign the slot
+  fixedColorSlotRegistry.set(competitorKey, colorSlot);
+  usedColorSlots.add(colorSlot);
+  
+  // Save to persistence
+  saveFixedColorAssignments();
+  
+  return colorSlot;
+}
+
+/**
+ * Get fixed color slot for a competitor (assigns one if not exists)
+ * @param competitorData - Object containing competitor identification data
+ * @returns Fixed color slot number (2-25)
+ */
+export function getCompetitorFixedColorSlot(competitorData: {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}): number {
+  // Generate standardized competitor key
+  const key = generateCompetitorKey(competitorData);
+  
+  // Load assignments if not already loaded
+  if (fixedColorSlotRegistry.size === 0) {
+    loadFixedColorAssignments();
+  }
+  
+  // Get or assign fixed color slot
+  return assignFixedColorSlot(key);
+}
+
+/**
+ * Clear all fixed color assignments (useful for reset scenarios)
+ */
+export function clearFixedColorAssignments(): void {
+  fixedColorSlotRegistry.clear();
+  usedColorSlots.clear();
+  
+  try {
+    localStorage.removeItem('beekon-competitor-colors');
+  } catch (error) {
+    console.warn('Failed to clear competitor color assignments from storage:', error);
+  }
+}
+
+/**
+ * Get all current fixed color assignments (useful for debugging/admin)
+ */
+export function getFixedColorAssignments(): Array<{ key: string; colorSlot: number; colorName: string }> {
+  return Array.from(fixedColorSlotRegistry.entries()).map(([key, colorSlot]) => ({
+    key,
+    colorSlot,
+    colorName: getColorInfo(colorSlot).name
+  }));
+}
+
+/**
+ * Get CSS color value for a competitor using fixed color slots
+ * @param competitorData - Object containing competitor identification data  
+ * @returns CSS hsl() color value
+ */
+export function getCompetitorFixedColor(competitorData: {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}): string {
+  const colorSlot = getCompetitorFixedColorSlot(competitorData);
+  return `hsl(var(--chart-${colorSlot}))`;
+}
+
+/**
+ * Get color info for a competitor using fixed color slots
+ * @param competitorData - Object containing competitor identification data
+ * @returns Color information including name and hex value
+ */
+export function getCompetitorFixedColorInfo(competitorData: {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}): { name: string; hex: string; colorSlot: number } {
+  const colorSlot = getCompetitorFixedColorSlot(competitorData);
+  const colorInfo = getColorInfo(colorSlot);
+  return {
+    name: colorInfo.name,
+    hex: colorInfo.hex,
+    colorSlot
+  };
+}
+
+/**
+ * Register competitors in fixed color slot system (replaces global registry for components)
+ * @param competitors - Array of competitor objects
+ */
+export function registerCompetitorsInFixedSlots<T extends {
+  id?: string;
+  competitorId?: string;
+  name?: string;
+  competitor_name?: string;
+  competitor_domain?: string;
+}>(competitors: T[]): void {
+  // Simply iterate through competitors to assign them fixed slots
+  // The assignment happens automatically when getCompetitorFixedColorSlot is called
+  competitors.forEach(competitor => {
+    getCompetitorFixedColorSlot(competitor);
+  });
 }
 
 /**

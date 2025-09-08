@@ -76,11 +76,31 @@ export default {
 					foreground: 'hsl(var(--warning-foreground))'
 				},
 				chart: {
-					'1': 'hsl(var(--chart-1))',
-					'2': 'hsl(var(--chart-2))',
-					'3': 'hsl(var(--chart-3))',
-					'4': 'hsl(var(--chart-4))',
-					'5': 'hsl(var(--chart-5))'
+					'1': 'hsl(var(--chart-1))',    // Your Brand (Primary)
+					'2': 'hsl(var(--chart-2))',    // Blue
+					'3': 'hsl(var(--chart-3))',    // Green
+					'4': 'hsl(var(--chart-4))',    // Orange
+					'5': 'hsl(var(--chart-5))',    // Purple
+					'6': 'hsl(var(--chart-6))',    // Red
+					'7': 'hsl(var(--chart-7))',    // Teal
+					'8': 'hsl(var(--chart-8))',    // Violet
+					'9': 'hsl(var(--chart-9))',    // Amber
+					'10': 'hsl(var(--chart-10))',  // Pink
+					'11': 'hsl(var(--chart-11))',  // Cyan
+					'12': 'hsl(var(--chart-12))',  // Lime
+					'13': 'hsl(var(--chart-13))',  // Rose
+					'14': 'hsl(var(--chart-14))',  // Indigo
+					'15': 'hsl(var(--chart-15))',  // Yellow
+					'16': 'hsl(var(--chart-16))',  // Emerald
+					'17': 'hsl(var(--chart-17))',  // Fuchsia
+					'18': 'hsl(var(--chart-18))',  // Sky
+					'19': 'hsl(var(--chart-19))',  // Orange Red
+					'20': 'hsl(var(--chart-20))',  // Blue Violet
+					'21': 'hsl(var(--chart-21))',  // Muted Teal
+					'22': 'hsl(var(--chart-22))',  // Burnt Orange
+					'23': 'hsl(var(--chart-23))',  // Medium Purple
+					'24': 'hsl(var(--chart-24))',  // Olive Green
+					'25': 'hsl(var(--chart-25))'   // Coral Pink
 				}
 			},
 			borderRadius: {

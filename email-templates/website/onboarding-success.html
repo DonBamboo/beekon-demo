@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Onboarding Success - Beekon AI</title>
+    <style>
+        /* Beekon AI Email Template Styles */
+
+        /* Base email styles */
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+        }
+        
+        .email-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px 20px;
+            text-align: center;
+        }
+        
+        .logo {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+        
+        .email-body {
+            padding: 40px 30px;
+        }
+        
+        .hero-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .hero-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 24px;
+        }
+        
+        .hero-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333333;
+            margin: 0 0 10px 0;
+        }
+        
+        .hero-subtitle {
+            font-size: 16px;
+            color: #666666;
+            margin: 0;
+        }
+        
+        .content-section {
+            margin-bottom: 30px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333333;
+            margin: 0 0 15px 0;
+        }
+        
+        .metrics-grid {
+            display: table;
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 10px;
+            margin: 20px 0;
+        }
+        
+        .metric-item {
+            display: table-cell;
+            background-color: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            width: 33.33%;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            display: block;
+        }
+        
+        .metric-label {
+            font-size: 14px;
+            color: #666666;
+            margin-top: 5px;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .data-table th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-success {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        
+        .email-footer {
+            background-color: #f9fafb;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .footer-links {
+            margin: 20px 0;
+        }
+        
+        .footer-links a {
+            color: #667eea;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 14px;
+        }
+        
+        .unsubscribe {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 20px;
+        }
+        
+        .unsubscribe a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        /* Responsive styles */
+        @media only screen and (max-width: 600px) {
+            .email-body {
+                padding: 30px 20px;
+            }
+            
+            .metrics-grid {
+                display: block;
+            }
+            
+            .metric-item {
+                display: block;
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="email-container">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">🌐</div>
+            <h1 class="hero-title">Welcome, {{user_name}}!</h1>
+            <p class="hero-subtitle">Your website <strong>{{website_domain}}</strong> has been successfully onboarded</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Initial Analysis Complete</h2>
+            <p>We've successfully crawled your website and generated initial analysis data. Here's what we found:</p>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{pages_crawled}}</span>
+                    <div class="metric-label">Pages Crawled</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{topics_generated}}</span>
+                    <div class="metric-label">Topics Generated</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{initial_ranking}}</span>
+                    <div class="metric-label">Initial Ranking</div>
+                </div>
+            </div>
+            
+            <table class="data-table">
+                <tr>
+                    <th>Generated Topics</th>
+                    <th>Status</th>
+                </tr>
+                {{#each topics}}
+                <tr>
+                    <td>{{topic_name}}</td>
+                    <td><span class="status-badge status-success">Ready</span></td>
+                </tr>
+                {{/each}}
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Next Steps</h2>
+            <p>Your website is now ready for comprehensive analysis. We recommend:</p>
+            <ul>
+                <li>Review the generated topics and customize them if needed</li>
+                <li>Add your competitors for comparative analysis</li>
+                <li>Schedule regular analysis updates</li>
+            </ul>
+            
+            <a href="{{dashboard_url}}" class="cta-button">View Your Dashboard</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

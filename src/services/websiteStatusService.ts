@@ -1,5 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import { RealtimeChannel } from "@supabase/supabase-js";
+import { 
+  REALTIME_LISTEN_TYPES, 
+  REALTIME_POSTGRES_CHANGES_LISTEN_EVENT, 
+  RealtimePostgresChangesPayload,
+  RealtimePostgresChangesFilter
+} from "@supabase/realtime-js";
 import { Website } from "@/types/database";
 
 // Website status types based on database schema
@@ -93,7 +99,6 @@ class WebsiteStatusService {
     const realtimeSuccess = await this.setupRealtimeSubscription(subscription);
     if (!realtimeSuccess) {
       this.startPollingForWorkspace(subscription);
-    } else {
     }
 
     // Start connection health monitoring
@@ -109,8 +114,8 @@ class WebsiteStatusService {
   private async setupRealtimeSubscription(subscription: StatusSubscription): Promise<boolean> {
     try {
       const channelName = `website-status-${subscription.workspaceId}`;
-      const subscriptionConfig = {
-        event: '*', // Listen to ALL events (INSERT, UPDATE, DELETE)
+      const subscriptionFilter: RealtimePostgresChangesFilter<'*'> = {
+        event: REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.ALL,
         schema: 'beekon_data',
         table: 'websites',
         filter: `workspace_id=eq.${subscription.workspaceId}`,
@@ -119,8 +124,8 @@ class WebsiteStatusService {
 
       const channel = supabase
         .channel(channelName)
-        .on('postgres_changes' as any, subscriptionConfig,
-          (payload: any) => {
+        .on(REALTIME_LISTEN_TYPES.POSTGRES_CHANGES, subscriptionFilter,
+          (payload: RealtimePostgresChangesPayload<Website>) => {
             if (!subscription.isActive) return;
 
 
@@ -163,8 +168,6 @@ class WebsiteStatusService {
           }
         )
         .subscribe((status) => {
-          const emoji = status === 'SUBSCRIBED' ? '✅' : status === 'CHANNEL_ERROR' ? '❌' : status === 'TIMED_OUT' ? '⏰' : '📡';
-          
           // Enhanced subscription health diagnostics - console removed for security
           
           if (status === 'SUBSCRIBED') {
@@ -195,8 +198,6 @@ class WebsiteStatusService {
               health.isHealthy = false;
             }
             this.handleRealtimeError(subscription);
-            
-          } else if (status === 'CLOSED') {
           }
         });
 
@@ -292,6 +293,7 @@ class WebsiteStatusService {
       });
 
     } catch (error) {
+      console.error('Failed to poll active websites:', error);
     }
   }
 
@@ -335,6 +337,7 @@ class WebsiteStatusService {
       });
 
     } catch (error) {
+      console.error('Failed to check website status:', error);
     }
   }
 
@@ -364,6 +367,7 @@ class WebsiteStatusService {
         
       }
     } catch (error) {
+      console.error('Failed to handle status update:', error);
     }
   }
 
@@ -520,8 +524,6 @@ class WebsiteStatusService {
           const isConnectionStale = !connectionHealth?.isHealthy || 
             (Date.now() - (connectionHealth?.lastSeen || 0)) > 120000; // 2 minutes
 
-          if (isConnectionStale) {
-          }
           
           websites.forEach(website => {
 
@@ -558,6 +560,7 @@ class WebsiteStatusService {
           });
 
         } catch (error) {
+          console.error('Failed to sync monitor workspace:', workspaceId, error);
         }
       }
     }, 30000); // Check every 30 seconds for more responsive fallback
@@ -645,9 +648,6 @@ class WebsiteStatusService {
     tracker.lastStatus = currentStatus;
 
     // Log event sequence info
-
-    if (potentialMissedEvents > 0) {
-    }
   }
 
   /**
@@ -776,6 +776,150 @@ class WebsiteStatusService {
         reconnectAttempts
       } : undefined,
     };
+  }
+
+  /**
+   * Get monitoring status for debugging/dashboard purposes
+   */
+  getMonitoringStatus(): {
+    totalSubscriptions: number;
+    activeSubscriptions: number;
+    totalWebsites: number;
+    realtimeConnections: number;
+    pollingWebsites: number;
+    totalWebsitesMonitored: number;
+    websitesBeingMonitored: Array<{
+      websiteId: string;
+      currentStatus: string;
+      hasRealtime: boolean;
+      hasPolling: boolean;
+    }>;
+  } {
+    let totalWebsites = 0;
+    let realtimeConnections = 0;
+    let pollingWebsites = 0;
+    let activeSubscriptions = 0;
+    const websitesBeingMonitored: Array<{
+      websiteId: string;
+      currentStatus: string;
+      hasRealtime: boolean;
+      hasPolling: boolean;
+    }> = [];
+
+    this.subscriptions.forEach(subscription => {
+      if (subscription.isActive) {
+        activeSubscriptions++;
+      }
+      totalWebsites += subscription.websiteIds.size;
+      pollingWebsites += subscription.pollingIntervals.size;
+      if (subscription.realtimeChannel) {
+        realtimeConnections++;
+      }
+
+      // Collect websites being monitored
+      subscription.websiteIds.forEach(websiteId => {
+        websitesBeingMonitored.push({
+          websiteId,
+          currentStatus: 'monitoring', // Default status - could be enhanced with actual status
+          hasRealtime: !!subscription.realtimeChannel,
+          hasPolling: subscription.pollingIntervals.has(websiteId),
+        });
+      });
+    });
+
+    return {
+      totalSubscriptions: this.subscriptions.size,
+      activeSubscriptions,
+      totalWebsites,
+      realtimeConnections,
+      pollingWebsites,
+      totalWebsitesMonitored: websitesBeingMonitored.length,
+      websitesBeingMonitored,
+    };
+  }
+
+  /**
+   * Start monitoring a specific website (wrapper around addWebsiteToMonitoring)
+   */
+  async startMonitoringWebsite(websiteId: string, workspaceId: string, _callback?: WebsiteStatusCallback): Promise<void> {
+    await this.addWebsiteToMonitoring(workspaceId, websiteId);
+  }
+
+  /**
+   * Stop monitoring a specific website
+   */
+  async stopMonitoringWebsite(websiteId: string): Promise<void> {
+    // Find which subscription contains this website
+    for (const [workspaceId, subscription] of this.subscriptions.entries()) {
+      if (subscription.websiteIds.has(websiteId)) {
+        // Remove from website set
+        subscription.websiteIds.delete(websiteId);
+        
+        // Clear any polling interval for this website
+        const pollingInterval = subscription.pollingIntervals.get(websiteId);
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          subscription.pollingIntervals.delete(websiteId);
+        }
+
+        // Remove event tracker
+        subscription.eventTrackers.delete(websiteId);
+
+        // If no websites left in this subscription, clean it up
+        if (subscription.websiteIds.size === 0) {
+          await this.unsubscribeFromWorkspace(workspaceId);
+        }
+        break;
+      }
+    }
+  }
+
+  /**
+   * Monitor crawling websites for a workspace (wrapper for subscribeToWorkspace)
+   */
+  async monitorCrawlingWebsites(
+    workspaceId: string,
+    websiteIds: string[],
+    callback: WebsiteStatusCallback
+  ): Promise<void> {
+    await this.subscribeToWorkspace(workspaceId, websiteIds, callback);
+  }
+
+  /**
+   * Validate status update chain for debugging purposes
+   */
+  async validateStatusUpdateChain(websiteId: string): Promise<boolean> {
+    try {
+      // Get current database status
+      const dbStatus = await this.getWebsiteStatusFromDB(websiteId);
+      if (!dbStatus) {
+        return false;
+      }
+
+      // Find the subscription that monitors this website
+      let subscription: StatusSubscription | undefined;
+      for (const sub of this.subscriptions.values()) {
+        if (sub.websiteIds.has(websiteId)) {
+          subscription = sub;
+          break;
+        }
+      }
+
+      if (!subscription) {
+        return false;
+      }
+
+      // Check if we have event tracking for this website
+      const tracker = subscription.eventTrackers.get(websiteId);
+      if (!tracker) {
+        return false;
+      }
+
+      // Verify that our tracked status matches database
+      return tracker.lastStatus === dbStatus.crawl_status;
+    } catch (error) {
+      return false;
+    }
   }
 }
 

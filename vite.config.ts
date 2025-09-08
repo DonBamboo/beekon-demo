@@ -2,6 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import dotenv from "dotenv";
+
+// Load environment variables from .env file
+dotenv.config();
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -10,15 +14,22 @@ export default defineConfig(({ mode }) => {
   // Validate critical environment variables are not using placeholder values
   const validateEnvVars = () => {
     const criticalVars = ['VITE_SUPABASE_URL', 'VITE_N8N_URL'];
-    const placeholderPattern = /YOUR_.*_HERE/;
     
     for (const varName of criticalVars) {
       const value = process.env[varName];
-      if (!value || placeholderPattern.test(value)) {
+      
+      // Check for common placeholder patterns
+      const isPlaceholder = !value || 
+        /YOUR_.*_HERE/.test(value) || 
+        value === varName || // Value exactly matches variable name
+        value.includes('PLACEHOLDER') ||
+        value.includes('REPLACE_ME');
+      
+      if (isPlaceholder) {
         if (mode === 'production') {
           throw new Error(`Production build requires valid ${varName}. Please update your environment configuration.`);
         } else {
-          console.warn(`Warning: ${varName} is not properly configured. Application may not function correctly.`);
+          console.warn(`Warning: ${varName} is not properly configured (current: "${value || 'undefined'}"). Application may not function correctly.`);
         }
       }
     }

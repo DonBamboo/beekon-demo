@@ -501,7 +501,7 @@ export function RealTimeDebugger() {
                                 )}
                               </div>
                               <span className="text-[9px] text-muted-foreground">
-                                {Math.round(website.monitoringDuration / 1000)}s
+                                {website.hasRealtime ? 'RT' : 'Poll'}
                               </span>
                             </div>
                           ))}
@@ -530,11 +530,7 @@ export function RealTimeDebugger() {
                       if (testWebsiteId) {
                         // Testing end-to-end validation
                         const { websiteStatusService } = await import("@/services/websiteStatusService");
-                        const success = await websiteStatusService.validateStatusUpdateChain(
-                          testWebsiteId, 
-                          'crawling', 
-                          5000
-                        );
+                        await websiteStatusService.validateStatusUpdateChain(testWebsiteId);
                         // Validation test completed
                       }
                     }}

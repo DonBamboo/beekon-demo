@@ -24,7 +24,7 @@ const navigation = [
 
 export function AppSidebar() {
   const { open } = useSidebar();
-  const { navigateTo, currentPage } = useTrueNavigation();
+  const { navigateTo } = useTrueNavigation();
   
   // Handle true instant navigation with no React Router involvement
   const handleNavClick = useCallback((event: React.MouseEvent, path: string) => {
@@ -33,7 +33,7 @@ export function AppSidebar() {
     // Sidebar navigation - console removed for security
     
     navigateTo(path);
-  }, [navigateTo, currentPage]);
+  }, [navigateTo]);
   
   return (
     <Sidebar collapsible="icon">

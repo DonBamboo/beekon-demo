@@ -26,20 +26,29 @@ export function addProtocol(domain: string): string {
   // Security: Validate domain format
   try {
     // Remove protocol if present for validation
-    const domainOnly = sanitizedDomain.replace(/^https?:\/\//, '');
+    const withoutProtocol = sanitizedDomain.replace(/^https?:\/\//, '');
     
-    // Basic domain validation
-    if (!/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(domainOnly)) {
+    // Extract domain part and path/query part
+    const urlParts = withoutProtocol.split('/');
+    const domainPart = urlParts[0];
+    const pathPart = urlParts.length > 1 ? '/' + urlParts.slice(1).join('/') : '';
+    
+    // Basic domain validation - allow domain with optional port and paths
+    // Domain must have at least one dot, valid TLD (2+ characters), and no consecutive dots
+    if (!/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])*(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])*)+(:[0-9]+)?$/.test(domainPart)) {
       throw new Error('Invalid domain format');
     }
     
-    // Check for suspicious patterns
-    if (domainOnly.includes('javascript:') || domainOnly.includes('data:') || domainOnly.includes('vbscript:')) {
-      throw new Error('Potentially malicious domain detected');
+    // Check for suspicious patterns in the entire URL
+    if (withoutProtocol.includes('javascript:') || withoutProtocol.includes('data:') || withoutProtocol.includes('vbscript:')) {
+      throw new Error('Potentially malicious URL detected');
     }
     
+    // Reconstruct the full URL
+    const fullUrl = domainPart + pathPart;
+    
     if (!sanitizedDomain.includes("https://")) {
-      return "https://" + domainOnly;
+      return "https://" + fullUrl;
     }
     return sanitizedDomain;
   } catch (error) {
@@ -96,7 +105,7 @@ export function sanitizeUserInput(input: string): string {
         "'": '&#x27;',
         '&': '&amp;'
       };
-      return entities[char];
+      return entities[char] || char;
     })
     .slice(0, 1000); // Limit input length
 }

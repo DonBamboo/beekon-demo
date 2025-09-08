@@ -102,7 +102,7 @@ export function WebsiteStatusProvider({
             update.websiteId,
             currentWorkspaceId,
             handleStatusUpdate
-          ).catch(error => {
+          ).catch(_error => {
             // Dynamic monitoring start failed - handled silently
           });
           
@@ -190,7 +190,7 @@ export function WebsiteStatusProvider({
             workspaceId,
             totalWebsitesRequested: websiteIds.length,
             crawlingWebsitesFound: monitoringStatus.totalWebsitesMonitored,
-            monitoredWebsites: monitoringStatus.websitesBeingMonitored.map(w => ({
+            monitoredWebsites: monitoringStatus.websitesBeingMonitored.map((w: { websiteId: string; currentStatus: string; hasRealtime: boolean; hasPolling: boolean }) => ({
               websiteId: w.websiteId,
               currentStatus: w.currentStatus,
               hasRealtime: w.hasRealtime,
@@ -250,8 +250,7 @@ export function WebsiteStatusProvider({
 
       // Get current monitoring status before cleanup for logging
       const monitoringStatusBefore = websiteStatusService.getMonitoringStatus();
-      const websitesInWorkspace = monitoringStatusBefore.websitesBeingMonitored
-        .filter(w => w.workspaceId === workspaceId);
+      const websitesInWorkspace = monitoringStatusBefore.websitesBeingMonitored;
 
       // Use simplified service method that stops all websites in workspace
       await websiteStatusService.unsubscribeFromWorkspace(workspaceId);
@@ -275,10 +274,11 @@ export function WebsiteStatusProvider({
         details: {
           workspaceId,
           websitesStopped: websitesInWorkspace.length,
-          stoppedWebsites: websitesInWorkspace.map(w => ({
+          stoppedWebsites: websitesInWorkspace.map((w: { websiteId: string; currentStatus: string; hasRealtime: boolean; hasPolling: boolean }) => ({
             websiteId: w.websiteId,
             currentStatus: w.currentStatus,
-            monitoringDuration: w.monitoringDuration,
+            hasRealtime: w.hasRealtime,
+            hasPolling: w.hasPolling,
           })),
           remainingContextSubscriptions: activeSubscriptionsRef.current.size,
         },
@@ -343,7 +343,7 @@ export function WebsiteStatusProvider({
             workspaceId,
             totalWebsitesInWorkspace: websiteIds.length,
             crawlingWebsitesFound: monitoringStatus.totalWebsitesMonitored,
-            monitoredWebsites: monitoringStatus.websitesBeingMonitored.map(w => ({
+            monitoredWebsites: monitoringStatus.websitesBeingMonitored.map((w: { websiteId: string; currentStatus: string; hasRealtime: boolean; hasPolling: boolean }) => ({
               websiteId: w.websiteId,
               currentStatus: w.currentStatus,
               hasRealtime: w.hasRealtime,
@@ -398,9 +398,10 @@ export function WebsiteStatusProvider({
 
   // Cleanup on unmount (SIMPLIFIED)
   useEffect(() => {
+    const currentActiveSubscriptions = activeSubscriptionsRef.current;
     return () => {
       // Cleanup all subscriptions
-      const workspaceIds = Array.from(activeSubscriptionsRef.current);
+      const workspaceIds = Array.from(currentActiveSubscriptions);
       workspaceIds.forEach((workspaceId) => {
         websiteStatusService
           .unsubscribeFromWorkspace(workspaceId)

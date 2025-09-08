@@ -321,7 +321,7 @@ export function useWebsitesCoordinated() {
   // Listen for real-time website status updates to refresh metrics
   useEffect(() => {
     const handleWebsiteStatusUpdate = (event: CustomEvent) => {
-      const { websiteId, status, source } = event.detail;
+      const { websiteId, status } = event.detail;
       
       // Only refresh metrics when status changes to "completed"
       if (status === 'completed') {

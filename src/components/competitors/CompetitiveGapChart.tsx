@@ -49,15 +49,109 @@ import {
   generateGapSummary,
 } from "@/lib/gap-analysis-utils";
 import {
-  getCompetitorColorIndex,
-  getColorInfo,
+  getCompetitorFixedColor,
+  getCompetitorFixedColorInfo,
+  getYourBrandColor,
+  registerCompetitorsInFixedSlots,
   validateAllColorAssignments,
+  autoFixColorConflicts,
 } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
+
+// Custom X-Axis Tick Component with multi-line text wrapping
+const CustomXAxisTick = ({
+  x,
+  y,
+  payload,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value: string };
+}) => {
+  const text = payload?.value || "";
+  const maxCharsPerLine = 20; // Characters per line to prevent overlap
+
+  // Split text into lines based on words and character limit
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+
+  words.forEach((word) => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    if (testLine.length <= maxCharsPerLine) {
+      currentLine = testLine;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        // Handle single word longer than maxCharsPerLine
+        lines.push(word.substring(0, maxCharsPerLine - 3) + "...");
+        currentLine = "";
+      }
+    }
+  });
+
+  if (currentLine) lines.push(currentLine);
+
+  // Limit to 2 lines maximum to prevent excessive height
+  const displayLines = lines.slice(0, 2);
+  if (lines.length > 2 && displayLines[1]) {
+    displayLines[1] = displayLines[1].substring(0, 20) + "...";
+  }
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        textAnchor="middle"
+        fill="currentColor"
+        fontSize="13.5"
+        className="select-none"
+      >
+        {displayLines.map((line, index) => (
+          <tspan key={index} x={0} dy={index === 0 ? 12 : 14}>
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  );
+};
 
 // Helper function for safe string extraction
 function safeString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
+}
+
+// Interface for competitor data from gap analysis
+interface CompetitorData {
+  competitorId: string;
+  competitor_name: string;
+  competitorDomain: string;
+  score: number;
+  avgRankPosition: number | null;
+  totalMentions: number;
+}
+
+// Helper function to extract competitor ID with multiple fallbacks
+function extractCompetitorId(comp: CompetitorData): string {
+  // Try multiple possible ID fields in order of preference
+  return (
+    safeString(comp.competitorId) ||
+    safeString(comp.competitor_name) ||
+    safeString(comp.competitorDomain) ||
+    `competitor_${Math.random().toString(36).substr(2, 9)}` // Generate unique fallback
+  );
+}
+
+// Helper function to extract competitor name with fallbacks
+function extractCompetitorName(comp: CompetitorData, fallbackIndex: number): string {
+  return (
+    safeString(comp.competitor_name) ||
+    safeString(comp.competitorDomain) ||
+    safeString(comp.competitorId) ||
+    `Competitor ${fallbackIndex + 1}`
+  );
 }
 
 interface CompetitiveGapChartProps {
@@ -74,6 +168,12 @@ export default function CompetitiveGapChart({
   // Enhanced data processing using service-layer utilities
   const processedData = useMemo(() => {
     if (!gapAnalysis || gapAnalysis.length === 0) return null;
+
+    // Validate color assignments and fix conflicts if needed
+    const colorValidation = validateAllColorAssignments();
+    if (!colorValidation.isValid) {
+      autoFixColorConflicts({ logResults: false });
+    }
 
     // Process gap analysis with service-layer utilities
     const gapClassification = processGapAnalysis(gapAnalysis);
@@ -102,10 +202,15 @@ export default function CompetitiveGapChart({
         topic: gap.topicName,
         yourBrand: gap.yourBrandScore,
       };
+      
       gap.competitorData.forEach((comp, index) => {
+        // Use robust competitor identification
+        const competitorId = extractCompetitorId(comp);
+        const competitorName = extractCompetitorName(comp, index);
+        
         data[`competitor${index + 1}`] = comp.score;
-        data[`competitor${index + 1}_name`] = comp.competitor_name;
-        data[`competitor${index + 1}_id`] = comp.competitorId;
+        data[`competitor${index + 1}_name`] = competitorName;
+        data[`competitor${index + 1}_id`] = competitorId;
       });
       return data;
     });
@@ -121,43 +226,93 @@ export default function CompetitiveGapChart({
       });
     });
 
-    // Create competitor info array for rendering with consistent color assignment
-    const competitorInfo = Array.from(competitorKeys).map((key, index) => {
-      // Get competitor name and ID from first data point that has this competitor
+    // Extract all unique competitors for standardized mapping
+    const allCompetitors: Array<{
+      competitorId: string;
+      name: string;
+      key: string;
+    }> = [];
+
+    Array.from(competitorKeys).forEach((key) => {
       const sampleData = barChartData.find((item) => item[`${key}_name`]);
+      const competitorId = safeString(sampleData?.[`${key}_id`]);
       const competitorName = safeString(
         sampleData?.[`${key}_name`],
-        `Competitor ${index + 1}`
+        `Competitor ${allCompetitors.length + 1}`
       );
-      const competitorId = safeString(sampleData?.[`${key}_id`]);
 
-      // Use competitorId as primary key for consistent colors across all charts
-      // This ensures the same competitor gets the same color in all visualizations
-      const colorIndex = getCompetitorColorIndex(
+      allCompetitors.push({
         competitorId,
-        competitorName,
-        0
-      );
+        name: competitorName,
+        key,
+      });
+    });
+
+    // Register all competitors in fixed color slots for predictable color assignment
+    registerCompetitorsInFixedSlots(
+      allCompetitors.map((comp) => ({
+        competitorId: comp.competitorId,
+        name: comp.name,
+      }))
+    );
+
+    // Create competitor info array for rendering with fixed color assignment
+    const competitorInfo = allCompetitors.map((comp) => {
+      // Get fixed color slot for predictable competitor coloring
+      const colorInfo = getCompetitorFixedColorInfo({
+        competitorId: comp.competitorId,
+        name: comp.name,
+      });
+
+      const color = getCompetitorFixedColor({
+        competitorId: comp.competitorId,
+        name: comp.name,
+      });
+
 
       return {
-        key,
-        name: competitorName,
-        competitorId,
-        colorIndex,
+        key: comp.key,
+        name: comp.name,
+        competitorId: comp.competitorId,
+        colorIndex: colorInfo.colorSlot,
+        color,
       };
     });
 
-    // Radar chart data with individual competitors
+    // Radar chart data with individual competitors using proper identifiers
     const radarData = validatedGapAnalysis.map((gap) => {
       const data: Record<string, number | string> = {
         topic: gap.topicName,
         yourBrand: gap.yourBrandScore,
       };
+
+      // Map competitor data to proper competitor keys for consistent coloring
       gap.competitorData.forEach(
-        (comp: { score: string | number }, index: number) => {
-          data[`competitor${index + 1}`] = comp.score;
+        (
+          comp: {
+            score: string | number;
+            competitorId?: string;
+            name?: string;
+          },
+          compIndex: number
+        ) => {
+          // Find matching competitor info for proper key assignment
+          const matchingCompetitor = competitorInfo.find(
+            (info) =>
+              info.competitorId === comp.competitorId ||
+              info.name === comp.name ||
+              info.name.includes(String(comp.name || ""))
+          );
+
+          if (matchingCompetitor) {
+            data[matchingCompetitor.key] = comp.score;
+          } else {
+            // Fallback to generic key if no match found
+            data[`competitor${compIndex + 1}`] = comp.score;
+          }
         }
       );
+
       return data;
     });
 
@@ -296,35 +451,58 @@ export default function CompetitiveGapChart({
               role="img"
               aria-label="Bar chart showing competitive gap analysis across topics"
             >
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={processedData.barChartData} accessibilityLayer>
+              <ResponsiveContainer width="100%" height={430}>
+                <BarChart
+                  data={processedData.barChartData}
+                  accessibilityLayer
+                  margin={{ bottom: 20, left: 20, right: 20, top: 20 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="topic"
-                    angle={-45}
-                    textAnchor="end"
+                    tick={<CustomXAxisTick />}
+                    interval={0}
                     height={100}
                     aria-label="Topics"
                   />
                   <YAxis
                     domain={[0, 100]}
+                    tickFormatter={(value) => `${value}%`}
                     aria-label="Performance score percentage"
                   />
                   <RechartsTooltip content={<CustomTooltip />} />
                   <Bar
                     dataKey="yourBrand"
                     name="Your Brand"
-                    fill="hsl(var(--primary))"
+                    fill={getYourBrandColor()}
                     radius={[4, 4, 0, 0]}
-                  />
+                  >
+                    {processedData.barChartData.map((_, index) => (
+                      <Cell
+                        key={`your-brand-cell-${index}`}
+                        fill={getYourBrandColor()}
+                        stroke={getYourBrandColor()}
+                        strokeWidth={1}
+                      />
+                    ))}
+                  </Bar>
                   {processedData.competitorInfo.map((competitor) => (
                     <Bar
                       key={competitor.key}
                       dataKey={competitor.key}
                       name={competitor.name}
-                      fill={`hsl(var(--chart-${competitor.colorIndex}))`}
+                      fill={competitor.color}
                       radius={[4, 4, 0, 0]}
-                    />
+                    >
+                      {processedData.barChartData.map((_, index) => (
+                        <Cell
+                          key={`${competitor.key}-cell-${index}`}
+                          fill={competitor.color}
+                          stroke={competitor.color}
+                          strokeWidth={1}
+                        />
+                      ))}
+                    </Bar>
                   ))}
                 </BarChart>
               </ResponsiveContainer>
@@ -341,14 +519,21 @@ export default function CompetitiveGapChart({
                   items={[
                     {
                       name: "Your Brand",
-                      color: "hsl(var(--primary))",
+                      color: getYourBrandColor(),
                       colorName: "Primary",
                     },
-                    ...processedData.competitorInfo.map((competitor) => ({
-                      name: competitor.name,
-                      color: `hsl(var(--chart-${competitor.colorIndex}))`,
-                      colorName: getColorInfo(competitor.colorIndex).name,
-                    })),
+                    ...processedData.competitorInfo.map((competitor) => {
+                      // Get color info using fixed color slot system
+                      const colorInfo = getCompetitorFixedColorInfo({
+                        competitorId: competitor.competitorId,
+                        name: competitor.name,
+                      });
+                      return {
+                        name: competitor.name,
+                        color: competitor.color,
+                        colorName: colorInfo.name,
+                      };
+                    }),
                   ]}
                 />
               </div>
@@ -360,16 +545,20 @@ export default function CompetitiveGapChart({
               role="img"
               aria-label="Radar chart showing competitive performance across all topics"
             >
-              <ResponsiveContainer width="100%" height={400}>
-                <RadarChart data={processedData.radarData} accessibilityLayer>
+              <ResponsiveContainer width="100%" height={450}>
+                <RadarChart
+                  data={processedData.radarData}
+                  accessibilityLayer
+                  margin={{ top: 20, right: 80, bottom: 20, left: 80 }}
+                >
                   <PolarGrid />
                   <PolarAngleAxis dataKey="topic" />
                   <PolarRadiusAxis angle={90} domain={[0, 100]} />
                   <Radar
                     name="Your Brand"
                     dataKey="yourBrand"
-                    stroke="hsl(var(--primary))"
-                    fill="hsl(var(--primary))"
+                    stroke={getYourBrandColor()}
+                    fill={getYourBrandColor()}
                     fillOpacity={0.3}
                   />
                   {processedData.competitorInfo.map((competitor) => (
@@ -377,8 +566,8 @@ export default function CompetitiveGapChart({
                       key={competitor.key}
                       name={competitor.name}
                       dataKey={competitor.key}
-                      stroke={`hsl(var(--chart-${competitor.colorIndex}))`}
-                      fill={`hsl(var(--chart-${competitor.colorIndex}))`}
+                      stroke={competitor.color}
+                      fill={competitor.color}
                       fillOpacity={0.2}
                     />
                   ))}
@@ -516,10 +705,11 @@ export default function CompetitiveGapChart({
               role="img"
               aria-label="Opportunity matrix scatter chart showing topics by market competitiveness versus your performance"
             >
-              <ResponsiveContainer width="100%" height={400}>
+              <ResponsiveContainer width="100%" height={450}>
                 <ScatterChart
                   data={processedData.opportunityMatrix}
                   accessibilityLayer
+                  margin={{ bottom: 60, left: 60, right: 20, top: 20 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
@@ -556,14 +746,52 @@ export default function CompetitiveGapChart({
                         : "Market Size",
                     ]}
                     labelFormatter={(label: unknown, payload: unknown) => {
-                      const data = Array.isArray(payload) && payload.length > 0 ? payload[0]?.payload : undefined;
-                      return data?.topic ? `Topic: ${data.topic}` : String(label);
+                      const data =
+                        Array.isArray(payload) && payload.length > 0
+                          ? payload[0]?.payload
+                          : undefined;
+                      return data?.topic
+                        ? `Topic: ${data.topic}`
+                        : String(label);
                     }}
                   />
-                  <Scatter name="Topics" dataKey="y" fill="hsl(var(--primary))">
-                    {processedData.opportunityMatrix.map((_, index) => (
-                      <Cell key={`cell-${index}`} />
-                    ))}
+                  <Scatter name="Topics" dataKey="y" fill={getYourBrandColor()}>
+                    {processedData.opportunityMatrix.map((entry, index) => {
+                      // Color points based on performance vs market competitiveness
+                      const performanceLevel =
+                        entry.y > 70 ? "high" : entry.y > 40 ? "medium" : "low";
+                      const competitivenessLevel =
+                        entry.x > 70 ? "high" : entry.x > 40 ? "medium" : "low";
+
+                      let fillColor = getYourBrandColor(); // Default to your brand color
+
+                      // Color coding based on opportunity/threat assessment
+                      if (
+                        performanceLevel === "low" &&
+                        competitivenessLevel === "high"
+                      ) {
+                        fillColor = "hsl(var(--destructive))"; // Red for threats (low performance, high competition)
+                      } else if (
+                        performanceLevel === "high" &&
+                        competitivenessLevel === "low"
+                      ) {
+                        fillColor = "hsl(var(--success))"; // Green for strong positions
+                      } else if (
+                        performanceLevel === "low" &&
+                        competitivenessLevel === "low"
+                      ) {
+                        fillColor = "hsl(var(--warning))"; // Orange for opportunities (low performance, low competition)
+                      }
+
+                      return (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={fillColor}
+                          stroke={fillColor}
+                          strokeWidth={2}
+                        />
+                      );
+                    })}
                   </Scatter>
                 </ScatterChart>
               </ResponsiveContainer>

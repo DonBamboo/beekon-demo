@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beekon AI Email Templates</title>
+    <style>
+        /* Base email styles */
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+        }
+        
+        .email-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px 20px;
+            text-align: center;
+        }
+        
+        .logo {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+        
+        .email-body {
+            padding: 40px 30px;
+        }
+        
+        .hero-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .hero-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 24px;
+        }
+        
+        .hero-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333333;
+            margin: 0 0 10px 0;
+        }
+        
+        .hero-subtitle {
+            font-size: 16px;
+            color: #666666;
+            margin: 0;
+        }
+        
+        .content-section {
+            margin-bottom: 30px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333333;
+            margin: 0 0 15px 0;
+        }
+        
+        .metrics-grid {
+            display: table;
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 10px;
+            margin: 20px 0;
+        }
+        
+        .metric-item {
+            display: table-cell;
+            background-color: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            width: 33.33%;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            display: block;
+        }
+        
+        .metric-label {
+            font-size: 14px;
+            color: #666666;
+            margin-top: 5px;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .data-table th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-success {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-processing {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .email-footer {
+            background-color: #f9fafb;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .footer-links {
+            margin: 20px 0;
+        }
+        
+        .footer-links a {
+            color: #667eea;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 14px;
+        }
+        
+        .unsubscribe {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 20px;
+        }
+        
+        .unsubscribe a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        /* Responsive styles */
+        @media only screen and (max-width: 600px) {
+            .email-body {
+                padding: 30px 20px;
+            }
+            
+            .metrics-grid {
+                display: block;
+            }
+            
+            .metric-item {
+                display: block;
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ============================================
+     TEMPLATE 1: WEBSITE ONBOARDING SUCCESS
+     ============================================ -->
+
+<div class="email-container" id="website-onboarding-success">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">🌐</div>
+            <h1 class="hero-title">Welcome, {{user_name}}!</h1>
+            <p class="hero-subtitle">Your website <strong>{{website_domain}}</strong> has been successfully onboarded</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Initial Analysis Complete</h2>
+            <p>We've successfully crawled your website and generated initial analysis data. Here's what we found:</p>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{pages_crawled}}</span>
+                    <div class="metric-label">Pages Crawled</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{topics_generated}}</span>
+                    <div class="metric-label">Topics Generated</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{initial_ranking}}</span>
+                    <div class="metric-label">Initial Ranking</div>
+                </div>
+            </div>
+            
+            <table class="data-table">
+                <tr>
+                    <th>Generated Topics</th>
+                    <th>Status</th>
+                </tr>
+                {{#each topics}}
+                <tr>
+                    <td>{{topic_name}}</td>
+                    <td><span class="status-badge status-success">Ready</span></td>
+                </tr>
+                {{/each}}
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Next Steps</h2>
+            <p>Your website is now ready for comprehensive analysis. We recommend:</p>
+            <ul>
+                <li>Review the generated topics and customize them if needed</li>
+                <li>Add your competitors for comparative analysis</li>
+                <li>Schedule regular analysis updates</li>
+            </ul>
+            
+            <a href="{{dashboard_url}}" class="cta-button">View Your Dashboard</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 2: WEBSITE RE-ANALYSIS COMPLETE
+     ============================================ -->
+
+<div class="email-container" id="website-reanalysis-complete">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">🔄</div>
+            <h1 class="hero-title">Re-analysis Complete!</h1>
+            <p class="hero-subtitle">Fresh insights for <strong>{{website_domain}}</strong> are ready</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Updated Performance Metrics</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{current_ranking}}</span>
+                    <div class="metric-label">Current Ranking</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{ranking_change}}{{ranking_direction}}</span>
+                    <div class="metric-label">Change from Last Analysis</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{new_mentions}}</span>
+                    <div class="metric-label">New Mentions Found</div>
+                </div>
+            </div>
+            
+            <table class="data-table">
+                <tr>
+                    <th>Metric</th>
+                    <th>Previous</th>
+                    <th>Current</th>
+                    <th>Change</th>
+                </tr>
+                <tr>
+                    <td>Overall Sentiment</td>
+                    <td>{{previous_sentiment}}</td>
+                    <td>{{current_sentiment}}</td>
+                    <td>{{sentiment_change}}</td>
+                </tr>
+                <tr>
+                    <td>Brand Mentions</td>
+                    <td>{{previous_mentions}}</td>
+                    <td>{{current_mentions}}</td>
+                    <td>{{mentions_change}}</td>
+                </tr>
+                <tr>
+                    <td>Visibility Score</td>
+                    <td>{{previous_visibility}}</td>
+                    <td>{{current_visibility}}</td>
+                    <td>{{visibility_change}}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Key Insights</h2>
+            <ul>
+                {{#each insights}}
+                <li>{{insight_text}}</li>
+                {{/each}}
+            </ul>
+            
+            <a href="{{analysis_url}}" class="cta-button">View Detailed Analysis</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 3: WEBSITE SETTINGS UPDATED
+     ============================================ -->
+
+<div class="email-container" id="website-settings-updated">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">⚙️</div>
+            <h1 class="hero-title">Settings Updated</h1>
+            <p class="hero-subtitle">Configuration changes for <strong>{{website_domain}}</strong> have been applied</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Updated Settings</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <th>Setting</th>
+                    <th>Previous Value</th>
+                    <th>New Value</th>
+                </tr>
+                {{#each settings_changes}}
+                <tr>
+                    <td>{{setting_name}}</td>
+                    <td>{{previous_value}}</td>
+                    <td><strong>{{new_value}}</strong></td>
+                </tr>
+                {{/each}}
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Impact on Future Analyses</h2>
+            <p>These changes will affect your next analysis in the following ways:</p>
+            <ul>
+                {{#each impact_items}}
+                <li>{{impact_description}}</li>
+                {{/each}}
+            </ul>
+            
+            <p><strong>Next scheduled analysis:</strong> {{next_analysis_date}}</p>
+            
+            <a href="{{settings_url}}" class="cta-button">Manage Settings</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 4: MANUAL ANALYSIS COMPLETE
+     ============================================ -->
+
+<div class="email-container" id="manual-analysis-complete">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">📊</div>
+            <h1 class="hero-title">Custom Analysis Complete</h1>
+            <p class="hero-subtitle">Your manual analysis for <strong>{{website_domain}}</strong> is ready</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Analysis Results</h2>
+            <p><strong>Analysis Type:</strong> {{analysis_type}}<br>
+            <strong>Completion Time:</strong> {{completion_time}}<br>
+            <strong>Data Sources:</strong> {{data_sources}}</p>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{total_mentions}}</span>
+                    <div class="metric-label">Total Mentions</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{sentiment_score}}</span>
+                    <div class="metric-label">Sentiment Score</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{ranking_position}}</span>
+                    <div class="metric-label">Ranking Position</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Key Findings</h2>
+            <table class="data-table">
+                <tr>
+                    <th>Topic</th>
+                    <th>Mentions</th>
+                    <th>Sentiment</th>
+                    <th>Ranking</th>
+                </tr>
+                {{#each topics_results}}
+                <tr>
+                    <td>{{topic_name}}</td>
+                    <td>{{mention_count}}</td>
+                    <td>{{sentiment}}</td>
+                    <td>{{ranking}}</td>
+                </tr>
+                {{/each}}
+            </table>
+            
+            <a href="{{results_url}}" class="cta-button">View Full Results</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 5: SCHEDULED ANALYSIS COMPLETE
+     ============================================ -->
+
+<div class="email-container" id="scheduled-analysis-complete">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">⏰</div>
+            <h1 class="hero-title">Scheduled Analysis Complete</h1>
+            <p class="hero-subtitle">Your {{analysis_frequency}} analysis for <strong>{{website_domain}}</strong></p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Weekly Performance Summary</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{weekly_mentions}}</span>
+                    <div class="metric-label">New Mentions</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{trend_direction}}</span>
+                    <div class="metric-label">Trend</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{comparison_period}}%</span>
+                    <div class="metric-label">vs Previous Period</div>
+                </div>
+            </div>
+            
+            <h2 class="section-title">Performance Comparison</h2>
+            <table class="data-table">
+                <tr>
+                    <th>Metric</th>
+                    <th>This Period</th>
+                    <th>Last Period</th>
+                    <th>Change</th>
+                </tr>
+                <tr>
+                    <td>Brand Mentions</td>
+                    <td>{{current_mentions}}</td>
+                    <td>{{previous_mentions}}</td>
+                    <td>{{mentions_change}}</td>
+                </tr>
+                <tr>
+                    <td>Average Sentiment</td>
+                    <td>{{current_sentiment}}</td>
+                    <td>{{previous_sentiment}}</td>
+                    <td>{{sentiment_change}}</td>
+                </tr>
+                <tr>
+                    <td>Visibility Score</td>
+                    <td>{{current_visibility}}</td>
+                    <td>{{previous_visibility}}</td>
+                    <td>{{visibility_change}}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Next Analysis</h2>
+            <p>Your next scheduled analysis will run on <strong>{{next_analysis_date}}</strong>.</p>
+            
+            <a href="{{dashboard_url}}" class="cta-button">View Dashboard</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 6: ANALYSIS SESSION COMPLETE
+     ============================================ -->
+
+<div class="email-container" id="analysis-session-complete">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">🎯</div>
+            <h1 class="hero-title">Comprehensive Analysis Complete</h1>
+            <p class="hero-subtitle">Deep analysis session for <strong>{{website_domain}}</strong> has finished</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Session Overview</h2>
+            <p><strong>Session Duration:</strong> {{session_duration}}<br>
+            <strong>Analysis Depth:</strong> {{analysis_depth}}<br>
+            <strong>Data Points Processed:</strong> {{data_points_processed}}</p>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{comprehensive_score}}</span>
+                    <div class="metric-label">Overall Score</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{insights_generated}}</span>
+                    <div class="metric-label">Insights Generated</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{recommendations}}</span>
+                    <div class="metric-label">Recommendations</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Key Performance Insights</h2>
+            <ul>
+                {{#each key_insights}}
+                <li><strong>{{category}}:</strong> {{insight_text}}</li>
+                {{/each}}
+            </ul>
+            
+            <h2 class="section-title">Recommended Actions</h2>
+            <ol>
+                {{#each recommendations}}
+                <li>{{recommendation_text}} <em>(Priority: {{priority}})</em></li>
+                {{/each}}
+            </ol>
+            
+            <a href="{{full_report_url}}" class="cta-button">Download Full Report</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 7: COMPETITOR ONBOARDING SUCCESS
+     ============================================ -->
+
+<div class="email-container" id="competitor-onboarding-success">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">🏆</div>
+            <h1 class="hero-title">Competitors Added Successfully</h1>
+            <p class="hero-subtitle">{{competitors_count}} competitors added for <strong>{{website_domain}}</strong></p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Your Competitive Landscape</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <th>Competitor</th>
+                    <th>Domain</th>
+                    <th>Status</th>
+                    <th>Initial Score</th>
+                </tr>
+                {{#each competitors}}
+                <tr>
+                    <td>{{competitor_name}}</td>
+                    <td>{{competitor_domain}}</td>
+                    <td><span class="status-badge status-success">Active</span></td>
+                    <td>{{initial_score}}</td>
+                </tr>
+                {{/each}}
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Initial Competitive Analysis</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{market_position}}</span>
+                    <div class="metric-label">Your Market Position</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{share_of_voice}}%</span>
+                    <div class="metric-label">Share of Voice</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{competitive_gaps}}</span>
+                    <div class="metric-label">Opportunities Identified</div>
+                </div>
+            </div>
+            
+            <p>Your first comprehensive competitive analysis will be ready within 24 hours.</p>
+            
+            <a href="{{competitors_url}}" class="cta-button">View Competitive Analysis</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 8: COMPETITIVE ANALYSIS COMPLETE
+     ============================================ -->
+
+<div class="email-container" id="competitive-analysis-complete">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">📈</div>
+            <h1 class="hero-title">Competitive Analysis Ready</h1>
+            <p class="hero-subtitle">Market insights for <strong>{{website_domain}}</strong> vs {{competitors_count}} competitors</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Market Position Summary</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">#{{market_rank}}</span>
+                    <div class="metric-label">Market Ranking</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{share_of_voice}}%</span>
+                    <div class="metric-label">Share of Voice</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{sentiment_advantage}}%</span>
+                    <div class="metric-label">Sentiment Advantage</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Competitor Performance</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <th>Competitor</th>
+                    <th>Market Share</th>
+                    <th>Mentions</th>
+                    <th>Sentiment</th>
+                    <th>Trend</th>
+                </tr>
+                {{#each competitor_data}}
+                <tr>
+                    <td>{{name}}</td>
+                    <td>{{market_share}}%</td>
+                    <td>{{mentions}}</td>
+                    <td>{{sentiment}}</td>
+                    <td>{{trend}}</td>
+                </tr>
+                {{/each}}
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Strategic Opportunities</h2>
+            <ul>
+                {{#each opportunities}}
+                <li><strong>{{opportunity_type}}:</strong> {{description}}</li>
+                {{/each}}
+            </ul>
+            
+            <a href="{{competitive_report_url}}" class="cta-button">View Full Competitive Report</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 9: COMPETITOR STATUS UPDATE
+     ============================================ -->
+
+<div class="email-container" id="competitor-status-update">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">📊</div>
+            <h1 class="hero-title">Competitor Activity Alert</h1>
+            <p class="hero-subtitle">Notable changes detected in your competitive landscape</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Performance Changes</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <th>Competitor</th>
+                    <th>Change Type</th>
+                    <th>Previous</th>
+                    <th>Current</th>
+                    <th>Impact</th>
+                </tr>
+                {{#each status_changes}}
+                <tr>
+                    <td>{{competitor_name}}</td>
+                    <td>{{change_type}}</td>
+                    <td>{{previous_value}}</td>
+                    <td>{{current_value}}</td>
+                    <td>{{impact_level}}</td>
+                </tr>
+                {{/each}}
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Key Insights</h2>
+            <ul>
+                {{#each insights}}
+                <li>{{insight_text}}</li>
+                {{/each}}
+            </ul>
+            
+            <h2 class="section-title">Recommended Actions</h2>
+            <ol>
+                {{#each recommended_actions}}
+                <li>{{action_text}}</li>
+                {{/each}}
+            </ol>
+            
+            <a href="{{competitors_url}}" class="cta-button">Monitor Competitors</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 10: DATA EXPORT READY
+     ============================================ -->
+
+<div class="email-container" id="data-export-ready">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">📥</div>
+            <h1 class="hero-title">Export Ready for Download</h1>
+            <p class="hero-subtitle">Your {{export_type}} export for <strong>{{website_domain}}</strong> is complete</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Export Details</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <td><strong>Export Type</strong></td>
+                    <td>{{export_type}}</td>
+                </tr>
+                <tr>
+                    <td><strong>File Size</strong></td>
+                    <td>{{file_size}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Records Included</strong></td>
+                    <td>{{records_count}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Date Range</strong></td>
+                    <td>{{date_range}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Generated</strong></td>
+                    <td>{{generation_time}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Expires</strong></td>
+                    <td>{{expiration_date}}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Export Contents</h2>
+            <ul>
+                {{#each export_contents}}
+                <li>{{content_description}} ({{record_count}} records)</li>
+                {{/each}}
+            </ul>
+            
+            <p><strong>Important:</strong> Your download link will expire in {{expiration_hours}} hours for security reasons.</p>
+            
+            <a href="{{download_url}}" class="cta-button">Download Export File</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 11: EXPORT HISTORY UPDATED
+     ============================================ -->
+
+<div class="email-container" id="export-history-updated">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">📋</div>
+            <h1 class="hero-title">Export Processed Successfully</h1>
+            <p class="hero-subtitle">Your {{export_type}} export has been logged and is ready</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Export Summary</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{total_exports}}</span>
+                    <div class="metric-label">Total Exports This Month</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{file_size}}</span>
+                    <div class="metric-label">File Size</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{processing_time}}</span>
+                    <div class="metric-label">Processing Time</div>
+                </div>
+            </div>
+            
+            <table class="data-table">
+                <tr>
+                    <td><strong>Status</strong></td>
+                    <td><span class="status-badge status-success">Completed</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Export ID</strong></td>
+                    <td>{{export_id}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Created</strong></td>
+                    <td>{{created_at}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Download Until</strong></td>
+                    <td>{{expires_at}}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Recent Export History</h2>
+            <table class="data-table">
+                <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                    <th>Status</th>
+                </tr>
+                {{#each recent_exports}}
+                <tr>
+                    <td>{{date}}</td>
+                    <td>{{type}}</td>
+                    <td>{{size}}</td>
+                    <td><span class="status-badge status-success">{{status}}</span></td>
+                </tr>
+                {{/each}}
+            </table>
+            
+            <a href="{{export_history_url}}" class="cta-button">View Export History</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 12: WORKSPACE CREATED
+     ============================================ -->
+
+<div class="email-container" id="workspace-created">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">🏢</div>
+            <h1 class="hero-title">Workspace Created Successfully</h1>
+            <p class="hero-subtitle">Welcome to your new workspace: <strong>{{workspace_name}}</strong></p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Workspace Details</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <td><strong>Workspace Name</strong></td>
+                    <td>{{workspace_name}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Plan</strong></td>
+                    <td>{{plan_name}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Credit Limit</strong></td>
+                    <td>{{credit_limit}} credits</td>
+                </tr>
+                <tr>
+                    <td><strong>Created</strong></td>
+                    <td>{{created_date}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Workspace ID</strong></td>
+                    <td>{{workspace_id}}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Getting Started</h2>
+            <p>Your workspace is ready! Here's what you can do next:</p>
+            <ol>
+                <li>Add your first website for analysis</li>
+                <li>Configure your analysis preferences</li>
+                <li>Invite team members (if applicable)</li>
+                <li>Set up automated reporting</li>
+            </ol>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{available_credits}}</span>
+                    <div class="metric-label">Available Credits</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{max_websites}}</span>
+                    <div class="metric-label">Website Limit</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{team_members}}</span>
+                    <div class="metric-label">Team Members</div>
+                </div>
+            </div>
+            
+            <a href="{{workspace_url}}" class="cta-button">Access Your Workspace</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 13: PROFILE UPDATED
+     ============================================ -->
+
+<div class="email-container" id="profile-updated">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">👤</div>
+            <h1 class="hero-title">Profile Updated</h1>
+            <p class="hero-subtitle">Your account information has been successfully updated</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Updated Information</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <th>Field</th>
+                    <th>Previous Value</th>
+                    <th>New Value</th>
+                </tr>
+                {{#each profile_changes}}
+                <tr>
+                    <td>{{field_name}}</td>
+                    <td>{{previous_value}}</td>
+                    <td><strong>{{new_value}}</strong></td>
+                </tr>
+                {{/each}}
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Security Information</h2>
+            <p><strong>Update Time:</strong> {{update_timestamp}}<br>
+            <strong>IP Address:</strong> {{ip_address}}<br>
+            <strong>Browser:</strong> {{user_agent}}</p>
+            
+            <p>If you didn't make these changes, please contact our support team immediately.</p>
+            
+            <a href="{{profile_url}}" class="cta-button">View Profile</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 14: PASSWORD CHANGED
+     ============================================ -->
+
+<div class="email-container" id="password-changed">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">🔒</div>
+            <h1 class="hero-title">Password Changed Successfully</h1>
+            <p class="hero-subtitle">Your account password has been updated</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Security Confirmation</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <td><strong>Account Email</strong></td>
+                    <td>{{user_email}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Change Time</strong></td>
+                    <td>{{change_timestamp}}</td>
+                </tr>
+                <tr>
+                    <td><strong>IP Address</strong></td>
+                    <td>{{ip_address}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Device</strong></td>
+                    <td>{{device_info}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Location</strong></td>
+                    <td>{{approximate_location}}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Security Recommendations</h2>
+            <ul>
+                <li>Keep your new password secure and don't share it with anyone</li>
+                <li>Consider enabling two-factor authentication for added security</li>
+                <li>Use a unique password that you don't use for other accounts</li>
+                <li>Sign out of all devices if you suspect unauthorized access</li>
+            </ul>
+            
+            <p><strong>⚠️ Important:</strong> If you didn't make this change, please contact our support team immediately.</p>
+            
+            <a href="{{security_settings_url}}" class="cta-button">Review Security Settings</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 15: AVATAR UPDATED
+     ============================================ -->
+
+<div class="email-container" id="avatar-updated">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">🖼️</div>
+            <h1 class="hero-title">Profile Picture Updated</h1>
+            <p class="hero-subtitle">Your new avatar has been successfully uploaded</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Upload Details</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <td><strong>Upload Time</strong></td>
+                    <td>{{upload_timestamp}}</td>
+                </tr>
+                <tr>
+                    <td><strong>File Size</strong></td>
+                    <td>{{file_size}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Image Dimensions</strong></td>
+                    <td>{{image_dimensions}}</td>
+                </tr>
+                <tr>
+                    <td><strong>File Format</strong></td>
+                    <td>{{file_format}}</td>
+                </tr>
+            </table>
+            
+            <p>Your new profile picture is now visible across your account and will appear in team collaborations.</p>
+            
+            <a href="{{profile_url}}" class="cta-button">View Profile</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 16: BULK COMPETITORS ADDED
+     ============================================ -->
+
+<div class="email-container" id="bulk-competitors-added">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">📊</div>
+            <h1 class="hero-title">Bulk Competitor Import Complete</h1>
+            <p class="hero-subtitle">{{total_processed}} competitors processed for <strong>{{website_domain}}</strong></p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Import Summary</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{successful_imports}}</span>
+                    <div class="metric-label">Successfully Added</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{failed_imports}}</span>
+                    <div class="metric-label">Failed</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{processing_time}}</span>
+                    <div class="metric-label">Processing Time</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Import Results</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <th>Competitor</th>
+                    <th>Domain</th>
+                    <th>Status</th>
+                    <th>Initial Score</th>
+                </tr>
+                {{#each successful_competitors}}
+                <tr>
+                    <td>{{name}}</td>
+                    <td>{{domain}}</td>
+                    <td><span class="status-badge status-success">Added</span></td>
+                    <td>{{initial_score}}</td>
+                </tr>
+                {{/each}}
+            </table>
+            
+            {{#if failed_competitors}}
+            <h2 class="section-title">Failed Imports</h2>
+            <table class="data-table">
+                <tr>
+                    <th>Competitor</th>
+                    <th>Domain</th>
+                    <th>Reason</th>
+                </tr>
+                {{#each failed_competitors}}
+                <tr>
+                    <td>{{name}}</td>
+                    <td>{{domain}}</td>
+                    <td>{{failure_reason}}</td>
+                </tr>
+                {{/each}}
+            </table>
+            {{/if}}
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Next Steps</h2>
+            <p>Your competitors have been added and initial analysis has begun. Full competitive intelligence will be available within 24 hours.</p>
+            
+            <a href="{{competitors_url}}" class="cta-button">View Competitor Dashboard</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 17: BULK PROCESSING COMPLETE
+     ============================================ -->
+
+<div class="email-container" id="bulk-processing-complete">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">⚡</div>
+            <h1 class="hero-title">Bulk Processing Complete</h1>
+            <p class="hero-subtitle">{{operation_type}} operation finished with {{total_items}} items processed</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Operation Summary</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{success_count}}</span>
+                    <div class="metric-label">Successful</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{error_count}}</span>
+                    <div class="metric-label">Errors</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{processing_time}}</span>
+                    <div class="metric-label">Total Time</div>
+                </div>
+            </div>
+            
+            <table class="data-table">
+                <tr>
+                    <td><strong>Operation Type</strong></td>
+                    <td>{{operation_type}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Started</strong></td>
+                    <td>{{start_time}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Completed</strong></td>
+                    <td>{{completion_time}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Success Rate</strong></td>
+                    <td>{{success_rate}}%</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Processing Details</h2>
+            
+            {{#if errors}}
+            <h3>Errors Encountered:</h3>
+            <ul>
+                {{#each errors}}
+                <li>{{error_description}} ({{affected_items}} items)</li>
+                {{/each}}
+            </ul>
+            {{/if}}
+            
+            <h3>Successful Operations:</h3>
+            <ul>
+                {{#each successful_operations}}
+                <li>{{operation_description}} ({{item_count}} items)</li>
+                {{/each}}
+            </ul>
+            
+            <a href="{{results_url}}" class="cta-button">View Detailed Results</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     TEMPLATE 18: PROCESS RECOVERY SUCCESS
+     ============================================ -->
+
+<div class="email-container" id="process-recovery-success">
+    <div class="email-header">
+        <a href="#" class="logo">🐝 Beekon AI</a>
+    </div>
+    
+    <div class="email-body">
+        <div class="hero-section">
+            <div class="hero-icon">🔧</div>
+            <h1 class="hero-title">Process Recovered Successfully</h1>
+            <p class="hero-subtitle">Your {{process_type}} operation has been completed after automatic recovery</p>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Recovery Details</h2>
+            
+            <table class="data-table">
+                <tr>
+                    <td><strong>Original Process</strong></td>
+                    <td>{{process_type}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Initial Failure Time</strong></td>
+                    <td>{{failure_time}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Failure Reason</strong></td>
+                    <td>{{failure_reason}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Recovery Started</strong></td>
+                    <td>{{recovery_start_time}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Successfully Completed</strong></td>
+                    <td>{{completion_time}}</td>
+                </tr>
+                <tr>
+                    <td><strong>Total Downtime</strong></td>
+                    <td>{{downtime_duration}}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Recovery Actions Taken</h2>
+            <ul>
+                {{#each recovery_actions}}
+                <li><strong>{{action_type}}:</strong> {{action_description}}</li>
+                {{/each}}
+            </ul>
+        </div>
+        
+        <div class="content-section">
+            <h2 class="section-title">Final Results</h2>
+            <p>Your {{process_type}} operation has been completed successfully. All data has been processed and results are now available.</p>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-value">{{final_success_rate}}%</span>
+                    <div class="metric-label">Success Rate</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{items_processed}}</span>
+                    <div class="metric-label">Items Processed</div>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-value">{{retry_attempts}}</span>
+                    <div class="metric-label">Retry Attempts</div>
+                </div>
+            </div>
+            
+            <p>We apologize for any inconvenience caused by the initial failure. Our system has been updated to prevent similar issues in the future.</p>
+            
+            <a href="{{results_url}}" class="cta-button">View Results</a>
+        </div>
+    </div>
+    
+    <div class="email-footer">
+        <div class="footer-links">
+            <a href="{{dashboard_url}}">Dashboard</a>
+            <a href="{{support_url}}">Support</a>
+            <a href="{{docs_url}}">Documentation</a>
+        </div>
+        <div class="unsubscribe">
+            <a href="{{unsubscribe_url}}">Unsubscribe</a> | <a href="{{preferences_url}}">Email Preferences</a>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
