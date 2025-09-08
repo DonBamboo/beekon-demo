@@ -125,7 +125,7 @@ function safeString(value: unknown, fallback = ""): string {
 
 // Interface for competitor data from gap analysis
 interface CompetitorData {
-  competitorId: string;
+  competitor_id: string;
   competitor_name: string;
   competitorDomain: string;
   score: number;
@@ -137,7 +137,7 @@ interface CompetitorData {
 function extractCompetitorId(comp: CompetitorData): string {
   // Try multiple possible ID fields in order of preference
   return (
-    safeString(comp.competitorId) ||
+    safeString(comp.competitor_id) ||
     safeString(comp.competitor_name) ||
     safeString(comp.competitorDomain) ||
     `competitor_${Math.random().toString(36).substr(2, 9)}` // Generate unique fallback
@@ -145,11 +145,14 @@ function extractCompetitorId(comp: CompetitorData): string {
 }
 
 // Helper function to extract competitor name with fallbacks
-function extractCompetitorName(comp: CompetitorData, fallbackIndex: number): string {
+function extractCompetitorName(
+  comp: CompetitorData,
+  fallbackIndex: number
+): string {
   return (
     safeString(comp.competitor_name) ||
     safeString(comp.competitorDomain) ||
-    safeString(comp.competitorId) ||
+    safeString(comp.competitor_id) ||
     `Competitor ${fallbackIndex + 1}`
   );
 }
@@ -202,12 +205,12 @@ export default function CompetitiveGapChart({
         topic: gap.topicName,
         yourBrand: gap.yourBrandScore,
       };
-      
+
       gap.competitorData.forEach((comp, index) => {
         // Use robust competitor identification
         const competitorId = extractCompetitorId(comp);
         const competitorName = extractCompetitorName(comp, index);
-        
+
         data[`competitor${index + 1}`] = comp.score;
         data[`competitor${index + 1}_name`] = competitorName;
         data[`competitor${index + 1}_id`] = competitorId;
@@ -268,7 +271,6 @@ export default function CompetitiveGapChart({
         competitorId: comp.competitorId,
         name: comp.name,
       });
-
 
       return {
         key: comp.key,

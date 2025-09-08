@@ -1,8 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Competitor,
-  AnalysisResult,
-} from "@/types/database";
+import { Competitor, AnalysisResult } from "@/types/database";
 import BaseService from "./baseService";
 import {
   competitorAnalysisService,
@@ -12,7 +9,11 @@ import {
 } from "./competitorAnalysisService";
 
 // Re-export types for external use
-export type { CompetitiveGapAnalysis, CompetitorShareOfVoice, CompetitorInsight };
+export type {
+  CompetitiveGapAnalysis,
+  CompetitorShareOfVoice,
+  CompetitorInsight,
+};
 export type { Competitor };
 
 export interface CompetitorPerformance {
@@ -166,7 +167,9 @@ export class OptimizedCompetitorService extends BaseService {
       const { data, error } = await supabase
         .schema("beekon_data")
         .from("competitors")
-        .select("*, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_error_message")
+        .select(
+          "*, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_error_message"
+        )
         .eq("website_id", websiteId)
         .eq("is_active", true)
         .order("created_at", { ascending: true });
@@ -204,7 +207,7 @@ export class OptimizedCompetitorService extends BaseService {
 
       // Use the optimized database function
       const { data, error } = await supabase
-        .schema('beekon_data')
+        .schema("beekon_data")
         .rpc("get_competitor_performance", {
           p_website_id: websiteId,
           p_limit: 50,
@@ -248,7 +251,9 @@ export class OptimizedCompetitorService extends BaseService {
           trend: this.calculateTrend(mentionTrend),
           trendPercentage:
             mentionTrend && !isNaN(mentionTrend) ? Math.abs(mentionTrend) : 0,
-          lastAnalyzed: String(row.last_analysis_date || new Date().toISOString()),
+          lastAnalyzed: String(
+            row.last_analysis_date || new Date().toISOString()
+          ),
           isActive: true,
         };
       });
@@ -283,7 +288,7 @@ export class OptimizedCompetitorService extends BaseService {
       }
 
       const { data, error } = await supabase
-        .schema('beekon_data')
+        .schema("beekon_data")
         .rpc("get_competitor_time_series", {
           p_website_id: websiteId,
           p_competitor_domain: competitorDomain,
@@ -646,7 +651,9 @@ export class OptimizedCompetitorService extends BaseService {
       const { data: existing } = await supabase
         .schema("beekon_data")
         .from("competitors")
-        .select("*, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_error_message")
+        .select(
+          "*, analysis_status, analysis_progress, analysis_started_at, analysis_completed_at, last_error_message"
+        )
         .eq("website_id", websiteId)
         .eq("competitor_domain", domain)
         .single();
@@ -974,7 +981,7 @@ export class OptimizedCompetitorService extends BaseService {
    */
   async refreshCompetitorViews(): Promise<void> {
     await supabase
-      .schema('beekon_data')
+      .schema("beekon_data")
       .rpc("refresh_competitor_performance_views");
     // Clear all cache after refresh
     this.clearCache();
@@ -988,8 +995,6 @@ export class OptimizedCompetitorService extends BaseService {
     if (trendValue < -5) return "down";
     return "stable";
   }
-
-
 
   private convertToCSV(data: {
     competitors: CompetitorPerformance[];
@@ -1278,7 +1283,7 @@ export class OptimizedCompetitorService extends BaseService {
       topic: gap.topicName,
       yourBrand: Math.round(gap.yourBrandScore),
       competitors: gap.competitorData.map((comp) => ({
-        competitorId: comp.competitorId,
+        competitorId: comp.competitor_id,
         name: comp.competitor_name,
         score: Math.round(comp.score),
       })),
@@ -1528,7 +1533,6 @@ export class OptimizedCompetitorService extends BaseService {
     // - Sentry for error tracking
     // - DataDog for metrics
     // - Custom analytics endpoint
-
     // Validation issues and warnings detected
     // This could be enhanced with proper monitoring integration
   }
