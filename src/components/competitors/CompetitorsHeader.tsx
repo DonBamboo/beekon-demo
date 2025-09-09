@@ -171,14 +171,15 @@ export default function CompetitorsHeader({
                 size="sm"
                 onClick={() => setDateFilter(period)}
                 disabled={isRefreshing}
+                className={isRefreshing && dateFilter !== period ? "opacity-50" : ""}
               >
                 {period}
               </Button>
             ))}
           </div>
 
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[180px]">
+          <Select value={sortBy} onValueChange={setSortBy} disabled={isRefreshing}>
+            <SelectTrigger className={`w-[180px] ${isRefreshing ? "opacity-75" : ""}`}>
               <Filter className="h-4 w-4 mr-2" />
               <SelectValue />
             </SelectTrigger>

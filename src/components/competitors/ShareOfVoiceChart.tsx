@@ -754,7 +754,7 @@ export default function ShareOfVoiceChart({
                 >
                   {chartData.map((entry, index) => (
                     <Cell
-                      key={`cell-${index}`}
+                      key={`bar-${entry.name}-${index}`}
                       fill={entry.fill}
                       stroke={entry.fill}
                       strokeWidth={2}
@@ -808,7 +808,7 @@ export default function ShareOfVoiceChart({
                 >
                   {chartData.map((entry, index) => (
                     <Cell 
-                      key={`cell-${index}`} 
+                      key={`pie-${entry.name}-${index}`} 
                       fill={entry.fill}
                       stroke={entry.fill}
                       strokeWidth={1}

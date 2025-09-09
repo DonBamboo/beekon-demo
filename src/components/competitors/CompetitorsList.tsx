@@ -143,7 +143,7 @@ export default function CompetitorsList({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {competitorsWithStatus.map((competitor) => {
+          {competitorsWithStatus.map((competitor, index) => {
             // Get unified data sources
             const performanceData = getCompetitorPerformance(competitor.id) || competitor.performance;
             const marketShareValue = getCompetitorMarketShare(competitor.id, competitor.competitor_name || competitor.competitor_domain);
@@ -175,8 +175,13 @@ export default function CompetitorsList({
               // Debug: competitor rank data available
             }
             
+            // Generate robust key with fallback to prevent duplicates
+            const uniqueKey = competitor.id || competitor.competitor_domain || `competitor-${index}`;
+            
+            // Add index parameter to the map callback
+            
             return (
-              <div key={competitor.id} className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors ${!isAnalyzed ? 'opacity-75' : ''} ${currentStatus === 'analyzing' ? 'border-blue-200 bg-blue-50/30' : ''} ${currentStatus === 'failed' ? 'border-red-200 bg-red-50/30' : ''}`}>
+              <div key={`list-${uniqueKey}`} className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors ${!isAnalyzed ? 'opacity-75' : ''} ${currentStatus === 'analyzing' ? 'border-blue-200 bg-blue-50/30' : ''} ${currentStatus === 'failed' ? 'border-red-200 bg-red-50/30' : ''}`}>
                 <div className="flex items-center space-x-4">
                   <div className="relative flex items-center justify-center w-10 h-10 bg-muted rounded-lg">
                     <Globe className="h-5 w-5 text-muted-foreground" />

@@ -30,6 +30,7 @@ import {
   Cell,
   ScatterChart,
   Scatter,
+  ReferenceLine,
 } from "recharts";
 import {
   TrendingUp,
@@ -479,9 +480,9 @@ export default function CompetitiveGapChart({
                     fill={getYourBrandColor()}
                     radius={[4, 4, 0, 0]}
                   >
-                    {processedData.barChartData.map((_, index) => (
+                    {processedData.barChartData.map((entry, index) => (
                       <Cell
-                        key={`your-brand-cell-${index}`}
+                        key={`your-brand-${entry.topic || index}`}
                         fill={getYourBrandColor()}
                         stroke={getYourBrandColor()}
                         strokeWidth={1}
@@ -496,9 +497,9 @@ export default function CompetitiveGapChart({
                       fill={competitor.color}
                       radius={[4, 4, 0, 0]}
                     >
-                      {processedData.barChartData.map((_, index) => (
+                      {processedData.barChartData.map((entry, index) => (
                         <Cell
-                          key={`${competitor.key}-cell-${index}`}
+                          key={`${competitor.key}-${entry.topic || index}`}
                           fill={competitor.color}
                           stroke={competitor.color}
                           strokeWidth={1}
@@ -692,16 +693,33 @@ export default function CompetitiveGapChart({
 
           <TabsContent value="matrix" className="space-y-4">
             <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                This matrix shows topics plotted by{" "}
-                <strong>average market competitiveness</strong> (x-axis) vs.
-                your performance (y-axis). Bubble size represents total market
-                mentions across all competitors.
+              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Strategic Opportunity Matrix
+              </h4>
+              <p className="text-sm text-muted-foreground mb-2">
+                This matrix identifies strategic opportunities by plotting{" "}
+                <strong>competitive intensity</strong> (x-axis) vs{" "}
+                <strong>market opportunity size</strong> (y-axis). Bubble size shows your current performance level.
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Market competitiveness is calculated as the average performance
-                of all competitors for each topic.
-              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2 bg-green-50 dark:bg-green-950 rounded border border-green-200 dark:border-green-800">
+                  <strong className="text-green-700 dark:text-green-300">Top-Left: Blue Ocean</strong>
+                  <p className="text-green-600 dark:text-green-400">High opportunity, low competition</p>
+                </div>
+                <div className="p-2 bg-orange-50 dark:bg-orange-950 rounded border border-orange-200 dark:border-orange-800">
+                  <strong className="text-orange-700 dark:text-orange-300">Top-Right: Battleground</strong>
+                  <p className="text-orange-600 dark:text-orange-400">High opportunity, high competition</p>
+                </div>
+                <div className="p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
+                  <strong className="text-blue-700 dark:text-blue-300">Bottom-Left: Niche</strong>
+                  <p className="text-blue-600 dark:text-blue-400">Low opportunity, low competition</p>
+                </div>
+                <div className="p-2 bg-red-50 dark:bg-red-950 rounded border border-red-200 dark:border-red-800">
+                  <strong className="text-red-700 dark:text-red-300">Bottom-Right: Red Ocean</strong>
+                  <p className="text-red-600 dark:text-red-400">Low opportunity, high competition</p>
+                </div>
+              </div>
             </div>
             <div
               role="img"
@@ -714,14 +732,17 @@ export default function CompetitiveGapChart({
                   margin={{ bottom: 60, left: 60, right: 20, top: 20 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
+                  {/* Quadrant dividers */}
+                  <ReferenceLine x={50} stroke="#64748b" strokeDasharray="5 5" strokeOpacity={0.6} />
+                  <ReferenceLine y={50} stroke="#64748b" strokeDasharray="5 5" strokeOpacity={0.6} />
                   <XAxis
                     type="number"
                     dataKey="x"
                     domain={[0, 100]}
-                    name="Market Competitiveness"
-                    aria-label="Market Competitiveness percentage"
+                    name="Competitive Intensity"
+                    aria-label="Competitive Intensity percentage"
                     label={{
-                      value: "Market Competitiveness (%)",
+                      value: "Competitive Intensity (%)",
                       position: "insideBottom",
                       offset: -5,
                     }}
@@ -730,10 +751,10 @@ export default function CompetitiveGapChart({
                     type="number"
                     dataKey="y"
                     domain={[0, 100]}
-                    name="Your Performance"
-                    aria-label="Your Performance percentage"
+                    name="Market Opportunity Size"
+                    aria-label="Market Opportunity Size percentage"
                     label={{
-                      value: "Your Performance (%)",
+                      value: "Market Opportunity Size (%)",
                       angle: -90,
                       position: "insideLeft",
                     }}
@@ -742,10 +763,10 @@ export default function CompetitiveGapChart({
                     formatter={(value: unknown, name: unknown) => [
                       name === "size" ? `${value} mentions` : `${value}%`,
                       name === "x"
-                        ? "Market Competitiveness"
+                        ? "Competitive Intensity"
                         : name === "y"
-                        ? "Your Performance"
-                        : "Market Size",
+                        ? "Market Opportunity Size"
+                        : "Your Performance Level",
                     ]}
                     labelFormatter={(label: unknown, payload: unknown) => {
                       const data =
@@ -759,35 +780,26 @@ export default function CompetitiveGapChart({
                   />
                   <Scatter name="Topics" dataKey="y" fill={getYourBrandColor()}>
                     {processedData.opportunityMatrix.map((entry, index) => {
-                      // Color points based on performance vs market competitiveness
-                      const performanceLevel =
-                        entry.y > 70 ? "high" : entry.y > 40 ? "medium" : "low";
-                      const competitivenessLevel =
-                        entry.x > 70 ? "high" : entry.x > 40 ? "medium" : "low";
+                      // Strategic quadrant-based color coding
+                      const opportunitySize = entry.y > 50 ? "high" : "low";
+                      const competitiveIntensity = entry.x > 50 ? "high" : "low";
 
                       let fillColor = getYourBrandColor(); // Default to your brand color
 
-                      // Color coding based on opportunity/threat assessment
-                      if (
-                        performanceLevel === "low" &&
-                        competitivenessLevel === "high"
-                      ) {
-                        fillColor = "hsl(var(--destructive))"; // Red for threats (low performance, high competition)
-                      } else if (
-                        performanceLevel === "high" &&
-                        competitivenessLevel === "low"
-                      ) {
-                        fillColor = "hsl(var(--success))"; // Green for strong positions
-                      } else if (
-                        performanceLevel === "low" &&
-                        competitivenessLevel === "low"
-                      ) {
-                        fillColor = "hsl(var(--warning))"; // Orange for opportunities (low performance, low competition)
+                      // Strategic quadrant color coding
+                      if (opportunitySize === "high" && competitiveIntensity === "low") {
+                        fillColor = "#22c55e"; // Green for Blue Ocean (high opportunity, low competition)
+                      } else if (opportunitySize === "high" && competitiveIntensity === "high") {
+                        fillColor = "#f97316"; // Orange for Battleground (high opportunity, high competition)
+                      } else if (opportunitySize === "low" && competitiveIntensity === "low") {
+                        fillColor = "#3b82f6"; // Blue for Niche (low opportunity, low competition)
+                      } else if (opportunitySize === "low" && competitiveIntensity === "high") {
+                        fillColor = "#ef4444"; // Red for Red Ocean (low opportunity, high competition)
                       }
 
                       return (
                         <Cell
-                          key={`cell-${index}`}
+                          key={`matrix-${index}-${entry.x}-${entry.y}`}
                           fill={fillColor}
                           stroke={fillColor}
                           strokeWidth={2}

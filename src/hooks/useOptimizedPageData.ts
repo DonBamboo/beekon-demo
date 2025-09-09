@@ -694,7 +694,17 @@ export function useOptimizedCompetitorsData() {
           
           // Ensure cached data has the correct structure with analysisStatus
           const cachedCompetitors = Array.isArray(currentCachedData.competitors) ? currentCachedData.competitors : [];
-          const transformedCachedCompetitors = cachedCompetitors.map((competitor: Competitor) => {
+          
+          // Validate and filter cached competitors
+          const validCachedCompetitors = cachedCompetitors.filter((competitor: Competitor) => {
+            const isValid = competitor.id && (competitor.competitor_domain || competitor.name);
+            if (!isValid) {
+              console.warn('Invalid cached competitor data found:', competitor);
+            }
+            return isValid;
+          });
+          
+          const transformedCachedCompetitors = validCachedCompetitors.map((competitor: Competitor) => {
             // If already has analysisStatus, keep it; otherwise derive it
             if (competitor.analysisStatus) {
               return competitor;
@@ -757,7 +767,17 @@ export function useOptimizedCompetitorsData() {
         // Transform competitors to include analysisStatus (like the old coordinated hook)
         const dataCompetitors = Array.isArray(data.competitors) ? data.competitors : [];
         const dataPerformance = Array.isArray(data.performance) ? data.performance : [];
-        const transformedCompetitors = dataCompetitors.map(
+        
+        // Validate and filter out invalid competitors
+        const validCompetitors = dataCompetitors.filter((competitor: Competitor) => {
+          const isValid = competitor.id && (competitor.competitor_domain || competitor.name);
+          if (!isValid) {
+            console.warn('Invalid competitor data found:', competitor);
+          }
+          return isValid;
+        });
+        
+        const transformedCompetitors = validCompetitors.map(
           (competitor: Competitor) => {
             const performance = dataPerformance.find(
               (p: CompetitorProfile) => p.domain === competitor.competitor_domain
@@ -912,13 +932,24 @@ export function useOptimizedCompetitorsData() {
     // Only handle filter changes if we have a website selected and filters actually changed
     if (!selectedWebsiteId || !competitorFiltersChanged) return;
 
+
     // Check if we have filtered cache for these specific filters
     const filteredCache = getFromCache<Record<string, unknown>>(competitorsFilteredCacheKey);
     const filteredCompetitors = Array.isArray(filteredCache?.competitors) ? filteredCache.competitors : [];
     const filteredPerformance = Array.isArray(filteredCache?.performance) ? filteredCache.performance : [];
     if (filteredCache && (filteredCompetitors.length > 0 || filteredPerformance.length > 0)) {
       // We have cache for these exact filters - use it immediately
-      const transformedCachedCompetitors = filteredCompetitors.map((competitor: Competitor) => {
+      
+      // Validate and filter cached competitors
+      const validFilteredCompetitors = filteredCompetitors.filter((competitor: Competitor) => {
+        const isValid = competitor.id && (competitor.competitor_domain || competitor.name);
+        if (!isValid) {
+          console.warn('Invalid filtered cached competitor data found:', competitor);
+        }
+        return isValid;
+      });
+      
+      const transformedCachedCompetitors = validFilteredCompetitors.map((competitor: Competitor) => {
         // If already has analysisStatus, keep it; otherwise derive it
         if (competitor.analysisStatus) {
           return competitor;
@@ -951,14 +982,12 @@ export function useOptimizedCompetitorsData() {
     }
 
     // No filtered cache found - need to reload with new filters
-    // No filtered cache, reloading with new filters
-    
     setIsLoading(true);
     setError(null);
     if (loadCompetitorsDataRef.current) {
       loadCompetitorsDataRef.current();
     }
-  }, [competitorFiltersChanged, selectedWebsiteId, competitorsFilteredCacheKey, getFromCache, transformedFilters]); // Removed loadCompetitorsData dependency
+  }, [competitorFiltersChanged, selectedWebsiteId, competitorsFilteredCacheKey, getFromCache]); // Fixed: removed transformedFilters dependency that was causing infinite loops
 
   // Listen for competitor status update events to force data refresh
   useEffect(() => {
