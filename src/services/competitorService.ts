@@ -180,7 +180,7 @@ export class OptimizedCompetitorService extends BaseService {
   }
 
   /**
-   * Get competitor performance metrics (optimized with database functions)
+   * Get competitor performance metrics (UPDATED: uses corrected database functions)
    */
   async getCompetitorPerformance(
     websiteId: string,
@@ -191,72 +191,64 @@ export class OptimizedCompetitorService extends BaseService {
     }`;
 
     return this.getCachedData(cacheKey, async () => {
-      // First check if there are any competitors for this website
-      const { data: competitors } = await supabase
-        .schema("beekon_data")
-        .from("competitors")
-        .select("id")
-        .eq("website_id", websiteId)
-        .eq("is_active", true)
-        .limit(1);
+      try {
+        // Use the corrected database function (now uses proper competitor_id relationships)
+        const { data, error } = await supabase
+          .schema("beekon_data")
+          .rpc("get_competitor_performance", {
+            p_website_id: websiteId,
+            p_limit: 50,
+            p_offset: 0,
+          });
 
-      // If no competitors exist, return empty array immediately
-      if (!competitors || competitors.length === 0) {
+        if (error) {
+          console.warn('Competitor performance query error:', error);
+          return [];
+        }
+
+        // Transform database results using the corrected field structure
+        const performanceData = Array.isArray(data) ? data : [];
+        return performanceData.map((row: Record<string, unknown>) => {
+          const totalMentions = Number(row.total_mentions) || 0;
+          const positiveMentions = Number(row.positive_mentions) || 0;
+          const avgSentiment = Number(row.avg_sentiment_score);
+          const avgRank = Number(row.avg_rank_position);
+          const mentionTrend = Number(row.mention_trend_7d) || 0;
+          const analysisStatus = String(row.analysis_status || 'completed');
+
+          return {
+            competitorId: String(row.competitor_id),
+            domain: String(row.competitor_domain),
+            name: String(row.competitor_name || row.competitor_domain),
+            shareOfVoice:
+              totalMentions > 0
+                ? Math.round((positiveMentions / totalMentions) * 100)
+                : 0,
+            averageRank:
+              avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20
+                ? Math.round(avgRank * 10) / 10 // Round to 1 decimal place
+                : 0,
+            mentionCount: totalMentions,
+            sentimentScore:
+              avgSentiment && !isNaN(avgSentiment)
+                ? Math.round(Math.max(0, Math.min(100, (avgSentiment + 1) * 50)))
+                : 50,
+            visibilityScore:
+              totalMentions > 0
+                ? Math.round((positiveMentions / totalMentions) * 100)
+                : 0,
+            trend: this.calculateTrend(mentionTrend),
+            trendPercentage: Math.abs(mentionTrend),
+            lastAnalyzed: String(
+              row.last_analysis_date || new Date().toISOString()
+            ),
+            isActive: analysisStatus === 'completed' || analysisStatus === 'analyzing',
+          };
+        });
+      } catch (error) {
+        console.error('Error fetching competitor performance:', error);
         return [];
       }
-
-      // Use the optimized database function
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_competitor_performance", {
-          p_website_id: websiteId,
-          p_limit: 50,
-          p_offset: 0,
-        });
-
-      if (error) throw error;
-
-      // Transform database results to match interface with safe calculations
-      const performanceData = Array.isArray(data) ? data : [];
-      return performanceData.map((row: Record<string, unknown>) => {
-        const totalMentions = Number(row.total_mentions) || 0;
-        const positiveMentions = Number(row.positive_mentions) || 0;
-        const avgSentiment = Number(row.avg_sentiment_score);
-        const avgRank = Number(row.avg_rank_position);
-        const mentionTrend = Number(row.mention_trend_7d);
-
-        // Average rank processing completed
-
-        return {
-          competitorId: String(row.competitor_id),
-          domain: String(row.competitor_domain),
-          name: String(row.competitor_name || row.competitor_domain),
-          shareOfVoice:
-            totalMentions > 0
-              ? Math.round((positiveMentions / totalMentions) * 100)
-              : 0,
-          averageRank:
-            avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20
-              ? avgRank
-              : 0,
-          mentionCount: totalMentions,
-          sentimentScore:
-            avgSentiment && !isNaN(avgSentiment)
-              ? Math.round((avgSentiment + 1) * 50)
-              : 50,
-          visibilityScore:
-            totalMentions > 0
-              ? Math.round((positiveMentions / totalMentions) * 100)
-              : 0,
-          trend: this.calculateTrend(mentionTrend),
-          trendPercentage:
-            mentionTrend && !isNaN(mentionTrend) ? Math.abs(mentionTrend) : 0,
-          lastAnalyzed: String(
-            row.last_analysis_date || new Date().toISOString()
-          ),
-          isActive: true,
-        };
-      });
     });
   }
 
@@ -316,7 +308,7 @@ export class OptimizedCompetitorService extends BaseService {
         const dailyAvgRank = Number(row.daily_avg_rank);
 
         timeSeriesMap.get(dateStr)!.competitors.push({
-          competitorId: "", // Would need to join with competitors table
+          competitorId: String(row.competitor_id || ''), // FIXED: Now includes competitor_id from corrected function
           name: String(row.competitor_domain),
           shareOfVoice:
             dailyMentions > 0
@@ -327,12 +319,12 @@ export class OptimizedCompetitorService extends BaseService {
             !isNaN(dailyAvgRank) &&
             dailyAvgRank > 0 &&
             dailyAvgRank <= 20
-              ? dailyAvgRank
+              ? Math.round(dailyAvgRank * 10) / 10 // Round to 1 decimal place
               : 0,
           mentionCount: dailyMentions,
           sentimentScore:
             dailyAvgSentiment && !isNaN(dailyAvgSentiment)
-              ? Math.round((dailyAvgSentiment + 1) * 50)
+              ? Math.round(Math.max(0, Math.min(100, (dailyAvgSentiment + 1) * 50)))
               : 50,
         });
       });

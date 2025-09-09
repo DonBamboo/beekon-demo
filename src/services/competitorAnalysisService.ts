@@ -147,13 +147,13 @@ export class CompetitorAnalysisService extends BaseService {
       competitor_id: competitorId,
       prompt_id: promptId,
       llm_provider: llmProvider,
-      llm_analysis_id: promptId, // Use promptId as a fallback
       is_mentioned: analysisResult.isMentioned,
       rank_position: analysisResult.rankPosition,
       sentiment_score: analysisResult.sentimentScore,
       confidence_score: analysisResult.confidenceScore,
       response_text: responseText,
       summary_text: analysisResult.summaryText,
+      analyzed_at: new Date().toISOString(),
     };
 
     const { data, error } = await supabase
