@@ -1,11 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "Bash(env)",
+      "Bash(supabase db inspect:*)",
+      "Read(//home/joel-jr-dev/**)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql",
+      "Bash(npx supabase db reset:*)",
+      "Bash(npx supabase:*)",
+      "mcp__supabase__list_migrations"
     ],
     "deny": [],
-    "defaultMode": "acceptEdits",
-    "ask": []
+    "ask": [],
+    "defaultMode": "acceptEdits"
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [

@@ -27,7 +27,7 @@ dist-ssr
 .env.*
 !.env.example
 .temp/
-!.mcp.json
+.mcp.json
 
 # Security and credentials
 *.pem
