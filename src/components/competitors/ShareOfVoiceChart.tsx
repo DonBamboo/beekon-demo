@@ -36,13 +36,23 @@ import {
   autoFixColorConflicts,
 } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
+import { validateAndSanitizeChartData } from "@/utils/chartDataValidation";
 
 // Custom Tick Component for competitor name truncation with hover
-const CustomCompetitorTick = ({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) => {
+const CustomCompetitorTick = ({
+  x,
+  y,
+  payload,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value: string };
+}) => {
   const maxLength = 20; // Maximum characters to display
-  const text = payload?.value || '';
-  const displayText = text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
-  
+  const text = payload?.value || "";
+  const displayText =
+    text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
+
   return (
     <g transform={`translate(${x},${y})`}>
       <text
@@ -103,24 +113,59 @@ export default function ShareOfVoiceChart({
     }
 
     // Filter out "Your Brand" for competitor processing
-    const competitorData = data.filter(item => item.name !== "Your Brand");
-    
+    const competitorData = data.filter((item) => item.name !== "Your Brand");
+
     // Register all competitors in fixed color slots for predictable color assignment
     registerCompetitorsInFixedSlots(
-      competitorData.map(item => ({
+      competitorData.map((item) => ({
         competitorId: item.competitorId,
-        name: item.name
+        name: item.name,
       }))
     );
 
-    // Validate and sanitize data
+    // Comprehensive data validation and sanitization
     const validatedData = data.map((item) => {
-      // Ensure value is a valid number and not negative
-      const sanitizedValue = Math.max(0, isNaN(item.value) ? 0 : item.value);
-      
+      // Robust sanitization to prevent NaN, null, undefined, or Infinity from reaching recharts
+      const sanitizedValue =
+        typeof item.value === "number" &&
+        !isNaN(item.value) &&
+        isFinite(item.value)
+          ? Math.max(0, item.value)
+          : 0;
+      const sanitizedMentions =
+        typeof item.mentions === "number" &&
+        !isNaN(item.mentions) &&
+        isFinite(item.mentions)
+          ? Math.max(0, item.mentions)
+          : 0;
+      const sanitizedTotalMentions =
+        typeof item.totalMentions === "number" &&
+        !isNaN(item.totalMentions) &&
+        isFinite(item.totalMentions)
+          ? Math.max(0, item.totalMentions)
+          : 0;
+      const sanitizedAvgRank =
+        typeof item.avgRank === "number" &&
+        !isNaN(item.avgRank) &&
+        isFinite(item.avgRank)
+          ? Math.max(0, item.avgRank)
+          : undefined;
+      const sanitizedShareOfVoice =
+        typeof item.shareOfVoice === "number" &&
+        !isNaN(item.shareOfVoice) &&
+        isFinite(item.shareOfVoice)
+          ? Math.max(0, item.shareOfVoice)
+          : sanitizedValue;
+      const sanitizedTotalAnalyses =
+        typeof item.totalAnalyses === "number" &&
+        !isNaN(item.totalAnalyses) &&
+        isFinite(item.totalAnalyses)
+          ? Math.max(0, item.totalAnalyses)
+          : 0;
+
       let fillColor: string;
       let colorIndex: number | undefined;
-      
+
       if (item.name === "Your Brand") {
         fillColor = getYourBrandColor();
         // colorIndex remains undefined for "Your Brand"
@@ -128,20 +173,25 @@ export default function ShareOfVoiceChart({
         // Get fixed color slot for predictable competitor coloring
         const colorInfo = getCompetitorFixedColorInfo({
           competitorId: item.competitorId,
-          name: item.name
+          name: item.name,
         });
-        
+
         // Use fixed color slot information
         colorIndex = colorInfo.colorSlot;
         fillColor = getCompetitorFixedColor({
           competitorId: item.competitorId,
-          name: item.name
+          name: item.name,
         });
       }
 
       return {
         ...item,
         value: sanitizedValue,
+        mentions: sanitizedMentions,
+        totalMentions: sanitizedTotalMentions,
+        avgRank: sanitizedAvgRank,
+        shareOfVoice: sanitizedShareOfVoice,
+        totalAnalyses: sanitizedTotalAnalyses,
         fill: fillColor,
         colorIndex, // Store pre-computed color index
       };
@@ -160,24 +210,51 @@ export default function ShareOfVoiceChart({
     return validatedData;
   }, [data]);
 
-  // Calculate insights
+  // Sanitize chart data at component level to prevent NaN/Infinity values throughout
+  const sanitizedChartData = useMemo(() => {
+    const validation = validateAndSanitizeChartData(chartData, ["value"]);
+
+    if (validation.hasIssues && process.env.NODE_ENV !== "production") {
+      console.warn(
+        "⚠️ ShareOfVoiceChart: NaN/Infinity detected in chartData (component-level):",
+        {
+          issues: validation.issues,
+          originalData: chartData,
+          sanitizedData: validation.data,
+        }
+      );
+    }
+
+    return validation.data;
+  }, [chartData]);
+
+  // Calculate insights with NaN protection
   const insights = useMemo(() => {
-    const totalVoice = data.reduce((sum, item) => sum + item.value, 0);
-    const yourBrand = data.find((item) => item.name === "Your Brand");
-    const competitors = data.filter((item) => item.name !== "Your Brand");
-    const leader = competitors.reduce(
-      (prev, current) => (prev && prev.value > current.value ? prev : current),
-      competitors[0]
+    // Use sanitizedChartData to ensure no NaN values propagate
+    const safeData = sanitizedChartData.filter((item) => item.value >= 0);
+    const totalVoice = safeData.reduce(
+      (sum, item) => sum + (item.value || 0),
+      0
     );
+    const yourBrand = safeData.find((item) => item.name === "Your Brand");
+    const competitors = safeData.filter((item) => item.name !== "Your Brand");
+    const leader =
+      competitors.length > 0
+        ? competitors.reduce(
+            (prev, current) =>
+              prev && (prev.value || 0) > (current.value || 0) ? prev : current,
+            competitors[0]
+          )
+        : null;
 
     return {
-      totalVoice,
+      totalVoice: totalVoice || 0,
       yourBrandShare: yourBrand?.value || 0,
       leader: leader || null,
       competitorCount: competitors.length,
       isLeading: (yourBrand?.value || 0) > (leader?.value || 0),
     };
-  }, [data]);
+  }, [sanitizedChartData]);
 
   // Process data for better visualization
   const processedChartData = useMemo(() => {
@@ -195,18 +272,66 @@ export default function ShareOfVoiceChart({
 
     // Group small competitors into "Others" if there are any
     if (smallCompetitors.length > 0) {
-      const othersTotal = smallCompetitors.reduce(
-        (sum, item) => sum + item.value,
-        0
-      );
-      if (othersTotal > 0) {
+      const othersTotal = smallCompetitors.reduce((sum, item) => {
+        // Robust validation to prevent NaN propagation in Others group
+        const safeValue =
+          typeof item.value === "number" &&
+          !isNaN(item.value) &&
+          isFinite(item.value)
+            ? item.value
+            : 0;
+        if (safeValue !== item.value) {
+          console.warn("Fixed invalid value in Others group calculation:", {
+            name: item.name,
+            originalValue: item.value,
+            fixedValue: safeValue,
+          });
+        }
+        return sum + safeValue;
+      }, 0);
+
+      // Validate othersTotal before using it
+      const safeOthersTotal =
+        typeof othersTotal === "number" &&
+        !isNaN(othersTotal) &&
+        isFinite(othersTotal)
+          ? othersTotal
+          : 0;
+
+      if (safeOthersTotal > 0) {
         result.push({
           name: `Others (${smallCompetitors.length})`,
-          value: othersTotal,
+          value: safeOthersTotal,
           fill: "#94a3b8", // Neutral gray color
           isOthersGroup: true,
           competitors: smallCompetitors,
           colorIndex: undefined, // Others group doesn't have a specific color index
+          // Add missing optional properties with aggregated values from smallCompetitors
+          mentions: smallCompetitors.reduce(
+            (sum, comp) => sum + (comp.mentions || 0),
+            0
+          ),
+          totalMentions: smallCompetitors.reduce(
+            (sum, comp) => sum + (comp.totalMentions || 0),
+            0
+          ),
+          avgRank:
+            smallCompetitors.length > 0
+              ? smallCompetitors.reduce(
+                  (sum, comp) => sum + (comp.avgRank || 0),
+                  0
+                ) / smallCompetitors.length
+              : undefined,
+          shareOfVoice: safeOthersTotal,
+          totalAnalyses: smallCompetitors.reduce(
+            (sum, comp) => sum + (comp.totalAnalyses || 0),
+            0
+          ),
+        });
+      } else if (othersTotal !== safeOthersTotal) {
+        console.warn("Others group total was invalid, skipping Others group:", {
+          originalTotal: othersTotal,
+          smallCompetitorsCount: smallCompetitors.length,
         });
       }
     }
@@ -218,7 +343,11 @@ export default function ShareOfVoiceChart({
   const dataQuality = useMemo(() => {
     const issues: string[] = [];
     const warnings: string[] = [];
-    const totalValue = data.reduce((sum, item) => sum + item.value, 0);
+    // Use sanitizedChartData to prevent NaN in calculations
+    const totalValue = sanitizedChartData.reduce(
+      (sum, item) => sum + (item.value || 0),
+      0
+    );
 
     // Check for data consistency issues
     if (chartType === "market_share") {
@@ -241,13 +370,17 @@ export default function ShareOfVoiceChart({
     }
 
     // Check for missing competitor data
-    const hasYourBrand = data.some((item) => item.name === "Your Brand");
+    const hasYourBrand = sanitizedChartData.some(
+      (item) => item.name === "Your Brand"
+    );
     if (!hasYourBrand) {
       issues.push("Your Brand data is missing");
     }
 
     // Check for zero values that might indicate data issues
-    const zeroValueCompetitors = data.filter((item) => item.value === 0).length;
+    const zeroValueCompetitors = sanitizedChartData.filter(
+      (item) => (item.value || 0) === 0
+    ).length;
     if (zeroValueCompetitors > 0) {
       warnings.push(`${zeroValueCompetitors} competitor(s) have zero values`);
     }
@@ -258,13 +391,45 @@ export default function ShareOfVoiceChart({
       isValid: issues.length === 0,
       totalValue,
     };
-  }, [data, chartType]);
+  }, [sanitizedChartData, chartType]);
 
   // Only show chart if there are competitors to compare against
   const hasCompetitors =
     data.length > 1 || (data.length === 1 && data[0]!.name !== "Your Brand");
 
-  if (!hasCompetitors) return null;
+  // Handle empty data scenario gracefully
+  const hasValidData =
+    sanitizedChartData.length > 0 &&
+    sanitizedChartData.some((item) => item.value > 0);
+
+  if (!hasCompetitors || !hasValidData) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {chartType === "market_share"
+              ? "Market Share Analysis"
+              : "Share of Voice Comparison"}
+          </CardTitle>
+          <CardDescription>
+            {!hasCompetitors
+              ? "Add competitors to see share of voice analysis"
+              : "No data available for the selected date range. Try selecting a wider date range like 90 days."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+            <Info className="h-12 w-12 mb-4" />
+            <p className="text-center">
+              {!hasCompetitors
+                ? "No competitors to display"
+                : `No data available for the last ${dateFilter}`}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const CustomTooltip = ({
     active,
@@ -464,7 +629,7 @@ export default function ShareOfVoiceChart({
               <div>
                 <div className="text-xl font-bold text-slate-900 dark:text-slate-100">
                   {Math.round(
-                    data.reduce(
+                    sanitizedChartData.reduce(
                       (sum, item) => sum + (item.totalMentions || 0),
                       0
                     )
@@ -505,11 +670,13 @@ export default function ShareOfVoiceChart({
                           : item.fill,
                         width: `${width}%`,
                         minWidth: "20px", // Minimum width for visibility
-                        border: `1px solid ${isYourBrand 
-                          ? "hsl(var(--primary))" 
-                          : isOthers 
-                          ? "#64748b" 
-                          : item.fill}`,
+                        border: `1px solid ${
+                          isYourBrand
+                            ? "hsl(var(--primary))"
+                            : isOthers
+                            ? "#64748b"
+                            : item.fill
+                        }`,
                       }}
                       title={
                         isOthers
@@ -700,7 +867,7 @@ export default function ShareOfVoiceChart({
           </div>
         </div>
 
-        {/* Charts Container */}
+        {/* Charts Container with Error Boundaries */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {/* Bar Chart */}
           <div>
@@ -716,53 +883,81 @@ export default function ShareOfVoiceChart({
                   : "Percentage of total brand mentions (hover for details)"}
               </p>
             </div>
-            <ResponsiveContainer width="100%" height={350}>
-              <BarChart
-                data={chartData}
-                layout="horizontal"
-                barCategoryGap={20}
-                margin={{ top: 20, right: 30, bottom: 20, left: 150 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  domain={[
-                    0,
-                    Math.max(50, Math.max(...data.map((d) => d.value)) * 1.1),
-                  ]}
-                  tickFormatter={(value) => `${value}%`}
-                />
-                <YAxis 
-                  dataKey="name" 
-                  type="category" 
-                  width={150}
-                  tick={<CustomCompetitorTick />}
-                  interval={0}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar
-                  dataKey="value"
-                  radius={[0, 4, 4, 0]}
-                  minPointSize={5}
-                  label={{
-                    position: "right",
-                    formatter: (value: number) => `${value.toFixed(1)}%`,
-                    fill: "#374151",
-                    fontSize: 12,
-                    fontWeight: 500,
-                  }}
+            <div className="relative">
+              {/* <ResponsiveContainer width="100%" height={350}>
+                <BarChart
+                  data={sanitizedChartData}
+                  layout="horizontal"
+                  barCategoryGap={20}
+                  margin={{ top: 20, right: 30, bottom: 20, left: 150 }}
                 >
-                  {chartData.map((entry, index) => (
-                    <Cell
-                      key={`bar-${entry.name}-${index}`}
-                      fill={entry.fill}
-                      stroke={entry.fill}
-                      strokeWidth={2}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    type="number"
+                    domain={[
+                      0,
+                      (() => {
+                        // Safe domain calculation to prevent NaN
+                        const values = sanitizedChartData
+                          .map((d) => d.value)
+                          .filter((v) => typeof v === "number" && !isNaN(v));
+                        const maxValue =
+                          values.length > 0 ? Math.max(...values) : 0;
+                        return Math.max(50, maxValue * 1.1);
+                      })(),
+                    ]}
+                    tickFormatter={(value) => {
+                      // Protect against NaN values in tick formatter
+                      const safeValue =
+                        typeof value === "number" &&
+                        !isNaN(value) &&
+                        isFinite(value)
+                          ? value
+                          : 0;
+                      return `${safeValue}%`;
+                    }}
+                  />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    width={150}
+                    tick={<CustomCompetitorTick />}
+                    interval={0}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar
+                    dataKey="value"
+                    radius={[0, 4, 4, 0]}
+                    minPointSize={5}
+                    label={{
+                      position: "right",
+                      formatter: (value: number) => {
+                        // Protect against NaN values in label formatter
+                        const safeValue =
+                          typeof value === "number" &&
+                          !isNaN(value) &&
+                          isFinite(value)
+                            ? value
+                            : 0;
+                        return `${safeValue.toFixed(1)}%`;
+                      },
+                      fill: "#374151",
+                      fontSize: 12,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {sanitizedChartData.map((entry, index) => (
+                      <Cell
+                        key={`bar-${entry.name}-${index}`}
+                        fill={entry.fill}
+                        stroke={entry.fill}
+                        strokeWidth={2}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer> */}
+            </div>
           </div>
 
           {/* Pie Chart */}
@@ -779,53 +974,86 @@ export default function ShareOfVoiceChart({
                   : "Visual distribution of competitor mentions"}
               </p>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({
-                    name,
-                    value,
-                  }: {
-                    name: string;
-                    value: number;
-                    index?: number;
-                  }) => {
-                    // Only show labels for segments > 5% to avoid clutter
-                    if (value < 5) return "";
-                    const shortName =
-                      name === "Your Brand" ? "You" : name.split(" ")[0];
-                    return `${shortName}: ${value.toFixed(1)}%`;
-                  }}
-                  outerRadius={90}
-                  fill="#8884d8"
-                  dataKey="value"
-                  stroke="#ffffff"
-                  strokeWidth={2}
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell 
-                      key={`pie-${entry.name}-${index}`} 
-                      fill={entry.fill}
-                      stroke={entry.fill}
-                      strokeWidth={1}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value) => [
-                    `${value}%`,
-                    chartType === "market_share"
-                      ? "Market Share"
-                      : "Share of Voice",
-                  ]}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="relative">
+              {(() => {
+                try {
+                  // Use component-level sanitized data for PieChart
+                  const validPieData = sanitizedChartData;
+
+                  return (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={validPieData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({
+                            name,
+                            value,
+                          }: {
+                            name: string;
+                            value: number;
+                            index?: number;
+                          }) => {
+                            // Only show labels for segments > 5% to avoid clutter with robust validation
+                            if (
+                              typeof value !== "number" ||
+                              isNaN(value) ||
+                              !isFinite(value) ||
+                              value < 5
+                            )
+                              return "";
+                            const shortName =
+                              name === "Your Brand"
+                                ? "You"
+                                : name.split(" ")[0];
+                            return `${shortName}: ${value.toFixed(1)}%`;
+                          }}
+                          outerRadius={90}
+                          fill="#8884d8"
+                          dataKey="value"
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                        >
+                          {validPieData.map((entry, index) => (
+                            <Cell
+                              key={`pie-${entry.name}-${index}`}
+                              fill={entry.fill}
+                              stroke={entry.fill}
+                              strokeWidth={1}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) => [
+                            `${value}%`,
+                            chartType === "market_share"
+                              ? "Market Share"
+                              : "Share of Voice",
+                          ]}
+                        />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  );
+                } catch (error) {
+                  console.error("PieChart rendering error:", error);
+                  return (
+                    <div className="flex flex-col items-center justify-center h-[300px] border border-dashed border-muted-foreground/50 rounded-lg">
+                      <AlertTriangle className="h-8 w-8 text-muted-foreground mb-2" />
+                      <p className="text-sm text-muted-foreground text-center">
+                        Chart could not render
+                        <br />
+                        <span className="text-xs">
+                          Try refreshing or selecting a different date range
+                        </span>
+                      </p>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
           </div>
         </div>
 
@@ -854,23 +1082,23 @@ export default function ShareOfVoiceChart({
               Color Legend
             </h4>
             <ColorLegend
-              items={chartData.map((item) => {
+              items={sanitizedChartData.map((item) => {
                 if (item.name === "Your Brand") {
                   return {
                     name: item.name,
                     color: item.fill,
-                    colorName: "Primary"
+                    colorName: "Primary",
                   };
                 } else {
                   // Use fixed color slot for consistent legend names
                   const colorInfo = getCompetitorFixedColorInfo({
                     competitorId: item.competitorId,
-                    name: item.name
+                    name: item.name,
                   });
                   return {
                     name: item.name,
                     color: item.fill,
-                    colorName: colorInfo.name
+                    colorName: colorInfo.name,
                   };
                 }
               })}

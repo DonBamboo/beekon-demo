@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download } from "lucide-react";
@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { validateAndSanitizeChartData } from "@/utils/chartDataValidation";
 
 interface VisibilityChartProps {
   timeSeriesData: Array<{
@@ -28,7 +29,18 @@ export const VisibilityChart = forwardRef<HTMLDivElement, VisibilityChartProps>(
   hasData,
   onExportData,
 }, ref) => {
-  if (timeSeriesData.length === 0) return null;
+  // Sanitize chart data to prevent NaN/Infinity values from reaching Recharts
+  const sanitizedData = useMemo(() => {
+    const validation = validateAndSanitizeChartData(timeSeriesData, ['visibility']);
+
+    if (validation.hasIssues && process.env.NODE_ENV !== 'production') {
+      console.warn('⚠️ VisibilityChart: Data validation issues detected:', validation.issues);
+    }
+
+    return validation.data;
+  }, [timeSeriesData]);
+
+  if (sanitizedData.length === 0) return null;
 
   return (
     <Card ref={ref}>
@@ -56,8 +68,8 @@ export const VisibilityChart = forwardRef<HTMLDivElement, VisibilityChartProps>(
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={350}>
-          <LineChart 
-            data={timeSeriesData}
+          <LineChart
+            data={sanitizedData}
             margin={{ bottom: 60, left: 20, right: 20, top: 20 }}
           >
             <CartesianGrid strokeDasharray="3 3" />

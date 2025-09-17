@@ -531,6 +531,30 @@ export class AnalysisService {
   }
 
   /**
+   * Get analysis results with pagination - main method that tries optimized first, then falls back
+   */
+  async getAnalysisResultsPaginated(
+    websiteId: string,
+    options: {
+      cursor?: string;
+      limit?: number;
+      filters?: {
+        topic?: string;
+        llmProvider?: string;
+        status?: AnalysisStatus;
+        dateRange?: { start: string; end: string };
+        searchQuery?: string;
+        mentionStatus?: string;
+        confidenceRange?: [number, number];
+        sentiment?: string;
+        analysisSession?: string;
+      };
+    } = {}
+  ): Promise<PaginatedAnalysisResults> {
+    return this.getAnalysisResultsPaginatedOptimized(websiteId, options);
+  }
+
+  /**
    * OPTIMIZED: Get analysis results using materialized views for lightning-fast performance
    * This replaces the expensive 4-table JOIN queries with pre-computed data
    */
@@ -563,7 +587,7 @@ export class AnalysisService {
 
       const { data, error } = await supabase
         .schema("beekon_data")
-        .rpc("get_analysis_results_optimized", {
+        .rpc("get_analysis_results_optimized" as any, {
           p_website_id: websiteId,
           p_date_start: defaultDateRange.start,
           p_date_end: defaultDateRange.end,
@@ -573,32 +597,57 @@ export class AnalysisService {
 
       if (error) throw error;
 
-      const results = data || [];
+      // Type guard to ensure data is an array
+      const results = Array.isArray(data) ? data : [];
       const hasMore = results.length > limit;
       const resultsToReturn = hasMore ? results.slice(0, -1) : results;
 
+      // Define interface for database result row
+      interface AnalysisResultRow {
+        id: string;
+        topic: string;
+        topic_id: string;
+        confidence_score: number;
+        created_at: string;
+        analyzed_at: string;
+        reporting_text: string;
+        llm_provider: string;
+        is_mentioned: boolean;
+        rank_position: number | null;
+        sentiment_score: number | null;
+        // Additional optional fields for UIAnalysisResult compatibility
+        prompt?: string;
+        updated_at?: string;
+        recommendation_text?: string | null;
+        prompt_strengths?: string[] | null;
+        prompt_opportunities?: string[] | null;
+      }
+
       // Transform to UIAnalysisResult format
-      const transformedResults = resultsToReturn.map((row: any) => ({
+      const transformedResults: UIAnalysisResult[] = resultsToReturn.map((row: AnalysisResultRow) => ({
         id: row.id,
+        prompt: row.prompt || '', // Add required field
         website_id: websiteId,
         topic: row.topic,
         topic_id: row.topic_id,
         confidence: row.confidence_score || 0,
-        status: 'completed' as AnalysisStatus,
+        status: 'completed',
         created_at: row.created_at,
+        updated_at: row.updated_at || row.created_at, // Add required field
         analyzed_at: row.analyzed_at,
         reporting_text: row.reporting_text,
+        recommendation_text: row.recommendation_text || null, // Add required field
+        prompt_strengths: row.prompt_strengths || null, // Add required field
+        prompt_opportunities: row.prompt_opportunities || null, // Add required field
         llm_results: [{
-          id: row.id,
-          prompt_id: row.id,  // Using analysis result id as fallback
           llm_provider: row.llm_provider,
           is_mentioned: row.is_mentioned,
           rank_position: row.rank_position,
           sentiment_score: row.sentiment_score,
           confidence_score: row.confidence_score,
-          analysis_text: row.reporting_text || '',
+          summary_text: row.reporting_text || null,
+          response_text: row.reporting_text || null,
           analyzed_at: row.analyzed_at,
-          created_at: row.created_at,
         }]
       }));
 
@@ -953,6 +1002,15 @@ export class AnalysisService {
   }
 
   /**
+   * Get topics for website - main method that tries optimized first, then falls back
+   */
+  async getTopicsForWebsite(
+    websiteId: string
+  ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
+    return this.getTopicsForWebsiteOptimized(websiteId);
+  }
+
+  /**
    * OPTIMIZED: Get topics using materialized views for instant results
    */
   async getTopicsForWebsiteOptimized(
@@ -962,13 +1020,21 @@ export class AnalysisService {
       // OPTIMIZED: Use materialized view function for instant topics
       const { data, error } = await supabase
         .schema("beekon_data")
-        .rpc("get_topics_optimized", {
+        .rpc("get_topics_optimized" as any, {
           p_website_id: websiteId,
         });
 
       if (error) throw error;
 
-      return (data || []).map((row: any) => ({
+      interface TopicRow {
+        id: string;
+        topic_name: string;
+        result_count: number;
+      }
+
+      // Type guard to ensure data is an array
+      const validData = Array.isArray(data) ? data : [];
+      return validData.map((row: TopicRow) => ({
         id: row.id,
         name: row.topic_name,
         resultCount: Number(row.result_count || 0),

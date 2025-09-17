@@ -15,7 +15,9 @@ interface AnalysisVisualizationProps {
   analytics: AnalysisAnalytics;
 }
 
-export function AnalysisVisualization({ analytics }: AnalysisVisualizationProps) {
+export function AnalysisVisualization({
+  analytics,
+}: AnalysisVisualizationProps) {
   // Use pre-calculated analytics data
   const {
     totalResults,
@@ -76,7 +78,9 @@ export function AnalysisVisualization({ analytics }: AnalysisVisualizationProps)
           {llmPerformance.map((llmStats) => (
             <div key={llmStats.provider} className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium capitalize">{llmStats.provider}</span>
+                <span className="text-sm font-medium capitalize">
+                  {llmStats.provider}
+                </span>
                 <div className="flex items-center space-x-2">
                   <Badge variant="outline" className="text-xs">
                     {llmStats.totalResults} total
@@ -88,12 +92,10 @@ export function AnalysisVisualization({ analytics }: AnalysisVisualizationProps)
                   )}
                 </div>
               </div>
-              <Progress
-                value={llmStats.mentionRate}
-                className="h-2"
-              />
+              <Progress value={llmStats.mentionRate} className="h-2" />
               <div className="text-xs text-muted-foreground">
-                {llmStats.mentionRate.toFixed(1)}% mention rate, {llmStats.averageConfidence.toFixed(1)}% confidence
+                {llmStats.mentionRate.toFixed(1)}% mention rate,{" "}
+                {llmStats.averageConfidence.toFixed(1)}% confidence
               </div>
             </div>
           ))}
@@ -113,14 +115,17 @@ export function AnalysisVisualization({ analytics }: AnalysisVisualizationProps)
           {topPerformingTopics.slice(0, 5).map((topicData) => (
             <div key={topicData.topic} className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium truncate">{topicData.topic}</span>
+                <span className="text-sm font-medium truncate">
+                  {topicData.topic}
+                </span>
                 <Badge variant="outline" className="text-xs">
                   {topicData.mentionRate.toFixed(1)}% mention rate
                 </Badge>
               </div>
               <Progress value={topicData.mentionRate} className="h-2" />
               <div className="text-xs text-muted-foreground">
-                {topicData.resultCount} results, avg rank #{topicData.averageRank.toFixed(1)}
+                {topicData.resultCount} results, avg rank #
+                {topicData.averageRank.toFixed(1)}
               </div>
             </div>
           ))}
@@ -139,7 +144,7 @@ export function SentimentChart({ results }: { results: UIAnalysisResult[] }) {
   };
 
   results.forEach((result: UIAnalysisResult) => {
-    result.llm_results.forEach((llm: UIAnalysisResult['llm_results'][0]) => {
+    result.llm_results.forEach((llm: UIAnalysisResult["llm_results"][0]) => {
       if (llm.is_mentioned && llm.sentiment_score !== null) {
         if (llm.sentiment_score > 0.1) {
           sentimentCounts.positive++;
@@ -204,7 +209,7 @@ export function RankingChart({ results }: { results: UIAnalysisResult[] }) {
   };
 
   results.forEach((result: UIAnalysisResult) => {
-    result.llm_results.forEach((llm: UIAnalysisResult['llm_results'][0]) => {
+    result.llm_results.forEach((llm: UIAnalysisResult["llm_results"][0]) => {
       if (llm.is_mentioned && llm.rank_position) {
         if (llm.rank_position <= 5) {
           rankingData[llm.rank_position as keyof typeof rankingData]++;

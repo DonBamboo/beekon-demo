@@ -16,7 +16,7 @@ export type {
 };
 export type { Competitor };
 
-export interface CompetitorPerformance {
+export interface CompetitorServicePerformance {
   competitorId: string;
   domain: string;
   name: string;
@@ -185,7 +185,7 @@ export class OptimizedCompetitorService extends BaseService {
   async getCompetitorPerformance(
     websiteId: string,
     dateRange?: { start: string; end: string }
-  ): Promise<CompetitorPerformance[]> {
+  ): Promise<CompetitorServicePerformance[]> {
     const cacheKey = `performance_${websiteId}_${dateRange?.start || "all"}_${
       dateRange?.end || "all"
     }`;
@@ -725,7 +725,7 @@ export class OptimizedCompetitorService extends BaseService {
    * Transform competitor data into clean, flattened export format
    */
   private transformCompetitorDataForExport(
-    competitors: CompetitorPerformance[],
+    competitors: CompetitorServicePerformance[],
     analytics: CompetitorAnalytics,
     dateRange?: { start: string; end: string }
   ): Record<string, unknown>[] {
@@ -989,7 +989,7 @@ export class OptimizedCompetitorService extends BaseService {
   }
 
   private convertToCSV(data: {
-    competitors: CompetitorPerformance[];
+    competitors: CompetitorServicePerformance[];
     analytics: CompetitorAnalytics;
   }): string {
     const { competitors, analytics } = data;
@@ -1216,7 +1216,7 @@ export class OptimizedCompetitorService extends BaseService {
     marketShareData,
     shareOfVoiceData,
   }: {
-    competitors: CompetitorPerformance[];
+    competitors: CompetitorServicePerformance[];
     shareOfVoice: CompetitorShareOfVoice[];
     gapAnalysis: CompetitiveGapAnalysis[];
     insights: CompetitorInsight[];

@@ -3,11 +3,20 @@
  * Combines related data fetching into single requests to reduce network overhead
  */
 
-import { analysisService } from './analysisService';
-import { competitorService } from './competitorService';
-import { dashboardService } from './dashboardService';
-import type { Topic, LLMProvider, WebsiteMetadata, CompetitorFilters, DashboardFilters } from '@/contexts/AppStateContext';
-import type { AnalysisFilters } from '@/hooks/useAnalysisQuery';
+import { analysisService } from "./analysisService";
+import { competitorService } from "./competitorService";
+import { competitorAnalysisService } from "./competitorAnalysisService";
+import { dashboardService } from "./dashboardService";
+import type {
+  Topic,
+  LLMProvider,
+  WebsiteMetadata,
+  CompetitorFilters,
+  DashboardFilters,
+} from "@/contexts/AppStateContext";
+import type { AnalysisFilters } from "@/hooks/useAnalysisQuery";
+import { normalizeCompetitorStatus } from "@/utils/competitorStatusUtils";
+import { sanitizeChartNumber, sanitizeSentimentScore } from "@/utils/chartDataValidation";
 
 // Batch request types
 export interface BatchRequest {
@@ -60,13 +69,13 @@ export interface CompetitorData {
   addedAt: string;
 }
 
-export interface CompetitorPerformance {
+export interface BatchCompetitorPerformance {
   competitorId: string;
   shareOfVoice: number;
   mentionCount: number;
   averageRank: number;
   sentimentScore: number;
-  trend: 'up' | 'down' | 'stable';
+  trend: "up" | "down" | "stable";
 }
 
 export interface DashboardMetrics {
@@ -88,7 +97,7 @@ export interface PerformanceMetrics {
   name: string;
   value: number;
   change: number;
-  trend: 'up' | 'down' | 'stable';
+  trend: "up" | "down" | "stable";
 }
 
 // Page-specific batch data structures
@@ -102,7 +111,7 @@ export interface AnalysisPageData {
 
 export interface CompetitorsPageData {
   competitors: CompetitorData[];
-  performance: CompetitorPerformance[];
+  performance: BatchCompetitorPerformance[];
   analytics: Record<string, unknown>; // Full CompetitorAnalytics structure
   topics: Topic[]; // Shared with analysis page
 }
@@ -127,26 +136,24 @@ class BatchService {
   async getWebsiteInitData(websiteId: string): Promise<WebsiteInitData> {
     try {
       // Fetch all data in parallel for maximum speed
-      const [
-        metadata,
-        topics,
-        llmProviders,
-        recentAnalyses,
-        basicMetrics,
-      ] = await Promise.all([
-        analysisService.getWebsiteMetadata(websiteId),
-        analysisService.getTopicsForWebsite(websiteId),
-        analysisService.getAvailableLLMProviders(websiteId),
-        this.getRecentAnalyses(websiteId, 5), // Last 5 analyses for quick context
-        this.getBasicMetrics(websiteId),
-      ]);
+      const [metadata, topics, llmProviders, recentAnalyses, basicMetrics] =
+        await Promise.all([
+          analysisService.getWebsiteMetadata(websiteId),
+          analysisService.getTopicsForWebsite(websiteId),
+          analysisService.getAvailableLLMProviders(websiteId),
+          this.getRecentAnalyses(websiteId, 5), // Last 5 analyses for quick context
+          this.getBasicMetrics(websiteId),
+        ]);
 
       // Transform topics to include "All Topics" option
       const topicsWithAll: Topic[] = [
         {
           id: "all",
           name: "All Topics",
-          resultCount: topics.reduce((sum, topic) => sum + topic.resultCount, 0),
+          resultCount: topics.reduce(
+            (sum, topic) => sum + topic.resultCount,
+            0
+          ),
         },
         ...topics,
       ];
@@ -157,7 +164,10 @@ class BatchService {
           id: "all",
           name: "All LLMs",
           description: "All available LLM providers",
-          resultCount: llmProviders.reduce((sum, provider) => sum + provider.resultCount, 0),
+          resultCount: llmProviders.reduce(
+            (sum, provider) => sum + provider.resultCount,
+            0
+          ),
         },
         ...llmProviders,
       ];
@@ -178,46 +188,55 @@ class BatchService {
   /**
    * Get all data needed for the Analysis page
    */
-  async getAnalysisPageData(websiteId: string, filters?: Partial<AnalysisFilters>): Promise<AnalysisPageData> {
+  async getAnalysisPageData(
+    websiteId: string,
+    filters?: Partial<AnalysisFilters>
+  ): Promise<AnalysisPageData> {
     try {
-      const [
-        topics,
-        llmProviders,
-        analysisSessions,
-        recentResults,
-        metadata,
-      ] = await Promise.all([
-        analysisService.getTopicsForWebsite(websiteId),
-        analysisService.getAvailableLLMProviders(websiteId),
-        this.getAnalysisSessions(websiteId),
-        analysisService.getAnalysisResultsPaginated(websiteId, {
-          limit: 20,
-          filters: filters || {},
-        }),
-        analysisService.getWebsiteMetadata(websiteId),
-      ]);
+      const [topics, llmProviders, analysisSessions, recentResults, metadata] =
+        await Promise.all([
+          analysisService.getTopicsForWebsite(websiteId),
+          analysisService.getAvailableLLMProviders(websiteId),
+          this.getAnalysisSessions(websiteId),
+          analysisService.getAnalysisResultsPaginated(websiteId, {
+            limit: 20,
+            filters: filters || {},
+          }),
+          analysisService.getWebsiteMetadata(websiteId),
+        ]);
 
       // Transform data with "All" options
       const topicsWithAll: Topic[] = [
-        { id: "all", name: "All Topics", resultCount: topics.reduce((s, t) => s + t.resultCount, 0) },
+        {
+          id: "all",
+          name: "All Topics",
+          resultCount: topics.reduce((s, t) => s + t.resultCount, 0),
+        },
         ...topics,
       ];
 
       const llmProvidersWithAll: LLMProvider[] = [
-        { id: "all", name: "All LLMs", description: "All LLM providers", resultCount: llmProviders.reduce((s, p) => s + p.resultCount, 0) },
+        {
+          id: "all",
+          name: "All LLMs",
+          description: "All LLM providers",
+          resultCount: llmProviders.reduce((s, p) => s + p.resultCount, 0),
+        },
         ...llmProviders,
       ];
 
       // Transform UIAnalysisResult[] to AnalysisResult[]
-      const transformedResults: AnalysisResult[] = recentResults.results.map(result => ({
-        id: result.id,
-        topic: result.topic,
-        llmProvider: result.llm_results[0]?.llm_provider || 'Unknown',
-        score: result.confidence,
-        createdAt: result.created_at,
-        isMentioned: result.status === 'mentioned',
-        summary: result.reporting_text || undefined,
-      }));
+      const transformedResults: AnalysisResult[] = recentResults.results.map(
+        (result) => ({
+          id: result.id,
+          topic: result.topic,
+          llmProvider: result.llm_results[0]?.llm_provider || "Unknown",
+          score: result.confidence,
+          createdAt: result.created_at,
+          isMentioned: result.status === "mentioned",
+          summary: result.reporting_text || undefined,
+        })
+      );
 
       return {
         topics: topicsWithAll,
@@ -235,36 +254,141 @@ class BatchService {
   /**
    * Get all data needed for the Competitors page
    */
-  async getCompetitorsPageData(websiteId: string, filters?: Partial<CompetitorFilters>): Promise<CompetitorsPageData> {
+  async getCompetitorsPageData(
+    websiteId: string,
+    filters?: Partial<CompetitorFilters>
+  ): Promise<CompetitorsPageData> {
     try {
-      const [
-        competitors,
-        performance,
-        analytics,
-        topics,
-      ] = await Promise.all([
-        competitorService.getCompetitors(websiteId),
-        competitorService.getCompetitorPerformance(websiteId, filters?.dateRange as { start: string; end: string; } | undefined),
-        competitorService.getCompetitiveAnalysis(websiteId, filters?.dateRange as { start: string; end: string; } | undefined),
-        analysisService.getTopicsForWebsite(websiteId), // Shared data
-      ]);
+      console.log(`🏆 BatchService: Loading competitors page data for website ${websiteId}`, { filters });
+
+      // IMPROVED: Use Promise.allSettled for resilient parallel loading
+      // Core data (essential) - if these fail, the whole request fails
+      const coreDataPromises = [
+        competitorService.getCompetitors(websiteId).catch(error => {
+          console.error('❌ Failed to load competitors:', error);
+          throw error; // Critical - must succeed
+        }),
+        competitorAnalysisService.getCompetitorShareOfVoice(
+          websiteId,
+          filters?.dateRange as { start: string; end: string } | undefined
+        ).catch(error => {
+          console.error('❌ Failed to load share of voice:', error);
+          return []; // Fallback to empty array instead of failing entire request
+        })
+      ];
+
+      // Optional data (nice-to-have) - if these fail, continue with core data
+      const optionalDataPromises = [
+        competitorAnalysisService.getCompetitiveGapAnalysis(
+          websiteId,
+          filters?.dateRange as { start: string; end: string } | undefined
+        ).catch(error => {
+          console.warn('⚠️ Failed to load gap analysis (non-critical):', error);
+          return []; // Fallback
+        }),
+        competitorAnalysisService.getCompetitorInsights(
+          websiteId,
+          filters?.dateRange as { start: string; end: string } | undefined
+        ).catch(error => {
+          console.warn('⚠️ Failed to load competitor insights (non-critical):', error);
+          return []; // Fallback
+        }),
+        analysisService.getTopicsForWebsite(websiteId).catch(error => {
+          console.warn('⚠️ Failed to load topics (non-critical):', error);
+          return []; // Fallback
+        })
+      ];
+
+      // Load core data first, then optional data
+      const [competitors, shareOfVoice] = await Promise.all(coreDataPromises);
+      const [gapAnalysis, insights, topics] = await Promise.all(optionalDataPromises);
+
+      console.log(`✅ BatchService: Data loaded successfully`, {
+        competitors: competitors?.length || 0,
+        shareOfVoice: shareOfVoice?.length || 0,
+        gapAnalysis: gapAnalysis?.length || 0,
+        insights: insights?.length || 0,
+        topics: topics?.length || 0
+      });
+
+      // Transform shareOfVoice data to match expected performance interface with NaN protection
+      const performance = (shareOfVoice || []).map((competitor: any) => {
+        // Sanitize all numeric values to prevent NaN propagation to charts
+        const sanitizedShareOfVoice = sanitizeChartNumber(competitor.shareOfVoice, 0);
+        const rankPosition = competitor.avgRankPosition || competitor.avg_rank || 0;
+        const sanitizedRankPosition = sanitizeChartNumber(rankPosition, 0);
+        const totalMentions = competitor.totalMentions || competitor.total_mentions || 0;
+        const sanitizedTotalMentions = sanitizeChartNumber(totalMentions, 0);
+        const sentimentScore = competitor.avgSentimentScore || competitor.sentiment_score || 0;
+        const sanitizedSentimentScore = sanitizeSentimentScore(sentimentScore);
+
+        return {
+          competitorId: competitor.competitorId || competitor.id,
+          domain: competitor.competitorDomain || competitor.competitor_domain,
+          name: competitor.competitorName || competitor.competitor_name || competitor.name,
+          shareOfVoice: sanitizedShareOfVoice,
+          averageRank: sanitizedRankPosition,
+          mentionCount: sanitizedTotalMentions,
+          sentimentScore: sanitizedSentimentScore,
+          visibilityScore: sanitizedShareOfVoice, // Use sanitized value
+          trend: "stable" as const, // Default trend
+          trendPercentage: 0,
+          lastAnalyzed: competitor.lastAnalyzedAt || competitor.analysis_completed_at || new Date().toISOString(),
+          isActive: competitor.is_active !== undefined ? competitor.is_active : true,
+          // FIXED: Use normalized status mapping with proper fallback
+          analysisStatus: normalizeCompetitorStatus(
+            competitor.analysisStatus || competitor.analysis_status
+          ),
+        };
+      });
+
+      // Create comprehensive analytics object
+      const analytics = {
+        totalCompetitors: competitors?.length || 0,
+        activeCompetitors: competitors?.filter((c: any) => c.is_active)?.length || 0,
+        averageCompetitorRank: shareOfVoice && shareOfVoice.length > 0
+          ? shareOfVoice.reduce((sum, c: any) => {
+              const rank = sanitizeChartNumber(c.avgRankPosition || c.avg_rank, 0);
+              return sum + rank;
+            }, 0) / shareOfVoice.length
+          : 0,
+        shareOfVoiceData: (shareOfVoice || []).map((competitor: any) => ({
+          name: competitor.competitorName || competitor.competitor_name || competitor.competitorDomain || competitor.competitor_domain,
+          shareOfVoice: sanitizeChartNumber(competitor.shareOfVoice, 0),
+          totalMentions: sanitizeChartNumber(competitor.totalMentions || competitor.total_mentions, 0),
+          totalAnalyses: sanitizeChartNumber(competitor.totalAnalyses || competitor.total_analyses, 0),
+          competitorId: competitor.competitorId || competitor.id,
+          avgRank: sanitizeChartNumber(competitor.avgRankPosition || competitor.avg_rank, 0),
+          dataType: "share_of_voice" as const,
+        })),
+        gapAnalysis,
+        insights,
+        marketShareData: [], // Will be populated by UI if needed
+        timeSeriesData: [], // Will be populated by UI if needed
+        competitiveGaps: [], // Will be populated by UI if needed
+      };
 
       return {
         competitors: competitors as unknown as CompetitorData[],
-        performance: performance as unknown as CompetitorPerformance[],
+        performance: performance as unknown as BatchCompetitorPerformance[],
         analytics: analytics as unknown as Record<string, unknown>,
-        topics,
+        topics: (topics as Topic[]) || [],
       };
     } catch (error) {
-      // Error handling - console removed for security
-      throw new Error(`Failed to load competitors data for website ${websiteId}`);
+      console.error('BatchService competitors page data error:', error);
+      throw new Error(
+        `Failed to load competitors data for website ${websiteId}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
   /**
    * Get all data needed for the Dashboard page
    */
-  async getDashboardPageData(websiteIds: string[], filters?: Partial<DashboardFilters>): Promise<DashboardPageData> {
+  async getDashboardPageData(
+    websiteIds: string[],
+    filters?: Partial<DashboardFilters>
+  ): Promise<DashboardPageData> {
     try {
       const [
         metrics,
@@ -273,8 +397,14 @@ class BatchService {
         llmPerformance,
         websitePerformance,
       ] = await Promise.all([
-        dashboardService.getDashboardMetrics(websiteIds, filters?.dateRange as { start: string; end: string; } | undefined),
-        dashboardService.getTimeSeriesData(websiteIds, filters?.dateRange as "7d" | "30d" | "90d" | undefined),
+        dashboardService.getDashboardMetrics(
+          websiteIds,
+          filters?.dateRange as { start: string; end: string } | undefined
+        ),
+        dashboardService.getTimeSeriesData(
+          websiteIds,
+          filters?.dateRange as "7d" | "30d" | "90d" | undefined
+        ),
         dashboardService.getTopicPerformance(websiteIds),
         dashboardService.getLLMPerformance(websiteIds),
         dashboardService.getWebsitePerformance(websiteIds),
@@ -283,49 +413,73 @@ class BatchService {
       return {
         metrics: {
           totalAnalyses: metrics.totalAnalyses,
-          averageVisibility: (metrics as unknown as Record<string, unknown>)?.averageVisibility as number || 0,
-          competitorCount: (metrics as unknown as Record<string, unknown>)?.competitorCount as number || 0,
-          lastAnalysisDate: (metrics as unknown as Record<string, unknown>)?.lastAnalysisDate as string,
-          growthRate: (metrics as unknown as Record<string, unknown>)?.growthRate as number || 0,
+          averageVisibility:
+            ((metrics as unknown as Record<string, unknown>)
+              ?.averageVisibility as number) || 0,
+          competitorCount:
+            ((metrics as unknown as Record<string, unknown>)
+              ?.competitorCount as number) || 0,
+          lastAnalysisDate: (metrics as unknown as Record<string, unknown>)
+            ?.lastAnalysisDate as string,
+          growthRate:
+            ((metrics as unknown as Record<string, unknown>)
+              ?.growthRate as number) || 0,
         },
         timeSeriesData: timeSeriesData.map((item: Record<string, unknown>) => ({
           date: item.date as string,
           value: (item.value as number) || 0,
-          label: (item.label as string) || '',
+          label: (item.label as string) || "",
         })),
-        topicPerformance: topicPerformance.map((item: Record<string, unknown>) => ({
-          id: (item.id as string) || '',
-          name: (item.name as string) || '',
-          value: (item.value as number) || 0,
-          change: (item.change as number) || 0,
-          trend: (item.trend as 'up' | 'down' | 'stable') || 'stable' as const,
-        })),
+        topicPerformance: topicPerformance.map(
+          (item: Record<string, unknown>) => ({
+            id: (item.id as string) || "",
+            name: (item.name as string) || "",
+            value: (item.value as number) || 0,
+            change: (item.change as number) || 0,
+            trend:
+              (item.trend as "up" | "down" | "stable") || ("stable" as const),
+          })
+        ),
         llmPerformance: (llmPerformance as unknown[]).map((item: unknown) => ({
-          id: ((item as Record<string, unknown>).id as string) || '',
-          name: ((item as Record<string, unknown>).name as string) || '',
+          id: ((item as Record<string, unknown>).id as string) || "",
+          name: ((item as Record<string, unknown>).name as string) || "",
           value: ((item as Record<string, unknown>).value as number) || 0,
           change: ((item as Record<string, unknown>).change as number) || 0,
-          trend: ((item as Record<string, unknown>).trend as 'up' | 'down' | 'stable') || 'stable' as const,
+          trend:
+            ((item as Record<string, unknown>).trend as
+              | "up"
+              | "down"
+              | "stable") || ("stable" as const),
         })),
-        websitePerformance: (websitePerformance as unknown[]).map((item: unknown) => ({
-          id: ((item as Record<string, unknown>).id as string) || '',
-          name: ((item as Record<string, unknown>).name as string) || '',
-          value: ((item as Record<string, unknown>).value as number) || 0,
-          change: ((item as Record<string, unknown>).change as number) || 0,
-          trend: ((item as Record<string, unknown>).trend as 'up' | 'down' | 'stable') || 'stable' as const,
-        })),
+        websitePerformance: (websitePerformance as unknown[]).map(
+          (item: unknown) => ({
+            id: ((item as Record<string, unknown>).id as string) || "",
+            name: ((item as Record<string, unknown>).name as string) || "",
+            value: ((item as Record<string, unknown>).value as number) || 0,
+            change: ((item as Record<string, unknown>).change as number) || 0,
+            trend:
+              ((item as Record<string, unknown>).trend as
+                | "up"
+                | "down"
+                | "stable") || ("stable" as const),
+          })
+        ),
       };
     } catch (error) {
       // Error handling - console removed for security
-      throw new Error('Failed to load dashboard data');
+      throw new Error("Failed to load dashboard data");
     }
   }
 
   /**
    * Batch multiple API requests together
    */
-  async batchRequests<T>(requests: BatchRequest[]): Promise<BatchResponse<T>[]> {
+  async batchRequests<T>(
+    requests: BatchRequest[]
+  ): Promise<BatchResponse<T>[]> {
     const responses: BatchResponse<T>[] = [];
+
+    console.log("requests", requests);
 
     // Process requests in parallel
     const promises = requests.map(async (request) => {
@@ -333,22 +487,33 @@ class BatchService {
         let data: T;
 
         switch (request.type) {
-          case 'website_init':
-            data = await this.getWebsiteInitData(request.payload.websiteId as string) as T;
+          case "website_init":
+            data = (await this.getWebsiteInitData(
+              request.payload.websiteId as string
+            )) as T;
             break;
-          
-          case 'analysis_page':
-            data = await this.getAnalysisPageData(request.payload.websiteId as string, request.payload.filters as Partial<AnalysisFilters>) as T;
+
+          case "analysis_page":
+            data = (await this.getAnalysisPageData(
+              request.payload.websiteId as string,
+              request.payload.filters as Partial<AnalysisFilters>
+            )) as T;
             break;
-          
-          case 'competitors_page':
-            data = await this.getCompetitorsPageData(request.payload.websiteId as string, request.payload.filters as Partial<CompetitorFilters>) as T;
+
+          case "competitors_page":
+            data = (await this.getCompetitorsPageData(
+              request.payload.websiteId as string,
+              request.payload.filters as Partial<CompetitorFilters>
+            )) as T;
             break;
-          
-          case 'dashboard_page':
-            data = await this.getDashboardPageData(request.payload.websiteIds as string[], request.payload.filters as Partial<DashboardFilters>) as T;
+
+          case "dashboard_page":
+            data = (await this.getDashboardPageData(
+              request.payload.websiteIds as string[],
+              request.payload.filters as Partial<DashboardFilters>
+            )) as T;
             break;
-          
+
           default:
             throw new Error(`Unknown batch request type: ${request.type}`);
         }
@@ -362,22 +527,22 @@ class BatchService {
         return {
           id: request.id,
           data: null as T,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : "Unknown error",
           timestamp: Date.now(),
         };
       }
     });
 
     const results = await Promise.allSettled(promises);
-    
+
     results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
+      if (result.status === "fulfilled") {
         responses.push(result.value);
       } else {
         responses.push({
-          id: requests[index]?.id || '',
+          id: requests[index]?.id || "",
           data: null as T,
-          error: result.reason?.message || 'Request failed',
+          error: result.reason?.message || "Request failed",
           timestamp: Date.now(),
         });
       }
@@ -411,14 +576,14 @@ class BatchService {
   private getBatchQueueKey(request: BatchRequest): string {
     // Group similar requests for batching
     switch (request.type) {
-      case 'website_init':
-      case 'analysis_page':
-      case 'competitors_page':
+      case "website_init":
+      case "analysis_page":
+      case "competitors_page":
         return `website_${request.payload.websiteId}`;
-      case 'dashboard_page':
-        return 'dashboard';
+      case "dashboard_page":
+        return "dashboard";
       default:
-        return 'general';
+        return "general";
     }
   }
 
@@ -441,10 +606,12 @@ class BatchService {
 
       try {
         const responses = await this.batchRequests(requests);
-        
+
         // Resolve individual request promises
         responses.forEach((response) => {
-          const originalRequest = requests.find(req => req.id === response.id);
+          const originalRequest = requests.find(
+            (req) => req.id === response.id
+          );
           if (originalRequest) {
             if (response.error) {
               originalRequest._reject?.(new Error(response.error));
@@ -463,20 +630,26 @@ class BatchService {
   }
 
   // Helper methods
-  private async getRecentAnalyses(websiteId: string, limit: number = 5): Promise<AnalysisResult[]> {
+  private async getRecentAnalyses(
+    websiteId: string,
+    limit: number = 5
+  ): Promise<AnalysisResult[]> {
     try {
-      const result = await analysisService.getAnalysisResultsPaginated(websiteId, {
-        limit,
-        filters: {},
-      });
+      const result = await analysisService.getAnalysisResultsPaginated(
+        websiteId,
+        {
+          limit,
+          filters: {},
+        }
+      );
       // Transform UIAnalysisResult[] to AnalysisResult[]
-      return result.results.map(result => ({
+      return result.results.map((result) => ({
         id: result.id,
         topic: result.topic,
-        llmProvider: result.llm_results[0]?.llm_provider || 'Unknown',
+        llmProvider: result.llm_results[0]?.llm_provider || "Unknown",
         score: result.confidence,
         createdAt: result.created_at,
-        isMentioned: result.status === 'mentioned',
+        isMentioned: result.status === "mentioned",
         summary: result.reporting_text || undefined,
       }));
     } catch (error) {
@@ -485,13 +658,18 @@ class BatchService {
     }
   }
 
-  private async getBasicMetrics(websiteId: string): Promise<WebsiteInitData['basicMetrics']> {
+  private async getBasicMetrics(
+    websiteId: string
+  ): Promise<WebsiteInitData["basicMetrics"]> {
     try {
       // This would be a simplified metrics call
-      const results = await analysisService.getAnalysisResultsPaginated(websiteId, {
-        limit: 1,
-        filters: {},
-      });
+      const results = await analysisService.getAnalysisResultsPaginated(
+        websiteId,
+        {
+          limit: 1,
+          filters: {},
+        }
+      );
 
       return {
         totalAnalyses: results.results.length > 0 ? 100 : 0, // Placeholder
@@ -507,13 +685,13 @@ class BatchService {
     }
   }
 
-  private async getAnalysisSessions(_websiteId: string): Promise<Array<{ id: string; name: string; resultCount: number }>> {
+  private async getAnalysisSessions(
+    _websiteId: string
+  ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
     try {
       // This would fetch available analysis sessions
       // For now, return a default "All" option
-      return [
-        { id: "all", name: "All Sessions", resultCount: 0 }
-      ];
+      return [{ id: "all", name: "All Sessions", resultCount: 0 }];
     } catch (error) {
       return [{ id: "all", name: "All Sessions", resultCount: 0 }];
     }
@@ -531,7 +709,7 @@ export const batchAPI = {
   initializeWebsite: (websiteId: string) =>
     batchService.queueRequest({
       id: `init_${websiteId}_${Date.now()}`,
-      type: 'website_init',
+      type: "website_init",
       payload: { websiteId },
       timestamp: Date.now(),
     }),
@@ -542,7 +720,7 @@ export const batchAPI = {
   loadAnalysisPage: (websiteId: string, filters?: Partial<AnalysisFilters>) =>
     batchService.queueRequest({
       id: `analysis_${websiteId}_${Date.now()}`,
-      type: 'analysis_page',
+      type: "analysis_page",
       payload: { websiteId, filters },
       timestamp: Date.now(),
     }),
@@ -550,10 +728,13 @@ export const batchAPI = {
   /**
    * Load complete competitors page data
    */
-  loadCompetitorsPage: (websiteId: string, filters?: Partial<CompetitorFilters>) =>
+  loadCompetitorsPage: (
+    websiteId: string,
+    filters?: Partial<CompetitorFilters>
+  ) =>
     batchService.queueRequest({
       id: `competitors_${websiteId}_${Date.now()}`,
-      type: 'competitors_page',
+      type: "competitors_page",
       payload: { websiteId, filters },
       timestamp: Date.now(),
     }),
@@ -561,10 +742,13 @@ export const batchAPI = {
   /**
    * Load complete dashboard page data
    */
-  loadDashboardPage: (websiteIds: string[], filters?: Partial<DashboardFilters>) =>
+  loadDashboardPage: (
+    websiteIds: string[],
+    filters?: Partial<DashboardFilters>
+  ) =>
     batchService.queueRequest({
-      id: `dashboard_${websiteIds.join(',')}_${Date.now()}`,
-      type: 'dashboard_page',
+      id: `dashboard_${websiteIds.join(",")}_${Date.now()}`,
+      type: "dashboard_page",
       payload: { websiteIds, filters },
       timestamp: Date.now(),
     }),

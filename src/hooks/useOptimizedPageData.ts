@@ -18,6 +18,7 @@ import { analysisService } from "@/services/analysisService";
 import { dashboardService, type DashboardMetrics as ServiceDashboardMetrics } from "@/services/dashboardService";
 import { deduplicateById } from "@/lib/utils";
 import type { UIAnalysisResult } from "@/types/database";
+import { normalizeCompetitorStatus } from "@/utils/competitorStatusUtils";
 
 // Type interfaces for competitor data
 interface Competitor {
@@ -624,9 +625,20 @@ export function useOptimizedCompetitorsData() {
 
   // Smart cache key strategy: base cache for website, filtered cache for specific filters
   const competitorsBaseCacheKey = `competitors_data_${selectedWebsiteId}`;
-  const competitorsFilteredCacheKey = `competitors_filtered_${selectedWebsiteId}_${JSON.stringify(
-    prevCompetitorFiltersRef.current
-  )}`;
+  // Create stable cache key based on meaningful filter values only
+  const createCacheKey = useCallback((filters: CompetitorFilters | null) => {
+    if (!selectedWebsiteId) return '';
+
+    // Extract only the meaningful filter values that affect data
+    const dateFilter = filters?.dateFilter || 'all';
+    const sortBy = filters?.sortBy || 'shareOfVoice';
+    const sortOrder = filters?.sortOrder || 'desc';
+
+    // Create deterministic key without full object serialization
+    return `competitors_filtered_${selectedWebsiteId}_${dateFilter}_${sortBy}_${sortOrder}`;
+  }, [selectedWebsiteId]);
+
+  const competitorsFilteredCacheKey = createCacheKey(prevCompetitorFiltersRef.current);
 
   // Synchronous cache detection for immediate skeleton bypass
   const hasSyncCache = useCallback(() => {
@@ -705,17 +717,20 @@ export function useOptimizedCompetitorsData() {
           });
           
           const transformedCachedCompetitors = validCachedCompetitors.map((competitor: Competitor) => {
-            // If already has analysisStatus, keep it; otherwise derive it
-            if (competitor.analysisStatus) {
-              return competitor;
-            }
+            // FIXED: Use database status directly from performance data instead of deriving
             const cachedPerformance = Array.isArray(currentCachedData.performance) ? currentCachedData.performance : [];
             const performance = cachedPerformance.find(
-              (p: CompetitorProfile) => p.domain === competitor.competitor_domain
+              (p: CompetitorProfile & { analysisStatus?: string }) => p.domain === competitor.competitor_domain
             );
+
             return {
               ...competitor,
-              analysisStatus: performance ? "completed" : ("pending" as const),
+              // FIXED: Use normalized status mapping with proper fallback logic
+              analysisStatus: normalizeCompetitorStatus(
+                performance?.analysisStatus ||
+                competitor.analysisStatus ||
+                competitor.analysis_status
+              ),
               performance,
               addedAt: competitor.created_at || new Date().toISOString(),
             };
@@ -758,33 +773,74 @@ export function useOptimizedCompetitorsData() {
       try {
         // Use stable filter reference
         const currentFilters = prevCompetitorFiltersRef.current;
+        console.log(`🔄 Loading competitors data for website ${selectedWebsiteId}`, {
+          filters: currentFilters,
+          cacheKey: competitorsFilteredCacheKey
+        });
+
+        const loadStart = Date.now();
         const batchResponse = await batchAPI.loadCompetitorsPage(
           selectedWebsiteId,
           currentFilters
         );
+        const loadTime = Date.now() - loadStart;
+        console.log(`✅ Competitors data loaded in ${loadTime}ms`);
+
+        // Handle batch API errors
+        if (batchResponse.error) {
+          throw new Error(`Batch API error: ${batchResponse.error}`);
+        }
+
         const data = batchResponse.data as Record<string, unknown>;
+
+        // Handle empty or invalid data gracefully
+        if (!data || typeof data !== 'object') {
+          console.warn('⚠️ Received invalid data structure from batch API:', data);
+          throw new Error('Invalid data structure received from server');
+        }
 
         // Transform competitors to include analysisStatus (like the old coordinated hook)
         const dataCompetitors = Array.isArray(data.competitors) ? data.competitors : [];
         const dataPerformance = Array.isArray(data.performance) ? data.performance : [];
-        
+
+        console.log(`📊 Data received:`, {
+          competitors: dataCompetitors.length,
+          performance: dataPerformance.length,
+          hasAnalytics: !!data.analytics
+        });
+
+        // Handle empty performance data (common with restrictive date filters)
+        if (dataCompetitors.length > 0 && dataPerformance.length === 0) {
+          console.warn('⚠️ No performance data found - possibly due to date range filters excluding recent analysis');
+        }
+
         // Validate and filter out invalid competitors
         const validCompetitors = dataCompetitors.filter((competitor: Competitor) => {
           const isValid = competitor.id && (competitor.competitor_domain || competitor.name);
           if (!isValid) {
-            console.warn('Invalid competitor data found:', competitor);
+            console.warn('❌ Invalid competitor data found:', competitor);
           }
           return isValid;
         });
+
+        // Warn if no valid competitors found
+        if (validCompetitors.length === 0) {
+          console.warn('⚠️ No valid competitors found after filtering');
+        }
         
         const transformedCompetitors = validCompetitors.map(
           (competitor: Competitor) => {
             const performance = dataPerformance.find(
-              (p: CompetitorProfile) => p.domain === competitor.competitor_domain
+              (p: CompetitorProfile & { analysisStatus?: string }) => p.domain === competitor.competitor_domain
             );
             return {
               ...competitor,
-              analysisStatus: performance ? "completed" : ("pending" as const),
+              // FIXED: Use analysis status from performance data (from database) instead of deriving
+              analysisStatus: normalizeCompetitorStatus(
+                performance?.analysisStatus ||
+                competitor.analysisStatus ||
+                competitor.analysis_status
+              ),
               performance,
               addedAt: competitor.created_at || new Date().toISOString(),
             };
@@ -828,15 +884,29 @@ export function useOptimizedCompetitorsData() {
         // Filtered cache (for exact filter match)
         setCache(competitorsFilteredCacheKey, competitorsData, 5 * 60 * 1000); // 5 minutes cache
         } catch (error) {
-          // Failed to load competitors data
-          setError(error instanceof Error ? error : new Error("Unknown error"));
+          console.error('❌ Failed to process competitors data:', error);
+          setError(error instanceof Error ? error : new Error("Failed to process data"));
         } finally {
           setIsLoading(false);
           isLoadingCompetitorsRef.current = false;
         }
       } catch (error) {
-        // Failed to load competitors data
-        setError(error instanceof Error ? error : new Error("Unknown error"));
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        console.error('❌ Failed to load competitors data:', {
+          error: errorMessage,
+          websiteId: selectedWebsiteId,
+          filters: prevCompetitorFiltersRef.current
+        });
+
+        // Provide user-friendly error messages based on common issues
+        let friendlyError = errorMessage;
+        if (errorMessage.includes('timeout') || errorMessage.includes('30 seconds')) {
+          friendlyError = 'Request timed out. This may be due to date filters excluding available data. Try selecting a wider date range.';
+        } else if (errorMessage.includes('Batch API error')) {
+          friendlyError = 'Server error occurred while loading competitor data. Please try again.';
+        }
+
+        setError(new Error(friendlyError));
         setIsLoading(false);
         isLoadingCompetitorsRef.current = false;
       }
@@ -875,16 +945,14 @@ export function useOptimizedCompetitorsData() {
       const cachedCompetitors = Array.isArray(cachedData.competitors) ? cachedData.competitors : [];
       const cachedPerformanceData = Array.isArray(cachedData.performance) ? cachedData.performance : [];
       const transformedCachedCompetitors = cachedCompetitors.map((competitor: Competitor) => {
-        // If already has analysisStatus, keep it; otherwise derive it
-        if (competitor.analysisStatus) {
-          return competitor;
-        }
+        // FIXED: Use database status from performance data instead of deriving
         const performance = cachedPerformanceData.find(
-          (p: CompetitorProfile) => p.domain === competitor.competitor_domain
+          (p: CompetitorProfile & { analysisStatus?: string }) => p.domain === competitor.competitor_domain
         );
         return {
           ...competitor,
-          analysisStatus: performance ? "completed" : ("pending" as const),
+          // Use analysis status from performance data (from database) or fallback to existing
+          analysisStatus: performance?.analysisStatus || competitor.analysisStatus || "pending",
           performance,
           addedAt: competitor.created_at || new Date().toISOString(),
         };
@@ -950,16 +1018,14 @@ export function useOptimizedCompetitorsData() {
       });
       
       const transformedCachedCompetitors = validFilteredCompetitors.map((competitor: Competitor) => {
-        // If already has analysisStatus, keep it; otherwise derive it
-        if (competitor.analysisStatus) {
-          return competitor;
-        }
+        // FIXED: Use database status from performance data instead of deriving
         const performance = filteredPerformance.find(
-          (p: CompetitorProfile) => p.domain === competitor.competitor_domain
+          (p: CompetitorProfile & { analysisStatus?: string }) => p.domain === competitor.competitor_domain
         );
         return {
           ...competitor,
-          analysisStatus: performance ? "completed" : ("pending" as const),
+          // Use analysis status from performance data (from database) or fallback to existing
+          analysisStatus: performance?.analysisStatus || competitor.analysisStatus || "pending",
           performance,
           addedAt: competitor.created_at || new Date().toISOString(),
         };

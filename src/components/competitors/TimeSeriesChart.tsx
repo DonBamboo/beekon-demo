@@ -5,12 +5,13 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TrendingUp, TrendingDown, Target } from 'lucide-react';
 import { CompetitorTimeSeriesData } from '@/services/competitorService';
-import { 
+import {
   getCompetitorFixedColor,
   registerCompetitorsInFixedSlots,
-  validateAllColorAssignments, 
-  autoFixColorConflicts 
+  validateAllColorAssignments,
+  autoFixColorConflicts
 } from '@/lib/color-utils';
+import { sanitizeChartNumber } from '@/utils/chartDataValidation';
 import { Info } from 'lucide-react';
 
 interface TimeSeriesChartProps {
@@ -24,14 +25,40 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
     [data]
   );
   
-  // Calculate benchmarks and trends
+  // Calculate benchmarks and trends with comprehensive validation
   const marketAverage = React.useMemo(() => {
     if (!data || data.length === 0) return [];
+
     return data.map(point => {
-      const avgShareOfVoice = point.competitors.reduce((sum, comp) => sum + comp.shareOfVoice, 0) / point.competitors.length;
-      const avgRank = point.competitors.reduce((sum, comp) => sum + comp.averageRank, 0) / point.competitors.length;
-      const avgMentions = point.competitors.reduce((sum, comp) => sum + comp.mentionCount, 0) / point.competitors.length;
-      
+      // Validate competitors array exists and has content
+      if (!point.competitors || point.competitors.length === 0) {
+        return {
+          date: point.date,
+          avgShareOfVoice: 0,
+          avgRank: 0,
+          avgMentions: 0
+        };
+      }
+
+      // Calculate averages with NaN protection
+      const avgShareOfVoice = sanitizeChartNumber(
+        point.competitors.reduce((sum, comp) =>
+          sum + sanitizeChartNumber(comp.shareOfVoice), 0
+        ) / point.competitors.length
+      );
+
+      const avgRank = sanitizeChartNumber(
+        point.competitors.reduce((sum, comp) =>
+          sum + sanitizeChartNumber(comp.averageRank), 0
+        ) / point.competitors.length
+      );
+
+      const avgMentions = sanitizeChartNumber(
+        point.competitors.reduce((sum, comp) =>
+          sum + sanitizeChartNumber(comp.mentionCount), 0
+        ) / point.competitors.length
+      );
+
       return {
         date: point.date,
         avgShareOfVoice,
@@ -41,18 +68,20 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
     });
   }, [data]);
 
-  // Find top performer for each metric
+  // Find top performer for each metric with comprehensive validation
   const topPerformer = React.useMemo(() => {
     if (!data || data.length === 0) return null;
     const latestPoint = data[data.length - 1];
-    if (!latestPoint) return null;
-    
-    const topByShareOfVoice = latestPoint.competitors.reduce((prev, current) => 
-      (current.shareOfVoice > prev.shareOfVoice) ? current : prev
-    );
-    
+    if (!latestPoint || !latestPoint.competitors || latestPoint.competitors.length === 0) return null;
+
+    const topByShareOfVoice = latestPoint.competitors.reduce((prev, current) => {
+      const prevValue = sanitizeChartNumber(prev.shareOfVoice);
+      const currentValue = sanitizeChartNumber(current.shareOfVoice);
+      return (currentValue > prevValue) ? current : prev;
+    });
+
     return {
-      shareOfVoice: topByShareOfVoice.shareOfVoice,
+      shareOfVoice: sanitizeChartNumber(topByShareOfVoice.shareOfVoice),
       name: topByShareOfVoice.name
     };
   }, [data]);
@@ -77,7 +106,39 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
     }
   }, [competitorsList]);
 
-  if (!data || data.length === 0) return null;
+  // Sanitize all data before rendering to prevent Recharts errors
+  const sanitizedData = React.useMemo(() => {
+    if (!data || data.length === 0) return [];
+
+    return data.map(point => ({
+      ...point,
+      competitors: point.competitors?.map(comp => ({
+        ...comp,
+        shareOfVoice: sanitizeChartNumber(comp.shareOfVoice),
+        averageRank: sanitizeChartNumber(comp.averageRank),
+        mentionCount: sanitizeChartNumber(comp.mentionCount)
+      })) || []
+    }));
+  }, [data]);
+
+  // Add development-only logging for validation issues
+  React.useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' && data && data.length > 0) {
+      const hasValidationIssues = data.some(point =>
+        point.competitors?.some(comp =>
+          typeof comp.shareOfVoice !== 'number' || isNaN(comp.shareOfVoice) ||
+          typeof comp.averageRank !== 'number' || isNaN(comp.averageRank) ||
+          typeof comp.mentionCount !== 'number' || isNaN(comp.mentionCount)
+        )
+      );
+
+      if (hasValidationIssues) {
+        console.warn('⚠️ TimeSeriesChart: Invalid numeric values detected in competitor data');
+      }
+    }
+  }, [data]);
+
+  if (!sanitizedData || sanitizedData.length === 0) return null;
 
   return (
     <Card>
@@ -115,8 +176,8 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
 
           <TabsContent value="shareOfVoice" className="space-y-4">
             <ResponsiveContainer width="100%" height={350}>
-              <ComposedChart 
-                data={data}
+              <ComposedChart
+                data={sanitizedData}
                 margin={{ bottom: 60, left: 20, right: 20, top: 20 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
@@ -180,8 +241,8 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
 
           <TabsContent value="ranking" className="space-y-4">
             <ResponsiveContainer width="100%" height={350}>
-              <LineChart 
-                data={data}
+              <LineChart
+                data={sanitizedData}
                 margin={{ bottom: 60, left: 20, right: 20, top: 20 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
@@ -226,8 +287,8 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
 
           <TabsContent value="mentions" className="space-y-4">
             <ResponsiveContainer width="100%" height={350}>
-              <LineChart 
-                data={data}
+              <LineChart
+                data={sanitizedData}
                 margin={{ bottom: 60, left: 20, right: 20, top: 20 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
@@ -285,12 +346,12 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
                   name: comp.name
                 });
 
-                const latestData = data[data.length - 1]?.competitors.find(c => c.competitorId === comp.competitorId);
-                const prevData = data[data.length - 2]?.competitors.find(c => c.competitorId === comp.competitorId);
-                
-                const trend = latestData && prevData ? 
-                  (latestData.shareOfVoice > prevData.shareOfVoice ? 'up' : 
-                   latestData.shareOfVoice < prevData.shareOfVoice ? 'down' : 'stable') : 'stable';
+                const latestData = sanitizedData[sanitizedData.length - 1]?.competitors.find(c => c.competitorId === comp.competitorId);
+                const prevData = sanitizedData[sanitizedData.length - 2]?.competitors.find(c => c.competitorId === comp.competitorId);
+
+                const trend = latestData && prevData ?
+                  (sanitizeChartNumber(latestData.shareOfVoice) > sanitizeChartNumber(prevData.shareOfVoice) ? 'up' :
+                   sanitizeChartNumber(latestData.shareOfVoice) < sanitizeChartNumber(prevData.shareOfVoice) ? 'down' : 'stable') : 'stable';
                 
                 // Generate robust key with fallback
                 const uniqueKey = comp.competitorId || comp.name || `competitor-summary-${index}`;
@@ -309,7 +370,7 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
                       </div>
                       {latestData && (
                         <p className="text-xs text-muted-foreground">
-                          {latestData.shareOfVoice.toFixed(1)}% • Rank {latestData.averageRank.toFixed(1)}
+                          {sanitizeChartNumber(latestData.shareOfVoice).toFixed(1)}% • Rank {sanitizeChartNumber(latestData.averageRank).toFixed(1)}
                         </p>
                       )}
                     </div>

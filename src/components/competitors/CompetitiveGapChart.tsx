@@ -5,6 +5,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  sanitizeChartNumber,
+  validateAndSanitizeChartData,
+  sanitizeCompetitorData,
+} from "@/utils/chartDataValidation";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -204,7 +209,7 @@ export default function CompetitiveGapChart({
     const barChartData = validatedGapAnalysis.map((gap) => {
       const data: Record<string, number | string> = {
         topic: gap.topicName,
-        yourBrand: gap.yourBrandScore,
+        yourBrand: sanitizeChartNumber(gap.yourBrandScore, 0),
       };
 
       gap.competitorData.forEach((comp, index) => {
@@ -212,7 +217,8 @@ export default function CompetitiveGapChart({
         const competitorId = extractCompetitorId(comp);
         const competitorName = extractCompetitorName(comp, index);
 
-        data[`competitor${index + 1}`] = comp.score;
+        // CRITICAL FIX: Sanitize score to prevent NaN from reaching Recharts
+        data[`competitor${index + 1}`] = sanitizeChartNumber(comp.score, 0);
         data[`competitor${index + 1}_name`] = competitorName;
         data[`competitor${index + 1}_id`] = competitorId;
       });
@@ -286,7 +292,7 @@ export default function CompetitiveGapChart({
     const radarData = validatedGapAnalysis.map((gap) => {
       const data: Record<string, number | string> = {
         topic: gap.topicName,
-        yourBrand: gap.yourBrandScore,
+        yourBrand: sanitizeChartNumber(gap.yourBrandScore, 0),
       };
 
       // Map competitor data to proper competitor keys for consistent coloring
@@ -308,10 +314,13 @@ export default function CompetitiveGapChart({
           );
 
           if (matchingCompetitor) {
-            data[matchingCompetitor.key] = comp.score;
+            data[matchingCompetitor.key] = sanitizeChartNumber(comp.score, 0);
           } else {
             // Fallback to generic key if no match found
-            data[`competitor${compIndex + 1}`] = comp.score;
+            data[`competitor${compIndex + 1}`] = sanitizeChartNumber(
+              comp.score,
+              0
+            );
           }
         }
       );
@@ -319,10 +328,14 @@ export default function CompetitiveGapChart({
       return data;
     });
 
+    // Final safety validation for all chart data
+    const finalBarChartData = sanitizeCompetitorData(barChartData);
+    const finalRadarData = sanitizeCompetitorData(radarData);
+
     return {
-      barChartData,
+      barChartData: finalBarChartData,
       competitorInfo,
-      radarData,
+      radarData: finalRadarData,
       gapClassification,
       opportunityMatrix,
     };
@@ -348,6 +361,38 @@ export default function CompetitiveGapChart({
       // Color mappings available for debugging
     }
   }, [processedData]);
+
+  // Enhanced debugging with data validation
+  if (processedData?.barChartData) {
+    console.log("processedData.barChartData", processedData.barChartData);
+
+    // Validate chart data for potential issues
+    const competitorKeys = Object.keys(
+      processedData.barChartData[0] || {}
+    ).filter(
+      (key) =>
+        key.startsWith("competitor") &&
+        !key.endsWith("_name") &&
+        !key.endsWith("_id")
+    );
+
+    const allDataKeys = ["yourBrand", ...competitorKeys];
+    const validation = validateAndSanitizeChartData(
+      processedData.barChartData,
+      allDataKeys
+    );
+
+    if (validation.hasIssues && process.env.NODE_ENV !== "production") {
+      console.warn(
+        "⚠️ CompetitiveGapChart: NaN/Infinity detected in barChartData:",
+        {
+          issues: validation.issues,
+          originalData: processedData.barChartData,
+          sanitizedData: validation.data,
+        }
+      );
+    }
+  }
 
   // Only show chart if there are competitors and meaningful data
   if (!processedData || !analytics || analytics.totalCompetitors === 0)
@@ -700,24 +745,41 @@ export default function CompetitiveGapChart({
               <p className="text-sm text-muted-foreground mb-2">
                 This matrix identifies strategic opportunities by plotting{" "}
                 <strong>competitive intensity</strong> (x-axis) vs{" "}
-                <strong>market opportunity size</strong> (y-axis). Bubble size shows your current performance level.
+                <strong>market opportunity size</strong> (y-axis). Bubble size
+                shows your current performance level.
               </p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="p-2 bg-green-50 dark:bg-green-950 rounded border border-green-200 dark:border-green-800">
-                  <strong className="text-green-700 dark:text-green-300">Top-Left: Blue Ocean</strong>
-                  <p className="text-green-600 dark:text-green-400">High opportunity, low competition</p>
+                  <strong className="text-green-700 dark:text-green-300">
+                    Top-Left: Blue Ocean
+                  </strong>
+                  <p className="text-green-600 dark:text-green-400">
+                    High opportunity, low competition
+                  </p>
                 </div>
                 <div className="p-2 bg-orange-50 dark:bg-orange-950 rounded border border-orange-200 dark:border-orange-800">
-                  <strong className="text-orange-700 dark:text-orange-300">Top-Right: Battleground</strong>
-                  <p className="text-orange-600 dark:text-orange-400">High opportunity, high competition</p>
+                  <strong className="text-orange-700 dark:text-orange-300">
+                    Top-Right: Battleground
+                  </strong>
+                  <p className="text-orange-600 dark:text-orange-400">
+                    High opportunity, high competition
+                  </p>
                 </div>
                 <div className="p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
-                  <strong className="text-blue-700 dark:text-blue-300">Bottom-Left: Niche</strong>
-                  <p className="text-blue-600 dark:text-blue-400">Low opportunity, low competition</p>
+                  <strong className="text-blue-700 dark:text-blue-300">
+                    Bottom-Left: Niche
+                  </strong>
+                  <p className="text-blue-600 dark:text-blue-400">
+                    Low opportunity, low competition
+                  </p>
                 </div>
                 <div className="p-2 bg-red-50 dark:bg-red-950 rounded border border-red-200 dark:border-red-800">
-                  <strong className="text-red-700 dark:text-red-300">Bottom-Right: Red Ocean</strong>
-                  <p className="text-red-600 dark:text-red-400">Low opportunity, high competition</p>
+                  <strong className="text-red-700 dark:text-red-300">
+                    Bottom-Right: Red Ocean
+                  </strong>
+                  <p className="text-red-600 dark:text-red-400">
+                    Low opportunity, high competition
+                  </p>
                 </div>
               </div>
             </div>
@@ -733,8 +795,18 @@ export default function CompetitiveGapChart({
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   {/* Quadrant dividers */}
-                  <ReferenceLine x={50} stroke="#64748b" strokeDasharray="5 5" strokeOpacity={0.6} />
-                  <ReferenceLine y={50} stroke="#64748b" strokeDasharray="5 5" strokeOpacity={0.6} />
+                  <ReferenceLine
+                    x={50}
+                    stroke="#64748b"
+                    strokeDasharray="5 5"
+                    strokeOpacity={0.6}
+                  />
+                  <ReferenceLine
+                    y={50}
+                    stroke="#64748b"
+                    strokeDasharray="5 5"
+                    strokeOpacity={0.6}
+                  />
                   <XAxis
                     type="number"
                     dataKey="x"
@@ -782,18 +854,31 @@ export default function CompetitiveGapChart({
                     {processedData.opportunityMatrix.map((entry, index) => {
                       // Strategic quadrant-based color coding
                       const opportunitySize = entry.y > 50 ? "high" : "low";
-                      const competitiveIntensity = entry.x > 50 ? "high" : "low";
+                      const competitiveIntensity =
+                        entry.x > 50 ? "high" : "low";
 
                       let fillColor = getYourBrandColor(); // Default to your brand color
 
                       // Strategic quadrant color coding
-                      if (opportunitySize === "high" && competitiveIntensity === "low") {
+                      if (
+                        opportunitySize === "high" &&
+                        competitiveIntensity === "low"
+                      ) {
                         fillColor = "#22c55e"; // Green for Blue Ocean (high opportunity, low competition)
-                      } else if (opportunitySize === "high" && competitiveIntensity === "high") {
+                      } else if (
+                        opportunitySize === "high" &&
+                        competitiveIntensity === "high"
+                      ) {
                         fillColor = "#f97316"; // Orange for Battleground (high opportunity, high competition)
-                      } else if (opportunitySize === "low" && competitiveIntensity === "low") {
+                      } else if (
+                        opportunitySize === "low" &&
+                        competitiveIntensity === "low"
+                      ) {
                         fillColor = "#3b82f6"; // Blue for Niche (low opportunity, low competition)
-                      } else if (opportunitySize === "low" && competitiveIntensity === "high") {
+                      } else if (
+                        opportunitySize === "low" &&
+                        competitiveIntensity === "high"
+                      ) {
                         fillColor = "#ef4444"; // Red for Red Ocean (low opportunity, high competition)
                       }
 

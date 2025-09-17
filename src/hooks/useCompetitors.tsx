@@ -6,9 +6,9 @@ import { useCompetitorStatus } from "./useCompetitorStatus";
 import {
   competitorService,
   type Competitor,
-  type CompetitorPerformance,
   type CompetitorAnalytics,
 } from "@/services/competitorService";
+import type { CompetitorPerformance } from "@/types/database";
 
 export interface CompetitorError {
   message: string;
@@ -413,24 +413,24 @@ function sortPerformanceData(
 
     switch (sortBy) {
       case "shareOfVoice":
-        aValue = a.shareOfVoice;
-        bValue = b.shareOfVoice;
+        aValue = a.shareOfVoice ?? 0;
+        bValue = b.shareOfVoice ?? 0;
         break;
       case "averageRank":
-        aValue = a.averageRank;
-        bValue = b.averageRank;
+        aValue = a.averageRank ?? 0;
+        bValue = b.averageRank ?? 0;
         break;
       case "mentionCount":
-        aValue = a.mentionCount;
-        bValue = b.mentionCount;
+        aValue = a.mentionCount ?? 0;
+        bValue = b.mentionCount ?? 0;
         break;
       case "sentimentScore":
-        aValue = a.sentimentScore;
-        bValue = b.sentimentScore;
+        aValue = a.sentimentScore ?? 0;
+        bValue = b.sentimentScore ?? 0;
         break;
       default:
-        aValue = a.shareOfVoice;
-        bValue = b.shareOfVoice;
+        aValue = a.shareOfVoice ?? 0;
+        bValue = b.shareOfVoice ?? 0;
     }
 
     if (sortOrder === "asc") {

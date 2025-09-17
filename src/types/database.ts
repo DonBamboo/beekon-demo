@@ -20,10 +20,25 @@ export type CompetitorUpdate =
 
 // Extended competitor types for status tracking
 export interface CompetitorPerformance {
+  // Database fields
   visibility_score: number;
   avg_rank: number;
   total_mentions: number;
   sentiment_score: number;
+
+  // UI-compatible fields (mapped from database)
+  competitorId?: string;
+  domain?: string;
+  name?: string;
+  shareOfVoice?: number; // Mapped from visibility_score
+  averageRank?: number; // Mapped from avg_rank
+  mentionCount?: number; // Mapped from total_mentions
+  sentimentScore?: number; // Mapped from sentiment_score
+  visibilityScore?: number; // Same as visibility_score
+  trend?: "up" | "down" | "stable";
+  trendPercentage?: number;
+  lastAnalyzed?: string;
+  isActive?: boolean;
 }
 
 // Competitor status tracking types
@@ -52,7 +67,7 @@ export interface CompetitorStatusUpdate {
 }
 
 export interface CompetitorWithStatus extends Competitor {
-  analysisStatus: "completed" | "pending" | "in_progress";
+  analysisStatus: CompetitorStatusValue; // Use the correct status values: "pending" | "analyzing" | "completed" | "failed"
   performance?: CompetitorPerformance;
   addedAt: string; // Non-nullable version of created_at
   analysis_frequency: string | null;

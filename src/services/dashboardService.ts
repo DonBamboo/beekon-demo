@@ -80,33 +80,57 @@ export class DashboardService {
         end: dateRange?.end || new Date().toISOString()
       };
 
+      console.log('📊 Dashboard metrics call:', {
+        websiteIds,
+        dateRange: defaultDateRange,
+        functionName: 'get_dashboard_metrics'
+      });
+
       const { data, error } = await supabase
         .schema("beekon_data")
-        .rpc("get_dashboard_metrics", {
+        .rpc("get_dashboard_metrics" as any, {
           p_website_ids: websiteIds,
           p_date_start: defaultDateRange.start,
           p_date_end: defaultDateRange.end,
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Dashboard metrics error:', {
+          error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          parameters: { websiteIds, dateRange: defaultDateRange }
+        });
+        throw error;
+      }
 
-      const result = data?.[0];
+      console.log('✅ Dashboard metrics success:', { dataLength: Array.isArray(data) ? data.length : 'not array', firstResult: Array.isArray(data) ? data[0] : data });
+
+      const result = Array.isArray(data) ? data[0] : null;
       if (!result) {
         return this.getEmptyMetrics();
       }
 
+      const metrics = result as any;
       return {
-        overallVisibilityScore: Number(result.overall_visibility_score || 0),
-        averageRanking: Number(result.average_ranking || 4.0),
-        totalMentions: Number(result.total_mentions || 0),
-        sentimentScore: Number(result.sentiment_score || 2.5),
-        totalAnalyses: Number(result.total_analyses || 0),
-        activeWebsites: Number(result.active_websites || 0),
-        topPerformingTopic: result.top_performing_topic || null,
-        improvementTrend: Number(result.improvement_trend || 0),
+        overallVisibilityScore: Number(metrics.overall_visibility_score || 0),
+        averageRanking: Number(metrics.average_ranking || 4.0),
+        totalMentions: Number(metrics.total_mentions || 0),
+        sentimentScore: Number(metrics.sentiment_score || 2.5),
+        totalAnalyses: Number(metrics.total_analyses || 0),
+        activeWebsites: Number(metrics.active_websites || 0),
+        topPerformingTopic: metrics.top_performing_topic || null,
+        improvementTrend: Number(metrics.improvement_trend || 0),
       };
     } catch (error) {
       // Failed to get dashboard metrics - fallback to empty metrics
+      console.error('🚨 Dashboard metrics fallback triggered:', {
+        error: error instanceof Error ? error.message : error,
+        websiteIds,
+        stack: error instanceof Error ? error.stack : undefined
+      });
       return this.getEmptyMetrics();
     }
   }
@@ -127,18 +151,27 @@ export class DashboardService {
       // OPTIMIZED: Use materialized view function for instant time series data
       const { data, error } = await supabase
         .schema("beekon_data")
-        .rpc("get_dashboard_time_series", {
+        .rpc("get_dashboard_time_series" as any, {
           p_website_ids: websiteIds,
           p_days: days,
-        });
+        } as any);
 
       if (error) throw error;
 
-      return (data || []).map((row: any) => ({
-        date: row.date,
-        visibility: Number(row.visibility || 0),
-        mentions: Number(row.mentions || 0),
-        sentiment: Number(row.sentiment || 2.5),
+      interface TimeSeriesRow {
+        period_start: string;
+        avg_rank: number;
+        avg_sentiment: number;
+        total_mentions: number;
+      }
+
+      // Type guard to ensure data is an array
+      const validData = Array.isArray(data) ? data : [];
+      return validData.map((row: TimeSeriesRow) => ({
+        date: row.period_start,
+        visibility: Number(row.avg_rank || 0),
+        mentions: Number(row.total_mentions || 0),
+        sentiment: Number(row.avg_sentiment || 2.5),
       }));
     } catch (error) {
       // Failed to get time series data - return empty array
@@ -160,14 +193,25 @@ export class DashboardService {
       // OPTIMIZED: Use materialized view function for topic performance
       const { data, error } = await supabase
         .schema("beekon_data")
-        .rpc("get_topic_performance_dashboard", {
+        .rpc("get_topic_performance_dashboard" as any, {
           p_website_ids: websiteIds,
           p_limit: limit,
         });
 
       if (error) throw error;
 
-      return (data || []).map((row: any) => ({
+      interface TopicPerformanceRow {
+        topic: string;
+        visibility: number;
+        mentions: number;
+        average_rank: number;
+        sentiment: number;
+        trend: number;
+      }
+
+      // Type guard to ensure data is an array
+      const validData = Array.isArray(data) ? data : [];
+      return validData.map((row: TopicPerformanceRow) => ({
         topic: row.topic,
         visibility: Number(row.visibility || 0),
         mentions: Number(row.mentions || 0),
@@ -192,13 +236,23 @@ export class DashboardService {
       // OPTIMIZED: Use materialized view function for LLM performance
       const { data, error } = await supabase
         .schema("beekon_data")
-        .rpc("get_llm_performance_dashboard", {
+        .rpc("get_llm_performance_dashboard" as any, {
           p_website_ids: websiteIds,
         });
 
       if (error) throw error;
 
-      return (data || []).map((row: any) => ({
+      interface LLMPerformanceRow {
+        provider: string;
+        mention_rate: number;
+        average_rank: number;
+        sentiment: number;
+        total_analyses: number;
+      }
+
+      // Type guard to ensure data is an array
+      const validData = Array.isArray(data) ? data : [];
+      return validData.map((row: LLMPerformanceRow) => ({
         provider: row.provider,
         mentionRate: Number(row.mention_rate || 0),
         averageRank: Number(row.average_rank || 4.0),
@@ -224,13 +278,25 @@ export class DashboardService {
       // OPTIMIZED: Use materialized view function for website performance
       const { data, error } = await supabase
         .schema("beekon_data")
-        .rpc("get_website_performance_dashboard", {
+        .rpc("get_website_performance_dashboard" as any, {
           p_website_ids: websiteIds,
         });
 
       if (error) throw error;
 
-      return (data || []).map((row: any) => ({
+      interface WebsitePerformanceRow {
+        website_id: string;
+        domain: string;
+        display_name: string;
+        visibility: number;
+        mentions: number;
+        sentiment: number;
+        last_analyzed: string;
+      }
+
+      // Type guard to ensure data is an array
+      const validData = Array.isArray(data) ? data : [];
+      return validData.map((row: WebsitePerformanceRow) => ({
         websiteId: row.website_id,
         domain: row.domain || "",
         displayName: row.display_name || "",
@@ -350,7 +416,7 @@ export class DashboardService {
     };
   }
 
-  private calculateMetricsForResults(
+  private _calculateMetricsForResults(
     results: AnalysisResult[]
   ): DashboardMetrics {
     return this.calculateAggregatedMetrics(results);
@@ -426,7 +492,7 @@ export class DashboardService {
       .slice(0, limit);
   }
 
-  private calculateLLMPerformance(results: AnalysisResult[]): LLMPerformance[] {
+  private _calculateLLMPerformance(results: AnalysisResult[]): LLMPerformance[] {
     const llmMap = new Map<string, LLMResult[]>();
 
     // Group results by LLM provider
@@ -483,7 +549,7 @@ export class DashboardService {
     return llmPerformance.sort((a, b) => b.mentionRate - a.mentionRate);
   }
 
-  private aggregateByDate(
+  private _aggregateByDate(
     results: AnalysisResult[],
     startDate: Date,
     endDate: Date
@@ -553,7 +619,7 @@ export class DashboardService {
     return timeSeriesData.sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  private async getPreviousPeriodMetrics(
+  private async _getPreviousPeriodMetrics(
     websiteIds: string[],
     currentRange?: { start: string; end: string }
   ): Promise<DashboardMetrics> {
@@ -580,7 +646,7 @@ export class DashboardService {
     return this.calculateAggregatedMetrics(previousResults);
   }
 
-  private calculateTrend(current: number, previous: number): number {
+  private _calculateTrend(current: number, previous: number): number {
     if (previous === 0) return current > 0 ? 100 : 0;
     return Math.round(((current - previous) / previous) * 100);
   }

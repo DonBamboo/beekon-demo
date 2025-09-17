@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import BaseService from "./baseService";
+import { CompetitorStatusValue } from "@/types/database";
+import { mapDatabaseStatusToUI } from "@/utils/competitorStatusUtils";
 
 // Type definitions for competitor analysis
 type CompetitorAnalysisResult =
@@ -26,6 +28,8 @@ export interface CompetitorShareOfVoice {
   avgRankPosition: number | null;
   avgSentimentScore: number | null;
   avgConfidenceScore: number | null;
+  analysisStatus?: CompetitorStatusValue; // NEW: Include analysis status from database with proper typing
+  lastAnalyzedAt?: string; // NEW: Include last analyzed timestamp
 }
 
 export interface CompetitiveGapAnalysis {
@@ -193,13 +197,10 @@ export class CompetitorAnalysisService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitorShareOfVoice[]> {
-    console.log("websiteId", websiteId);
-    console.log("dateRange", dateRange);
-
-    // Use 90-day default instead of 30-day to capture more historical data
-    // This addresses the issue where 7-day range was too restrictive for older data
+    // FIXED: Use 30-day default to match UI expectations and reduce query load
+    // The materialized views are optimized for 30-day ranges
     const defaultDateRange = {
-      start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
       end: new Date().toISOString(),
     };
 
@@ -208,8 +209,17 @@ export class CompetitorAnalysisService extends BaseService {
     // Add query timing and timeout protection
     const queryStart = Date.now();
 
+    // Declare data outside try block to fix scoping issue
+    let data: unknown = null;
+
     try {
-      const { data, error } = (await Promise.race([
+      console.log("🏆 Competitor share of voice call:", {
+        websiteId,
+        dateRange: finalDateRange,
+        functionName: "get_competitor_share_of_voice",
+      });
+
+      const response = (await Promise.race([
         supabase.schema("beekon_data").rpc("get_competitor_share_of_voice", {
           p_website_id: websiteId,
           p_date_start: finalDateRange.start,
@@ -221,13 +231,26 @@ export class CompetitorAnalysisService extends BaseService {
             30000
           )
         ),
-      ])) as { data: any; error: any };
+      ])) as { data: unknown; error: unknown };
 
       const queryTime = Date.now() - queryStart;
       console.log(`Share of voice query completed in ${queryTime}ms`);
 
-      if (error) {
-        console.error("Share of voice query error:", error);
+      if (response.error) {
+        const error = response.error as {
+          code?: string;
+          message?: string;
+          details?: string;
+          hint?: string;
+        };
+        console.error("❌ Share of voice query error:", {
+          error: response.error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          parameters: { websiteId, dateRange: finalDateRange },
+        });
         // If query fails, try with a shorter date range as fallback
         if (finalDateRange === defaultDateRange) {
           console.log("Retrying with shorter 30-day range...");
@@ -238,43 +261,59 @@ export class CompetitorAnalysisService extends BaseService {
             end: new Date().toISOString(),
           });
         }
-        throw error;
+        throw response.error;
       }
+
+      // Set data from successful response
+      data = response.data;
     } catch (error) {
-      console.error("Share of voice query failed:", error);
+      console.error("🚨 Share of voice query failed:", {
+        error,
+        websiteId,
+        dateRange: finalDateRange,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
+
       if (error instanceof Error && error.message.includes("timeout")) {
-        console.log("Query timed out, trying shorter date range...");
+        console.log("⏰ Query timed out, trying shorter date range...");
         // Fallback to 7-day range if timeout occurred
         if (finalDateRange === defaultDateRange) {
+          console.log("🔄 Retrying with 7-day range as fallback...");
           return this.getCompetitorShareOfVoice(websiteId, {
             start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
             end: new Date().toISOString(),
           });
         }
       }
-      // Return empty array instead of throwing to prevent page crashes
-      return [];
+
+      // FIXED: Don't mask errors - throw them so we can debug the real issue
+      throw new Error(`Competitor share of voice query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
-    console.log("data", data);
-
-    return (data || []).map((row) => ({
-      competitorId: row.competitor_id,
-      competitorName: row.competitor_name || row.competitor_domain,
-      competitorDomain: row.competitor_domain,
-      totalAnalyses: row.total_analyses,
-      totalMentions: row.total_voice_mentions,
-      shareOfVoice: Number(row.share_of_voice || 0),
-      avgRankPosition: row.avg_rank_position
-        ? Number(row.avg_rank_position)
-        : null,
-      avgSentimentScore: row.avg_sentiment_score
-        ? Number(row.avg_sentiment_score)
-        : null,
-      avgConfidenceScore: row.avg_confidence_score
-        ? Number(row.avg_confidence_score)
-        : null,
-    }));
+    return ((data as Array<Record<string, unknown>>) || []).map(
+      (row: Record<string, unknown>) => ({
+        competitorId: row.competitor_id as string,
+        competitorName:
+          (row.competitor_name as string) || (row.competitor_domain as string),
+        competitorDomain: row.competitor_domain as string,
+        totalAnalyses: row.total_analyses as number,
+        totalMentions: row.total_voice_mentions as number,
+        shareOfVoice: Number(row.share_of_voice || 0),
+        avgRankPosition: row.avg_rank_position
+          ? Number(row.avg_rank_position)
+          : null,
+        avgSentimentScore: row.avg_sentiment_score
+          ? Number(row.avg_sentiment_score)
+          : null,
+        avgConfidenceScore: row.avg_confidence_score
+          ? Number(row.avg_confidence_score)
+          : null,
+        // FIXED: Include analysis_status with proper mapping and typing
+        analysisStatus: mapDatabaseStatusToUI(row.analysis_status as string | null),
+        lastAnalyzedAt: row.last_analyzed_at as string,
+      })
+    );
   }
 
   /**
@@ -284,9 +323,9 @@ export class CompetitorAnalysisService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitiveGapAnalysis[]> {
-    // Use consistent 90-day default range to match share of voice function
+    // FIXED: Use consistent 30-day default to match UI filter and share of voice function
     const defaultDateRange = {
-      start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
       end: new Date().toISOString(),
     };
 
@@ -295,8 +334,11 @@ export class CompetitorAnalysisService extends BaseService {
     // Add query timing and timeout protection for gap analysis
     const queryStart = Date.now();
 
+    // Declare data outside try block to fix scoping issue
+    let data: Array<Record<string, unknown>> | null = null;
+
     try {
-      const { data, error } = (await Promise.race([
+      const response = (await Promise.race([
         supabase.schema("beekon_data").rpc("get_competitive_gap_analysis", {
           p_website_id: websiteId,
           p_date_start: finalDateRange.start,
@@ -308,28 +350,47 @@ export class CompetitorAnalysisService extends BaseService {
             30000
           )
         ),
-      ])) as { data: any; error: any };
+      ])) as { data: Array<Record<string, unknown>>; error: unknown };
 
       const queryTime = Date.now() - queryStart;
       console.log(`Gap analysis query completed in ${queryTime}ms`);
 
-      if (error) {
-        console.error("Gap analysis query error:", error);
+      if (response.error) {
+        console.error("Gap analysis query error:", response.error);
         // Return empty array for fallback instead of throwing
         return [];
       }
+
+      // Set data from successful response
+      data = response.data;
     } catch (error) {
-      console.error("Gap analysis query failed:", error);
+      console.error("🚨 Gap analysis query failed:", {
+        error,
+        websiteId,
+        dateRange: finalDateRange,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
+
       if (error instanceof Error && error.message.includes("timeout")) {
-        console.log("Gap analysis query timed out, returning empty results");
+        console.log("⏰ Gap analysis query timed out");
+        // Try with shorter range if timeout
+        if (finalDateRange === defaultDateRange) {
+          console.log("🔄 Retrying gap analysis with 7-day range...");
+          return this.getCompetitiveGapAnalysis(websiteId, {
+            start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+            end: new Date().toISOString(),
+          });
+        }
       }
-      // Return empty array instead of throwing to prevent page crashes
-      return [];
+
+      // FIXED: Don't mask errors - throw them so we can debug the real issue
+      throw new Error(`Competitive gap analysis query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
-    return (data || []).map((row) => ({
-      topicId: row.topic_id,
-      topicName: row.topic_name,
+    return (data || []).map((row: Record<string, unknown>) => ({
+      topicId: row.topic_id as string,
+      topicName: row.topic_name as string,
       yourBrandScore: Number(row.your_brand_score || 0),
       competitorData: Array.isArray(row.competitor_data)
         ? (row.competitor_data as Array<{

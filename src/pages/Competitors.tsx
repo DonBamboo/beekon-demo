@@ -3,6 +3,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ExportFormat } from "@/types/database";
 import { useExportHandler } from "@/lib/export-utils";
 import type { CompetitorWithStatus } from "@/hooks/useCompetitorsQuery";
+import { isCompetitorActive } from "@/utils/competitorStatusUtils";
+import type { CompetitorStatusValue } from "@/types/database";
 import type {
   CompetitiveGapAnalysis,
   CompetitorAnalytics,
@@ -30,6 +32,7 @@ import CompetitiveGapChart from "@/components/competitors/CompetitiveGapChart";
 import TimeSeriesChart from "@/components/competitors/TimeSeriesChart";
 import CompetitorsEmptyState from "@/components/competitors/CompetitorsEmptyState";
 import NoAnalyticsState from "@/components/competitors/NoAnalyticsState";
+import { sanitizeChartNumber } from "@/utils/chartDataValidation";
 import CompetitorInsights from "@/components/competitors/CompetitorInsights";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { addProtocol } from "@/lib/utils";
@@ -94,26 +97,62 @@ export default function Competitors() {
       }))
     );
 
-    return rawData.map((item: Record<string, unknown>) => ({
-      name: item.name as string,
-      value: item.shareOfVoice as number,
-      shareOfVoice: item.shareOfVoice as number,
-      totalMentions: item.totalMentions as number,
-      totalAnalyses: item.totalAnalyses as number,
-      avgRank: item.avgRank as number,
-      competitorId: item.competitorId as string,
-      dataType:
-        (item.dataType as string) === "market_share"
-          ? ("market_share" as const)
-          : ("share_of_voice" as const),
-      fill:
-        item.name === "Your Brand"
+    return rawData.map((item: Record<string, unknown>) => {
+      // Sanitize all numeric values to prevent NaN propagation to ShareOfVoiceChart
+      const sanitizedShareOfVoice = sanitizeChartNumber(item.shareOfVoice, 0);
+      const sanitizedTotalMentions = sanitizeChartNumber(item.totalMentions, 0);
+      const sanitizedTotalAnalyses = sanitizeChartNumber(item.totalAnalyses, 0);
+      const sanitizedAvgRank = sanitizeChartNumber(item.avgRank, 0);
+
+      // Log validation issues in development (specifically for 30d filter debugging)
+      if (process.env.NODE_ENV !== 'production') {
+        const hasInvalidData = [
+          item.shareOfVoice !== sanitizedShareOfVoice,
+          item.totalMentions !== sanitizedTotalMentions,
+          item.totalAnalyses !== sanitizedTotalAnalyses,
+          item.avgRank !== sanitizedAvgRank
+        ].some(Boolean);
+
+        if (hasInvalidData) {
+          console.warn('⚠️ Competitors.tsx: Invalid data detected in shareOfVoiceChartData:', {
+            competitorName: item.name,
+            originalData: {
+              shareOfVoice: item.shareOfVoice,
+              totalMentions: item.totalMentions,
+              totalAnalyses: item.totalAnalyses,
+              avgRank: item.avgRank
+            },
+            sanitizedData: {
+              shareOfVoice: sanitizedShareOfVoice,
+              totalMentions: sanitizedTotalMentions,
+              totalAnalyses: sanitizedTotalAnalyses,
+              avgRank: sanitizedAvgRank
+            }
+          });
+        }
+      }
+
+      return {
+        name: item.name as string,
+        value: sanitizedShareOfVoice,
+        shareOfVoice: sanitizedShareOfVoice,
+        totalMentions: sanitizedTotalMentions,
+        totalAnalyses: sanitizedTotalAnalyses,
+        avgRank: sanitizedAvgRank,
+        competitorId: item.competitorId as string,
+        dataType:
+          (item.dataType as string) === "market_share"
+            ? ("market_share" as const)
+            : ("share_of_voice" as const),
+        fill:
+          item.name === "Your Brand"
           ? getYourBrandColor()
           : getCompetitorFixedColor({
               competitorId: item.competitorId as string,
               name: item.name as string,
             }),
-    }));
+      };
+    });
   }, [analytics?.shareOfVoiceData]);
 
   // Derive additional data for backward compatibility
@@ -368,9 +407,8 @@ export default function Competitors() {
         <CompetitorsHeader
           totalCompetitors={competitorsWithStatus.length}
           activeCompetitors={
-            competitorsWithStatus.filter(
-              (c) => c.analysisStatus === "completed"
-            ).length
+            competitorsWithStatus.filter((c) => isCompetitorActive(c.analysisStatus as CompetitorStatusValue))
+            .length
           }
           dateFilter={(filters as CompetitorFilters).dateFilter}
           sortBy={(filters as CompetitorFilters).sortBy}
@@ -439,6 +477,12 @@ export default function Competitors() {
             Array.isArray(performance)
               ? (performance as unknown as Record<string, unknown>[]).map(
                   (p) => ({
+                    // Database fields (required by CompetitorPerformance)
+                    visibility_score: (p.visibilityScore as number) || 0,
+                    avg_rank: (p.averageRank as number) || 0,
+                    total_mentions: (p.mentionCount as number) || 0,
+                    sentiment_score: (p.sentimentScore as number) || 0,
+                    // UI fields (optional in CompetitorPerformance)
                     competitorId: (p.competitorId as string) || "",
                     domain: (p.domain as string) || "",
                     name: (p.name as string) || "",
