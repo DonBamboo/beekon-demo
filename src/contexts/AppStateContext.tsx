@@ -676,14 +676,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   // Note: updateWebsiteStatus will be defined after other cache functions
 
+  // Ref to track expired cache keys for deferred cleanup
+  const expiredKeysRef = useRef<Set<string>>(new Set());
+
   // Stabilized getFromCache - no dependencies on state
+  // Fixed: Defer cache cleanup to avoid setState during render
   const getFromCache = useCallback(<T,>(key: string): T | null => {
     const entry = stateRef.current.cache.memory.get(key);
     if (!entry) return null;
 
-    // Check expiration
+    // Check expiration - defer cleanup to avoid render-time dispatch
     if (Date.now() > entry.expiresAt) {
-      dispatch({ type: "CACHE_DELETE", payload: { key } });
+      expiredKeysRef.current.add(key);
       return null;
     }
 
@@ -957,6 +961,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const interval = setInterval(cleanup, 120000); // Cleanup every 2 minutes
     return () => clearInterval(interval);
   }, []); // Empty dependencies - no longer depends on changing cache state
+
+  // Effect to clean up expired cache entries (deferred from getFromCache)
+  useEffect(() => {
+    if (expiredKeysRef.current.size > 0) {
+      // Process expired keys after render to avoid setState during render warning
+      const keysToDelete = Array.from(expiredKeysRef.current);
+      expiredKeysRef.current.clear();
+
+      keysToDelete.forEach(key => {
+        dispatch({ type: "CACHE_DELETE", payload: { key } });
+      });
+    }
+  }); // No dependencies - run after every render to check for expired keys
 
   return (
     <AppStateContext.Provider

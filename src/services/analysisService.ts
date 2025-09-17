@@ -530,7 +530,93 @@ export class AnalysisService {
     return Array.from(resultsMap.values());
   }
 
-  async getAnalysisResultsPaginated(
+  /**
+   * OPTIMIZED: Get analysis results using materialized views for lightning-fast performance
+   * This replaces the expensive 4-table JOIN queries with pre-computed data
+   */
+  async getAnalysisResultsPaginatedOptimized(
+    websiteId: string,
+    options: {
+      cursor?: string;
+      limit?: number;
+      filters?: {
+        topic?: string;
+        llmProvider?: string;
+        status?: AnalysisStatus;
+        dateRange?: { start: string; end: string };
+        searchQuery?: string;
+        mentionStatus?: string;
+        confidenceRange?: [number, number];
+        sentiment?: string;
+        analysisSession?: string;
+      };
+    } = {}
+  ): Promise<PaginatedAnalysisResults> {
+    const { limit = 20, filters } = options;
+
+    try {
+      // OPTIMIZED: Use materialized view function for instant results
+      const defaultDateRange = {
+        start: filters?.dateRange?.start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        end: filters?.dateRange?.end || new Date().toISOString()
+      };
+
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_analysis_results_optimized", {
+          p_website_id: websiteId,
+          p_date_start: defaultDateRange.start,
+          p_date_end: defaultDateRange.end,
+          p_limit: limit + 1,  // Get one extra to check for more results
+          p_offset: 0
+        });
+
+      if (error) throw error;
+
+      const results = data || [];
+      const hasMore = results.length > limit;
+      const resultsToReturn = hasMore ? results.slice(0, -1) : results;
+
+      // Transform to UIAnalysisResult format
+      const transformedResults = resultsToReturn.map((row: any) => ({
+        id: row.id,
+        website_id: websiteId,
+        topic: row.topic,
+        topic_id: row.topic_id,
+        confidence: row.confidence_score || 0,
+        status: 'completed' as AnalysisStatus,
+        created_at: row.created_at,
+        analyzed_at: row.analyzed_at,
+        reporting_text: row.reporting_text,
+        llm_results: [{
+          id: row.id,
+          prompt_id: row.id,  // Using analysis result id as fallback
+          llm_provider: row.llm_provider,
+          is_mentioned: row.is_mentioned,
+          rank_position: row.rank_position,
+          sentiment_score: row.sentiment_score,
+          confidence_score: row.confidence_score,
+          analysis_text: row.reporting_text || '',
+          analyzed_at: row.analyzed_at,
+          created_at: row.created_at,
+        }]
+      }));
+
+      return {
+        results: transformedResults,
+        hasMore,
+        nextCursor: hasMore ? resultsToReturn[resultsToReturn.length - 1]?.created_at : null,
+        totalCount: transformedResults.length,
+      };
+    } catch (error) {
+      console.error('Optimized analysis results failed, falling back to original method:', error);
+      // Fallback to original method if optimized fails
+      return this.getAnalysisResultsPaginatedOriginal(websiteId, options);
+    }
+  }
+
+  // Keep original method as fallback
+  async getAnalysisResultsPaginatedOriginal(
     websiteId: string,
     options: {
       cursor?: string;
@@ -866,7 +952,36 @@ export class AnalysisService {
     return filteredResults;
   }
 
-  async getTopicsForWebsite(
+  /**
+   * OPTIMIZED: Get topics using materialized views for instant results
+   */
+  async getTopicsForWebsiteOptimized(
+    websiteId: string
+  ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
+    try {
+      // OPTIMIZED: Use materialized view function for instant topics
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_topics_optimized", {
+          p_website_id: websiteId,
+        });
+
+      if (error) throw error;
+
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        name: row.topic_name,
+        resultCount: Number(row.result_count || 0),
+      }));
+    } catch (error) {
+      console.error('Optimized topics failed, falling back to original method:', error);
+      // Fallback to original method
+      return this.getTopicsForWebsiteOriginal(websiteId);
+    }
+  }
+
+  // Keep original method as fallback
+  async getTopicsForWebsiteOriginal(
     websiteId: string
   ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
     try {

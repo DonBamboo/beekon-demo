@@ -51,8 +51,8 @@ export function useTopics(websiteId: string | null) {
     setError(null);
 
     try {
-      // Start request tracking
-      const requestPromise = analysisService.getTopicsForWebsite(websiteId);
+      // OPTIMIZED: Start request tracking with materialized view topics
+      const requestPromise = analysisService.getTopicsForWebsiteOptimized(websiteId);
       dispatch({ type: 'REQUEST_START', payload: { key: requestKey, promise: requestPromise } });
 
       const websiteTopics = await requestPromise;

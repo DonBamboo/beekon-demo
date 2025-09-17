@@ -179,8 +179,8 @@ export function useOptimizedAnalysisData() {
         // Use current transformed filters (from ref for stability)
         const currentFilters = prevFiltersRef.current;
 
-        // Use analysis service for consistent cursor-based pagination
-        const response = await analysisService.getAnalysisResultsPaginated(
+        // OPTIMIZED: Use materialized view service for lightning-fast pagination
+        const response = await analysisService.getAnalysisResultsPaginatedOptimized(
           selectedWebsiteId,
           {
             limit: 20,
@@ -239,7 +239,7 @@ export function useOptimizedAnalysisData() {
       // Use stable filter reference for pagination
       const currentFilters = prevFiltersRef.current;
       const additionalResults =
-        await analysisService.getAnalysisResultsPaginated(selectedWebsiteId, {
+        await analysisService.getAnalysisResultsPaginatedOptimized(selectedWebsiteId, {
           cursor,
           limit: 20,
           filters: currentFilters,

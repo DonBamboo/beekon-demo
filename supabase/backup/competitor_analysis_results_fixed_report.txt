@@ -1,0 +1,13 @@
+Competitor Analysis Results CSV Cleanup Report
+==================================================
+
+Input file: supabase/backup/competitor_analysis_results_rows.csv
+Output file: supabase/backup/competitor_analysis_results_fixed.csv
+Input lines: 442,521
+Records processed: 7,309
+Valid records (with FK integrity): 5,560
+Records with FK violations: 1,749
+Malformed records: 3
+Success rate: 76.1%
+
+Valid llm_analysis_results IDs available: 6,325

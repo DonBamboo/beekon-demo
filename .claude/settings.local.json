@@ -11,8 +11,15 @@
       "Bash(npx supabase:*)",
       "mcp__supabase__list_migrations",
       "Bash(npm run dev:*)",
-      "Bash(npm run typecheck:*)",
-      "Bash(npm run type-check:*)"
+      "Bash(npm run type-check:*)",
+      "Bash(node:*)",
+      "Bash(awk:*)",
+      "Bash(sed:*)",
+      "Bash(python:*)",
+      "Bash(for id in 807c9151-040c-4095-854a-9a9c103bd5c2 a2c6b83c-f9da-41e3-b593-f3362e5be0da 512de63c-19b0-445b-ad4d-55c69ba7566b d80d67ae-f4bb-4371-8084-1fda2984b9aa 612be150-c8c8-4df8-b007-2678d55c7db6)",
+      "Bash(do echo -n \"$id: \")",
+      "Bash(grep:*)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": [],

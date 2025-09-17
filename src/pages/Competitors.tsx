@@ -2,16 +2,13 @@ import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ExportFormat } from "@/types/database";
 import { useExportHandler } from "@/lib/export-utils";
-import type { 
-  CompetitorWithStatus
-} from "@/hooks/useCompetitorsQuery";
-import type { 
+import type { CompetitorWithStatus } from "@/hooks/useCompetitorsQuery";
+import type {
   CompetitiveGapAnalysis,
-  CompetitorAnalytics 
+  CompetitorAnalytics,
 } from "@/services/competitorService";
 
 // Local interfaces since they're not exported
-
 
 import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import {
@@ -36,10 +33,10 @@ import NoAnalyticsState from "@/components/competitors/NoAnalyticsState";
 import CompetitorInsights from "@/components/competitors/CompetitorInsights";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { addProtocol } from "@/lib/utils";
-import { 
+import {
   getCompetitorFixedColor,
   getYourBrandColor,
-  registerCompetitorsInFixedSlots
+  registerCompetitorsInFixedSlots,
 } from "@/lib/color-utils";
 
 export default function Competitors() {
@@ -85,17 +82,18 @@ export default function Competitors() {
   // Market Share Data is handled by ShareOfVoiceChart component directly
   // Share of Voice Data (raw percentages)
   const shareOfVoiceChartData = useMemo(() => {
-    const rawData = (analytics?.shareOfVoiceData as Record<string, unknown>[]) || [];
-    
+    const rawData =
+      (analytics?.shareOfVoiceData as Record<string, unknown>[]) || [];
+
     // Filter out "Your Brand" for competitor processing and register all competitors in fixed slots
-    const competitorData = rawData.filter(item => item.name !== "Your Brand");
+    const competitorData = rawData.filter((item) => item.name !== "Your Brand");
     registerCompetitorsInFixedSlots(
-      competitorData.map(item => ({
+      competitorData.map((item) => ({
         competitorId: item.competitorId as string,
-        name: item.name as string
+        name: item.name as string,
       }))
     );
-    
+
     return rawData.map((item: Record<string, unknown>) => ({
       name: item.name as string,
       value: item.shareOfVoice as number,
@@ -104,13 +102,17 @@ export default function Competitors() {
       totalAnalyses: item.totalAnalyses as number,
       avgRank: item.avgRank as number,
       competitorId: item.competitorId as string,
-      dataType: (item.dataType as string) === "market_share" ? "market_share" as const : "share_of_voice" as const,
-      fill: item.name === "Your Brand"
-        ? getYourBrandColor()
-        : getCompetitorFixedColor({
-            competitorId: item.competitorId as string,
-            name: item.name as string
-          }),
+      dataType:
+        (item.dataType as string) === "market_share"
+          ? ("market_share" as const)
+          : ("share_of_voice" as const),
+      fill:
+        item.name === "Your Brand"
+          ? getYourBrandColor()
+          : getCompetitorFixedColor({
+              competitorId: item.competitorId as string,
+              name: item.name as string,
+            }),
     }));
   }, [analytics?.shareOfVoiceData]);
 
@@ -414,29 +416,50 @@ export default function Competitors() {
 
         {/* Competitors List */}
         <CompetitorsList
-          competitorsWithStatus={competitorsWithStatus as unknown as CompetitorWithStatus[]}
-          marketShareData={Array.isArray(analytics?.marketShareData) ? (analytics.marketShareData).map(item => ({
-            name: (item as Record<string, unknown>).name as string,
-            normalizedValue: (item as Record<string, unknown>).normalizedValue as number,
-            rawValue: (item as Record<string, unknown>).rawValue as number,
-            competitorId: (item as Record<string, unknown>).competitorId as string,
-            mentions: (item as Record<string, unknown>).mentions as number,
-            dataType: "market_share" as const
-          })) : []}
-          performance={Array.isArray(performance) ? (performance as unknown as Record<string, unknown>[]).map(p => ({
-            competitorId: (p.competitorId as string) || "",
-            domain: (p.domain as string) || "",
-            name: (p.name as string) || "",
-            shareOfVoice: (p.shareOfVoice as number) || 0,
-            averageRank: (p.averageRank as number) || 0,
-            mentionCount: (p.mentionCount as number) || 0,
-            sentimentScore: (p.sentimentScore as number) || 0,
-            visibilityScore: (p.visibilityScore as number) || 0,
-            trend: ((p.trend as string) === "up" || (p.trend as string) === "down") ? (p.trend as "up" | "down") : "stable" as const,
-            trendPercentage: (p.trendPercentage as number) || 0,
-            lastAnalyzed: (p.lastAnalyzed as string) || new Date().toISOString(),
-            isActive: (p.isActive as boolean) || true
-          })) : []}
+          competitorsWithStatus={
+            competitorsWithStatus as unknown as CompetitorWithStatus[]
+          }
+          marketShareData={
+            Array.isArray(analytics?.marketShareData)
+              ? analytics.marketShareData.map((item) => ({
+                  name: (item as Record<string, unknown>).name as string,
+                  normalizedValue: (item as Record<string, unknown>)
+                    .normalizedValue as number,
+                  rawValue: (item as Record<string, unknown>)
+                    .rawValue as number,
+                  competitorId: (item as Record<string, unknown>)
+                    .competitorId as string,
+                  mentions: (item as Record<string, unknown>)
+                    .mentions as number,
+                  dataType: "market_share" as const,
+                }))
+              : []
+          }
+          performance={
+            Array.isArray(performance)
+              ? (performance as unknown as Record<string, unknown>[]).map(
+                  (p) => ({
+                    competitorId: (p.competitorId as string) || "",
+                    domain: (p.domain as string) || "",
+                    name: (p.name as string) || "",
+                    shareOfVoice: (p.shareOfVoice as number) || 0,
+                    averageRank: (p.averageRank as number) || 0,
+                    mentionCount: (p.mentionCount as number) || 0,
+                    sentimentScore: (p.sentimentScore as number) || 0,
+                    visibilityScore: (p.visibilityScore as number) || 0,
+                    trend:
+                      (p.trend as string) === "up" ||
+                      (p.trend as string) === "down"
+                        ? (p.trend as "up" | "down")
+                        : ("stable" as const),
+                    trendPercentage: (p.trendPercentage as number) || 0,
+                    lastAnalyzed:
+                      (p.lastAnalyzed as string) || new Date().toISOString(),
+                    isActive: (p.isActive as boolean) || true,
+                  })
+                )
+              : []
+          }
           sortBy={(filters as CompetitorFilters).sortBy}
           confirmDelete={confirmDelete}
           isDeleting={deleteCompetitorMutation.isPending}
@@ -444,19 +467,32 @@ export default function Competitors() {
 
         {/* Competitive Gap Analysis */}
         <CompetitiveGapChart
-          gapAnalysis={(analytics?.gapAnalysis || []) as CompetitiveGapAnalysis[]}
+          gapAnalysis={
+            (analytics?.gapAnalysis || []) as CompetitiveGapAnalysis[]
+          }
           analytics={analytics as CompetitorAnalytics | null}
           dateFilter={(filters as CompetitorFilters).dateFilter}
         />
 
         {/* Competitive Intelligence */}
         <CompetitorInsights
-          insights={((analytics?.insights as unknown as Record<string, unknown>[]) || []).map(insight => ({
-            type: ((insight.type as string) === "opportunity" || (insight.type as string) === "threat") ? (insight.type as "opportunity" | "threat") : "neutral" as const,
+          insights={(
+            (analytics?.insights as unknown as Record<string, unknown>[]) || []
+          ).map((insight) => ({
+            type:
+              (insight.type as string) === "opportunity" ||
+              (insight.type as string) === "threat"
+                ? (insight.type as "opportunity" | "threat")
+                : ("neutral" as const),
             title: insight.title as string,
             description: insight.description as string,
-            impact: ((insight.impact as string) === "high" || (insight.impact as string) === "medium" || (insight.impact as string) === "low") ? (insight.impact as "high" | "medium" | "low") : "medium" as const,
-            recommendations: insight.recommendations as string[]
+            impact:
+              (insight.impact as string) === "high" ||
+              (insight.impact as string) === "medium" ||
+              (insight.impact as string) === "low"
+                ? (insight.impact as "high" | "medium" | "low")
+                : ("medium" as const),
+            recommendations: insight.recommendations as string[],
           }))}
           isLoading={isLoading}
           onRefresh={handleInsightsRefresh}
@@ -464,17 +500,27 @@ export default function Competitors() {
 
         {/* Time Series Chart */}
         <TimeSeriesChart
-          data={Array.isArray(analytics?.timeSeriesData) ? (analytics.timeSeriesData as Record<string, unknown>[]).map(item => ({
-            date: item.date as string,
-            competitors: Array.isArray(item.competitors) ? (item.competitors as Array<Record<string, unknown>>).map(comp => ({
-              competitorId: (comp.competitorId as string) || "",
-              name: (comp.name as string) || "",
-              shareOfVoice: (comp.shareOfVoice as number) || 0,
-              averageRank: (comp.averageRank as number) || 0,
-              mentionCount: (comp.mentionCount as number) || 0,
-              sentimentScore: (comp.sentimentScore as number) || 0
-            })) : []
-          })) : []}
+          data={
+            Array.isArray(analytics?.timeSeriesData)
+              ? (analytics.timeSeriesData as Record<string, unknown>[]).map(
+                  (item) => ({
+                    date: item.date as string,
+                    competitors: Array.isArray(item.competitors)
+                      ? (
+                          item.competitors as Array<Record<string, unknown>>
+                        ).map((comp) => ({
+                          competitorId: (comp.competitorId as string) || "",
+                          name: (comp.name as string) || "",
+                          shareOfVoice: (comp.shareOfVoice as number) || 0,
+                          averageRank: (comp.averageRank as number) || 0,
+                          mentionCount: (comp.mentionCount as number) || 0,
+                          sentimentScore: (comp.sentimentScore as number) || 0,
+                        }))
+                      : [],
+                  })
+                )
+              : []
+          }
         />
 
         {/* Main Empty State */}

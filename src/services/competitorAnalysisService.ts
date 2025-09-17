@@ -193,17 +193,70 @@ export class CompetitorAnalysisService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitorShareOfVoice[]> {
-    const { data, error } = await supabase
-      .schema("beekon_data")
-      .rpc("get_competitor_share_of_voice", {
-        p_website_id: websiteId,
-        p_date_start:
-          dateRange?.start ||
-          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        p_date_end: dateRange?.end || new Date().toISOString(),
-      });
+    console.log("websiteId", websiteId);
+    console.log("dateRange", dateRange);
 
-    if (error) throw error;
+    // Use 90-day default instead of 30-day to capture more historical data
+    // This addresses the issue where 7-day range was too restrictive for older data
+    const defaultDateRange = {
+      start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+      end: new Date().toISOString(),
+    };
+
+    const finalDateRange = dateRange || defaultDateRange;
+
+    // Add query timing and timeout protection
+    const queryStart = Date.now();
+
+    try {
+      const { data, error } = (await Promise.race([
+        supabase.schema("beekon_data").rpc("get_competitor_share_of_voice", {
+          p_website_id: websiteId,
+          p_date_start: finalDateRange.start,
+          p_date_end: finalDateRange.end,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Query timeout after 30 seconds")),
+            30000
+          )
+        ),
+      ])) as { data: any; error: any };
+
+      const queryTime = Date.now() - queryStart;
+      console.log(`Share of voice query completed in ${queryTime}ms`);
+
+      if (error) {
+        console.error("Share of voice query error:", error);
+        // If query fails, try with a shorter date range as fallback
+        if (finalDateRange === defaultDateRange) {
+          console.log("Retrying with shorter 30-day range...");
+          return this.getCompetitorShareOfVoice(websiteId, {
+            start: new Date(
+              Date.now() - 30 * 24 * 60 * 60 * 1000
+            ).toISOString(),
+            end: new Date().toISOString(),
+          });
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error("Share of voice query failed:", error);
+      if (error instanceof Error && error.message.includes("timeout")) {
+        console.log("Query timed out, trying shorter date range...");
+        // Fallback to 7-day range if timeout occurred
+        if (finalDateRange === defaultDateRange) {
+          return this.getCompetitorShareOfVoice(websiteId, {
+            start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+            end: new Date().toISOString(),
+          });
+        }
+      }
+      // Return empty array instead of throwing to prevent page crashes
+      return [];
+    }
+
+    console.log("data", data);
 
     return (data || []).map((row) => ({
       competitorId: row.competitor_id,
@@ -231,17 +284,48 @@ export class CompetitorAnalysisService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<CompetitiveGapAnalysis[]> {
-    const { data, error } = await supabase
-      .schema("beekon_data")
-      .rpc("get_competitive_gap_analysis", {
-        p_website_id: websiteId,
-        p_date_start:
-          dateRange?.start ||
-          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        p_date_end: dateRange?.end || new Date().toISOString(),
-      });
+    // Use consistent 90-day default range to match share of voice function
+    const defaultDateRange = {
+      start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+      end: new Date().toISOString(),
+    };
 
-    if (error) throw error;
+    const finalDateRange = dateRange || defaultDateRange;
+
+    // Add query timing and timeout protection for gap analysis
+    const queryStart = Date.now();
+
+    try {
+      const { data, error } = (await Promise.race([
+        supabase.schema("beekon_data").rpc("get_competitive_gap_analysis", {
+          p_website_id: websiteId,
+          p_date_start: finalDateRange.start,
+          p_date_end: finalDateRange.end,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Gap analysis timeout after 30 seconds")),
+            30000
+          )
+        ),
+      ])) as { data: any; error: any };
+
+      const queryTime = Date.now() - queryStart;
+      console.log(`Gap analysis query completed in ${queryTime}ms`);
+
+      if (error) {
+        console.error("Gap analysis query error:", error);
+        // Return empty array for fallback instead of throwing
+        return [];
+      }
+    } catch (error) {
+      console.error("Gap analysis query failed:", error);
+      if (error instanceof Error && error.message.includes("timeout")) {
+        console.log("Gap analysis query timed out, returning empty results");
+      }
+      // Return empty array instead of throwing to prevent page crashes
+      return [];
+    }
 
     return (data || []).map((row) => ({
       topicId: row.topic_id,
@@ -318,7 +402,8 @@ export class CompetitorAnalysisService extends BaseService {
         .eq("website_id", websiteId)
         .eq("is_active", true);
 
-      const hasCompetitors = typeof competitorsCount === 'number' ? competitorsCount > 0 : false;
+      const hasCompetitors =
+        typeof competitorsCount === "number" ? competitorsCount > 0 : false;
 
       // Get data with error handling for each source
       const [shareOfVoice, gapAnalysis] = await Promise.allSettled([
@@ -326,15 +411,21 @@ export class CompetitorAnalysisService extends BaseService {
         this.getCompetitiveGapAnalysis(websiteId, dateRange),
       ]);
 
-      const shareOfVoiceData = shareOfVoice.status === 'fulfilled' ? shareOfVoice.value : [];
-      const gapAnalysisData = gapAnalysis.status === 'fulfilled' ? gapAnalysis.value : [];
+      const shareOfVoiceData =
+        shareOfVoice.status === "fulfilled" ? shareOfVoice.value : [];
+      const gapAnalysisData =
+        gapAnalysis.status === "fulfilled" ? gapAnalysis.value : [];
 
       const insights: CompetitorInsight[] = [];
 
       // Generate insights based on available data
       if (shareOfVoiceData.length > 0 || gapAnalysisData.length > 0) {
         // We have some analysis data - generate insights
-        this.generateInsightsFromData(insights, shareOfVoiceData, gapAnalysisData);
+        this.generateInsightsFromData(
+          insights,
+          shareOfVoiceData,
+          gapAnalysisData
+        );
       } else if (hasCompetitors) {
         // We have competitors but no analysis data - they're likely still being analyzed
         this.generatePendingAnalysisInsights(insights, websiteId);
@@ -349,7 +440,7 @@ export class CompetitorAnalysisService extends BaseService {
       });
     } catch (error) {
       // Log error but don't fail completely - return helpful fallback insights
-      console.error('Error generating competitor insights:', error);
+      console.error("Error generating competitor insights:", error);
       return this.generateFallbackInsights();
     }
   }
@@ -395,7 +486,9 @@ export class CompetitorAnalysisService extends BaseService {
       insights.push({
         type: "threat",
         title: `Emerging Competitor: ${competitor.competitorName}`,
-        description: `${competitor.competitorName} has gained ${competitor.shareOfVoice.toFixed(1)}% share of voice`,
+        description: `${
+          competitor.competitorName
+        } has gained ${competitor.shareOfVoice.toFixed(1)}% share of voice`,
         impact: "medium",
         competitorId: competitor.competitorId,
         recommendations: [
@@ -468,12 +561,17 @@ export class CompetitorAnalysisService extends BaseService {
 
     // Add strategic insights if we have sufficient data
     if (shareOfVoice.length >= 2) {
-      const totalCompetitorShare = shareOfVoice.reduce((sum, comp) => sum + comp.shareOfVoice, 0);
+      const totalCompetitorShare = shareOfVoice.reduce(
+        (sum, comp) => sum + comp.shareOfVoice,
+        0
+      );
       if (totalCompetitorShare < 80) {
         insights.push({
           type: "opportunity",
           title: "Market Share Opportunity",
-          description: `Only ${totalCompetitorShare.toFixed(1)}% of voice share is captured by tracked competitors`,
+          description: `Only ${totalCompetitorShare.toFixed(
+            1
+          )}% of voice share is captured by tracked competitors`,
           impact: "high",
           recommendations: [
             "Research and add more competitors in your space",
@@ -488,11 +586,15 @@ export class CompetitorAnalysisService extends BaseService {
   /**
    * Generate insights when competitors exist but analysis is pending
    */
-  private generatePendingAnalysisInsights(insights: CompetitorInsight[], _websiteId: string): void {
+  private generatePendingAnalysisInsights(
+    insights: CompetitorInsight[],
+    _websiteId: string
+  ): void {
     insights.push({
       type: "neutral",
       title: "Competitor Analysis in Progress",
-      description: "Your competitors are being analyzed. Insights will be available once analysis is complete.",
+      description:
+        "Your competitors are being analyzed. Insights will be available once analysis is complete.",
       impact: "medium",
       recommendations: [
         "Check back in a few minutes for updated insights",
@@ -504,7 +606,8 @@ export class CompetitorAnalysisService extends BaseService {
     insights.push({
       type: "opportunity",
       title: "Optimize Your Analysis Setup",
-      description: "While waiting for competitor analysis, optimize your analysis configuration",
+      description:
+        "While waiting for competitor analysis, optimize your analysis configuration",
       impact: "low",
       recommendations: [
         "Review your topic coverage and add missing topics",
@@ -521,7 +624,8 @@ export class CompetitorAnalysisService extends BaseService {
     insights.push({
       type: "opportunity",
       title: "Add Competitors to Begin Analysis",
-      description: "Start generating competitive insights by adding your main competitors",
+      description:
+        "Start generating competitive insights by adding your main competitors",
       impact: "high",
       recommendations: [
         "Identify 3-5 main competitors in your space",
@@ -533,7 +637,8 @@ export class CompetitorAnalysisService extends BaseService {
     insights.push({
       type: "neutral",
       title: "Competitive Intelligence Benefits",
-      description: "Competitor analysis will help you understand market positioning and opportunities",
+      description:
+        "Competitor analysis will help you understand market positioning and opportunities",
       impact: "medium",
       recommendations: [
         "Track share of voice across different topics",
@@ -552,7 +657,8 @@ export class CompetitorAnalysisService extends BaseService {
       {
         type: "neutral",
         title: "Insights Temporarily Unavailable",
-        description: "We're working to restore competitive intelligence. Please try again in a few moments.",
+        description:
+          "We're working to restore competitive intelligence. Please try again in a few moments.",
         impact: "low",
         recommendations: [
           "Refresh the page to try again",
@@ -563,7 +669,8 @@ export class CompetitorAnalysisService extends BaseService {
       {
         type: "opportunity",
         title: "Manual Competitive Research",
-        description: "While automated insights are unavailable, consider manual competitive research",
+        description:
+          "While automated insights are unavailable, consider manual competitive research",
         impact: "medium",
         recommendations: [
           "Research competitor content strategies manually",

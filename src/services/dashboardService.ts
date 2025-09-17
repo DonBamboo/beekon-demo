@@ -62,7 +62,8 @@ export class DashboardService {
   }
 
   /**
-   * Get comprehensive dashboard metrics for a workspace
+   * Get comprehensive dashboard metrics for a workspace - OPTIMIZED
+   * Uses materialized views for lightning-fast performance
    */
   async getDashboardMetrics(
     websiteIds: string[],
@@ -73,34 +74,46 @@ export class DashboardService {
     }
 
     try {
-      // Execute all data fetching in parallel for better performance
-      const [allResults, previousPeriodMetrics] = await Promise.all([
-        this.getAllAnalysisResults(websiteIds, dateRange),
-        this.getPreviousPeriodMetrics(websiteIds, dateRange),
-      ]);
+      // OPTIMIZED: Use materialized view function instead of expensive analysis queries
+      const defaultDateRange = {
+        start: dateRange?.start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        end: dateRange?.end || new Date().toISOString()
+      };
 
-      if (allResults.length === 0) {
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_dashboard_metrics", {
+          p_website_ids: websiteIds,
+          p_date_start: defaultDateRange.start,
+          p_date_end: defaultDateRange.end,
+        });
+
+      if (error) throw error;
+
+      const result = data?.[0];
+      if (!result) {
         return this.getEmptyMetrics();
       }
 
-      // Calculate aggregated metrics
-      const metrics = this.calculateAggregatedMetrics(allResults);
-
-      // Calculate trend from parallel fetched data
-      metrics.improvementTrend = this.calculateTrend(
-        metrics.overallVisibilityScore,
-        previousPeriodMetrics.overallVisibilityScore
-      );
-
-      return metrics;
+      return {
+        overallVisibilityScore: Number(result.overall_visibility_score || 0),
+        averageRanking: Number(result.average_ranking || 4.0),
+        totalMentions: Number(result.total_mentions || 0),
+        sentimentScore: Number(result.sentiment_score || 2.5),
+        totalAnalyses: Number(result.total_analyses || 0),
+        activeWebsites: Number(result.active_websites || 0),
+        topPerformingTopic: result.top_performing_topic || null,
+        improvementTrend: Number(result.improvement_trend || 0),
+      };
     } catch (error) {
-      // Failed to get dashboard metrics
+      // Failed to get dashboard metrics - fallback to empty metrics
       return this.getEmptyMetrics();
     }
   }
 
   /**
-   * Get time series data for dashboard charts
+   * Get time series data for dashboard charts - OPTIMIZED
+   * Uses materialized views for fast time series data
    */
   async getTimeSeriesData(
     websiteIds: string[],
@@ -110,29 +123,32 @@ export class DashboardService {
 
     try {
       const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(endDate.getDate() - days);
 
-      const dateRange = {
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-      };
+      // OPTIMIZED: Use materialized view function for instant time series data
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_dashboard_time_series", {
+          p_website_ids: websiteIds,
+          p_days: days,
+        });
 
-      const allResults = await this.getAllAnalysisResults(
-        websiteIds,
-        dateRange
-      );
+      if (error) throw error;
 
-      return this.aggregateByDate(allResults, startDate, endDate);
+      return (data || []).map((row: any) => ({
+        date: row.date,
+        visibility: Number(row.visibility || 0),
+        mentions: Number(row.mentions || 0),
+        sentiment: Number(row.sentiment || 2.5),
+      }));
     } catch (error) {
-      // Failed to get time series data
+      // Failed to get time series data - return empty array
       return [];
     }
   }
 
   /**
-   * Get topic performance data
+   * Get topic performance data - OPTIMIZED
+   * Uses competitive gap analysis materialized view
    */
   async getTopicPerformance(
     websiteIds: string[],
@@ -141,31 +157,63 @@ export class DashboardService {
     if (websiteIds.length === 0) return [];
 
     try {
-      const allResults = await this.getAllAnalysisResults(websiteIds);
-      return this.calculateTopicPerformance(allResults, limit);
+      // OPTIMIZED: Use materialized view function for topic performance
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_topic_performance_dashboard", {
+          p_website_ids: websiteIds,
+          p_limit: limit,
+        });
+
+      if (error) throw error;
+
+      return (data || []).map((row: any) => ({
+        topic: row.topic,
+        visibility: Number(row.visibility || 0),
+        mentions: Number(row.mentions || 0),
+        averageRank: Number(row.average_rank || 4.0),
+        sentiment: Number(row.sentiment || 2.5),
+        trend: Number(row.trend || 0),
+      }));
     } catch (error) {
-      // Failed to get topic performance
+      // Failed to get topic performance - return empty array
       return [];
     }
   }
 
   /**
-   * Get LLM provider performance comparison
+   * Get LLM provider performance comparison - OPTIMIZED
+   * Uses cached performance metrics for instant results
    */
   async getLLMPerformance(websiteIds: string[]): Promise<LLMPerformance[]> {
     if (websiteIds.length === 0) return [];
 
     try {
-      const allResults = await this.getAllAnalysisResults(websiteIds);
-      return this.calculateLLMPerformance(allResults);
+      // OPTIMIZED: Use materialized view function for LLM performance
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_llm_performance_dashboard", {
+          p_website_ids: websiteIds,
+        });
+
+      if (error) throw error;
+
+      return (data || []).map((row: any) => ({
+        provider: row.provider,
+        mentionRate: Number(row.mention_rate || 0),
+        averageRank: Number(row.average_rank || 4.0),
+        sentiment: Number(row.sentiment || 2.5),
+        totalAnalyses: Number(row.total_analyses || 0),
+      }));
     } catch (error) {
-      // Failed to get LLM performance
+      // Failed to get LLM performance - return empty array
       return [];
     }
   }
 
   /**
-   * Get website performance comparison
+   * Get website performance comparison - OPTIMIZED
+   * Uses materialized view for instant website metrics
    */
   async getWebsitePerformance(
     websiteIds: string[]
@@ -173,50 +221,26 @@ export class DashboardService {
     if (websiteIds.length === 0) return [];
 
     try {
-      // Execute all website data fetching in parallel
-      const websitePromises = websiteIds.map(async (websiteId) => {
-        const [results, websiteInfo] = await Promise.all([
-          analysisService.getAnalysisResults(websiteId),
-          supabase
-            .schema("beekon_data")
-            .from("websites")
-            .select("domain, display_name")
-            .eq("id", websiteId)
-            .single(),
-        ]);
+      // OPTIMIZED: Use materialized view function for website performance
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_website_performance_dashboard", {
+          p_website_ids: websiteIds,
+        });
 
-        // Convert UIAnalysisResult to AnalysisResult format for metrics calculation
-        const analysisResults = results.map(result => ({
-          id: result.id,
-          topic_name: result.topic,
-          topic: result.topic,
-          topic_keywords: [],
-          llm_results: result.llm_results,
-          total_mentions: result.llm_results.filter(r => r.is_mentioned).length,
-          avg_rank: result.llm_results.reduce((acc, r) => acc + (r.rank_position || 0), 0) / result.llm_results.length,
-          avg_confidence: result.confidence,
-          avg_sentiment: result.llm_results.reduce((acc, r) => acc + (r.sentiment_score || 0), 0) / result.llm_results.length,
-          created_at: result.created_at,
-          website_id: result.website_id,
-        }));
-        
-        const metrics = this.calculateMetricsForResults(analysisResults);
+      if (error) throw error;
 
-        return {
-          websiteId,
-          domain: websiteInfo.data?.domain || "",
-          displayName: websiteInfo.data?.display_name || "",
-          visibility: metrics.overallVisibilityScore,
-          mentions: metrics.totalMentions,
-          sentiment: metrics.sentimentScore,
-          lastAnalyzed: results.length > 0 ? results[0]!.created_at : "",
-        };
-      });
-
-      const websitePerformance = await Promise.all(websitePromises);
-      return websitePerformance.sort((a, b) => b.visibility - a.visibility);
+      return (data || []).map((row: any) => ({
+        websiteId: row.website_id,
+        domain: row.domain || "",
+        displayName: row.display_name || "",
+        visibility: Number(row.visibility || 0),
+        mentions: Number(row.mentions || 0),
+        sentiment: Number(row.sentiment || 2.5),
+        lastAnalyzed: row.last_analyzed || "",
+      }));
     } catch (error) {
-      // Failed to get website performance
+      // Failed to get website performance - return empty array
       return [];
     }
   }
