@@ -178,6 +178,28 @@ export default function CompetitiveGapChart({
   const processedData = useMemo(() => {
     if (!gapAnalysis || gapAnalysis.length === 0) return null;
 
+    // Debug logging for input data analysis
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🎯 [DEBUG] CompetitiveGapChart input data:", {
+        gapAnalysisLength: gapAnalysis.length,
+        totalUniqueCompetitors: new Set(
+          gapAnalysis.flatMap(gap =>
+            gap.competitorData.map(comp => comp.competitor_id || comp.competitor_name)
+          )
+        ).size,
+        gapAnalysisStructure: gapAnalysis.map(gap => ({
+          topicName: gap.topicName,
+          competitorCount: gap.competitorData.length,
+          competitors: gap.competitorData.map(comp => ({
+            id: comp.competitor_id,
+            name: comp.competitor_name,
+            domain: comp.competitorDomain,
+            score: comp.score
+          }))
+        }))
+      });
+    }
+
     // Validate color assignments and fix conflicts if needed
     const colorValidation = validateAllColorAssignments();
     if (!colorValidation.isValid) {
@@ -236,6 +258,16 @@ export default function CompetitiveGapChart({
       });
     });
 
+    // Debug logging for competitor key extraction
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🔑 [DEBUG] CompetitiveGapChart competitor keys:", {
+        competitorKeysFound: Array.from(competitorKeys),
+        totalKeysCount: competitorKeys.size,
+        barChartDataSample: barChartData[0] ? Object.keys(barChartData[0]) : [],
+        barChartDataFirstItem: barChartData[0]
+      });
+    }
+
     // Extract all unique competitors for standardized mapping
     const allCompetitors: Array<{
       competitorId: string;
@@ -287,6 +319,26 @@ export default function CompetitiveGapChart({
         color,
       };
     });
+
+    // Debug logging for competitor info and color assignments
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🎨 [DEBUG] CompetitiveGapChart competitor info & colors:", {
+        allCompetitorsCount: allCompetitors.length,
+        competitorInfoCount: competitorInfo.length,
+        allCompetitors: allCompetitors.map(comp => ({
+          competitorId: comp.competitorId,
+          name: comp.name,
+          key: comp.key
+        })),
+        competitorInfo: competitorInfo.map(comp => ({
+          key: comp.key,
+          name: comp.name,
+          competitorId: comp.competitorId,
+          colorIndex: comp.colorIndex,
+          color: comp.color
+        }))
+      });
+    }
 
     // Radar chart data with individual competitors using proper identifiers
     const radarData = validatedGapAnalysis.map((gap) => {

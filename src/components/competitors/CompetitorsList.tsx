@@ -439,7 +439,7 @@ export default function CompetitorsList({
                         !isAnalyzed ? "text-muted-foreground" : ""
                       }`}
                     >
-                      {performanceData?.sentimentScore ?? 0}%
+                      {performanceData?.sentimentScore?.toFixed(1) ?? 0}%
                     </div>
                   </div>
 
