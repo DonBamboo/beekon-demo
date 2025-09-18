@@ -92,11 +92,22 @@ export function useDashboardData(filters: DashboardFilters) {
   const { websites, loading: workspaceLoading } = useWorkspace();
   const websiteIds = websites?.map((w) => w.id) || [];
 
+  // Convert period to dateRange if dateRange is not provided for consistent caching
+  const effectiveDateRange = filters.dateRange || (() => {
+    const days = filters.period === "7d" ? 7 : filters.period === "30d" ? 30 : 90;
+    const endDate = new Date();
+    const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
+    return {
+      start: startDate.toISOString(),
+      end: endDate.toISOString(),
+    };
+  })();
+
   const queries = useQueries({
     queries: [
       {
-        queryKey: dashboardKeys.metrics(websiteIds, filters.dateRange),
-        queryFn: () => dashboardService.getDashboardMetrics(websiteIds, filters.dateRange),
+        queryKey: dashboardKeys.metrics(websiteIds, effectiveDateRange),
+        queryFn: () => dashboardService.getDashboardMetrics(websiteIds, effectiveDateRange),
         enabled: !workspaceLoading && websiteIds.length > 0,
         staleTime: 2 * 60 * 1000,
       },

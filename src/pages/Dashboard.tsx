@@ -36,6 +36,8 @@ import { sanitizeChartNumber } from "@/utils/chartDataValidation";
 import { useToast } from "@/hooks/use-toast";
 import { useOptimizedDashboardData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { usePageFilters } from "@/hooks/appStateHooks";
+import type { DashboardFilters } from "@/contexts/AppStateContext";
 import {
   BarChart3,
   Download,
@@ -64,8 +66,32 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [isExporting, setIsExporting] = useState(false);
   const [,] = useState(false);
-  const [dateFilter, setDateFilter] = useState<"7d" | "30d" | "90d">("7d");
   const [showAllCharts, setShowAllCharts] = useState(false);
+
+  // Use global dashboard filters instead of local state
+  const { filters: dashboardFilters, setFilters: setDashboardFilters } =
+    usePageFilters<DashboardFilters>("dashboard");
+  const dateFilter = dashboardFilters.period || "7d";
+
+  // Function to update date filter in global state
+  const setDateFilter = (period: "7d" | "30d" | "90d") => {
+    setDashboardFilters({
+      ...dashboardFilters,
+      period,
+      // Convert period to dateRange for consistent data fetching
+      dateRange: {
+        start: new Date(
+          Date.now() -
+            (period === "7d" ? 7 : period === "30d" ? 30 : 90) *
+              24 *
+              60 *
+              60 *
+              1000
+        ).toISOString(),
+        end: new Date().toISOString(),
+      },
+    });
+  };
   const { handleExport } = useExportHandler();
 
   // Chart refs for capture
@@ -106,45 +132,58 @@ export default function Dashboard() {
 
   // Sanitize timeSeriesData to prevent Recharts errors
   const sanitizedTimeSeriesData = useMemo(() => {
-    return timeSeriesData.map((point) => {
-      // Validate and sanitize the date field
-      let validDate = String(point.date || '');
+    return timeSeriesData
+      .map((point) => {
+        // Validate and sanitize the date field
+        let validDate = String(point.date || "");
 
-      // Check if date is valid
-      if (!validDate || validDate === null || validDate === undefined || validDate === '') {
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('⚠️ Dashboard: Invalid date in timeSeriesData:', point);
+        // Check if date is valid
+        if (
+          !validDate ||
+          validDate === null ||
+          validDate === undefined ||
+          validDate === ""
+        ) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn(
+              "⚠️ Dashboard: Invalid date in timeSeriesData:",
+              point
+            );
+          }
+          validDate = new Date().toISOString().split("T")[0]!; // Use today as fallback
         }
-        validDate = new Date().toISOString().split('T')[0]!; // Use today as fallback
-      }
 
-      // Ensure date is in a valid format
-      const dateTest = new Date(validDate);
-      if (isNaN(dateTest.getTime())) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('⚠️ Dashboard: Invalid date format in timeSeriesData:', { originalDate: point.date, point });
+        // Ensure date is in a valid format
+        const dateTest = new Date(validDate);
+        if (isNaN(dateTest.getTime())) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn(
+              "⚠️ Dashboard: Invalid date format in timeSeriesData:",
+              { originalDate: point.date, point }
+            );
+          }
+          validDate = new Date().toISOString().split("T")[0]!; // Use today as fallback
         }
-        validDate = new Date().toISOString().split('T')[0]!; // Use today as fallback
-      }
 
-      return {
-        ...point,
-        date: validDate,
-        visibility: sanitizeChartNumber(point.visibility),
-        mentions: sanitizeChartNumber(point.mentions),
-        sentiment: sanitizeChartNumber(point.sentiment),
-      };
-    }).filter(point => {
-      // Final filter to remove any points that still have invalid dates
-      const finalDateTest = new Date(String(point.date));
-      const isValid = !isNaN(finalDateTest.getTime());
+        return {
+          ...point,
+          date: validDate,
+          visibility: sanitizeChartNumber(point.visibility),
+          mentions: sanitizeChartNumber(point.mentions),
+          sentiment: sanitizeChartNumber(point.sentiment),
+        };
+      })
+      .filter((point) => {
+        // Final filter to remove any points that still have invalid dates
+        const finalDateTest = new Date(String(point.date));
+        const isValid = !isNaN(finalDateTest.getTime());
 
-      if (!isValid && process.env.NODE_ENV !== 'production') {
-        console.error('❌ Dashboard: Removing invalid data point:', point);
-      }
+        if (!isValid && process.env.NODE_ENV !== "production") {
+          console.error("❌ Dashboard: Removing invalid data point:", point);
+        }
 
-      return isValid;
-    });
+        return isValid;
+      });
   }, [timeSeriesData]);
 
   const getSentimentColor = (sentiment: number) => {
@@ -580,6 +619,8 @@ export default function Dashboard() {
     return <WorkspaceCreationPrompt />;
   }
 
+  console.log("metrics", metrics);
+
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -764,14 +805,18 @@ export default function Dashboard() {
                       try {
                         const date = new Date(value);
                         if (isNaN(date.getTime())) {
-                          return 'Invalid Date';
+                          return "Invalid Date";
                         }
                         return date.toLocaleDateString();
                       } catch (error) {
-                        if (process.env.NODE_ENV !== 'production') {
-                          console.warn('⚠️ Dashboard Chart: Error formatting date:', value, error);
+                        if (process.env.NODE_ENV !== "production") {
+                          console.warn(
+                            "⚠️ Dashboard Chart: Error formatting date:",
+                            value,
+                            error
+                          );
                         }
-                        return 'Invalid Date';
+                        return "Invalid Date";
                       }
                     }}
                   />
@@ -781,14 +826,18 @@ export default function Dashboard() {
                       try {
                         const date = new Date(value);
                         if (isNaN(date.getTime())) {
-                          return 'Invalid Date';
+                          return "Invalid Date";
                         }
                         return date.toLocaleDateString();
                       } catch (error) {
-                        if (process.env.NODE_ENV !== 'production') {
-                          console.warn('⚠️ Dashboard Tooltip: Error formatting date:', value, error);
+                        if (process.env.NODE_ENV !== "production") {
+                          console.warn(
+                            "⚠️ Dashboard Tooltip: Error formatting date:",
+                            value,
+                            error
+                          );
                         }
-                        return 'Invalid Date';
+                        return "Invalid Date";
                       }
                     }}
                     formatter={(value) => [
@@ -980,7 +1029,7 @@ export default function Dashboard() {
                           <div className="flex justify-between text-sm mb-1">
                             <span>Visibility</span>
                             <span className="font-medium">
-                              {Number(item.visibility) || 0}%
+                              {(item.visibility as number).toFixed(2) || 0}%
                             </span>
                           </div>
                           <Progress

@@ -22,7 +22,8 @@ export interface TimeSeriesData {
   visibility: number;
   mentions: number;
   sentiment: number;
-  [key: string]: unknown;}
+  [key: string]: unknown;
+}
 
 export interface TopicPerformance {
   topic: string;
@@ -31,7 +32,8 @@ export interface TopicPerformance {
   averageRank: number;
   sentiment: number;
   trend: number; // percentage change
-  [key: string]: unknown;}
+  [key: string]: unknown;
+}
 
 export interface LLMPerformance {
   provider: string;
@@ -76,14 +78,16 @@ export class DashboardService {
     try {
       // OPTIMIZED: Use materialized view function instead of expensive analysis queries
       const defaultDateRange = {
-        start: dateRange?.start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        end: dateRange?.end || new Date().toISOString()
+        start:
+          dateRange?.start ||
+          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+        end: dateRange?.end || new Date().toISOString(),
       };
 
-      console.log('📊 Dashboard metrics call:', {
+      console.log("📊 Dashboard metrics call:", {
         websiteIds,
         dateRange: defaultDateRange,
-        functionName: 'get_dashboard_metrics'
+        functionName: "get_dashboard_metrics",
       });
 
       const { data, error } = await supabase
@@ -95,30 +99,37 @@ export class DashboardService {
         });
 
       if (error) {
-        console.error('❌ Dashboard metrics error:', {
+        console.error("❌ Dashboard metrics error:", {
           error,
           code: error.code,
           message: error.message,
           details: error.details,
           hint: error.hint,
-          parameters: { websiteIds, dateRange: defaultDateRange }
+          parameters: { websiteIds, dateRange: defaultDateRange },
         });
         throw error;
       }
 
-      console.log('✅ Dashboard metrics success:', { dataLength: Array.isArray(data) ? data.length : 'not array', firstResult: Array.isArray(data) ? data[0] : data });
+      console.log("✅ Dashboard metrics success:", {
+        dataLength: Array.isArray(data) ? data.length : "not array",
+        firstResult: Array.isArray(data) ? data[0] : data,
+      });
 
-      const result = Array.isArray(data) ? data[0] : null;
+      const result = Array.isArray(data) ? data[0] : data;
       if (!result) {
         return this.getEmptyMetrics();
       }
 
+      console.log("result", result);
+
       const metrics = result as any;
       return {
-        overallVisibilityScore: Number(metrics.overall_visibility_score || 0),
-        averageRanking: Number(metrics.average_ranking || 4.0),
+        overallVisibilityScore: Number(
+          metrics.overall_visibility_score.toFixed(2) || 0
+        ),
+        averageRanking: Number(metrics.average_ranking.toFixed(2) || 0.0),
         totalMentions: Number(metrics.total_mentions || 0),
-        sentimentScore: Number(metrics.sentiment_score || 50),
+        sentimentScore: Number(metrics.sentiment_score.toFixed(2) || 50),
         totalAnalyses: Number(metrics.total_analyses || 0),
         activeWebsites: Number(metrics.active_websites || 0),
         topPerformingTopic: metrics.top_performing_topic || null,
@@ -126,10 +137,10 @@ export class DashboardService {
       };
     } catch (error) {
       // Failed to get dashboard metrics - fallback to empty metrics
-      console.error('🚨 Dashboard metrics fallback triggered:', {
+      console.error("🚨 Dashboard metrics fallback triggered:", {
         error: error instanceof Error ? error.message : error,
         websiteIds,
-        stack: error instanceof Error ? error.stack : undefined
+        stack: error instanceof Error ? error.stack : undefined,
       });
       return this.getEmptyMetrics();
     }
@@ -149,12 +160,13 @@ export class DashboardService {
       const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
 
       // OPTIMIZED: Use materialized view function for instant time series data
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_dashboard_time_series" as any, {
+      const { data, error } = await supabase.schema("beekon_data").rpc(
+        "get_dashboard_time_series" as any,
+        {
           p_website_ids: websiteIds,
           p_days: days,
-        } as any);
+        } as any
+      );
 
       if (error) throw error;
 
@@ -329,16 +341,24 @@ export class DashboardService {
 
       // Flatten all results into a single array and convert to AnalysisResult format
       const flatResults = allResultsArrays.flat();
-      return flatResults.map(result => ({
+      return flatResults.map((result) => ({
         id: result.id,
         topic_name: result.topic,
         topic: result.topic,
         topic_keywords: [],
         llm_results: result.llm_results,
-        total_mentions: result.llm_results.filter(r => r.is_mentioned).length,
-        avg_rank: result.llm_results.reduce((acc, r) => acc + (r.rank_position || 0), 0) / result.llm_results.length || null,
+        total_mentions: result.llm_results.filter((r) => r.is_mentioned).length,
+        avg_rank:
+          result.llm_results.reduce(
+            (acc, r) => acc + (r.rank_position || 0),
+            0
+          ) / result.llm_results.length || null,
         avg_confidence: result.confidence,
-        avg_sentiment: result.llm_results.reduce((acc, r) => acc + (r.sentiment_score || 0), 0) / result.llm_results.length || null,
+        avg_sentiment:
+          result.llm_results.reduce(
+            (acc, r) => acc + (r.sentiment_score || 0),
+            0
+          ) / result.llm_results.length || null,
         created_at: result.created_at,
         website_id: result.website_id,
       }));
@@ -492,7 +512,9 @@ export class DashboardService {
       .slice(0, limit);
   }
 
-  private _calculateLLMPerformance(results: AnalysisResult[]): LLMPerformance[] {
+  private _calculateLLMPerformance(
+    results: AnalysisResult[]
+  ): LLMPerformance[] {
     const llmMap = new Map<string, LLMResult[]>();
 
     // Group results by LLM provider
@@ -716,7 +738,6 @@ export class DashboardService {
       }),
     });
   }
-
 }
 
 export const dashboardService = DashboardService.getInstance();

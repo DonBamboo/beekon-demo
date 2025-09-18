@@ -105,7 +105,6 @@ export default function ShareOfVoiceChart({
   dateFilter,
   chartType = "share_of_voice", // Default to share of voice for backward compatibility
 }: ShareOfVoiceChartProps) {
-  console.log("ShareOfVoiceChart data prop:", data);
   // Enhanced data processing with validation
   const chartData = useMemo(() => {
     // Validate color assignments and fix conflicts if needed
@@ -226,14 +225,17 @@ export default function ShareOfVoiceChart({
           validationSummary: {
             originalDataPoints: chartData.length,
             sanitizedDataPoints: validation.data.length,
-            dataConsistency: chartData.length === validation.data.length ? 'maintained' : 'changed'
+            dataConsistency:
+              chartData.length === validation.data.length
+                ? "maintained"
+                : "changed",
           },
-          impact: 'Chart will render with sanitized data to prevent crashes',
+          impact: "Chart will render with sanitized data to prevent crashes",
           possibleCauses: [
-            'Service layer returned invalid numeric values',
-            'Data transformation errors',
-            'Network/database issues'
-          ]
+            "Service layer returned invalid numeric values",
+            "Data transformation errors",
+            "Network/database issues",
+          ],
         }
       );
     }
@@ -351,8 +353,6 @@ export default function ShareOfVoiceChart({
 
     return result;
   }, [chartData]);
-
-  console.log("chartData", chartData);
 
   // Data validation and quality checks
   const dataQuality = useMemo(() => {
@@ -901,79 +901,79 @@ export default function ShareOfVoiceChart({
             <ErrorBoundary fallback={ChartErrorFallback}>
               <div className="relative">
                 <ResponsiveContainer width="100%" height={350}>
-                <BarChart
-                  data={sanitizedChartData}
-                  layout="horizontal"
-                  barCategoryGap={20}
-                  margin={{ top: 20, right: 30, bottom: 20, left: 150 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    type="number"
-                    domain={[
-                      0,
-                      (() => {
-                        // Safe domain calculation to prevent NaN
-                        const values = sanitizedChartData
-                          .map((d) => d.value)
-                          .filter((v) => typeof v === "number" && !isNaN(v));
-                        const maxValue =
-                          values.length > 0 ? Math.max(...values) : 0;
-                        return Math.max(50, maxValue * 1.1);
-                      })(),
-                    ]}
-                    tickFormatter={(value) => {
-                      // Protect against NaN values in tick formatter
-                      const safeValue =
-                        typeof value === "number" &&
-                        !isNaN(value) &&
-                        isFinite(value)
-                          ? value
-                          : 0;
-                      return `${safeValue}%`;
-                    }}
-                  />
-                  <YAxis
-                    dataKey="name"
-                    type="category"
-                    width={150}
-                    tick={<CustomCompetitorTick />}
-                    interval={0}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar
-                    dataKey="value"
-                    radius={[0, 4, 4, 0]}
-                    minPointSize={5}
-                    label={{
-                      position: "right",
-                      formatter: (value: number) => {
-                        // Protect against NaN values in label formatter
+                  <BarChart
+                    data={sanitizedChartData}
+                    layout="horizontal"
+                    barCategoryGap={20}
+                    margin={{ top: 20, right: 30, bottom: 20, left: 150 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      type="number"
+                      domain={[
+                        0,
+                        (() => {
+                          // Safe domain calculation to prevent NaN
+                          const values = sanitizedChartData
+                            .map((d) => d.value)
+                            .filter((v) => typeof v === "number" && !isNaN(v));
+                          const maxValue =
+                            values.length > 0 ? Math.max(...values) : 0;
+                          return Math.max(50, maxValue * 1.1);
+                        })(),
+                      ]}
+                      tickFormatter={(value) => {
+                        // Protect against NaN values in tick formatter
                         const safeValue =
                           typeof value === "number" &&
                           !isNaN(value) &&
                           isFinite(value)
                             ? value
                             : 0;
-                        return `${safeValue.toFixed(1)}%`;
-                      },
-                      fill: "#374151",
-                      fontSize: 12,
-                      fontWeight: 500,
-                    }}
-                  >
-                    {sanitizedChartData.map((entry, index) => (
-                      <Cell
-                        key={`bar-${entry.name}-${index}`}
-                        fill={entry.fill}
-                        stroke={entry.fill}
-                        strokeWidth={2}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+                        return `${safeValue}%`;
+                      }}
+                    />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      width={150}
+                      tick={<CustomCompetitorTick />}
+                      interval={0}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar
+                      dataKey="value"
+                      radius={[0, 4, 4, 0]}
+                      minPointSize={5}
+                      label={{
+                        position: "right",
+                        formatter: (value: number) => {
+                          // Protect against NaN values in label formatter
+                          const safeValue =
+                            typeof value === "number" &&
+                            !isNaN(value) &&
+                            isFinite(value)
+                              ? value
+                              : 0;
+                          return `${safeValue.toFixed(1)}%`;
+                        },
+                        fill: "#374151",
+                        fontSize: 12,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {sanitizedChartData.map((entry, index) => (
+                        <Cell
+                          key={`bar-${entry.name}-${index}`}
+                          fill={entry.fill}
+                          stroke={entry.fill}
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </ErrorBoundary>
           </div>
 
@@ -993,84 +993,84 @@ export default function ShareOfVoiceChart({
             </div>
             <ErrorBoundary fallback={ChartErrorFallback}>
               <div className="relative">
-              {(() => {
-                try {
-                  // Use component-level sanitized data for PieChart
-                  const validPieData = sanitizedChartData;
+                {(() => {
+                  try {
+                    // Use component-level sanitized data for PieChart
+                    const validPieData = sanitizedChartData;
 
-                  return (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={validPieData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({
-                            name,
-                            value,
-                          }: {
-                            name: string;
-                            value: number;
-                            index?: number;
-                          }) => {
-                            // Only show labels for segments > 5% to avoid clutter with robust validation
-                            if (
-                              typeof value !== "number" ||
-                              isNaN(value) ||
-                              !isFinite(value) ||
-                              value < 5
-                            )
-                              return "";
-                            const shortName =
-                              name === "Your Brand"
-                                ? "You"
-                                : name.split(" ")[0];
-                            return `${shortName}: ${value.toFixed(1)}%`;
-                          }}
-                          outerRadius={90}
-                          fill="#8884d8"
-                          dataKey="value"
-                          stroke="#ffffff"
-                          strokeWidth={2}
-                        >
-                          {validPieData.map((entry, index) => (
-                            <Cell
-                              key={`pie-${entry.name}-${index}`}
-                              fill={entry.fill}
-                              stroke={entry.fill}
-                              strokeWidth={1}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value) => [
-                            `${value}%`,
-                            chartType === "market_share"
-                              ? "Market Share"
-                              : "Share of Voice",
-                          ]}
-                        />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  );
-                } catch (error) {
-                  console.error("PieChart rendering error:", error);
-                  return (
-                    <div className="flex flex-col items-center justify-center h-[300px] border border-dashed border-muted-foreground/50 rounded-lg">
-                      <AlertTriangle className="h-8 w-8 text-muted-foreground mb-2" />
-                      <p className="text-sm text-muted-foreground text-center">
-                        Chart could not render
-                        <br />
-                        <span className="text-xs">
-                          Try refreshing or selecting a different date range
-                        </span>
-                      </p>
-                    </div>
-                  );
-                }
-              })()}
+                    return (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={validPieData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({
+                              name,
+                              value,
+                            }: {
+                              name: string;
+                              value: number;
+                              index?: number;
+                            }) => {
+                              // Only show labels for segments > 5% to avoid clutter with robust validation
+                              if (
+                                typeof value !== "number" ||
+                                isNaN(value) ||
+                                !isFinite(value) ||
+                                value < 5
+                              )
+                                return "";
+                              const shortName =
+                                name === "Your Brand"
+                                  ? "You"
+                                  : name.split(" ")[0];
+                              return `${shortName}: ${value.toFixed(1)}%`;
+                            }}
+                            outerRadius={90}
+                            fill="#8884d8"
+                            dataKey="value"
+                            stroke="#ffffff"
+                            strokeWidth={2}
+                          >
+                            {validPieData.map((entry, index) => (
+                              <Cell
+                                key={`pie-${entry.name}-${index}`}
+                                fill={entry.fill}
+                                stroke={entry.fill}
+                                strokeWidth={1}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(value) => [
+                              `${value}%`,
+                              chartType === "market_share"
+                                ? "Market Share"
+                                : "Share of Voice",
+                            ]}
+                          />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    );
+                  } catch (error) {
+                    console.error("PieChart rendering error:", error);
+                    return (
+                      <div className="flex flex-col items-center justify-center h-[300px] border border-dashed border-muted-foreground/50 rounded-lg">
+                        <AlertTriangle className="h-8 w-8 text-muted-foreground mb-2" />
+                        <p className="text-sm text-muted-foreground text-center">
+                          Chart could not render
+                          <br />
+                          <span className="text-xs">
+                            Try refreshing or selecting a different date range
+                          </span>
+                        </p>
+                      </div>
+                    );
+                  }
+                })()}
               </div>
             </ErrorBoundary>
           </div>
