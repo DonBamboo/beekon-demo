@@ -42,9 +42,22 @@ interface MarketShareItem {
   dataType: "market_share";
 }
 
+interface ShareOfVoiceItem {
+  name: string;
+  value: number;
+  shareOfVoice?: number;
+  competitorId?: string;
+  mentions?: number;
+  totalMentions?: number;
+  totalAnalyses?: number;
+  avgRank?: number;
+  dataType?: "market_share" | "share_of_voice";
+}
+
 interface CompetitorsListProps {
   competitorsWithStatus: CompetitorWithStatus[];
   marketShareData: MarketShareItem[];
+  shareOfVoiceData: ShareOfVoiceItem[];
   performance: CompetitorPerformance[];
   sortBy: "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore";
   confirmDelete: (competitorId: string) => void;
@@ -54,6 +67,7 @@ interface CompetitorsListProps {
 export default function CompetitorsList({
   competitorsWithStatus,
   marketShareData,
+  shareOfVoiceData,
   performance,
   sortBy,
   confirmDelete,
@@ -99,7 +113,7 @@ export default function CompetitorsList({
     return undefined;
   }, []);
 
-  // Helper function to get market share for a competitor
+  // Helper function to get market share for a competitor (kept for potential future use)
   const getCompetitorMarketShare = (
     competitorId: string,
     competitorName: string
@@ -117,6 +131,31 @@ export default function CompetitorsList({
         (item.name === competitorName || item.name.includes(competitorName))
     );
     if (byName) return byName.normalizedValue;
+
+    return 0; // Default if not found
+  };
+
+  // Suppress unused variable warning - function kept for potential future use
+  void getCompetitorMarketShare;
+
+  // Helper function to get share of voice for a competitor
+  const getCompetitorShareOfVoice = (
+    competitorId: string,
+    competitorName: string
+  ): number => {
+    // First try to find by competitor ID
+    const byId = shareOfVoiceData.find(
+      (item) => item.competitorId === competitorId
+    );
+    if (byId) return byId.shareOfVoice || byId.value || 0;
+
+    // Fallback to matching by name (excluding "Your Brand")
+    const byName = shareOfVoiceData.find(
+      (item) =>
+        item.name !== "Your Brand" &&
+        (item.name === competitorName || item.name.includes(competitorName))
+    );
+    if (byName) return byName.shareOfVoice || byName.value || 0;
 
     return 0; // Default if not found
   };
@@ -180,7 +219,7 @@ export default function CompetitorsList({
             // Get unified data sources
             const performanceData =
               getCompetitorPerformance(competitor.id) || competitor.performance;
-            const marketShareValue = getCompetitorMarketShare(
+            const shareOfVoiceValue = getCompetitorShareOfVoice(
               competitor.id,
               competitor.competitor_name || competitor.competitor_domain
             );
@@ -357,7 +396,7 @@ export default function CompetitorsList({
                         !isAnalyzed ? "text-muted-foreground" : ""
                       }`}
                     >
-                      {marketShareValue.toFixed(1)}%
+                      {shareOfVoiceValue.toFixed(1)}%
                     </div>
                   </div>
 

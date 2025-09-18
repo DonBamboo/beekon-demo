@@ -568,6 +568,7 @@ export default function Competitors() {
                 }))
               : []
           }
+          shareOfVoiceData={shareOfVoiceChartData}
           performance={
             Array.isArray(performance)
               ? (performance as unknown as Record<string, unknown>[]).map(
