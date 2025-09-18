@@ -619,8 +619,6 @@ export default function Dashboard() {
     return <WorkspaceCreationPrompt />;
   }
 
-  console.log("metrics", metrics);
-
   return (
     <TooltipProvider>
       <div className="space-y-6">
