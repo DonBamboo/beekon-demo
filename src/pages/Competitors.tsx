@@ -88,8 +88,55 @@ export default function Competitors() {
     const rawData =
       (analytics?.shareOfVoiceData as Record<string, unknown>[]) || [];
 
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🎯 [DEBUG] Competitors.tsx shareOfVoiceChartData processing:', {
+        rawDataCount: rawData.length,
+        hasYourBrand: rawData.some(item => item.name === "Your Brand"),
+        rawDataEntries: rawData.map(item => ({
+          name: item.name,
+          shareOfVoice: item.shareOfVoice,
+          totalMentions: item.totalMentions,
+          dataType: item.dataType,
+          allFields: Object.keys(item)
+        })),
+        analyticsObject: analytics ? 'exists' : 'missing',
+        fullAnalyticsStructure: analytics ? {
+          hasShareOfVoiceData: !!analytics.shareOfVoiceData,
+          shareOfVoiceDataType: Array.isArray(analytics.shareOfVoiceData) ? 'array' : typeof analytics.shareOfVoiceData,
+          shareOfVoiceDataLength: Array.isArray(analytics.shareOfVoiceData) ? analytics.shareOfVoiceData.length : 'not-array',
+          analyticsKeys: Object.keys(analytics)
+        } : 'analytics-missing'
+      });
+    }
+
+    // Validate that "Your Brand" data is present (should always be provided by service layer)
+    const hasYourBrand = rawData.some(item => item.name === "Your Brand");
+
+    if (!hasYourBrand) {
+      // This indicates a service layer issue that needs investigation
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('❌ [DATA ERROR] Your Brand data missing from service layer', {
+          receivedDataCount: rawData.length,
+          receivedItems: rawData.map(item => ({ name: item.name, dataType: item.dataType })),
+          analyticsStructure: analytics ? {
+            hasShareOfVoiceData: !!analytics.shareOfVoiceData,
+            shareOfVoiceDataType: Array.isArray(analytics.shareOfVoiceData) ? 'array' : typeof analytics.shareOfVoiceData,
+            dataLength: Array.isArray(analytics.shareOfVoiceData) ? analytics.shareOfVoiceData.length : 'not-array'
+          } : 'analytics-missing',
+          criticalIssue: 'Service layer should always provide Your Brand data',
+          requiredAction: 'Check competitorService.getCompetitiveAnalysis() implementation'
+        });
+      }
+
+      // Don't add fallback - this should be fixed in the service layer
+      // Using empty array to prevent chart errors while maintaining data integrity
+      return [];
+    }
+
+    const processedData = [...rawData];
+
     // Filter out "Your Brand" for competitor processing and register all competitors in fixed slots
-    const competitorData = rawData.filter((item) => item.name !== "Your Brand");
+    const competitorData = processedData.filter((item) => item.name !== "Your Brand");
     registerCompetitorsInFixedSlots(
       competitorData.map((item) => ({
         competitorId: item.competitorId as string,
@@ -97,7 +144,7 @@ export default function Competitors() {
       }))
     );
 
-    return rawData.map((item: Record<string, unknown>) => {
+    return processedData.map((item: Record<string, unknown>) => {
       // Sanitize all numeric values to prevent NaN propagation to ShareOfVoiceChart
       const sanitizedShareOfVoice = sanitizeChartNumber(item.shareOfVoice, 0);
       const sanitizedTotalMentions = sanitizeChartNumber(item.totalMentions, 0);
@@ -114,8 +161,14 @@ export default function Competitors() {
         ].some(Boolean);
 
         if (hasInvalidData) {
-          console.warn('⚠️ Competitors.tsx: Invalid data detected in shareOfVoiceChartData:', {
+          console.warn('⚠️ Invalid data detected in shareOfVoiceChartData', {
             competitorName: item.name,
+            dataIssues: {
+              shareOfVoiceFixed: item.shareOfVoice !== sanitizedShareOfVoice,
+              totalMentionsFixed: item.totalMentions !== sanitizedTotalMentions,
+              totalAnalysesFixed: item.totalAnalyses !== sanitizedTotalAnalyses,
+              avgRankFixed: item.avgRank !== sanitizedAvgRank
+            },
             originalData: {
               shareOfVoice: item.shareOfVoice,
               totalMentions: item.totalMentions,
@@ -127,7 +180,13 @@ export default function Competitors() {
               totalMentions: sanitizedTotalMentions,
               totalAnalyses: sanitizedTotalAnalyses,
               avgRank: sanitizedAvgRank
-            }
+            },
+            possibleCauses: [
+              'Database returned NaN, null, or undefined values',
+              'Data transformation errors in service layer',
+              'Network issues during data fetch'
+            ],
+            impact: 'Charts will render with fallback values to prevent crashes'
           });
         }
       }
@@ -153,7 +212,7 @@ export default function Competitors() {
             }),
       };
     });
-  }, [analytics?.shareOfVoiceData]);
+  }, [analytics?.shareOfVoiceData, analytics]);
 
   // Derive additional data for backward compatibility
   const competitorsWithStatus = competitors; // Status already included

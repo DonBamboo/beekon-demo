@@ -37,6 +37,7 @@ import {
 } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
 import { validateAndSanitizeChartData } from "@/utils/chartDataValidation";
+import { ChartErrorFallback, ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Custom Tick Component for competitor name truncation with hover
 const CustomCompetitorTick = ({
@@ -104,6 +105,7 @@ export default function ShareOfVoiceChart({
   dateFilter,
   chartType = "share_of_voice", // Default to share of voice for backward compatibility
 }: ShareOfVoiceChartProps) {
+  console.log("ShareOfVoiceChart data prop:", data);
   // Enhanced data processing with validation
   const chartData = useMemo(() => {
     // Validate color assignments and fix conflicts if needed
@@ -216,11 +218,22 @@ export default function ShareOfVoiceChart({
 
     if (validation.hasIssues && process.env.NODE_ENV !== "production") {
       console.warn(
-        "⚠️ ShareOfVoiceChart: NaN/Infinity detected in chartData (component-level):",
+        "⚠️ ShareOfVoiceChart: Invalid chart data detected and sanitized",
         {
+          totalIssues: validation.issues.length,
+          affectedDataPoints: validation.issues.length,
           issues: validation.issues,
-          originalData: chartData,
-          sanitizedData: validation.data,
+          validationSummary: {
+            originalDataPoints: chartData.length,
+            sanitizedDataPoints: validation.data.length,
+            dataConsistency: chartData.length === validation.data.length ? 'maintained' : 'changed'
+          },
+          impact: 'Chart will render with sanitized data to prevent crashes',
+          possibleCauses: [
+            'Service layer returned invalid numeric values',
+            'Data transformation errors',
+            'Network/database issues'
+          ]
         }
       );
     }
@@ -338,6 +351,8 @@ export default function ShareOfVoiceChart({
 
     return result;
   }, [chartData]);
+
+  console.log("chartData", chartData);
 
   // Data validation and quality checks
   const dataQuality = useMemo(() => {
@@ -883,8 +898,9 @@ export default function ShareOfVoiceChart({
                   : "Percentage of total brand mentions (hover for details)"}
               </p>
             </div>
-            <div className="relative">
-              {/* <ResponsiveContainer width="100%" height={350}>
+            <ErrorBoundary fallback={ChartErrorFallback}>
+              <div className="relative">
+                <ResponsiveContainer width="100%" height={350}>
                 <BarChart
                   data={sanitizedChartData}
                   layout="horizontal"
@@ -956,8 +972,9 @@ export default function ShareOfVoiceChart({
                     ))}
                   </Bar>
                 </BarChart>
-              </ResponsiveContainer> */}
+              </ResponsiveContainer>
             </div>
+            </ErrorBoundary>
           </div>
 
           {/* Pie Chart */}
@@ -974,7 +991,8 @@ export default function ShareOfVoiceChart({
                   : "Visual distribution of competitor mentions"}
               </p>
             </div>
-            <div className="relative">
+            <ErrorBoundary fallback={ChartErrorFallback}>
+              <div className="relative">
               {(() => {
                 try {
                   // Use component-level sanitized data for PieChart
@@ -1053,7 +1071,8 @@ export default function ShareOfVoiceChart({
                   );
                 }
               })()}
-            </div>
+              </div>
+            </ErrorBoundary>
           </div>
         </div>
 

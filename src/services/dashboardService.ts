@@ -118,7 +118,7 @@ export class DashboardService {
         overallVisibilityScore: Number(metrics.overall_visibility_score || 0),
         averageRanking: Number(metrics.average_ranking || 4.0),
         totalMentions: Number(metrics.total_mentions || 0),
-        sentimentScore: Number(metrics.sentiment_score || 2.5),
+        sentimentScore: Number(metrics.sentiment_score || 50),
         totalAnalyses: Number(metrics.total_analyses || 0),
         activeWebsites: Number(metrics.active_websites || 0),
         topPerformingTopic: metrics.top_performing_topic || null,
@@ -159,19 +159,19 @@ export class DashboardService {
       if (error) throw error;
 
       interface TimeSeriesRow {
-        period_start: string;
-        avg_rank: number;
-        avg_sentiment: number;
-        total_mentions: number;
+        date: string;
+        visibility: number;
+        mentions: number;
+        sentiment: number;
       }
 
       // Type guard to ensure data is an array
       const validData = Array.isArray(data) ? data : [];
       return validData.map((row: TimeSeriesRow) => ({
-        date: row.period_start,
-        visibility: Number(row.avg_rank || 0),
-        mentions: Number(row.total_mentions || 0),
-        sentiment: Number(row.avg_sentiment || 2.5),
+        date: row.date,
+        visibility: Number(row.visibility || 0),
+        mentions: Number(row.mentions || 0),
+        sentiment: Number(row.sentiment || 50),
       }));
     } catch (error) {
       // Failed to get time series data - return empty array
@@ -216,7 +216,7 @@ export class DashboardService {
         visibility: Number(row.visibility || 0),
         mentions: Number(row.mentions || 0),
         averageRank: Number(row.average_rank || 4.0),
-        sentiment: Number(row.sentiment || 2.5),
+        sentiment: Number(row.sentiment || 50),
         trend: Number(row.trend || 0),
       }));
     } catch (error) {
@@ -256,7 +256,7 @@ export class DashboardService {
         provider: row.provider,
         mentionRate: Number(row.mention_rate || 0),
         averageRank: Number(row.average_rank || 4.0),
-        sentiment: Number(row.sentiment || 2.5),
+        sentiment: Number(row.sentiment || 50),
         totalAnalyses: Number(row.total_analyses || 0),
       }));
     } catch (error) {
@@ -302,7 +302,7 @@ export class DashboardService {
         displayName: row.display_name || "",
         visibility: Number(row.visibility || 0),
         mentions: Number(row.mentions || 0),
-        sentiment: Number(row.sentiment || 2.5),
+        sentiment: Number(row.sentiment || 50),
         lastAnalyzed: row.last_analyzed || "",
       }));
     } catch (error) {

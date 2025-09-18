@@ -150,3 +150,286 @@ export function sanitizeSentimentScore(rawScore: unknown): number {
   // Ensure result is valid and within reasonable bounds (0-100)
   return sanitizeChartNumber(Math.max(0, Math.min(100, transformedScore)), 50);
 }
+
+/**
+ * Validates that an array contains the expected "Your Brand" entry
+ * @param data - Array of chart data items
+ * @param brandKey - Key that should identify the brand (default: "name")
+ * @param brandValue - Expected brand value (default: "Your Brand")
+ * @returns Validation result with detailed information
+ */
+export function validateBrandDataPresence<T extends Record<string, unknown>>(
+  data: T[],
+  brandKey: keyof T = 'name',
+  brandValue: unknown = 'Your Brand'
+): {
+  hasBrandData: boolean;
+  brandItem?: T;
+  issues: string[];
+  dataStructure: {
+    totalItems: number;
+    itemsWithBrandKey: number;
+    uniqueValues: unknown[];
+  };
+} {
+  const issues: string[] = [];
+
+  if (!Array.isArray(data)) {
+    issues.push('Data is not an array');
+    return {
+      hasBrandData: false,
+      issues,
+      dataStructure: { totalItems: 0, itemsWithBrandKey: 0, uniqueValues: [] }
+    };
+  }
+
+  const itemsWithBrandKey = data.filter(item => brandKey in item);
+  const uniqueValues = [...new Set(data.map(item => item[brandKey]))];
+  const brandItem = data.find(item => item[brandKey] === brandValue);
+
+  if (!brandItem) {
+    issues.push(`No item found with ${String(brandKey)} = "${brandValue}"`);
+  }
+
+  if (itemsWithBrandKey.length !== data.length) {
+    issues.push(`${data.length - itemsWithBrandKey.length} items missing ${String(brandKey)} property`);
+  }
+
+  return {
+    hasBrandData: !!brandItem,
+    brandItem,
+    issues,
+    dataStructure: {
+      totalItems: data.length,
+      itemsWithBrandKey: itemsWithBrandKey.length,
+      uniqueValues
+    }
+  };
+}
+
+/**
+ * Validates that chart data doesn't contain obvious data quality issues
+ * @param data - Chart data to validate
+ * @param numericKeys - Keys that should contain numeric values
+ * @returns Comprehensive validation report
+ */
+export function validateChartDataQuality<T extends Record<string, unknown>>(
+  data: T[],
+  numericKeys: (keyof T)[]
+): {
+  isValid: boolean;
+  issues: string[];
+  warnings: string[];
+  statistics: {
+    totalItems: number;
+    validItems: number;
+    numericFieldStats: Record<string, {
+      validCount: number;
+      invalidCount: number;
+      range: { min: number; max: number } | null;
+      hasNegatives: boolean;
+      hasZeros: number;
+    }>;
+  };
+} {
+  const issues: string[] = [];
+  const warnings: string[] = [];
+
+  if (!Array.isArray(data)) {
+    return {
+      isValid: false,
+      issues: ['Data is not an array'],
+      warnings: [],
+      statistics: {
+        totalItems: 0,
+        validItems: 0,
+        numericFieldStats: {}
+      }
+    };
+  }
+
+  const numericFieldStats: Record<string, {
+    validCount: number;
+    invalidCount: number;
+    range: { min: number; max: number } | null;
+    hasNegatives: boolean;
+    hasZeros: number;
+  }> = {};
+  let validItems = 0;
+
+  // Analyze each numeric field
+  numericKeys.forEach(key => {
+    const values = data.map(item => item[key]).filter(val =>
+      typeof val === 'number' && !isNaN(val) && isFinite(val)
+    ) as number[];
+
+    const invalidCount = data.length - values.length;
+    const hasNegatives = values.some(val => val < 0);
+    const hasZeros = values.filter(val => val === 0).length;
+
+    let range: { min: number; max: number } | null = null;
+    if (values.length > 0) {
+      range = {
+        min: Math.min(...values),
+        max: Math.max(...values)
+      };
+    }
+
+    numericFieldStats[String(key)] = {
+      validCount: values.length,
+      invalidCount,
+      range,
+      hasNegatives,
+      hasZeros
+    };
+
+    if (invalidCount > 0) {
+      issues.push(`${invalidCount} items have invalid ${String(key)} values`);
+    }
+
+    // Add warnings for unusual patterns
+    if (hasNegatives && String(key).includes('share')) {
+      warnings.push(`Negative values found in ${String(key)} (unusual for share metrics)`);
+    }
+
+    if (hasZeros / values.length > 0.5) {
+      warnings.push(`More than 50% of ${String(key)} values are zero`);
+    }
+  });
+
+  // Count items that have all required numeric fields valid
+  validItems = data.filter(item =>
+    numericKeys.every(key => {
+      const val = item[key];
+      return typeof val === 'number' && !isNaN(val) && isFinite(val);
+    })
+  ).length;
+
+  return {
+    isValid: issues.length === 0,
+    issues,
+    warnings,
+    statistics: {
+      totalItems: data.length,
+      validItems,
+      numericFieldStats
+    }
+  };
+}
+
+/**
+ * Validates percentage-based data to ensure totals are reasonable
+ * @param data - Array of items with percentage values
+ * @param percentageKey - Key containing percentage values
+ * @param tolerance - Acceptable deviation from 100% (default: 5%)
+ * @returns Validation result for percentage totals
+ */
+export function validatePercentageTotal<T extends Record<string, unknown>>(
+  data: T[],
+  percentageKey: keyof T,
+  tolerance: number = 5
+): {
+  isValid: boolean;
+  total: number;
+  deviation: number;
+  issues: string[];
+  breakdown: Array<{ item: T; value: number; isValid: boolean }>;
+} {
+  const issues: string[] = [];
+  const breakdown: Array<{ item: T; value: number; isValid: boolean }> = [];
+
+  if (!Array.isArray(data) || data.length === 0) {
+    return {
+      isValid: false,
+      total: 0,
+      deviation: 0,
+      issues: ['No data provided'],
+      breakdown: []
+    };
+  }
+
+  let total = 0;
+
+  data.forEach(item => {
+    const value = sanitizeChartNumber(item[percentageKey], 0);
+    const isValid = value >= 0 && value <= 100;
+
+    breakdown.push({ item, value, isValid });
+
+    if (!isValid) {
+      issues.push(`Invalid percentage value: ${value} (should be 0-100)`);
+    }
+
+    total += value;
+  });
+
+  const deviation = Math.abs(total - 100);
+
+  if (deviation > tolerance) {
+    issues.push(`Total percentage ${total.toFixed(1)}% deviates from 100% by ${deviation.toFixed(1)}%`);
+  }
+
+  return {
+    isValid: issues.length === 0,
+    total,
+    deviation,
+    issues,
+    breakdown
+  };
+}
+
+/**
+ * Enhanced validation specifically for ShareOfVoice chart data
+ * @param data - ShareOfVoice chart data
+ * @returns Comprehensive validation report
+ */
+export function validateShareOfVoiceData(
+  data: Array<{
+    name?: unknown;
+    value?: unknown;
+    shareOfVoice?: unknown;
+    totalMentions?: unknown;
+    [key: string]: unknown;
+  }>
+): {
+  isValid: boolean;
+  issues: string[];
+  warnings: string[];
+  hasBrandData: boolean;
+  dataQuality: ReturnType<typeof validateChartDataQuality>;
+  percentageValidation: ReturnType<typeof validatePercentageTotal>;
+} {
+  const issues: string[] = [];
+  const warnings: string[] = [];
+
+  // Check for brand data presence
+  const brandValidation = validateBrandDataPresence(data, 'name', 'Your Brand');
+  if (!brandValidation.hasBrandData) {
+    issues.push('Your Brand data is missing from ShareOfVoice data');
+  }
+
+  // Validate overall data quality
+  const dataQuality = validateChartDataQuality(data, ['value', 'shareOfVoice', 'totalMentions']);
+
+  // Validate percentage totals (using 'value' field which should contain the chart percentages)
+  const percentageValidation = validatePercentageTotal(data, 'value', 10); // Allow 10% tolerance for ShareOfVoice
+
+  // Check for data consistency between value and shareOfVoice fields
+  data.forEach((item, index) => {
+    const value = sanitizeChartNumber(item.value);
+    const shareOfVoice = sanitizeChartNumber(item.shareOfVoice);
+
+    if (Math.abs(value - shareOfVoice) > 1) { // Allow 1% difference for rounding
+      warnings.push(`Item ${index} (${item.name}): value (${value}) differs from shareOfVoice (${shareOfVoice})`);
+    }
+  });
+
+  return {
+    isValid: issues.length === 0 && dataQuality.isValid && percentageValidation.isValid,
+    issues: [...issues, ...dataQuality.issues, ...percentageValidation.issues],
+    warnings: [...warnings, ...dataQuality.warnings],
+    hasBrandData: brandValidation.hasBrandData,
+    dataQuality,
+    percentageValidation
+  };
+}

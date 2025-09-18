@@ -106,10 +106,45 @@ export default function Dashboard() {
 
   // Sanitize timeSeriesData to prevent Recharts errors
   const sanitizedTimeSeriesData = useMemo(() => {
-    return timeSeriesData.map((point) => ({
-      ...point,
-      visibility: sanitizeChartNumber(point.visibility),
-    }));
+    return timeSeriesData.map((point) => {
+      // Validate and sanitize the date field
+      let validDate = String(point.date || '');
+
+      // Check if date is valid
+      if (!validDate || validDate === null || validDate === undefined || validDate === '') {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('⚠️ Dashboard: Invalid date in timeSeriesData:', point);
+        }
+        validDate = new Date().toISOString().split('T')[0]!; // Use today as fallback
+      }
+
+      // Ensure date is in a valid format
+      const dateTest = new Date(validDate);
+      if (isNaN(dateTest.getTime())) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('⚠️ Dashboard: Invalid date format in timeSeriesData:', { originalDate: point.date, point });
+        }
+        validDate = new Date().toISOString().split('T')[0]!; // Use today as fallback
+      }
+
+      return {
+        ...point,
+        date: validDate,
+        visibility: sanitizeChartNumber(point.visibility),
+        mentions: sanitizeChartNumber(point.mentions),
+        sentiment: sanitizeChartNumber(point.sentiment),
+      };
+    }).filter(point => {
+      // Final filter to remove any points that still have invalid dates
+      const finalDateTest = new Date(String(point.date));
+      const isValid = !isNaN(finalDateTest.getTime());
+
+      if (!isValid && process.env.NODE_ENV !== 'production') {
+        console.error('❌ Dashboard: Removing invalid data point:', point);
+      }
+
+      return isValid;
+    });
   }, [timeSeriesData]);
 
   const getSentimentColor = (sentiment: number) => {
@@ -725,15 +760,37 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="date"
-                    tickFormatter={(value) =>
-                      new Date(value).toLocaleDateString()
-                    }
+                    tickFormatter={(value) => {
+                      try {
+                        const date = new Date(value);
+                        if (isNaN(date.getTime())) {
+                          return 'Invalid Date';
+                        }
+                        return date.toLocaleDateString();
+                      } catch (error) {
+                        if (process.env.NODE_ENV !== 'production') {
+                          console.warn('⚠️ Dashboard Chart: Error formatting date:', value, error);
+                        }
+                        return 'Invalid Date';
+                      }
+                    }}
                   />
                   <YAxis domain={[0, 100]} />
                   <RechartsTooltip
-                    labelFormatter={(value) =>
-                      new Date(value).toLocaleDateString()
-                    }
+                    labelFormatter={(value) => {
+                      try {
+                        const date = new Date(value);
+                        if (isNaN(date.getTime())) {
+                          return 'Invalid Date';
+                        }
+                        return date.toLocaleDateString();
+                      } catch (error) {
+                        if (process.env.NODE_ENV !== 'production') {
+                          console.warn('⚠️ Dashboard Tooltip: Error formatting date:', value, error);
+                        }
+                        return 'Invalid Date';
+                      }
+                    }}
                     formatter={(value) => [
                       `${sanitizeChartNumber(value)}%`,
                       "Visibility Score",

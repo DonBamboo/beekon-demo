@@ -811,7 +811,25 @@ export function useOptimizedCompetitorsData() {
 
         // Handle empty performance data (common with restrictive date filters)
         if (dataCompetitors.length > 0 && dataPerformance.length === 0) {
-          console.warn('⚠️ No performance data found - possibly due to date range filters excluding recent analysis');
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('⚠️ No performance data found - possibly due to date range filters excluding recent analysis');
+          }
+
+          // Add helpful context for developers
+          const context = {
+            competitorCount: dataCompetitors.length,
+            hasAnalytics: !!data.analytics,
+            possibleCauses: [
+              'Date range filters are too restrictive',
+              'Analysis is still in progress for some competitors',
+              'No recent analysis data available for current filter period'
+            ],
+            recommendation: 'Try expanding the date range or check competitor analysis status'
+          };
+
+          if (process.env.NODE_ENV !== 'production') {
+            console.info('📊 Performance data context:', context);
+          }
         }
 
         // Validate and filter out invalid competitors
@@ -824,8 +842,18 @@ export function useOptimizedCompetitorsData() {
         });
 
         // Warn if no valid competitors found
-        if (validCompetitors.length === 0) {
-          console.warn('⚠️ No valid competitors found after filtering');
+        if (validCompetitors.length === 0 && dataCompetitors.length > 0) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('⚠️ No valid competitors found after filtering', {
+              originalCount: dataCompetitors.length,
+              invalidCompetitors: dataCompetitors.map(c => ({
+                id: c.id,
+                domain: c.competitor_domain,
+                name: c.name,
+                isValid: !!(c.id && (c.competitor_domain || c.name))
+              }))
+            });
+          }
         }
         
         const transformedCompetitors = validCompetitors.map(

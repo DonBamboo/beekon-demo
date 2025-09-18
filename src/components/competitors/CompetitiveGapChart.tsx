@@ -364,8 +364,6 @@ export default function CompetitiveGapChart({
 
   // Enhanced debugging with data validation
   if (processedData?.barChartData) {
-    console.log("processedData.barChartData", processedData.barChartData);
-
     // Validate chart data for potential issues
     const competitorKeys = Object.keys(
       processedData.barChartData[0] || {}
