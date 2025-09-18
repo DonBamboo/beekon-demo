@@ -511,9 +511,14 @@ export default function Competitors() {
           websitesLoading={workspaceLoading || isLoading}
           isExporting={isExporting}
           competitorsData={competitors}
-          setDateFilter={(value) =>
-            setFilters({ ...(filters as CompetitorFilters), dateFilter: value })
-          }
+          setDateFilter={(value) => {
+            console.log("🗓️ Date filter changed:", {
+              from: (filters as CompetitorFilters).dateFilter,
+              to: value,
+              timestamp: new Date().toISOString()
+            });
+            setFilters({ ...(filters as CompetitorFilters), dateFilter: value });
+          }}
           setSortBy={(value) =>
             setFilters({ ...(filters as CompetitorFilters), sortBy: value })
           }
