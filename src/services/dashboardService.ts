@@ -120,8 +120,6 @@ export class DashboardService {
         return this.getEmptyMetrics();
       }
 
-      console.log("result", result);
-
       const metrics = result as any;
       return {
         overallVisibilityScore: Number(

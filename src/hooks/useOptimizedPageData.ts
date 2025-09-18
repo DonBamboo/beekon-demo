@@ -197,7 +197,7 @@ export function useOptimizedAnalysisData() {
             selectedWebsiteId,
             limit: 20,
             filters: currentFilters,
-            forceRefresh
+            forceRefresh,
           });
 
           // OPTIMIZED: Use materialized view service for lightning-fast pagination
@@ -213,7 +213,7 @@ export function useOptimizedAnalysisData() {
           console.log("📦 Initial API response:", {
             resultsCount: response.results.length,
             hasMore: response.hasMore,
-            nextCursor: response.nextCursor
+            nextCursor: response.nextCursor,
           });
 
           // Update results with deduplication
@@ -225,7 +225,7 @@ export function useOptimizedAnalysisData() {
           console.log("🏁 Initial data loading complete:", {
             finalResultsCount: results.length,
             cursor: response.nextCursor,
-            hasMore: response.hasMore
+            hasMore: response.hasMore,
           });
 
           // Smart caching strategy: Cache both base and filtered data
@@ -265,7 +265,7 @@ export function useOptimizedAnalysisData() {
       isLoadingMore,
       hasMore,
       cursor,
-      currentResultsLength: analysisResults.length
+      currentResultsLength: analysisResults.length,
     });
 
     if (!selectedWebsiteId || isLoadingMore || !hasMore || !cursor) {
@@ -273,7 +273,7 @@ export function useOptimizedAnalysisData() {
         hasWebsiteId: !!selectedWebsiteId,
         isNotLoadingMore: !isLoadingMore,
         hasMoreResults: hasMore,
-        hasCursor: !!cursor
+        hasCursor: !!cursor,
       });
       return;
     }
@@ -286,7 +286,7 @@ export function useOptimizedAnalysisData() {
       console.log("📡 Making API call with cursor:", {
         cursor,
         limit: 20,
-        filters: currentFilters
+        filters: currentFilters,
       });
 
       const additionalResults =
@@ -303,7 +303,7 @@ export function useOptimizedAnalysisData() {
         newResultsCount: additionalResults.results.length,
         hasMore: additionalResults.hasMore,
         nextCursor: additionalResults.nextCursor,
-        currentResultsLength: analysisResults.length
+        currentResultsLength: analysisResults.length,
       });
 
       // Deduplicate results to prevent duplicate keys
@@ -317,7 +317,7 @@ export function useOptimizedAnalysisData() {
         beforeCombine: analysisResults.length,
         afterCombine: combinedResults.length,
         afterDedup: newResults.length,
-        addedCount: newResults.length - analysisResults.length
+        addedCount: newResults.length - analysisResults.length,
       });
 
       setAnalysisResults(newResults);
@@ -327,7 +327,7 @@ export function useOptimizedAnalysisData() {
       console.log("✅ State updated:", {
         newCursor: additionalResults.nextCursor,
         newHasMore: additionalResults.hasMore,
-        totalResults: newResults.length
+        totalResults: newResults.length,
       });
 
       // Update cache with deduplicated results (both base and filtered cache)
@@ -567,7 +567,6 @@ export function useOptimizedDashboardData() {
         ]);
 
         const data = { metrics, timeSeriesData, topicPerformance };
-        console.log("getDashboardMetrics", data);
         setMetrics(data.metrics);
         setTimeSeriesData(data.timeSeriesData || []);
         setTopicPerformance(data.topicPerformance || []);
@@ -1013,6 +1012,8 @@ export function useOptimizedCompetitorsData() {
                     : [],
                 }
               : null;
+
+            console.log("validatedAnalytics", validatedAnalytics);
 
             setAnalytics(validatedAnalytics);
             setIsLoading(false);

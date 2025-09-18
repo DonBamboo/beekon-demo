@@ -1364,12 +1364,18 @@ export class OptimizedCompetitorService extends BaseService {
       0
     );
 
-    if (Math.abs(shareOfVoiceTotal - 100) > 5) {
+    // UPDATED: Expect normalized data to be very close to 100%
+    if (Math.abs(shareOfVoiceTotal - 100) > 1) {
       validation.warnings.push(
         `Share of voice total deviates from 100%: ${shareOfVoiceTotal.toFixed(
-          1
-        )}%`
+          2
+        )}% (expected: 100.00% ±1%)`
       );
+    } else {
+      console.log("✅ Share of voice validation passed:", {
+        total: shareOfVoiceTotal.toFixed(2) + "%",
+        variance: Math.abs(shareOfVoiceTotal - 100).toFixed(2) + "%"
+      });
     }
 
     if (Math.abs(marketShareTotal - 100) > 5) {
@@ -1469,9 +1475,10 @@ export class OptimizedCompetitorService extends BaseService {
       (sum, comp) => sum + comp.shareOfVoice,
       0
     );
-    if (shareOfVoiceTotal > 105) {
+    // UPDATED: Expect normalized data to be very close to 100%
+    if (Math.abs(shareOfVoiceTotal - 100) > 1) {
       warnings.push(
-        `Share of voice total exceeds 100%: ${shareOfVoiceTotal.toFixed(1)}%`
+        `Share of voice total deviates from expected 100%: ${shareOfVoiceTotal.toFixed(2)}% (±1% tolerance)`
       );
     }
 

@@ -291,7 +291,8 @@ export class CompetitorAnalysisService extends BaseService {
       throw new Error(`Competitor share of voice query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
-    return ((data as Array<Record<string, unknown>>) || []).map(
+    // Map competitor data from database
+    const competitorData = ((data as Array<Record<string, unknown>>) || []).map(
       (row: Record<string, unknown>) => ({
         competitorId: row.competitor_id as string,
         competitorName:
@@ -314,6 +315,244 @@ export class CompetitorAnalysisService extends BaseService {
         lastAnalyzedAt: row.last_analyzed_at as string,
       })
     );
+
+    // CRITICAL FIX: Add "Your Brand" data that UI expects
+    // Calculate user's brand performance metrics from their analysis results
+    try {
+      console.log("🏢 Calculating Your Brand metrics for website:", websiteId);
+
+      const yourBrandData = await this.calculateYourBrandMetrics(websiteId, finalDateRange);
+
+      // Add "Your Brand" as the first entry in the array (for prominence in UI)
+      const rawResult = [yourBrandData, ...competitorData];
+
+      console.log("📊 Raw Share of Voice data before normalization:", {
+        totalEntries: rawResult.length,
+        hasYourBrand: rawResult.some(item => item.competitorName === "Your Brand"),
+        yourBrandShare: yourBrandData.shareOfVoice,
+        rawTotal: rawResult.reduce((sum, item) => sum + item.shareOfVoice, 0)
+      });
+
+      // CRITICAL FIX: Normalize to ensure totals add up to 100%
+      const normalizedResult = this.normalizeShareOfVoice(rawResult);
+
+      console.log("✅ Normalized Share of Voice data:", {
+        totalEntries: normalizedResult.length,
+        normalizedTotal: normalizedResult.reduce((sum, item) => sum + item.shareOfVoice, 0),
+        yourBrandNormalized: normalizedResult.find(item => item.competitorName === "Your Brand")?.shareOfVoice
+      });
+
+      return normalizedResult;
+    } catch (error) {
+      console.error("❌ Failed to calculate Your Brand metrics:", error);
+
+      // Fallback: Add minimal "Your Brand" entry to prevent UI errors
+      const fallbackYourBrand: CompetitorShareOfVoice = {
+        competitorId: "your-brand",
+        competitorName: "Your Brand",
+        competitorDomain: "your-brand",
+        totalAnalyses: 0,
+        totalMentions: 0,
+        shareOfVoice: 0,
+        avgRankPosition: null,
+        avgSentimentScore: null,
+        avgConfidenceScore: null,
+        analysisStatus: "no_data",
+        lastAnalyzedAt: new Date().toISOString(),
+      };
+
+      console.log("⚠️ Using fallback Your Brand data due to calculation error");
+
+      // Apply normalization even to fallback data
+      const fallbackResult = [fallbackYourBrand, ...competitorData];
+      return this.normalizeShareOfVoice(fallbackResult);
+    }
+  }
+
+  /**
+   * Normalize Share of Voice values to ensure they total exactly 100%
+   * This fixes the mathematical inconsistency where individual calculations can exceed 100%
+   */
+  private normalizeShareOfVoice(data: CompetitorShareOfVoice[]): CompetitorShareOfVoice[] {
+    // Calculate the total of all raw share of voice values
+    const rawTotal = data.reduce((sum, item) => sum + item.shareOfVoice, 0);
+
+    console.log("🔧 Normalizing Share of Voice:", {
+      entriesCount: data.length,
+      rawTotal: rawTotal.toFixed(2),
+      needsNormalization: rawTotal !== 100
+    });
+
+    // If total is 0 or very close to 100, return as-is
+    if (rawTotal === 0) {
+      console.log("⚠️ Raw total is 0 - returning zero values");
+      return data.map(item => ({
+        ...item,
+        shareOfVoice: 0
+      }));
+    }
+
+    if (Math.abs(rawTotal - 100) < 0.01) {
+      console.log("✅ Raw total already at 100% - no normalization needed");
+      return data;
+    }
+
+    // Apply proportional scaling to make total = 100%
+    const normalizationFactor = 100 / rawTotal;
+
+    console.log("📐 Applying normalization factor:", {
+      factor: normalizationFactor.toFixed(4),
+      expectedTotal: "100.00%"
+    });
+
+    const normalizedData = data.map((item, index) => {
+      const normalizedShareOfVoice = item.shareOfVoice * normalizationFactor;
+
+      console.log(`📊 Entity ${index + 1} (${item.competitorName}):`, {
+        original: item.shareOfVoice.toFixed(2) + "%",
+        normalized: normalizedShareOfVoice.toFixed(2) + "%",
+        change: ((normalizedShareOfVoice - item.shareOfVoice) >= 0 ? "+" : "") +
+                (normalizedShareOfVoice - item.shareOfVoice).toFixed(2) + "%"
+      });
+
+      return {
+        ...item,
+        shareOfVoice: Math.round(normalizedShareOfVoice * 100) / 100 // Round to 2 decimal places
+      };
+    });
+
+    // Verify the total
+    const finalTotal = normalizedData.reduce((sum, item) => sum + item.shareOfVoice, 0);
+    console.log("🎯 Normalization complete:", {
+      finalTotal: finalTotal.toFixed(2) + "%",
+      accuracy: Math.abs(finalTotal - 100) < 0.1 ? "✅ Accurate" : "⚠️ Slight variance"
+    });
+
+    return normalizedData;
+  }
+
+  /**
+   * Calculate "Your Brand" metrics from user's analysis results
+   * This provides the brand performance data that the UI expects alongside competitor data
+   */
+  private async calculateYourBrandMetrics(
+    websiteId: string,
+    dateRange: { start: string; end: string }
+  ): Promise<CompetitorShareOfVoice> {
+    console.log("📊 Calculating Your Brand metrics:", {
+      websiteId,
+      dateRange
+    });
+
+    try {
+      // Query user's brand analysis results for the specified date range
+      const { data: analysisData, error } = await supabase
+        .schema("beekon_data")
+        .from("llm_analysis_results")
+        .select(`
+          is_mentioned,
+          rank_position,
+          sentiment_score,
+          confidence_score,
+          analyzed_at,
+          prompts!inner (
+            topics!inner (
+              website_id
+            )
+          )
+        `)
+        .eq("prompts.topics.website_id", websiteId)
+        .gte("analyzed_at", dateRange.start)
+        .lte("analyzed_at", dateRange.end);
+
+      if (error) {
+        console.error("❌ Error querying Your Brand analysis data:", error);
+        throw error;
+      }
+
+      const results = analysisData || [];
+      console.log(`📈 Found ${results.length} analysis results for Your Brand`);
+
+      if (results.length === 0) {
+        // No analysis data found - return zero metrics but valid structure
+        return {
+          competitorId: "your-brand",
+          competitorName: "Your Brand",
+          competitorDomain: "your-brand",
+          totalAnalyses: 0,
+          totalMentions: 0,
+          shareOfVoice: 0,
+          avgRankPosition: null,
+          avgSentimentScore: null,
+          avgConfidenceScore: null,
+          analysisStatus: "no_data",
+          lastAnalyzedAt: new Date().toISOString(),
+        };
+      }
+
+      // Calculate metrics from analysis results
+      const totalAnalyses = results.length;
+      const mentionedResults = results.filter(r => r.is_mentioned);
+      const totalMentions = mentionedResults.length;
+
+      // Calculate share of voice (percentage of times mentioned)
+      const shareOfVoice = totalAnalyses > 0 ? (totalMentions / totalAnalyses) * 100 : 0;
+
+      // Calculate average rank position (only for mentioned results)
+      const rankedResults = mentionedResults.filter(r => r.rank_position !== null);
+      const avgRankPosition = rankedResults.length > 0
+        ? rankedResults.reduce((sum, r) => sum + r.rank_position!, 0) / rankedResults.length
+        : null;
+
+      // Calculate average sentiment score
+      const sentimentResults = results.filter(r => r.sentiment_score !== null);
+      const avgSentimentScore = sentimentResults.length > 0
+        ? sentimentResults.reduce((sum, r) => sum + r.sentiment_score!, 0) / sentimentResults.length
+        : null;
+
+      // Calculate average confidence score
+      const confidenceResults = results.filter(r => r.confidence_score !== null);
+      const avgConfidenceScore = confidenceResults.length > 0
+        ? confidenceResults.reduce((sum, r) => sum + r.confidence_score!, 0) / confidenceResults.length
+        : null;
+
+      // Determine analysis status based on data quality
+      let analysisStatus: string;
+      if (totalAnalyses === 0) {
+        analysisStatus = "no_data";
+      } else if (totalAnalyses < 5) {
+        analysisStatus = "limited_data";
+      } else {
+        analysisStatus = "completed";
+      }
+
+      // Get the most recent analysis date
+      const sortedByDate = results
+        .filter(r => r.analyzed_at)
+        .sort((a, b) => new Date(b.analyzed_at).getTime() - new Date(a.analyzed_at).getTime());
+      const lastAnalyzedAt = sortedByDate.length > 0 ? sortedByDate[0].analyzed_at : new Date().toISOString();
+
+      const yourBrandMetrics: CompetitorShareOfVoice = {
+        competitorId: "your-brand",
+        competitorName: "Your Brand",
+        competitorDomain: "your-brand",
+        totalAnalyses,
+        totalMentions,
+        shareOfVoice: Math.round(shareOfVoice * 100) / 100, // Round to 2 decimal places
+        avgRankPosition: avgRankPosition ? Math.round(avgRankPosition * 100) / 100 : null,
+        avgSentimentScore: avgSentimentScore ? Math.round(avgSentimentScore * 100) / 100 : null,
+        avgConfidenceScore: avgConfidenceScore ? Math.round(avgConfidenceScore * 100) / 100 : null,
+        analysisStatus: mapDatabaseStatusToUI(analysisStatus),
+        lastAnalyzedAt,
+      };
+
+      console.log("✅ Your Brand metrics calculated:", yourBrandMetrics);
+      return yourBrandMetrics;
+
+    } catch (error) {
+      console.error("❌ Failed to calculate Your Brand metrics:", error);
+      throw error;
+    }
   }
 
   /**
