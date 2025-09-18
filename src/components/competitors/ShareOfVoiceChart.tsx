@@ -1044,11 +1044,11 @@ export default function ShareOfVoiceChart({
                             ))}
                           </Pie>
                           <Tooltip
-                            formatter={(value) => [
+                            formatter={(value, name) => [
                               `${value}%`,
                               chartType === "market_share"
                                 ? "Market Share"
-                                : "Share of Voice",
+                                : `${name}`,
                             ]}
                           />
                           <Legend />
