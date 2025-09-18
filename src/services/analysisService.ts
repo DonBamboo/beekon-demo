@@ -97,64 +97,64 @@ export class AnalysisService {
   ): Promise<string> {
     // Get current user if not provided
     if (!userId) {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user)
-          throw new Error("User must be authenticated to create analysis");
-        userId = user.id;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user)
+        throw new Error("User must be authenticated to create analysis");
+      userId = user.id;
+    }
+
+    // Get workspace ID from website if not provided
+    if (!workspaceId) {
+      const { data: website } = await supabase
+        .schema("beekon_data")
+        .from("websites")
+        .select("workspace_id")
+        .eq("id", config.websiteId)
+        .single();
+
+      if (!website) throw new Error("Website not found");
+      workspaceId = website.workspace_id;
+    }
+
+    // Create analysis session first
+    const analysisSession = await this.createAnalysisSession(
+      config,
+      userId,
+      workspaceId
+    );
+
+    // First, create topics if they don't exist
+    const topicIds = await this.ensureTopicsExist(
+      config.websiteId,
+      config.topics
+    );
+
+    // Create prompts for each topic
+    const prompts = await this.createPrompts(config.customPrompts, topicIds);
+
+    const promptIds = [];
+
+    for (const prompt of prompts) {
+      if (prompt.id) {
+        promptIds.push(prompt.id);
       }
+    }
 
-      // Get workspace ID from website if not provided
-      if (!workspaceId) {
-        const { data: website } = await supabase
-          .schema("beekon_data")
-          .from("websites")
-          .select("workspace_id")
-          .eq("id", config.websiteId)
-          .single();
+    // Start the analysis process
+    await this.startAnalysis(analysisSession.id, config, promptIds);
 
-        if (!website) throw new Error("Website not found");
-        workspaceId = website.workspace_id;
-      }
+    // Trigger N8N webhook for actual analysis
+    await this.triggerAnalysisWebhook(
+      analysisSession.id,
+      config,
+      prompts,
+      topicIds,
+      workspaceId
+    );
 
-      // Create analysis session first
-      const analysisSession = await this.createAnalysisSession(
-        config,
-        userId,
-        workspaceId
-      );
-
-      // First, create topics if they don't exist
-      const topicIds = await this.ensureTopicsExist(
-        config.websiteId,
-        config.topics
-      );
-
-      // Create prompts for each topic
-      const prompts = await this.createPrompts(config.customPrompts, topicIds);
-
-      const promptIds = [];
-
-      for (const prompt of prompts) {
-        if (prompt.id) {
-          promptIds.push(prompt.id);
-        }
-      }
-
-      // Start the analysis process
-      await this.startAnalysis(analysisSession.id, config, promptIds);
-
-      // Trigger N8N webhook for actual analysis
-      await this.triggerAnalysisWebhook(
-        analysisSession.id,
-        config,
-        prompts,
-        topicIds,
-        workspaceId
-      );
-
-      return analysisSession.id;
+    return analysisSession.id;
   }
 
   private async ensureTopicsExist(
@@ -576,89 +576,26 @@ export class AnalysisService {
       };
     } = {}
   ): Promise<PaginatedAnalysisResults> {
-    const { limit = 20, filters } = options;
+    const { cursor, limit = 20, filters } = options;
+
+    console.log("🔍 Pagination Debug - getAnalysisResultsPaginatedOptimized called:", {
+      websiteId,
+      cursor,
+      limit,
+      filters
+    });
 
     try {
-      // OPTIMIZED: Use materialized view function for instant results
-      const defaultDateRange = {
-        start: filters?.dateRange?.start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        end: filters?.dateRange?.end || new Date().toISOString()
-      };
-
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_analysis_results_optimized" as any, {
-          p_website_id: websiteId,
-          p_date_start: defaultDateRange.start,
-          p_date_end: defaultDateRange.end,
-          p_limit: limit + 1,  // Get one extra to check for more results
-          p_offset: 0
-        });
-
-      if (error) throw error;
-
-      // Type guard to ensure data is an array
-      const results = Array.isArray(data) ? data : [];
-      const hasMore = results.length > limit;
-      const resultsToReturn = hasMore ? results.slice(0, -1) : results;
-
-      // Define interface for database result row
-      interface AnalysisResultRow {
-        id: string;
-        topic: string;
-        topic_id: string;
-        confidence_score: number;
-        created_at: string;
-        analyzed_at: string;
-        reporting_text: string;
-        llm_provider: string;
-        is_mentioned: boolean;
-        rank_position: number | null;
-        sentiment_score: number | null;
-        // Additional optional fields for UIAnalysisResult compatibility
-        prompt?: string;
-        updated_at?: string;
-        recommendation_text?: string | null;
-        prompt_strengths?: string[] | null;
-        prompt_opportunities?: string[] | null;
-      }
-
-      // Transform to UIAnalysisResult format
-      const transformedResults: UIAnalysisResult[] = resultsToReturn.map((row: AnalysisResultRow) => ({
-        id: row.id,
-        prompt: row.prompt || '', // Add required field
-        website_id: websiteId,
-        topic: row.topic,
-        topic_id: row.topic_id,
-        confidence: row.confidence_score || 0,
-        status: 'completed',
-        created_at: row.created_at,
-        updated_at: row.updated_at || row.created_at, // Add required field
-        analyzed_at: row.analyzed_at,
-        reporting_text: row.reporting_text,
-        recommendation_text: row.recommendation_text || null, // Add required field
-        prompt_strengths: row.prompt_strengths || null, // Add required field
-        prompt_opportunities: row.prompt_opportunities || null, // Add required field
-        llm_results: [{
-          llm_provider: row.llm_provider,
-          is_mentioned: row.is_mentioned,
-          rank_position: row.rank_position,
-          sentiment_score: row.sentiment_score,
-          confidence_score: row.confidence_score,
-          summary_text: row.reporting_text || null,
-          response_text: row.reporting_text || null,
-          analyzed_at: row.analyzed_at,
-        }]
-      }));
-
-      return {
-        results: transformedResults,
-        hasMore,
-        nextCursor: hasMore ? resultsToReturn[resultsToReturn.length - 1]?.created_at : null,
-        totalCount: transformedResults.length,
-      };
+      // For the optimized function, we need to use cursor-based pagination
+      // Since the materialized view doesn't support cursor filtering,
+      // we'll fall back to the original method for proper pagination
+      console.log("📋 Using original method for proper cursor-based pagination");
+      return this.getAnalysisResultsPaginatedOriginal(websiteId, options);
     } catch (error) {
-      console.error('Optimized analysis results failed, falling back to original method:', error);
+      console.error(
+        "Optimized analysis results failed, falling back to original method:",
+        error
+      );
       // Fallback to original method if optimized fails
       return this.getAnalysisResultsPaginatedOriginal(websiteId, options);
     }
@@ -763,9 +700,10 @@ export class AnalysisService {
     // Use analyzed_at as primary date field with created_at as fallback
     if (filters?.dateRange) {
       // First filter by analyzed_at for records that have this field populated
-      const dateFilteredQuery = llmResultsQuery
-        .or(`and(analyzed_at.gte.${filters.dateRange.start},analyzed_at.lte.${filters.dateRange.end}),and(analyzed_at.is.null,created_at.gte.${filters.dateRange.start},created_at.lte.${filters.dateRange.end})`);
-      
+      const dateFilteredQuery = llmResultsQuery.or(
+        `and(analyzed_at.gte.${filters.dateRange.start},analyzed_at.lte.${filters.dateRange.end}),and(analyzed_at.is.null,created_at.gte.${filters.dateRange.start},created_at.lte.${filters.dateRange.end})`
+      );
+
       llmResultsQuery = dateFilteredQuery;
     }
 
@@ -865,7 +803,8 @@ export class AnalysisService {
     // Apply analysis session filter
     if (filters?.analysisSession && filters.analysisSession !== "all") {
       filteredResults = filteredResults.filter(
-        (result) => result.analysis_session_id === (filters.analysisSession ?? null)
+        (result) =>
+          result.analysis_session_id === (filters.analysisSession ?? null)
       );
     }
 
@@ -994,7 +933,8 @@ export class AnalysisService {
     // Apply analysis session filter
     if (filters?.analysisSession && filters.analysisSession !== "all") {
       filteredResults = filteredResults.filter(
-        (result) => result.analysis_session_id === (filters.analysisSession ?? null)
+        (result) =>
+          result.analysis_session_id === (filters.analysisSession ?? null)
       );
     }
 
@@ -1040,7 +980,10 @@ export class AnalysisService {
         resultCount: Number(row.result_count || 0),
       }));
     } catch (error) {
-      console.error('Optimized topics failed, falling back to original method:', error);
+      console.error(
+        "Optimized topics failed, falling back to original method:",
+        error
+      );
       // Fallback to original method
       return this.getTopicsForWebsiteOriginal(websiteId);
     }
@@ -1157,11 +1100,15 @@ export class AnalysisService {
   /**
    * Get website metadata for caching and display purposes
    */
-  async getWebsiteMetadata(websiteId: string): Promise<import('@/contexts/AppStateContext').WebsiteMetadata> {
+  async getWebsiteMetadata(
+    websiteId: string
+  ): Promise<import("@/contexts/AppStateContext").WebsiteMetadata> {
     const { data: website, error } = await supabase
       .schema("beekon_data")
       .from("websites")
-      .select("id, domain, display_name, last_crawled_at, crawl_status, is_active")
+      .select(
+        "id, domain, display_name, last_crawled_at, crawl_status, is_active"
+      )
       .eq("id", websiteId)
       .single();
 
@@ -1178,7 +1125,7 @@ export class AnalysisService {
       domain: website.domain,
       displayName: website.display_name || website.domain,
       lastCrawledAt: website.last_crawled_at || new Date().toISOString(),
-      crawlStatus: website.crawl_status || 'unknown',
+      crawlStatus: website.crawl_status || "unknown",
       isActive: website.is_active ?? true,
     };
   }
@@ -1756,7 +1703,7 @@ export class AnalysisService {
 
   // CSV export functionality (reserved for future implementation)
   // This would generate a CSV export of analysis results
-  
+
   /*
     const headers = [
       "Analysis ID",
@@ -1803,10 +1750,10 @@ export class AnalysisService {
   }
 
   */
-  
+
   // PDF export functionality (reserved for future implementation)
   // This would generate a PDF export of analysis results
-  
+
   /*
     // For now, generate a structured text document that can be saved as PDF
     // In a production environment, you would use a PDF library like jsPDF or Puppeteer

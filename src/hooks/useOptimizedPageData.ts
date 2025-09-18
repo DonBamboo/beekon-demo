@@ -193,6 +193,13 @@ export function useOptimizedAnalysisData() {
           // Use current transformed filters (from ref for stability)
           const currentFilters = prevFiltersRef.current;
 
+          console.log("🚀 Initial loadAnalysisData API call:", {
+            selectedWebsiteId,
+            limit: 20,
+            filters: currentFilters,
+            forceRefresh
+          });
+
           // OPTIMIZED: Use materialized view service for lightning-fast pagination
           const response =
             await analysisService.getAnalysisResultsPaginatedOptimized(
@@ -203,11 +210,23 @@ export function useOptimizedAnalysisData() {
               }
             );
 
+          console.log("📦 Initial API response:", {
+            resultsCount: response.results.length,
+            hasMore: response.hasMore,
+            nextCursor: response.nextCursor
+          });
+
           // Update results with deduplication
           const results = deduplicateById(response.results);
           setAnalysisResults(results);
           setHasMore(response.hasMore);
           setCursor(response.nextCursor);
+
+          console.log("🏁 Initial data loading complete:", {
+            finalResultsCount: results.length,
+            cursor: response.nextCursor,
+            hasMore: response.hasMore
+          });
 
           // Smart caching strategy: Cache both base and filtered data
           // Base cache (for website switching)
@@ -241,12 +260,35 @@ export function useOptimizedAnalysisData() {
 
   // Load more results for infinite scroll
   const loadMoreResults = useCallback(async () => {
-    if (!selectedWebsiteId || isLoadingMore || !hasMore || !cursor) return;
+    console.log("🔄 loadMoreResults called - Initial state check:", {
+      selectedWebsiteId,
+      isLoadingMore,
+      hasMore,
+      cursor,
+      currentResultsLength: analysisResults.length
+    });
+
+    if (!selectedWebsiteId || isLoadingMore || !hasMore || !cursor) {
+      console.log("❌ loadMoreResults early return - conditions not met:", {
+        hasWebsiteId: !!selectedWebsiteId,
+        isNotLoadingMore: !isLoadingMore,
+        hasMoreResults: hasMore,
+        hasCursor: !!cursor
+      });
+      return;
+    }
 
     setIsLoadingMore(true);
     try {
       // Use stable filter reference for pagination
       const currentFilters = prevFiltersRef.current;
+
+      console.log("📡 Making API call with cursor:", {
+        cursor,
+        limit: 20,
+        filters: currentFilters
+      });
+
       const additionalResults =
         await analysisService.getAnalysisResultsPaginatedOptimized(
           selectedWebsiteId,
@@ -257,21 +299,43 @@ export function useOptimizedAnalysisData() {
           }
         );
 
+      console.log("📥 API response received:", {
+        newResultsCount: additionalResults.results.length,
+        hasMore: additionalResults.hasMore,
+        nextCursor: additionalResults.nextCursor,
+        currentResultsLength: analysisResults.length
+      });
+
       // Deduplicate results to prevent duplicate keys
       const combinedResults = [
         ...analysisResults,
         ...additionalResults.results,
       ];
       const newResults = deduplicateById(combinedResults);
+
+      console.log("🔧 After deduplication:", {
+        beforeCombine: analysisResults.length,
+        afterCombine: combinedResults.length,
+        afterDedup: newResults.length,
+        addedCount: newResults.length - analysisResults.length
+      });
+
       setAnalysisResults(newResults);
       setHasMore(additionalResults.hasMore);
       setCursor(additionalResults.nextCursor);
+
+      console.log("✅ State updated:", {
+        newCursor: additionalResults.nextCursor,
+        newHasMore: additionalResults.hasMore,
+        totalResults: newResults.length
+      });
 
       // Update cache with deduplicated results (both base and filtered cache)
       setCache(baseCacheKey, newResults, 10 * 60 * 1000);
       setCache(filteredCacheKey, newResults, 5 * 60 * 1000);
     } catch (error) {
       // Failed to load more results
+      console.error("❌ loadMoreResults error:", error);
       setError(
         error instanceof Error ? error : new Error("Failed to load more")
       );
