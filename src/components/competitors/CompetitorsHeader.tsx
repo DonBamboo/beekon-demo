@@ -74,7 +74,8 @@ export default function CompetitorsHeader({
   handleExportData,
 }: CompetitorsHeaderProps) {
   // Use global website selection state
-  const { selectedWebsiteId, setSelectedWebsite, websites } = useSelectedWebsite();
+  const { selectedWebsiteId, setSelectedWebsite, websites } =
+    useSelectedWebsite();
   return (
     <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
       <div>
@@ -118,7 +119,8 @@ export default function CompetitorsHeader({
                     <span className="truncate">
                       {websites.find((w) => w.id === selectedWebsiteId)
                         ?.display_name ||
-                        websites.find((w) => w.id === selectedWebsiteId)?.domain ||
+                        websites.find((w) => w.id === selectedWebsiteId)
+                          ?.domain ||
                         "Selected website"}
                     </span>
                   )}
@@ -171,14 +173,16 @@ export default function CompetitorsHeader({
                 size="sm"
                 onClick={() => setDateFilter(period)}
                 disabled={isRefreshing}
-                className={isRefreshing && dateFilter !== period ? "opacity-50" : ""}
+                className={
+                  isRefreshing && dateFilter !== period ? "opacity-50" : ""
+                }
               >
                 {period}
               </Button>
             ))}
           </div>
 
-          <Select value={sortBy} onValueChange={setSortBy} disabled={isRefreshing}>
+          {/* <Select value={sortBy} onValueChange={setSortBy} disabled={isRefreshing}>
             <SelectTrigger className={`w-[180px] ${isRefreshing ? "opacity-75" : ""}`}>
               <Filter className="h-4 w-4 mr-2" />
               <SelectValue />
@@ -189,7 +193,7 @@ export default function CompetitorsHeader({
               <SelectItem value="mentionCount">Mention Count</SelectItem>
               <SelectItem value="sentimentScore">Sentiment Score</SelectItem>
             </SelectContent>
-          </Select>
+          </Select> */}
         </div>
 
         {/* Actions Group */}
@@ -209,13 +213,14 @@ export default function CompetitorsHeader({
             <ExportDropdown
               onExport={handleExportData}
               isLoading={isExporting}
-              disabled={!hasData || !competitorsData || competitorsData.length === 0}
+              disabled={
+                !hasData || !competitorsData || competitorsData.length === 0
+              }
               formats={["csv", "json", "pdf"]}
               data={competitorsData as Record<string, unknown>[]}
               showEstimatedSize={true}
             />
           )}
-
         </div>
 
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
