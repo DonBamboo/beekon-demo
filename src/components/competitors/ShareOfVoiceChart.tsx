@@ -7,8 +7,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -18,6 +16,8 @@ import {
   PieChart,
   Pie,
   Legend,
+  AreaChart,
+  Area,
 } from "recharts";
 import {
   Info,
@@ -36,41 +36,10 @@ import {
   autoFixColorConflicts,
 } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
-import { validateAndSanitizeChartData } from "@/utils/chartDataValidation";
+import { validateAndSanitizeChartData, sanitizeChartNumber } from "@/utils/chartDataValidation";
 import { ChartErrorFallback, ErrorBoundary } from "@/components/ErrorBoundary";
+import { CompetitorTimeSeriesData } from "@/services/competitorService";
 
-// Custom Tick Component for competitor name truncation with hover
-const CustomCompetitorTick = ({
-  x,
-  y,
-  payload,
-}: {
-  x?: number;
-  y?: number;
-  payload?: { value: string };
-}) => {
-  const maxLength = 20; // Maximum characters to display
-  const text = payload?.value || "";
-  const displayText =
-    text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
-
-  return (
-    <g transform={`translate(${x},${y})`}>
-      <text
-        x={0}
-        y={0}
-        dy={4}
-        textAnchor="end"
-        fill="currentColor"
-        fontSize="12"
-        className="cursor-help"
-      >
-        {text.length > maxLength && <title>{text}</title>}
-        {displayText}
-      </text>
-    </g>
-  );
-};
 
 interface ShareOfVoiceData {
   name: string;
@@ -96,12 +65,14 @@ interface ShareOfVoiceData {
 
 interface ShareOfVoiceChartProps {
   data: ShareOfVoiceData[];
+  timeSeriesData?: CompetitorTimeSeriesData[];
   dateFilter: "7d" | "30d" | "90d";
   chartType?: "market_share" | "share_of_voice"; // New prop to specify chart type
 }
 
 export default function ShareOfVoiceChart({
   data,
+  timeSeriesData,
   dateFilter,
   chartType = "share_of_voice", // Default to share of voice for backward compatibility
 }: ShareOfVoiceChartProps) {
@@ -210,6 +181,88 @@ export default function ShareOfVoiceChart({
 
     return validatedData;
   }, [data]);
+
+  // Process time-series data for stacked area chart
+  const stackedAreaData = useMemo(() => {
+    if (!timeSeriesData || timeSeriesData.length === 0) {
+      return [];
+    }
+
+    // Validate color assignments and fix conflicts if needed
+    const colorValidation = validateAllColorAssignments();
+    if (!colorValidation.isValid) {
+      autoFixColorConflicts({ logResults: false });
+    }
+
+    // Get all unique competitors from the time series data
+    const allCompetitors = new Set<string>();
+    timeSeriesData.forEach(point => {
+      point.competitors?.forEach(comp => {
+        allCompetitors.add(comp.competitorId);
+      });
+    });
+
+    // Register all competitors in fixed color slots for predictable coloring
+    const competitorsList = Array.from(allCompetitors).map(competitorId => {
+      // Find the competitor name from any data point
+      const competitorData = timeSeriesData
+        .flatMap(point => point.competitors || [])
+        .find(comp => comp.competitorId === competitorId);
+
+      return {
+        competitorId,
+        name: competitorData?.name || competitorId,
+      };
+    });
+
+    registerCompetitorsInFixedSlots(competitorsList);
+
+    // Transform time-series data into format suitable for stacked area chart
+    return timeSeriesData.map(point => {
+      const transformedPoint: any = {
+        date: point.date,
+        dateFormatted: new Date(point.date).toLocaleDateString(),
+      };
+
+      // Add each competitor's share of voice for this time point
+      competitorsList.forEach(competitor => {
+        const competitorData = point.competitors?.find(
+          comp => comp.competitorId === competitor.competitorId
+        );
+
+        // Sanitize the share of voice value
+        const shareOfVoice = sanitizeChartNumber(competitorData?.shareOfVoice || 0);
+        transformedPoint[competitor.name] = shareOfVoice;
+      });
+
+      return transformedPoint;
+    });
+  }, [timeSeriesData]);
+
+  // Get competitors list for stacked area chart
+  const competitorsList = useMemo(() => {
+    if (!timeSeriesData || timeSeriesData.length === 0) {
+      return [];
+    }
+
+    const allCompetitors = new Set<string>();
+    timeSeriesData.forEach(point => {
+      point.competitors?.forEach(comp => {
+        allCompetitors.add(comp.competitorId);
+      });
+    });
+
+    return Array.from(allCompetitors).map(competitorId => {
+      const competitorData = timeSeriesData
+        .flatMap(point => point.competitors || [])
+        .find(comp => comp.competitorId === competitorId);
+
+      return {
+        competitorId,
+        name: competitorData?.name || competitorId,
+      };
+    });
+  }, [timeSeriesData]);
 
   // Sanitize chart data at component level to prevent NaN/Infinity values throughout
   const sanitizedChartData = useMemo(() => {
@@ -446,55 +499,6 @@ export default function ShareOfVoiceChart({
     );
   }
 
-  const CustomTooltip = ({
-    active,
-    payload,
-    label,
-  }: {
-    active?: boolean;
-    payload?: Array<{ payload: ShareOfVoiceData; value: number }>;
-    label?: string;
-  }): React.ReactElement | null => {
-    if (active && payload && payload.length) {
-      const data = payload[0]?.payload;
-      if (!data) return null;
-
-      const isMarketShare = chartType === "market_share";
-      const displayValue = payload[0]?.value;
-      if (displayValue === undefined) return null;
-
-      return (
-        <div className="bg-background border rounded-lg p-3 shadow-md">
-          <p className="font-medium">{label}</p>
-          <p className="text-primary">
-            {isMarketShare ? "Market Share" : "Share of Voice"}:{" "}
-            <span className="font-bold">{displayValue}%</span>
-          </p>
-          {isMarketShare && typeof data.rawValue === "number" && (
-            <p className="text-sm text-muted-foreground">
-              Raw Share: {data.rawValue.toFixed(1)}%
-            </p>
-          )}
-          {(data.mentions || data.totalMentions) && (
-            <p className="text-sm text-muted-foreground">
-              Mentions: {data.mentions || data.totalMentions}
-            </p>
-          )}
-          {data.totalAnalyses && chartType === "share_of_voice" && (
-            <p className="text-sm text-muted-foreground">
-              Total Analyses: {data.totalAnalyses}
-            </p>
-          )}
-          {typeof data.avgRank === "number" && (
-            <p className="text-sm text-muted-foreground">
-              Avg. Rank: #{data.avgRank.toFixed(1)}
-            </p>
-          )}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <Card>
@@ -884,95 +888,75 @@ export default function ShareOfVoiceChart({
 
         {/* Charts Container with Error Boundaries */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {/* Bar Chart */}
+          {/* Stacked Area Chart - Share of Voice Over Time */}
           <div>
             <div className="mb-3">
               <h4 className="text-sm font-medium">
-                {chartType === "market_share"
-                  ? "Market Share Breakdown"
-                  : "Share of Voice Breakdown"}
+                Share of Voice Over Time
               </h4>
               <p className="text-xs text-muted-foreground mt-1">
-                {chartType === "market_share"
-                  ? "Normalized distribution with data labels"
-                  : "Percentage of total brand mentions (hover for details)"}
+                Stacked area chart showing how each competitor's share of voice changes over time
               </p>
             </div>
             <ErrorBoundary fallback={ChartErrorFallback}>
               <div className="relative">
-                <ResponsiveContainer width="100%" height={350}>
-                  <BarChart
-                    data={sanitizedChartData}
-                    layout="horizontal"
-                    barCategoryGap={20}
-                    margin={{ top: 20, right: 30, bottom: 20, left: 150 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      type="number"
-                      domain={[
-                        0,
-                        (() => {
-                          // Safe domain calculation to prevent NaN
-                          const values = sanitizedChartData
-                            .map((d) => d.value)
-                            .filter((v) => typeof v === "number" && !isNaN(v));
-                          const maxValue =
-                            values.length > 0 ? Math.max(...values) : 0;
-                          return Math.max(50, maxValue * 1.1);
-                        })(),
-                      ]}
-                      tickFormatter={(value) => {
-                        // Protect against NaN values in tick formatter
-                        const safeValue =
-                          typeof value === "number" &&
-                          !isNaN(value) &&
-                          isFinite(value)
-                            ? value
-                            : 0;
-                        return `${safeValue}%`;
-                      }}
-                    />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      width={150}
-                      tick={<CustomCompetitorTick />}
-                      interval={0}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar
-                      dataKey="value"
-                      radius={[0, 4, 4, 0]}
-                      minPointSize={5}
-                      label={{
-                        position: "right",
-                        formatter: (value: number) => {
-                          // Protect against NaN values in label formatter
-                          const safeValue =
-                            typeof value === "number" &&
-                            !isNaN(value) &&
-                            isFinite(value)
-                              ? value
-                              : 0;
-                          return `${safeValue.toFixed(1)}%`;
-                        },
-                        fill: "#374151",
-                        fontSize: 12,
-                        fontWeight: 500,
-                      }}
+                {stackedAreaData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={350}>
+                    <AreaChart
+                      data={stackedAreaData}
+                      margin={{ top: 20, right: 30, bottom: 60, left: 20 }}
                     >
-                      {sanitizedChartData.map((entry, index) => (
-                        <Cell
-                          key={`bar-${entry.name}-${index}`}
-                          fill={entry.fill}
-                          stroke={entry.fill}
-                          strokeWidth={2}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="date"
+                        tickFormatter={(value) => new Date(value).toLocaleDateString()}
+                        height={60}
+                        tick={{ fontSize: 12 }}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis
+                        domain={[0, 100]}
+                        tickFormatter={(value) => `${value}%`}
+                      />
+                      <Tooltip
+                        labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                        formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]}
+                      />
+
+                      {/* Render stacked areas for each competitor */}
+                      {competitorsList.map((competitor, index) => {
+                        const color = getCompetitorFixedColor({
+                          competitorId: competitor.competitorId,
+                          name: competitor.name,
+                        });
+
+                        return (
+                          <Area
+                            key={`area-${competitor.competitorId}-${index}`}
+                            type="monotone"
+                            dataKey={competitor.name}
+                            stackId="1"
+                            stroke={color}
+                            fill={color}
+                            fillOpacity={0.7}
+                            strokeWidth={2}
+                          />
+                        );
+                      })}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[350px] border border-dashed border-muted-foreground/50 rounded-lg">
+                    <Info className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground text-center">
+                      No time-series data available
+                      <br />
+                      <span className="text-xs">
+                        Time-series data is needed to show Share of Voice over time
+                      </span>
+                    </p>
+                  </div>
+                )}
               </div>
             </ErrorBoundary>
           </div>

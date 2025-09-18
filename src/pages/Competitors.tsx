@@ -543,6 +543,27 @@ export default function Competitors() {
         {/* Share of Voice Chart */}
         <ShareOfVoiceChart
           data={shareOfVoiceChartData}
+          timeSeriesData={
+            Array.isArray(analytics?.timeSeriesData)
+              ? (analytics.timeSeriesData as Record<string, unknown>[]).map(
+                  (item) => ({
+                    date: item.date as string,
+                    competitors: Array.isArray(item.competitors)
+                      ? (
+                          item.competitors as Array<Record<string, unknown>>
+                        ).map((comp) => ({
+                          competitorId: (comp.competitorId as string) || "",
+                          name: (comp.name as string) || "",
+                          shareOfVoice: (comp.shareOfVoice as number) || 0,
+                          averageRank: (comp.averageRank as number) || 0,
+                          mentionCount: (comp.mentionCount as number) || 0,
+                          sentimentScore: (comp.sentimentScore as number) || 0,
+                        }))
+                      : [],
+                  })
+                )
+              : []
+          }
           dateFilter={(filters as CompetitorFilters).dateFilter}
           chartType="share_of_voice"
         />
