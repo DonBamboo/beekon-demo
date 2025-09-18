@@ -415,7 +415,7 @@ export default function Analysis() {
       }
     }
     return undefined;
-  }, [topics, filters, setFilters, typedFilters.topic]);
+  }, [topics, typedFilters.topic, filters, setFilters]);
 
   useEffect(() => {
     if (llmProviders.length > 0 && typedFilters.llm !== "all") {
@@ -428,7 +428,7 @@ export default function Analysis() {
       }
     }
     return undefined;
-  }, [llmProviders, filters, setFilters, typedFilters.llm]);
+  }, [llmProviders, typedFilters.llm, filters, setFilters]);
 
   // No need for legacy format transformation - work directly with modern format
   // Use analysisResults directly from infinite scroll hook

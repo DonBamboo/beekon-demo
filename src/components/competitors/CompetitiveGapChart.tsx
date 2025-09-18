@@ -5,6 +5,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  sanitizeChartNumber,
+  validateAndSanitizeChartData,
+  sanitizeCompetitorData,
+} from "@/utils/chartDataValidation";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -30,6 +35,7 @@ import {
   Cell,
   ScatterChart,
   Scatter,
+  ReferenceLine,
 } from "recharts";
 import {
   TrendingUp,
@@ -172,6 +178,28 @@ export default function CompetitiveGapChart({
   const processedData = useMemo(() => {
     if (!gapAnalysis || gapAnalysis.length === 0) return null;
 
+    // Debug logging for input data analysis
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🎯 [DEBUG] CompetitiveGapChart input data:", {
+        gapAnalysisLength: gapAnalysis.length,
+        totalUniqueCompetitors: new Set(
+          gapAnalysis.flatMap(gap =>
+            gap.competitorData.map(comp => comp.competitor_id || comp.competitor_name)
+          )
+        ).size,
+        gapAnalysisStructure: gapAnalysis.map(gap => ({
+          topicName: gap.topicName,
+          competitorCount: gap.competitorData.length,
+          competitors: gap.competitorData.map(comp => ({
+            id: comp.competitor_id,
+            name: comp.competitor_name,
+            domain: comp.competitorDomain,
+            score: comp.score
+          }))
+        }))
+      });
+    }
+
     // Validate color assignments and fix conflicts if needed
     const colorValidation = validateAllColorAssignments();
     if (!colorValidation.isValid) {
@@ -203,7 +231,7 @@ export default function CompetitiveGapChart({
     const barChartData = validatedGapAnalysis.map((gap) => {
       const data: Record<string, number | string> = {
         topic: gap.topicName,
-        yourBrand: gap.yourBrandScore,
+        yourBrand: sanitizeChartNumber(gap.yourBrandScore, 0),
       };
 
       gap.competitorData.forEach((comp, index) => {
@@ -211,7 +239,8 @@ export default function CompetitiveGapChart({
         const competitorId = extractCompetitorId(comp);
         const competitorName = extractCompetitorName(comp, index);
 
-        data[`competitor${index + 1}`] = comp.score;
+        // CRITICAL FIX: Sanitize score to prevent NaN from reaching Recharts
+        data[`competitor${index + 1}`] = sanitizeChartNumber(comp.score, 0);
         data[`competitor${index + 1}_name`] = competitorName;
         data[`competitor${index + 1}_id`] = competitorId;
       });
@@ -228,6 +257,16 @@ export default function CompetitiveGapChart({
         }
       });
     });
+
+    // Debug logging for competitor key extraction
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🔑 [DEBUG] CompetitiveGapChart competitor keys:", {
+        competitorKeysFound: Array.from(competitorKeys),
+        totalKeysCount: competitorKeys.size,
+        barChartDataSample: barChartData[0] ? Object.keys(barChartData[0]) : [],
+        barChartDataFirstItem: barChartData[0]
+      });
+    }
 
     // Extract all unique competitors for standardized mapping
     const allCompetitors: Array<{
@@ -281,11 +320,31 @@ export default function CompetitiveGapChart({
       };
     });
 
+    // Debug logging for competitor info and color assignments
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🎨 [DEBUG] CompetitiveGapChart competitor info & colors:", {
+        allCompetitorsCount: allCompetitors.length,
+        competitorInfoCount: competitorInfo.length,
+        allCompetitors: allCompetitors.map(comp => ({
+          competitorId: comp.competitorId,
+          name: comp.name,
+          key: comp.key
+        })),
+        competitorInfo: competitorInfo.map(comp => ({
+          key: comp.key,
+          name: comp.name,
+          competitorId: comp.competitorId,
+          colorIndex: comp.colorIndex,
+          color: comp.color
+        }))
+      });
+    }
+
     // Radar chart data with individual competitors using proper identifiers
     const radarData = validatedGapAnalysis.map((gap) => {
       const data: Record<string, number | string> = {
         topic: gap.topicName,
-        yourBrand: gap.yourBrandScore,
+        yourBrand: sanitizeChartNumber(gap.yourBrandScore, 0),
       };
 
       // Map competitor data to proper competitor keys for consistent coloring
@@ -307,10 +366,13 @@ export default function CompetitiveGapChart({
           );
 
           if (matchingCompetitor) {
-            data[matchingCompetitor.key] = comp.score;
+            data[matchingCompetitor.key] = sanitizeChartNumber(comp.score, 0);
           } else {
             // Fallback to generic key if no match found
-            data[`competitor${compIndex + 1}`] = comp.score;
+            data[`competitor${compIndex + 1}`] = sanitizeChartNumber(
+              comp.score,
+              0
+            );
           }
         }
       );
@@ -318,10 +380,14 @@ export default function CompetitiveGapChart({
       return data;
     });
 
+    // Final safety validation for all chart data
+    const finalBarChartData = sanitizeCompetitorData(barChartData);
+    const finalRadarData = sanitizeCompetitorData(radarData);
+
     return {
-      barChartData,
+      barChartData: finalBarChartData,
       competitorInfo,
-      radarData,
+      radarData: finalRadarData,
       gapClassification,
       opportunityMatrix,
     };
@@ -347,6 +413,36 @@ export default function CompetitiveGapChart({
       // Color mappings available for debugging
     }
   }, [processedData]);
+
+  // Enhanced debugging with data validation
+  if (processedData?.barChartData) {
+    // Validate chart data for potential issues
+    const competitorKeys = Object.keys(
+      processedData.barChartData[0] || {}
+    ).filter(
+      (key) =>
+        key.startsWith("competitor") &&
+        !key.endsWith("_name") &&
+        !key.endsWith("_id")
+    );
+
+    const allDataKeys = ["yourBrand", ...competitorKeys];
+    const validation = validateAndSanitizeChartData(
+      processedData.barChartData,
+      allDataKeys
+    );
+
+    if (validation.hasIssues && process.env.NODE_ENV !== "production") {
+      console.warn(
+        "⚠️ CompetitiveGapChart: NaN/Infinity detected in barChartData:",
+        {
+          issues: validation.issues,
+          originalData: processedData.barChartData,
+          sanitizedData: validation.data,
+        }
+      );
+    }
+  }
 
   // Only show chart if there are competitors and meaningful data
   if (!processedData || !analytics || analytics.totalCompetitors === 0)
@@ -479,9 +575,9 @@ export default function CompetitiveGapChart({
                     fill={getYourBrandColor()}
                     radius={[4, 4, 0, 0]}
                   >
-                    {processedData.barChartData.map((_, index) => (
+                    {processedData.barChartData.map((entry, index) => (
                       <Cell
-                        key={`your-brand-cell-${index}`}
+                        key={`your-brand-${entry.topic || index}`}
                         fill={getYourBrandColor()}
                         stroke={getYourBrandColor()}
                         strokeWidth={1}
@@ -496,9 +592,9 @@ export default function CompetitiveGapChart({
                       fill={competitor.color}
                       radius={[4, 4, 0, 0]}
                     >
-                      {processedData.barChartData.map((_, index) => (
+                      {processedData.barChartData.map((entry, index) => (
                         <Cell
-                          key={`${competitor.key}-cell-${index}`}
+                          key={`${competitor.key}-${entry.topic || index}`}
                           fill={competitor.color}
                           stroke={competitor.color}
                           strokeWidth={1}
@@ -692,16 +788,50 @@ export default function CompetitiveGapChart({
 
           <TabsContent value="matrix" className="space-y-4">
             <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                This matrix shows topics plotted by{" "}
-                <strong>average market competitiveness</strong> (x-axis) vs.
-                your performance (y-axis). Bubble size represents total market
-                mentions across all competitors.
+              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Strategic Opportunity Matrix
+              </h4>
+              <p className="text-sm text-muted-foreground mb-2">
+                This matrix identifies strategic opportunities by plotting{" "}
+                <strong>competitive intensity</strong> (x-axis) vs{" "}
+                <strong>market opportunity size</strong> (y-axis). Bubble size
+                shows your current performance level.
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Market competitiveness is calculated as the average performance
-                of all competitors for each topic.
-              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2 bg-green-50 dark:bg-green-950 rounded border border-green-200 dark:border-green-800">
+                  <strong className="text-green-700 dark:text-green-300">
+                    Top-Left: Blue Ocean
+                  </strong>
+                  <p className="text-green-600 dark:text-green-400">
+                    High opportunity, low competition
+                  </p>
+                </div>
+                <div className="p-2 bg-orange-50 dark:bg-orange-950 rounded border border-orange-200 dark:border-orange-800">
+                  <strong className="text-orange-700 dark:text-orange-300">
+                    Top-Right: Battleground
+                  </strong>
+                  <p className="text-orange-600 dark:text-orange-400">
+                    High opportunity, high competition
+                  </p>
+                </div>
+                <div className="p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
+                  <strong className="text-blue-700 dark:text-blue-300">
+                    Bottom-Left: Niche
+                  </strong>
+                  <p className="text-blue-600 dark:text-blue-400">
+                    Low opportunity, low competition
+                  </p>
+                </div>
+                <div className="p-2 bg-red-50 dark:bg-red-950 rounded border border-red-200 dark:border-red-800">
+                  <strong className="text-red-700 dark:text-red-300">
+                    Bottom-Right: Red Ocean
+                  </strong>
+                  <p className="text-red-600 dark:text-red-400">
+                    Low opportunity, high competition
+                  </p>
+                </div>
+              </div>
             </div>
             <div
               role="img"
@@ -714,14 +844,27 @@ export default function CompetitiveGapChart({
                   margin={{ bottom: 60, left: 60, right: 20, top: 20 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
+                  {/* Quadrant dividers */}
+                  <ReferenceLine
+                    x={50}
+                    stroke="#64748b"
+                    strokeDasharray="5 5"
+                    strokeOpacity={0.6}
+                  />
+                  <ReferenceLine
+                    y={50}
+                    stroke="#64748b"
+                    strokeDasharray="5 5"
+                    strokeOpacity={0.6}
+                  />
                   <XAxis
                     type="number"
                     dataKey="x"
                     domain={[0, 100]}
-                    name="Market Competitiveness"
-                    aria-label="Market Competitiveness percentage"
+                    name="Competitive Intensity"
+                    aria-label="Competitive Intensity percentage"
                     label={{
-                      value: "Market Competitiveness (%)",
+                      value: "Competitive Intensity (%)",
                       position: "insideBottom",
                       offset: -5,
                     }}
@@ -730,10 +873,10 @@ export default function CompetitiveGapChart({
                     type="number"
                     dataKey="y"
                     domain={[0, 100]}
-                    name="Your Performance"
-                    aria-label="Your Performance percentage"
+                    name="Market Opportunity Size"
+                    aria-label="Market Opportunity Size percentage"
                     label={{
-                      value: "Your Performance (%)",
+                      value: "Market Opportunity Size (%)",
                       angle: -90,
                       position: "insideLeft",
                     }}
@@ -742,10 +885,10 @@ export default function CompetitiveGapChart({
                     formatter={(value: unknown, name: unknown) => [
                       name === "size" ? `${value} mentions` : `${value}%`,
                       name === "x"
-                        ? "Market Competitiveness"
+                        ? "Competitive Intensity"
                         : name === "y"
-                        ? "Your Performance"
-                        : "Market Size",
+                        ? "Market Opportunity Size"
+                        : "Your Performance Level",
                     ]}
                     labelFormatter={(label: unknown, payload: unknown) => {
                       const data =
@@ -759,35 +902,39 @@ export default function CompetitiveGapChart({
                   />
                   <Scatter name="Topics" dataKey="y" fill={getYourBrandColor()}>
                     {processedData.opportunityMatrix.map((entry, index) => {
-                      // Color points based on performance vs market competitiveness
-                      const performanceLevel =
-                        entry.y > 70 ? "high" : entry.y > 40 ? "medium" : "low";
-                      const competitivenessLevel =
-                        entry.x > 70 ? "high" : entry.x > 40 ? "medium" : "low";
+                      // Strategic quadrant-based color coding
+                      const opportunitySize = entry.y > 50 ? "high" : "low";
+                      const competitiveIntensity =
+                        entry.x > 50 ? "high" : "low";
 
                       let fillColor = getYourBrandColor(); // Default to your brand color
 
-                      // Color coding based on opportunity/threat assessment
+                      // Strategic quadrant color coding
                       if (
-                        performanceLevel === "low" &&
-                        competitivenessLevel === "high"
+                        opportunitySize === "high" &&
+                        competitiveIntensity === "low"
                       ) {
-                        fillColor = "hsl(var(--destructive))"; // Red for threats (low performance, high competition)
+                        fillColor = "#22c55e"; // Green for Blue Ocean (high opportunity, low competition)
                       } else if (
-                        performanceLevel === "high" &&
-                        competitivenessLevel === "low"
+                        opportunitySize === "high" &&
+                        competitiveIntensity === "high"
                       ) {
-                        fillColor = "hsl(var(--success))"; // Green for strong positions
+                        fillColor = "#f97316"; // Orange for Battleground (high opportunity, high competition)
                       } else if (
-                        performanceLevel === "low" &&
-                        competitivenessLevel === "low"
+                        opportunitySize === "low" &&
+                        competitiveIntensity === "low"
                       ) {
-                        fillColor = "hsl(var(--warning))"; // Orange for opportunities (low performance, low competition)
+                        fillColor = "#3b82f6"; // Blue for Niche (low opportunity, low competition)
+                      } else if (
+                        opportunitySize === "low" &&
+                        competitiveIntensity === "high"
+                      ) {
+                        fillColor = "#ef4444"; // Red for Red Ocean (low opportunity, high competition)
                       }
 
                       return (
                         <Cell
-                          key={`cell-${index}`}
+                          key={`matrix-${index}-${entry.x}-${entry.y}`}
                           fill={fillColor}
                           stroke={fillColor}
                           strokeWidth={2}

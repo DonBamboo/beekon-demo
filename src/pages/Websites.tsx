@@ -72,7 +72,8 @@ export default function Websites() {
   const [isAddingWebsite, setIsAddingWebsite] = useState(false);
   const modalCloseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
-  const { consumeCreditForWebsite, restoreCredit } = useSubscriptionEnforcement();
+  const { consumeCreditForWebsite, restoreCredit } =
+    useSubscriptionEnforcement();
   const {
     websites,
     deleteWebsite,
@@ -246,7 +247,7 @@ export default function Websites() {
     if (!response.success) {
       // Restore credit on webhook failure
       await restoreCredit();
-      
+
       toast({
         title: "Error",
         description: "Website crawl failed. Website not found.",

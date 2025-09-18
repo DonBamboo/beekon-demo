@@ -58,6 +58,20 @@ export function useDashboardMetrics(
 
   const { dateRange, period } = filters;
 
+  // Convert period to dateRange if dateRange is not provided
+  const effectiveDateRange = useMemo(() => {
+    if (dateRange) return dateRange;
+
+    const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
+    const endDate = new Date();
+    const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
+
+    return {
+      start: startDate.toISOString(),
+      end: endDate.toISOString(),
+    };
+  }, [dateRange, period]);
+
   const loadDashboardData = useCallback(
     async (isRefresh = false) => {
       if (workspaceLoading || websiteIds.length === 0) return;
@@ -70,7 +84,7 @@ export function useDashboardMetrics(
       }));
 
       try {
-        // Load all dashboard data in parallel
+        // Load all dashboard data in parallel - use consistent date ranges
         const [
           metrics,
           timeSeriesData,
@@ -78,7 +92,7 @@ export function useDashboardMetrics(
           llmPerformance,
           websitePerformance,
         ] = await Promise.all([
-          dashboardService.getDashboardMetrics(websiteIds, dateRange),
+          dashboardService.getDashboardMetrics(websiteIds, effectiveDateRange),
           dashboardService.getTimeSeriesData(websiteIds, period),
           dashboardService.getTopicPerformance(websiteIds, 10),
           dashboardService.getLLMPerformance(websiteIds),
@@ -128,7 +142,7 @@ export function useDashboardMetrics(
         });
       }
     },
-    [websiteIds, dateRange, period, workspaceLoading, toast]
+    [websiteIds, effectiveDateRange, period, workspaceLoading, toast]
   );
 
   const refreshData = useCallback(() => {

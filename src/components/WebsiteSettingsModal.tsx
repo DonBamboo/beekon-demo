@@ -148,7 +148,7 @@ export function WebsiteSettingsModal({
             dataRetention: settings.data_retention,
             exportEnabled: settings.export_enabled,
           });
-          
+
           // Set selected country for CountrySelect component
           if (settings.country_code) {
             const country = getCountryByCode(settings.country_code);
@@ -242,12 +242,12 @@ export function WebsiteSettingsModal({
   // Export website settings
   const handleExportSettings = async (format: ExportFormat) => {
     if (!website) return;
-    
+
     setIsExporting(true);
-    
+
     try {
       const currentSettings = form.getValues();
-      
+
       // Prepare settings data for export
       const settingsData = {
         website: {
@@ -262,7 +262,8 @@ export function WebsiteSettingsModal({
         metadata: {
           exportType: "website_settings",
           settingsVersion: "1.0",
-          description: "Website settings backup that can be imported and applied to other websites",
+          description:
+            "Website settings backup that can be imported and applied to other websites",
           compatibleWith: "Beekon AI v1.0+",
         },
       };
@@ -274,21 +275,21 @@ export function WebsiteSettingsModal({
       );
 
       const websiteName = website.display_name || website.domain;
-      
-      await handleExport(
-        () => Promise.resolve(blob),
-        {
-          filename: `${websiteName.replace(/[^a-zA-Z0-9]/g, '-')}-settings-backup`,
-          format,
-          includeTimestamp: true,
-          metadata: {
-            websiteId: website.id,
-            websiteName,
-            settingsCount: Object.keys(currentSettings).length,
-            exportType: "website_settings",
-          },
-        }
-      );
+
+      await handleExport(() => Promise.resolve(blob), {
+        filename: `${websiteName.replace(
+          /[^a-zA-Z0-9]/g,
+          "-"
+        )}-settings-backup`,
+        format,
+        includeTimestamp: true,
+        metadata: {
+          websiteId: website.id,
+          websiteName,
+          settingsCount: Object.keys(currentSettings).length,
+          exportType: "website_settings",
+        },
+      });
     } catch (error) {
       // Export failed
       toast({
@@ -449,7 +450,9 @@ export function WebsiteSettingsModal({
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="country">Country <span className="text-destructive">*</span></Label>
+                          <Label htmlFor="country">
+                            Country <span className="text-destructive">*</span>
+                          </Label>
                           <p className="text-xs text-muted-foreground">
                             Country selection is required to save settings
                           </p>
@@ -465,7 +468,8 @@ export function WebsiteSettingsModal({
                           />
                           {selectedCountry && (
                             <p className="text-xs text-muted-foreground">
-                              Selected: {selectedCountry.flag} {selectedCountry.name}
+                              Selected: {selectedCountry.flag}{" "}
+                              {selectedCountry.name}
                             </p>
                           )}
                         </div>

@@ -25,10 +25,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ExportFormat, useExportHandler, captureMultipleCharts, ChartInfo, ChartCaptureConfig } from "@/lib/export-utils";
+import {
+  ExportFormat,
+  useExportHandler,
+  captureMultipleCharts,
+  ChartInfo,
+  ChartCaptureConfig,
+} from "@/lib/export-utils";
+import { sanitizeChartNumber } from "@/utils/chartDataValidation";
 import { useToast } from "@/hooks/use-toast";
 import { useOptimizedDashboardData } from "@/hooks/useOptimizedPageData";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { usePageFilters } from "@/hooks/appStateHooks";
+import type { DashboardFilters } from "@/contexts/AppStateContext";
 import {
   BarChart3,
   Download,
@@ -56,11 +65,35 @@ export default function Dashboard() {
   const { currentWorkspace, loading, websites } = useWorkspace();
   const navigate = useNavigate();
   const [isExporting, setIsExporting] = useState(false);
-  const [, ] = useState(false);
-  const [dateFilter, setDateFilter] = useState<"7d" | "30d" | "90d">("7d");
+  const [,] = useState(false);
   const [showAllCharts, setShowAllCharts] = useState(false);
+
+  // Use global dashboard filters instead of local state
+  const { filters: dashboardFilters, setFilters: setDashboardFilters } =
+    usePageFilters<DashboardFilters>("dashboard");
+  const dateFilter = dashboardFilters.period || "7d";
+
+  // Function to update date filter in global state
+  const setDateFilter = (period: "7d" | "30d" | "90d") => {
+    setDashboardFilters({
+      ...dashboardFilters,
+      period,
+      // Convert period to dateRange for consistent data fetching
+      dateRange: {
+        start: new Date(
+          Date.now() -
+            (period === "7d" ? 7 : period === "30d" ? 30 : 90) *
+              24 *
+              60 *
+              60 *
+              1000
+        ).toISOString(),
+        end: new Date().toISOString(),
+      },
+    });
+  };
   const { handleExport } = useExportHandler();
-  
+
   // Chart refs for capture
   const llmChartRef = useRef<HTMLDivElement>(null);
   const websiteChartRef = useRef<HTMLDivElement>(null);
@@ -68,7 +101,6 @@ export default function Dashboard() {
   const mentionTrendChartRef = useRef<HTMLDivElement>(null);
   const topicRadarChartRef = useRef<HTMLDivElement>(null);
   const visibilityChartRef = useRef<HTMLDivElement>(null);
-  
 
   // Use optimized dashboard data loading
   const {
@@ -81,15 +113,78 @@ export default function Dashboard() {
     hasCachedData,
     hasSyncCache,
   } = useOptimizedDashboardData();
-  
+
   // Derive additional data for backward compatibility
-  const hasData = !!(metrics || timeSeriesData.length > 0 || topicPerformance.length > 0);
+  const hasData = !!(
+    metrics ||
+    timeSeriesData.length > 0 ||
+    topicPerformance.length > 0
+  );
   const isRefreshing = isDashboardLoading && hasCachedData;
   const clearError = () => {}; // Not needed with optimized hook
   const llmPerformance: Array<Record<string, unknown>> = []; // To be implemented
   const websitePerformance: Array<Record<string, unknown>> = []; // To be implemented
 
-  const websiteIds = useMemo(() => websites?.map((w) => w.id) || [], [websites]);
+  const websiteIds = useMemo(
+    () => websites?.map((w) => w.id) || [],
+    [websites]
+  );
+
+  // Sanitize timeSeriesData to prevent Recharts errors
+  const sanitizedTimeSeriesData = useMemo(() => {
+    return timeSeriesData
+      .map((point) => {
+        // Validate and sanitize the date field
+        let validDate = String(point.date || "");
+
+        // Check if date is valid
+        if (
+          !validDate ||
+          validDate === null ||
+          validDate === undefined ||
+          validDate === ""
+        ) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn(
+              "⚠️ Dashboard: Invalid date in timeSeriesData:",
+              point
+            );
+          }
+          validDate = new Date().toISOString().split("T")[0]!; // Use today as fallback
+        }
+
+        // Ensure date is in a valid format
+        const dateTest = new Date(validDate);
+        if (isNaN(dateTest.getTime())) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn(
+              "⚠️ Dashboard: Invalid date format in timeSeriesData:",
+              { originalDate: point.date, point }
+            );
+          }
+          validDate = new Date().toISOString().split("T")[0]!; // Use today as fallback
+        }
+
+        return {
+          ...point,
+          date: validDate,
+          visibility: sanitizeChartNumber(point.visibility),
+          mentions: sanitizeChartNumber(point.mentions),
+          sentiment: sanitizeChartNumber(point.sentiment),
+        };
+      })
+      .filter((point) => {
+        // Final filter to remove any points that still have invalid dates
+        const finalDateTest = new Date(String(point.date));
+        const isValid = !isNaN(finalDateTest.getTime());
+
+        if (!isValid && process.env.NODE_ENV !== "production") {
+          console.error("❌ Dashboard: Removing invalid data point:", point);
+        }
+
+        return isValid;
+      });
+  }, [timeSeriesData]);
 
   const getSentimentColor = (sentiment: number) => {
     if (sentiment >= 60) return "bg-success";
@@ -123,99 +218,197 @@ export default function Dashboard() {
     try {
       // Import the export service dynamically
       const { exportService } = await import("@/services/exportService");
-      
+
       // Prepare comprehensive dashboard export data as tabular format for PDF
       const dashboardExportData = [
         // Summary section
-        { category: "Summary", metric: "Total Websites", value: websiteIds.length.toString(), unit: "count" },
-        { category: "Summary", metric: "Time Period", value: dateFilter.toUpperCase(), unit: "period" },
-        { category: "Summary", metric: "Export Date", value: new Date().toLocaleDateString(), unit: "date" },
-        { category: "Summary", metric: "Total Analyses", value: (metrics?.totalAnalyses || 0).toLocaleString(), unit: "count" },
-        { category: "Summary", metric: "Top Performing Topic", value: topicPerformance?.[0]?.topic || "N/A", unit: "text" },
-        
+        {
+          category: "Summary",
+          metric: "Total Websites",
+          value: websiteIds.length.toString(),
+          unit: "count",
+        },
+        {
+          category: "Summary",
+          metric: "Time Period",
+          value: dateFilter.toUpperCase(),
+          unit: "period",
+        },
+        {
+          category: "Summary",
+          metric: "Export Date",
+          value: new Date().toLocaleDateString(),
+          unit: "date",
+        },
+        {
+          category: "Summary",
+          metric: "Total Analyses",
+          value: (metrics?.totalAnalyses || 0).toLocaleString(),
+          unit: "count",
+        },
+        {
+          category: "Summary",
+          metric: "Top Performing Topic",
+          value: topicPerformance?.[0]?.topic || "N/A",
+          unit: "text",
+        },
+
         // Performance Metrics - Fixed property mapping to match dashboard service interface
-        { category: "Performance", metric: "Overall Visibility Score", value: `${(metrics?.overallVisibilityScore || 0).toFixed(1)}%`, unit: "percentage" },
-        { category: "Performance", metric: "Average Sentiment", value: `${(metrics?.sentimentScore || 0).toFixed(1)}%`, unit: "percentage" },
-        { category: "Performance", metric: "Average Ranking", value: `${(metrics?.averageRanking || 0).toFixed(1)}`, unit: "position" },
-        { category: "Performance", metric: "Total Mentions", value: (metrics?.totalMentions || 0).toLocaleString(), unit: "count" },
-        { category: "Performance", metric: "Total Analyses", value: (metrics?.totalAnalyses || 0).toLocaleString(), unit: "count" },
-        { category: "Performance", metric: "Sentiment Trend", value: getSentimentLabel(metrics?.sentimentScore || 0), unit: "text" },
-        
+        {
+          category: "Performance",
+          metric: "Overall Visibility Score",
+          value: `${(metrics?.overallVisibilityScore || 0).toFixed(1)}%`,
+          unit: "percentage",
+        },
+        {
+          category: "Performance",
+          metric: "Average Sentiment",
+          value: `${(metrics?.sentimentScore || 0).toFixed(1)}%`,
+          unit: "percentage",
+        },
+        {
+          category: "Performance",
+          metric: "Average Ranking",
+          value: `${(metrics?.averageRanking || 0).toFixed(1)}`,
+          unit: "position",
+        },
+        {
+          category: "Performance",
+          metric: "Total Mentions",
+          value: (metrics?.totalMentions || 0).toLocaleString(),
+          unit: "count",
+        },
+        {
+          category: "Performance",
+          metric: "Total Analyses",
+          value: (metrics?.totalAnalyses || 0).toLocaleString(),
+          unit: "count",
+        },
+        {
+          category: "Performance",
+          metric: "Sentiment Trend",
+          value: getSentimentLabel(metrics?.sentimentScore || 0),
+          unit: "text",
+        },
+
         // Website Statistics
-        ...(websites?.filter(w => 
-          w?.display_name && w?.domain // Only include websites with required fields
-        ).map(w => ({
-          category: "Websites", 
-          metric: w.display_name, 
-          value: w.domain, 
-          unit: `${w.is_active ? 'Active' : 'Inactive'}`
-        })) || []),
-        
+        ...(websites
+          ?.filter(
+            (w) => w?.display_name && w?.domain // Only include websites with required fields
+          )
+          .map((w) => ({
+            category: "Websites",
+            metric: w.display_name,
+            value: w.domain,
+            unit: `${w.is_active ? "Active" : "Inactive"}`,
+          })) || []),
+
         // Topic Performance (top 5) - Fixed property mapping to match TopicPerformance interface
-        ...(topicPerformance?.filter(topic => 
-          topic?.topic && typeof topic?.visibility === 'number' // Use correct property names
-        ).slice(0, 5).map((topic, index) => ({
-          category: "Top Topics",
-          metric: `#${index + 1} ${topic.topic}`,
-          value: `${Number(topic.visibility).toFixed(1)}%`,
-          unit: "visibility"
-        })) || []),
-        
-        // Performance by Topics - Comprehensive section with detailed metrics
-        ...(topicPerformance?.filter(topic => 
-          topic?.topic && typeof topic?.visibility === 'number'
-        ).slice(0, 10).flatMap((topic, _) => [
-          {
-            category: "Performance by Topics",
-            metric: `${topic.topic} - Visibility`,
+        ...(topicPerformance
+          ?.filter(
+            (topic) => topic?.topic && typeof topic?.visibility === "number" // Use correct property names
+          )
+          .slice(0, 5)
+          .map((topic, index) => ({
+            category: "Top Topics",
+            metric: `#${index + 1} ${topic.topic}`,
             value: `${Number(topic.visibility).toFixed(1)}%`,
-            unit: "visibility score"
-          },
-          {
-            category: "Performance by Topics", 
-            metric: `${topic.topic} - Sentiment`,
-            value: `${Number(topic.sentiment).toFixed(1)}%`,
-            unit: "sentiment score" 
-          },
-          {
-            category: "Performance by Topics",
-            metric: `${topic.topic} - Mentions`,
-            value: Number(topic.mentions).toString(),
-            unit: "total mentions"
-          },
-          {
-            category: "Performance by Topics",
-            metric: `${topic.topic} - Avg Rank`,
-            value: Number(topic.averageRank).toFixed(1),
-            unit: "ranking position"
-          }
-        ]) || []),
-        
+            unit: "visibility",
+          })) || []),
+
+        // Performance by Topics - Comprehensive section with detailed metrics
+        ...(topicPerformance
+          ?.filter(
+            (topic) => topic?.topic && typeof topic?.visibility === "number"
+          )
+          .slice(0, 10)
+          .flatMap((topic, _) => [
+            {
+              category: "Performance by Topics",
+              metric: `${topic.topic} - Visibility`,
+              value: `${Number(topic.visibility).toFixed(1)}%`,
+              unit: "visibility score",
+            },
+            {
+              category: "Performance by Topics",
+              metric: `${topic.topic} - Sentiment`,
+              value: `${Number(topic.sentiment).toFixed(1)}%`,
+              unit: "sentiment score",
+            },
+            {
+              category: "Performance by Topics",
+              metric: `${topic.topic} - Mentions`,
+              value: Number(topic.mentions).toString(),
+              unit: "total mentions",
+            },
+            {
+              category: "Performance by Topics",
+              metric: `${topic.topic} - Avg Rank`,
+              value: Number(topic.averageRank).toFixed(1),
+              unit: "ranking position",
+            },
+          ]) || []),
+
         // LLM Performance - Fixed property mapping to match LLMPerformance interface
-        ...(llmPerformance?.filter(llm => 
-          llm?.provider && typeof llm?.mentionRate === 'number' && typeof llm?.totalAnalyses === 'number'
-        ).map(llm => ({
-          category: "LLM Performance",
-          metric: llm.provider,
-          value: `${Number(llm.mentionRate).toFixed(1)}%`,
-          unit: `${llm.totalAnalyses} analyses`
-        })) || []),
-        
+        ...(llmPerformance
+          ?.filter(
+            (llm) =>
+              llm?.provider &&
+              typeof llm?.mentionRate === "number" &&
+              typeof llm?.totalAnalyses === "number"
+          )
+          .map((llm) => ({
+            category: "LLM Performance",
+            metric: llm.provider,
+            value: `${Number(llm.mentionRate).toFixed(1)}%`,
+            unit: `${llm.totalAnalyses} analyses`,
+          })) || []),
+
         // Website Performance (top performers) - Fixed property mapping to match WebsitePerformance interface
-        ...(websitePerformance?.filter(site => 
-          site?.displayName && typeof site?.visibility === 'number' && typeof site?.mentions === 'number'
-        ).slice(0, 5).map((site, index) => ({
-          category: "Website Performance",
-          metric: `#${index + 1} ${site.displayName}`,
-          value: `${Number(site.visibility).toFixed(1)}%`,
-          unit: `${site.mentions} mentions`
-        })) || []),
-        
+        ...(websitePerformance
+          ?.filter(
+            (site) =>
+              site?.displayName &&
+              typeof site?.visibility === "number" &&
+              typeof site?.mentions === "number"
+          )
+          .slice(0, 5)
+          .map((site, index) => ({
+            category: "Website Performance",
+            metric: `#${index + 1} ${site.displayName}`,
+            value: `${Number(site.visibility).toFixed(1)}%`,
+            unit: `${site.mentions} mentions`,
+          })) || []),
+
         // Time Series Summary (if available)
-        ...(timeSeriesData && timeSeriesData.length > 0 ? [
-          { category: "Time Series", metric: "Data Points", value: timeSeriesData.length.toString(), unit: "count" },
-          { category: "Time Series", metric: "Date Range", value: `${new Date(Math.min(...timeSeriesData.map(d => new Date(String(d.date)).getTime()))).toLocaleDateString()} - ${new Date(Math.max(...timeSeriesData.map(d => new Date(String(d.date)).getTime()))).toLocaleDateString()}`, unit: "range" },
-        ] : []),
+        ...(timeSeriesData && timeSeriesData.length > 0
+          ? [
+              {
+                category: "Time Series",
+                metric: "Data Points",
+                value: timeSeriesData.length.toString(),
+                unit: "count",
+              },
+              {
+                category: "Time Series",
+                metric: "Date Range",
+                value: `${new Date(
+                  Math.min(
+                    ...timeSeriesData.map((d) =>
+                      new Date(String(d.date)).getTime()
+                    )
+                  )
+                ).toLocaleDateString()} - ${new Date(
+                  Math.max(
+                    ...timeSeriesData.map((d) =>
+                      new Date(String(d.date)).getTime()
+                    )
+                  )
+                ).toLocaleDateString()}`,
+                unit: "range",
+              },
+            ]
+          : []),
       ];
 
       // Create export content with proper structure
@@ -227,11 +420,24 @@ export default function Dashboard() {
         filters: {
           period: dateFilter,
           totalWebsites: websiteIds.length,
-          activeWebsites: websites?.filter(w => w.is_active).length || 0,
-          dataTypes: ["metrics", "timeSeriesData", "topicPerformance", "llmPerformance", "websitePerformance"],
+          activeWebsites: websites?.filter((w) => w.is_active).length || 0,
+          dataTypes: [
+            "metrics",
+            "timeSeriesData",
+            "topicPerformance",
+            "llmPerformance",
+            "websitePerformance",
+          ],
         },
         dateRange: {
-          start: new Date(Date.now() - (dateFilter === "7d" ? 7 : dateFilter === "30d" ? 30 : 90) * 24 * 60 * 60 * 1000).toISOString(),
+          start: new Date(
+            Date.now() -
+              (dateFilter === "7d" ? 7 : dateFilter === "30d" ? 30 : 90) *
+                24 *
+                60 *
+                60 *
+                1000
+          ).toISOString(),
           end: new Date().toISOString(),
         },
         dataType: "dashboard", // Use dashboard field mapping
@@ -253,52 +459,58 @@ export default function Dashboard() {
         try {
           toast({
             title: "Capturing charts...",
-            description: "Please wait while we capture the dashboard charts for PDF export.",
+            description:
+              "Please wait while we capture the dashboard charts for PDF export.",
           });
 
           // Define chart elements to capture with element-specific configurations
           const chartElements = [
-            { 
-              element: visibilityChartRef.current, 
-              id: "visibility-chart", 
+            {
+              element: visibilityChartRef.current,
+              id: "visibility-chart",
               title: "Visibility Over Time",
               config: {
                 // Visibility chart specific config - ensure adequate height for export button
                 height: 480, // Extra height to accommodate export button and proper spacing
-              }
+              },
             },
-            { 
-              element: llmChartRef.current, 
-              id: "llm-performance", 
-              title: "LLM Performance Comparison" 
+            {
+              element: llmChartRef.current,
+              id: "llm-performance",
+              title: "LLM Performance Comparison",
             },
-            { 
-              element: websiteChartRef.current, 
-              id: "website-performance", 
-              title: "Website Performance Breakdown" 
+            {
+              element: websiteChartRef.current,
+              id: "website-performance",
+              title: "Website Performance Breakdown",
             },
-            { 
-              element: sentimentChartRef.current, 
-              id: "sentiment-distribution", 
-              title: "Sentiment Distribution" 
+            {
+              element: sentimentChartRef.current,
+              id: "sentiment-distribution",
+              title: "Sentiment Distribution",
             },
-            { 
-              element: mentionTrendChartRef.current, 
-              id: "mention-trends", 
-              title: "Mention Trends" 
+            {
+              element: mentionTrendChartRef.current,
+              id: "mention-trends",
+              title: "Mention Trends",
             },
-            { 
-              element: topicRadarChartRef.current, 
-              id: "topic-radar", 
-              title: "Topic Performance Radar" 
+            {
+              element: topicRadarChartRef.current,
+              id: "topic-radar",
+              title: "Topic Performance Radar",
             },
-          ].filter(chart => chart.element !== null) as Array<{ element: HTMLElement; id: string; title: string; config?: ChartCaptureConfig }>;
+          ].filter((chart) => chart.element !== null) as Array<{
+            element: HTMLElement;
+            id: string;
+            title: string;
+            config?: ChartCaptureConfig;
+          }>;
 
           if (chartElements.length > 0) {
             capturedCharts = await captureMultipleCharts(chartElements, {
-              backgroundColor: 'white',
+              backgroundColor: "white",
               scale: 2,
-              useCORS: true
+              useCORS: true,
             });
 
             toast({
@@ -306,38 +518,43 @@ export default function Dashboard() {
               description: `Successfully captured ${capturedCharts.length} charts for PDF export.`,
             });
           }
-
         } catch (error) {
           // Chart capture failed
           toast({
             title: "Chart capture warning",
-            description: "Charts could not be captured, but export will continue with data only.",
+            description:
+              "Charts could not be captured, but export will continue with data only.",
             variant: "destructive",
           });
         }
       }
 
-      const blob = await exportService.exportData(exportContent, format, { 
-        exportType: "dashboard", 
-        customFilename: `dashboard_analytics_${dateFilter}_${new Date().toISOString().split('T')[0]}`,
-        charts: capturedCharts.length > 0 ? capturedCharts : undefined
+      const blob = await exportService.exportData(exportContent, format, {
+        exportType: "dashboard",
+        customFilename: `dashboard_analytics_${dateFilter}_${
+          new Date().toISOString().split("T")[0]
+        }`,
+        charts: capturedCharts.length > 0 ? capturedCharts : undefined,
       });
 
-      await handleExport(
-        () => Promise.resolve(blob),
-        {
-          filename: `dashboard-analytics-${dateFilter}`,
-          format,
-          includeTimestamp: true,
-          metadata: {
-            websiteCount: websiteIds.length,
-            period: dateFilter,
-            exportType: "dashboard_analytics",
-            dataTypes: ["metrics", "timeSeriesData", "topicPerformance", "llmPerformance", "websitePerformance"],
-            generatedBy: "Beekon AI",
-          },
-        }
-      );
+      await handleExport(() => Promise.resolve(blob), {
+        filename: `dashboard-analytics-${dateFilter}`,
+        format,
+        includeTimestamp: true,
+        metadata: {
+          websiteCount: websiteIds.length,
+          period: dateFilter,
+          exportType: "dashboard_analytics",
+          dataTypes: [
+            "metrics",
+            "timeSeriesData",
+            "topicPerformance",
+            "llmPerformance",
+            "websitePerformance",
+          ],
+          generatedBy: "Beekon AI",
+        },
+      });
 
       toast({
         title: "Export Successful",
@@ -347,7 +564,10 @@ export default function Dashboard() {
       // Export failed
       toast({
         title: "Export failed",
-        description: error instanceof Error ? error.message : "Failed to export dashboard data",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to export dashboard data",
         variant: "destructive",
       });
     } finally {
@@ -389,7 +609,7 @@ export default function Dashboard() {
   // Show skeleton immediately unless we have synchronous cache data
   // This eliminates empty state flash by showing skeleton first
   const shouldShowSkeleton = loading || (isDashboardLoading && !hasSyncCache());
-  
+
   if (shouldShowSkeleton) {
     return <DashboardSkeleton />;
   }
@@ -549,7 +769,7 @@ export default function Dashboard() {
         </div>
 
         {/* Visibility Chart */}
-        {timeSeriesData.length > 0 && (
+        {sanitizedTimeSeriesData.length > 0 && (
           <Card ref={visibilityChartRef}>
             <CardHeader>
               <div className="flex justify-between items-center">
@@ -575,20 +795,53 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={timeSeriesData}>
+                <LineChart data={sanitizedTimeSeriesData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="date"
-                    tickFormatter={(value) =>
-                      new Date(value).toLocaleDateString()
-                    }
+                    tickFormatter={(value) => {
+                      try {
+                        const date = new Date(value);
+                        if (isNaN(date.getTime())) {
+                          return "Invalid Date";
+                        }
+                        return date.toLocaleDateString();
+                      } catch (error) {
+                        if (process.env.NODE_ENV !== "production") {
+                          console.warn(
+                            "⚠️ Dashboard Chart: Error formatting date:",
+                            value,
+                            error
+                          );
+                        }
+                        return "Invalid Date";
+                      }
+                    }}
                   />
                   <YAxis domain={[0, 100]} />
                   <RechartsTooltip
-                    labelFormatter={(value) =>
-                      new Date(value).toLocaleDateString()
-                    }
-                    formatter={(value) => [`${value}%`, "Visibility Score"]}
+                    labelFormatter={(value) => {
+                      try {
+                        const date = new Date(value);
+                        if (isNaN(date.getTime())) {
+                          return "Invalid Date";
+                        }
+                        return date.toLocaleDateString();
+                      } catch (error) {
+                        if (process.env.NODE_ENV !== "production") {
+                          console.warn(
+                            "⚠️ Dashboard Tooltip: Error formatting date:",
+                            value,
+                            error
+                          );
+                        }
+                        return "Invalid Date";
+                      }
+                    }}
+                    formatter={(value) => [
+                      `${sanitizeChartNumber(value)}%`,
+                      "Visibility Score",
+                    ]}
                   />
                   <Line
                     type="monotone"
@@ -620,27 +873,45 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* LLM Performance Chart */}
             {llmPerformance.length > 0 && (
-              <LLMPerformanceChart ref={llmChartRef} llmData={llmPerformance.map(llm => ({
-                provider: (llm as Record<string, unknown>).provider as string,
-                mentionRate: (llm as Record<string, unknown>).mentionRate as number,
-                averageRank: (llm as Record<string, unknown>).averageRank as number,
-                sentiment: (llm as Record<string, unknown>).sentiment as number,
-                totalAnalyses: (llm as Record<string, unknown>).totalAnalyses as number
-              }))} />
+              <LLMPerformanceChart
+                ref={llmChartRef}
+                llmData={llmPerformance.map((llm) => ({
+                  provider: (llm as Record<string, unknown>).provider as string,
+                  mentionRate: (llm as Record<string, unknown>)
+                    .mentionRate as number,
+                  averageRank: (llm as Record<string, unknown>)
+                    .averageRank as number,
+                  sentiment: (llm as Record<string, unknown>)
+                    .sentiment as number,
+                  totalAnalyses: (llm as Record<string, unknown>)
+                    .totalAnalyses as number,
+                }))}
+              />
             )}
 
             {/* Website Performance Chart */}
             {websitePerformance.length > 0 && (
-              <WebsitePerformanceChart ref={websiteChartRef} websiteData={websitePerformance.map(site => ({
-                websiteId: (site as Record<string, unknown>).websiteId as string,
-                domain: (site as Record<string, unknown>).domain as string,
-                displayName: (site as Record<string, unknown>).displayName as string,
-                visibility: (site as Record<string, unknown>).visibility as number,
-                mentions: (site as Record<string, unknown>).mentions as number,
-                averageRank: (site as Record<string, unknown>).averageRank as number,
-                sentiment: (site as Record<string, unknown>).sentiment as number,
-                lastAnalyzed: (site as Record<string, unknown>).lastAnalyzed as string || new Date().toISOString()
-              }))} />
+              <WebsitePerformanceChart
+                ref={websiteChartRef}
+                websiteData={websitePerformance.map((site) => ({
+                  websiteId: (site as Record<string, unknown>)
+                    .websiteId as string,
+                  domain: (site as Record<string, unknown>).domain as string,
+                  displayName: (site as Record<string, unknown>)
+                    .displayName as string,
+                  visibility: (site as Record<string, unknown>)
+                    .visibility as number,
+                  mentions: (site as Record<string, unknown>)
+                    .mentions as number,
+                  averageRank: (site as Record<string, unknown>)
+                    .averageRank as number,
+                  sentiment: (site as Record<string, unknown>)
+                    .sentiment as number,
+                  lastAnalyzed:
+                    ((site as Record<string, unknown>)
+                      .lastAnalyzed as string) || new Date().toISOString(),
+                }))}
+              />
             )}
 
             {/* Sentiment Distribution */}
@@ -664,22 +935,38 @@ export default function Dashboard() {
             )}
 
             {/* Mention Trends */}
-            {timeSeriesData.length > 0 && (
-              <MentionTrendChart ref={mentionTrendChartRef} trendData={timeSeriesData.map(data => ({
-                date: (data as Record<string, unknown>).date as string,
-                mentions: (data as Record<string, unknown>).mentions as number,
-                sentiment: (data as Record<string, unknown>).sentiment as number
-              }))} />
+            {sanitizedTimeSeriesData.length > 0 && (
+              <MentionTrendChart
+                ref={mentionTrendChartRef}
+                trendData={sanitizedTimeSeriesData.map((data) => ({
+                  date: (data as Record<string, unknown>).date as string,
+                  mentions: sanitizeChartNumber(
+                    (data as Record<string, unknown>).mentions as number
+                  ),
+                  sentiment: sanitizeChartNumber(
+                    (data as Record<string, unknown>).sentiment as number
+                  ),
+                }))}
+              />
             )}
 
             {/* Topic Radar Chart */}
             {topicPerformance.length > 0 && (
-              <TopicRadarChart ref={topicRadarChartRef} topicData={topicPerformance.map(topic => ({
-                topic: (topic as Record<string, unknown>).topic as string,
-                visibility: (topic as Record<string, unknown>).visibility as number,
-                mentions: (topic as Record<string, unknown>).mentions as number,
-                sentiment: (topic as Record<string, unknown>).sentiment as number
-              }))} />
+              <TopicRadarChart
+                ref={topicRadarChartRef}
+                topicData={topicPerformance.map((topic) => ({
+                  topic: (topic as Record<string, unknown>).topic as string,
+                  visibility: sanitizeChartNumber(
+                    (topic as Record<string, unknown>).visibility as number
+                  ),
+                  mentions: sanitizeChartNumber(
+                    (topic as Record<string, unknown>).mentions as number
+                  ),
+                  sentiment: sanitizeChartNumber(
+                    (topic as Record<string, unknown>).sentiment as number
+                  ),
+                }))}
+              />
             )}
           </div>
         )}
@@ -715,26 +1002,38 @@ export default function Dashboard() {
                     key={index}
                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
                     onClick={() =>
-                      handleMetricClick("topic-details", { topic: String((item as Record<string, unknown>).topic) })
+                      handleMetricClick("topic-details", {
+                        topic: String((item as Record<string, unknown>).topic),
+                      })
                     }
                   >
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-2">
-                        <h4 className="font-medium">{String((item as Record<string, unknown>).topic)}</h4>
+                        <h4 className="font-medium">
+                          {String((item as Record<string, unknown>).topic)}
+                        </h4>
                         {item.trend !== 0 &&
-                          React.createElement(getTrendIcon(Number(item.trend) || 0), {
-                            className: `h-4 w-4 ${getTrendColor(Number(item.trend) || 0)}`,
-                          })}
+                          React.createElement(
+                            getTrendIcon(Number(item.trend) || 0),
+                            {
+                              className: `h-4 w-4 ${getTrendColor(
+                                Number(item.trend) || 0
+                              )}`,
+                            }
+                          )}
                       </div>
                       <div className="flex items-center space-x-4">
                         <div className="flex-1">
                           <div className="flex justify-between text-sm mb-1">
                             <span>Visibility</span>
                             <span className="font-medium">
-                              {Number(item.visibility) || 0}%
+                              {(item.visibility as number).toFixed(2) || 0}%
                             </span>
                           </div>
-                          <Progress value={Number(item.visibility) || 0} className="h-2" />
+                          <Progress
+                            value={Number(item.visibility) || 0}
+                            className="h-2"
+                          />
                         </div>
                         <div className="text-center">
                           <div className="text-sm text-muted-foreground">
@@ -769,7 +1068,9 @@ export default function Dashboard() {
                           <div className="text-sm text-muted-foreground">
                             Mentions
                           </div>
-                          <div className="font-medium">{String((item as Record<string, unknown>).mentions)}</div>
+                          <div className="font-medium">
+                            {String((item as Record<string, unknown>).mentions)}
+                          </div>
                         </div>
                       </div>
                     </div>

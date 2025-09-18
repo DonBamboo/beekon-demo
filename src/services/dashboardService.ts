@@ -22,7 +22,8 @@ export interface TimeSeriesData {
   visibility: number;
   mentions: number;
   sentiment: number;
-  [key: string]: unknown;}
+  [key: string]: unknown;
+}
 
 export interface TopicPerformance {
   topic: string;
@@ -31,7 +32,8 @@ export interface TopicPerformance {
   averageRank: number;
   sentiment: number;
   trend: number; // percentage change
-  [key: string]: unknown;}
+  [key: string]: unknown;
+}
 
 export interface LLMPerformance {
   provider: string;
@@ -62,7 +64,8 @@ export class DashboardService {
   }
 
   /**
-   * Get comprehensive dashboard metrics for a workspace
+   * Get comprehensive dashboard metrics for a workspace - OPTIMIZED
+   * Uses materialized views for lightning-fast performance
    */
   async getDashboardMetrics(
     websiteIds: string[],
@@ -73,34 +76,77 @@ export class DashboardService {
     }
 
     try {
-      // Execute all data fetching in parallel for better performance
-      const [allResults, previousPeriodMetrics] = await Promise.all([
-        this.getAllAnalysisResults(websiteIds, dateRange),
-        this.getPreviousPeriodMetrics(websiteIds, dateRange),
-      ]);
+      // OPTIMIZED: Use materialized view function instead of expensive analysis queries
+      const defaultDateRange = {
+        start:
+          dateRange?.start ||
+          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+        end: dateRange?.end || new Date().toISOString(),
+      };
 
-      if (allResults.length === 0) {
+      console.log("📊 Dashboard metrics call:", {
+        websiteIds,
+        dateRange: defaultDateRange,
+        functionName: "get_dashboard_metrics",
+      });
+
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_dashboard_metrics" as any, {
+          p_website_ids: websiteIds,
+          p_date_start: defaultDateRange.start,
+          p_date_end: defaultDateRange.end,
+        });
+
+      if (error) {
+        console.error("❌ Dashboard metrics error:", {
+          error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          parameters: { websiteIds, dateRange: defaultDateRange },
+        });
+        throw error;
+      }
+
+      console.log("✅ Dashboard metrics success:", {
+        dataLength: Array.isArray(data) ? data.length : "not array",
+        firstResult: Array.isArray(data) ? data[0] : data,
+      });
+
+      const result = Array.isArray(data) ? data[0] : data;
+      if (!result) {
         return this.getEmptyMetrics();
       }
 
-      // Calculate aggregated metrics
-      const metrics = this.calculateAggregatedMetrics(allResults);
-
-      // Calculate trend from parallel fetched data
-      metrics.improvementTrend = this.calculateTrend(
-        metrics.overallVisibilityScore,
-        previousPeriodMetrics.overallVisibilityScore
-      );
-
-      return metrics;
+      const metrics = result as any;
+      return {
+        overallVisibilityScore: Number(
+          metrics.overall_visibility_score.toFixed(2) || 0
+        ),
+        averageRanking: Number(metrics.average_ranking.toFixed(2) || 0.0),
+        totalMentions: Number(metrics.total_mentions || 0),
+        sentimentScore: Number(metrics.sentiment_score.toFixed(2) || 50),
+        totalAnalyses: Number(metrics.total_analyses || 0),
+        activeWebsites: Number(metrics.active_websites || 0),
+        topPerformingTopic: metrics.top_performing_topic || null,
+        improvementTrend: Number(metrics.improvement_trend || 0),
+      };
     } catch (error) {
-      // Failed to get dashboard metrics
+      // Failed to get dashboard metrics - fallback to empty metrics
+      console.error("🚨 Dashboard metrics fallback triggered:", {
+        error: error instanceof Error ? error.message : error,
+        websiteIds,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       return this.getEmptyMetrics();
     }
   }
 
   /**
-   * Get time series data for dashboard charts
+   * Get time series data for dashboard charts - OPTIMIZED
+   * Uses materialized views for fast time series data
    */
   async getTimeSeriesData(
     websiteIds: string[],
@@ -110,29 +156,42 @@ export class DashboardService {
 
     try {
       const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(endDate.getDate() - days);
 
-      const dateRange = {
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-      };
-
-      const allResults = await this.getAllAnalysisResults(
-        websiteIds,
-        dateRange
+      // OPTIMIZED: Use materialized view function for instant time series data
+      const { data, error } = await supabase.schema("beekon_data").rpc(
+        "get_dashboard_time_series" as any,
+        {
+          p_website_ids: websiteIds,
+          p_days: days,
+        } as any
       );
 
-      return this.aggregateByDate(allResults, startDate, endDate);
+      if (error) throw error;
+
+      interface TimeSeriesRow {
+        date: string;
+        visibility: number;
+        mentions: number;
+        sentiment: number;
+      }
+
+      // Type guard to ensure data is an array
+      const validData = Array.isArray(data) ? data : [];
+      return validData.map((row: TimeSeriesRow) => ({
+        date: row.date,
+        visibility: Number(row.visibility || 0),
+        mentions: Number(row.mentions || 0),
+        sentiment: Number(row.sentiment || 50),
+      }));
     } catch (error) {
-      // Failed to get time series data
+      // Failed to get time series data - return empty array
       return [];
     }
   }
 
   /**
-   * Get topic performance data
+   * Get topic performance data - OPTIMIZED
+   * Uses competitive gap analysis materialized view
    */
   async getTopicPerformance(
     websiteIds: string[],
@@ -141,31 +200,84 @@ export class DashboardService {
     if (websiteIds.length === 0) return [];
 
     try {
-      const allResults = await this.getAllAnalysisResults(websiteIds);
-      return this.calculateTopicPerformance(allResults, limit);
+      // OPTIMIZED: Use materialized view function for topic performance
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_topic_performance_dashboard" as any, {
+          p_website_ids: websiteIds,
+          p_limit: limit,
+        });
+
+      if (error) throw error;
+
+      interface TopicPerformanceRow {
+        topic: string;
+        visibility: number;
+        mentions: number;
+        average_rank: number;
+        sentiment: number;
+        trend: number;
+      }
+
+      // Type guard to ensure data is an array
+      const validData = Array.isArray(data) ? data : [];
+      return validData.map((row: TopicPerformanceRow) => ({
+        topic: row.topic,
+        visibility: Number(row.visibility || 0),
+        mentions: Number(row.mentions || 0),
+        averageRank: Number(row.average_rank || 4.0),
+        sentiment: Number(row.sentiment || 50),
+        trend: Number(row.trend || 0),
+      }));
     } catch (error) {
-      // Failed to get topic performance
+      // Failed to get topic performance - return empty array
       return [];
     }
   }
 
   /**
-   * Get LLM provider performance comparison
+   * Get LLM provider performance comparison - OPTIMIZED
+   * Uses cached performance metrics for instant results
    */
   async getLLMPerformance(websiteIds: string[]): Promise<LLMPerformance[]> {
     if (websiteIds.length === 0) return [];
 
     try {
-      const allResults = await this.getAllAnalysisResults(websiteIds);
-      return this.calculateLLMPerformance(allResults);
+      // OPTIMIZED: Use materialized view function for LLM performance
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_llm_performance_dashboard" as any, {
+          p_website_ids: websiteIds,
+        });
+
+      if (error) throw error;
+
+      interface LLMPerformanceRow {
+        provider: string;
+        mention_rate: number;
+        average_rank: number;
+        sentiment: number;
+        total_analyses: number;
+      }
+
+      // Type guard to ensure data is an array
+      const validData = Array.isArray(data) ? data : [];
+      return validData.map((row: LLMPerformanceRow) => ({
+        provider: row.provider,
+        mentionRate: Number(row.mention_rate || 0),
+        averageRank: Number(row.average_rank || 4.0),
+        sentiment: Number(row.sentiment || 50),
+        totalAnalyses: Number(row.total_analyses || 0),
+      }));
     } catch (error) {
-      // Failed to get LLM performance
+      // Failed to get LLM performance - return empty array
       return [];
     }
   }
 
   /**
-   * Get website performance comparison
+   * Get website performance comparison - OPTIMIZED
+   * Uses materialized view for instant website metrics
    */
   async getWebsitePerformance(
     websiteIds: string[]
@@ -173,50 +285,38 @@ export class DashboardService {
     if (websiteIds.length === 0) return [];
 
     try {
-      // Execute all website data fetching in parallel
-      const websitePromises = websiteIds.map(async (websiteId) => {
-        const [results, websiteInfo] = await Promise.all([
-          analysisService.getAnalysisResults(websiteId),
-          supabase
-            .schema("beekon_data")
-            .from("websites")
-            .select("domain, display_name")
-            .eq("id", websiteId)
-            .single(),
-        ]);
+      // OPTIMIZED: Use materialized view function for website performance
+      const { data, error } = await supabase
+        .schema("beekon_data")
+        .rpc("get_website_performance_dashboard" as any, {
+          p_website_ids: websiteIds,
+        });
 
-        // Convert UIAnalysisResult to AnalysisResult format for metrics calculation
-        const analysisResults = results.map(result => ({
-          id: result.id,
-          topic_name: result.topic,
-          topic: result.topic,
-          topic_keywords: [],
-          llm_results: result.llm_results,
-          total_mentions: result.llm_results.filter(r => r.is_mentioned).length,
-          avg_rank: result.llm_results.reduce((acc, r) => acc + (r.rank_position || 0), 0) / result.llm_results.length,
-          avg_confidence: result.confidence,
-          avg_sentiment: result.llm_results.reduce((acc, r) => acc + (r.sentiment_score || 0), 0) / result.llm_results.length,
-          created_at: result.created_at,
-          website_id: result.website_id,
-        }));
-        
-        const metrics = this.calculateMetricsForResults(analysisResults);
+      if (error) throw error;
 
-        return {
-          websiteId,
-          domain: websiteInfo.data?.domain || "",
-          displayName: websiteInfo.data?.display_name || "",
-          visibility: metrics.overallVisibilityScore,
-          mentions: metrics.totalMentions,
-          sentiment: metrics.sentimentScore,
-          lastAnalyzed: results.length > 0 ? results[0]!.created_at : "",
-        };
-      });
+      interface WebsitePerformanceRow {
+        website_id: string;
+        domain: string;
+        display_name: string;
+        visibility: number;
+        mentions: number;
+        sentiment: number;
+        last_analyzed: string;
+      }
 
-      const websitePerformance = await Promise.all(websitePromises);
-      return websitePerformance.sort((a, b) => b.visibility - a.visibility);
+      // Type guard to ensure data is an array
+      const validData = Array.isArray(data) ? data : [];
+      return validData.map((row: WebsitePerformanceRow) => ({
+        websiteId: row.website_id,
+        domain: row.domain || "",
+        displayName: row.display_name || "",
+        visibility: Number(row.visibility || 0),
+        mentions: Number(row.mentions || 0),
+        sentiment: Number(row.sentiment || 50),
+        lastAnalyzed: row.last_analyzed || "",
+      }));
     } catch (error) {
-      // Failed to get website performance
+      // Failed to get website performance - return empty array
       return [];
     }
   }
@@ -239,16 +339,24 @@ export class DashboardService {
 
       // Flatten all results into a single array and convert to AnalysisResult format
       const flatResults = allResultsArrays.flat();
-      return flatResults.map(result => ({
+      return flatResults.map((result) => ({
         id: result.id,
         topic_name: result.topic,
         topic: result.topic,
         topic_keywords: [],
         llm_results: result.llm_results,
-        total_mentions: result.llm_results.filter(r => r.is_mentioned).length,
-        avg_rank: result.llm_results.reduce((acc, r) => acc + (r.rank_position || 0), 0) / result.llm_results.length || null,
+        total_mentions: result.llm_results.filter((r) => r.is_mentioned).length,
+        avg_rank:
+          result.llm_results.reduce(
+            (acc, r) => acc + (r.rank_position || 0),
+            0
+          ) / result.llm_results.length || null,
         avg_confidence: result.confidence,
-        avg_sentiment: result.llm_results.reduce((acc, r) => acc + (r.sentiment_score || 0), 0) / result.llm_results.length || null,
+        avg_sentiment:
+          result.llm_results.reduce(
+            (acc, r) => acc + (r.sentiment_score || 0),
+            0
+          ) / result.llm_results.length || null,
         created_at: result.created_at,
         website_id: result.website_id,
       }));
@@ -326,7 +434,7 @@ export class DashboardService {
     };
   }
 
-  private calculateMetricsForResults(
+  private _calculateMetricsForResults(
     results: AnalysisResult[]
   ): DashboardMetrics {
     return this.calculateAggregatedMetrics(results);
@@ -402,7 +510,9 @@ export class DashboardService {
       .slice(0, limit);
   }
 
-  private calculateLLMPerformance(results: AnalysisResult[]): LLMPerformance[] {
+  private _calculateLLMPerformance(
+    results: AnalysisResult[]
+  ): LLMPerformance[] {
     const llmMap = new Map<string, LLMResult[]>();
 
     // Group results by LLM provider
@@ -459,7 +569,7 @@ export class DashboardService {
     return llmPerformance.sort((a, b) => b.mentionRate - a.mentionRate);
   }
 
-  private aggregateByDate(
+  private _aggregateByDate(
     results: AnalysisResult[],
     startDate: Date,
     endDate: Date
@@ -529,7 +639,7 @@ export class DashboardService {
     return timeSeriesData.sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  private async getPreviousPeriodMetrics(
+  private async _getPreviousPeriodMetrics(
     websiteIds: string[],
     currentRange?: { start: string; end: string }
   ): Promise<DashboardMetrics> {
@@ -556,7 +666,7 @@ export class DashboardService {
     return this.calculateAggregatedMetrics(previousResults);
   }
 
-  private calculateTrend(current: number, previous: number): number {
+  private _calculateTrend(current: number, previous: number): number {
     if (previous === 0) return current > 0 ? 100 : 0;
     return Math.round(((current - previous) / previous) * 100);
   }
@@ -626,7 +736,6 @@ export class DashboardService {
       }),
     });
   }
-
 }
 
 export const dashboardService = DashboardService.getInstance();

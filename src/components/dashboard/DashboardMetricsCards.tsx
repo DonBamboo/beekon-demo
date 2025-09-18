@@ -76,17 +76,14 @@ export function DashboardMetricsCards({
                     metrics.improvementTrend
                   )}`}
                 >
-                  {React.createElement(
-                    getTrendIcon(metrics.improvementTrend),
-                    { className: "h-3 w-3 mr-1" }
-                  )}
+                  {React.createElement(getTrendIcon(metrics.improvementTrend), {
+                    className: "h-3 w-3 mr-1",
+                  })}
                   {formatTrendText(metrics.improvementTrend)}
                 </p>
               )}
               {(!metrics || metrics.improvementTrend === 0) && (
-                <p className="text-xs text-muted-foreground">
-                  No trend data
-                </p>
+                <p className="text-xs text-muted-foreground">No trend data</p>
               )}
             </CardContent>
           </Card>
@@ -114,9 +111,7 @@ export function DashboardMetricsCards({
               : "0.0"}
           </div>
           <p className="text-xs text-muted-foreground">
-            {metrics?.totalMentions
-              ? "Across all mentions"
-              : "No ranking data"}
+            {metrics?.totalMentions ? "Across all mentions" : "No ranking data"}
           </p>
         </CardContent>
       </Card>

@@ -2,16 +2,15 @@ import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ExportFormat } from "@/types/database";
 import { useExportHandler } from "@/lib/export-utils";
-import type { 
-  CompetitorWithStatus
-} from "@/hooks/useCompetitorsQuery";
-import type { 
+import type { CompetitorWithStatus } from "@/hooks/useCompetitorsQuery";
+import { isCompetitorActive } from "@/utils/competitorStatusUtils";
+import type { CompetitorStatusValue } from "@/types/database";
+import type {
   CompetitiveGapAnalysis,
-  CompetitorAnalytics 
+  CompetitorAnalytics,
 } from "@/services/competitorService";
 
 // Local interfaces since they're not exported
-
 
 import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import {
@@ -33,13 +32,14 @@ import CompetitiveGapChart from "@/components/competitors/CompetitiveGapChart";
 import TimeSeriesChart from "@/components/competitors/TimeSeriesChart";
 import CompetitorsEmptyState from "@/components/competitors/CompetitorsEmptyState";
 import NoAnalyticsState from "@/components/competitors/NoAnalyticsState";
+import { sanitizeChartNumber } from "@/utils/chartDataValidation";
 import CompetitorInsights from "@/components/competitors/CompetitorInsights";
 import { sendN8nWebhook } from "@/lib/http-request";
 import { addProtocol } from "@/lib/utils";
-import { 
+import {
   getCompetitorFixedColor,
   getYourBrandColor,
-  registerCompetitorsInFixedSlots
+  registerCompetitorsInFixedSlots,
 } from "@/lib/color-utils";
 
 export default function Competitors() {
@@ -85,34 +85,164 @@ export default function Competitors() {
   // Market Share Data is handled by ShareOfVoiceChart component directly
   // Share of Voice Data (raw percentages)
   const shareOfVoiceChartData = useMemo(() => {
-    const rawData = (analytics?.shareOfVoiceData as Record<string, unknown>[]) || [];
-    
+    const rawData =
+      (analytics?.shareOfVoiceData as Record<string, unknown>[]) || [];
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        "🎯 [DEBUG] Competitors.tsx shareOfVoiceChartData processing:",
+        {
+          rawDataCount: rawData.length,
+          hasYourBrand: rawData.some((item) => item.name === "Your Brand"),
+          rawDataEntries: rawData.map((item) => ({
+            name: item.name,
+            shareOfVoice: item.shareOfVoice,
+            totalMentions: item.totalMentions,
+            dataType: item.dataType,
+            allFields: Object.keys(item),
+          })),
+          analyticsObject: analytics ? "exists" : "missing",
+          fullAnalyticsStructure: analytics
+            ? {
+                hasShareOfVoiceData: !!analytics.shareOfVoiceData,
+                shareOfVoiceDataType: Array.isArray(analytics.shareOfVoiceData)
+                  ? "array"
+                  : typeof analytics.shareOfVoiceData,
+                shareOfVoiceDataLength: Array.isArray(
+                  analytics.shareOfVoiceData
+                )
+                  ? analytics.shareOfVoiceData.length
+                  : "not-array",
+                analyticsKeys: Object.keys(analytics),
+              }
+            : "analytics-missing",
+        }
+      );
+    }
+
+    // Validate that "Your Brand" data is present (should always be provided by service layer)
+    const hasYourBrand = rawData.some((item) => item.name === "Your Brand");
+
+    if (!hasYourBrand) {
+      // This indicates a service layer issue that needs investigation
+      if (process.env.NODE_ENV !== "production") {
+        console.error(
+          "❌ [DATA ERROR] Your Brand data missing from service layer",
+          {
+            receivedDataCount: rawData.length,
+            receivedItems: rawData.map((item) => ({
+              name: item.name,
+              dataType: item.dataType,
+            })),
+            analyticsStructure: analytics
+              ? {
+                  hasShareOfVoiceData: !!analytics.shareOfVoiceData,
+                  shareOfVoiceDataType: Array.isArray(
+                    analytics.shareOfVoiceData
+                  )
+                    ? "array"
+                    : typeof analytics.shareOfVoiceData,
+                  dataLength: Array.isArray(analytics.shareOfVoiceData)
+                    ? analytics.shareOfVoiceData.length
+                    : "not-array",
+                }
+              : "analytics-missing",
+            criticalIssue:
+              "Service layer should always provide Your Brand data",
+            requiredAction:
+              "Check competitorService.getCompetitiveAnalysis() implementation",
+          }
+        );
+      }
+
+      // Don't add fallback - this should be fixed in the service layer
+      // Using empty array to prevent chart errors while maintaining data integrity
+      return [];
+    }
+
+    const processedData = [...rawData];
+
     // Filter out "Your Brand" for competitor processing and register all competitors in fixed slots
-    const competitorData = rawData.filter(item => item.name !== "Your Brand");
+    const competitorData = processedData.filter(
+      (item) => item.name !== "Your Brand"
+    );
     registerCompetitorsInFixedSlots(
-      competitorData.map(item => ({
+      competitorData.map((item) => ({
         competitorId: item.competitorId as string,
-        name: item.name as string
+        name: item.name as string,
       }))
     );
-    
-    return rawData.map((item: Record<string, unknown>) => ({
-      name: item.name as string,
-      value: item.shareOfVoice as number,
-      shareOfVoice: item.shareOfVoice as number,
-      totalMentions: item.totalMentions as number,
-      totalAnalyses: item.totalAnalyses as number,
-      avgRank: item.avgRank as number,
-      competitorId: item.competitorId as string,
-      dataType: (item.dataType as string) === "market_share" ? "market_share" as const : "share_of_voice" as const,
-      fill: item.name === "Your Brand"
-        ? getYourBrandColor()
-        : getCompetitorFixedColor({
-            competitorId: item.competitorId as string,
-            name: item.name as string
-          }),
-    }));
-  }, [analytics?.shareOfVoiceData]);
+
+    return processedData.map((item: Record<string, unknown>) => {
+      // Sanitize all numeric values to prevent NaN propagation to ShareOfVoiceChart
+      const sanitizedShareOfVoice = sanitizeChartNumber(item.shareOfVoice, 0);
+      const sanitizedTotalMentions = sanitizeChartNumber(item.totalMentions, 0);
+      const sanitizedTotalAnalyses = sanitizeChartNumber(item.totalAnalyses, 0);
+      const sanitizedAvgRank = sanitizeChartNumber(item.avgRank, 0);
+
+      // Log validation issues in development (specifically for 30d filter debugging)
+      if (process.env.NODE_ENV !== "production") {
+        const hasInvalidData = [
+          item.shareOfVoice !== sanitizedShareOfVoice,
+          item.totalMentions !== sanitizedTotalMentions,
+          item.totalAnalyses !== sanitizedTotalAnalyses,
+          item.avgRank !== sanitizedAvgRank,
+        ].some(Boolean);
+
+        if (hasInvalidData) {
+          console.warn("⚠️ Invalid data detected in shareOfVoiceChartData", {
+            competitorName: item.name,
+            dataIssues: {
+              shareOfVoiceFixed: item.shareOfVoice !== sanitizedShareOfVoice,
+              totalMentionsFixed: item.totalMentions !== sanitizedTotalMentions,
+              totalAnalysesFixed: item.totalAnalyses !== sanitizedTotalAnalyses,
+              avgRankFixed: item.avgRank !== sanitizedAvgRank,
+            },
+            originalData: {
+              shareOfVoice: item.shareOfVoice,
+              totalMentions: item.totalMentions,
+              totalAnalyses: item.totalAnalyses,
+              avgRank: item.avgRank,
+            },
+            sanitizedData: {
+              shareOfVoice: sanitizedShareOfVoice,
+              totalMentions: sanitizedTotalMentions,
+              totalAnalyses: sanitizedTotalAnalyses,
+              avgRank: sanitizedAvgRank,
+            },
+            possibleCauses: [
+              "Database returned NaN, null, or undefined values",
+              "Data transformation errors in service layer",
+              "Network issues during data fetch",
+            ],
+            impact:
+              "Charts will render with fallback values to prevent crashes",
+          });
+        }
+      }
+
+      return {
+        name: item.name as string,
+        value: sanitizedShareOfVoice,
+        shareOfVoice: sanitizedShareOfVoice,
+        totalMentions: sanitizedTotalMentions,
+        totalAnalyses: sanitizedTotalAnalyses,
+        avgRank: sanitizedAvgRank,
+        competitorId: item.competitorId as string,
+        dataType:
+          (item.dataType as string) === "market_share"
+            ? ("market_share" as const)
+            : ("share_of_voice" as const),
+        fill:
+          item.name === "Your Brand"
+            ? getYourBrandColor()
+            : getCompetitorFixedColor({
+                competitorId: item.competitorId as string,
+                name: item.name as string,
+              }),
+      };
+    });
+  }, [analytics?.shareOfVoiceData, analytics]);
 
   // Derive additional data for backward compatibility
   const competitorsWithStatus = competitors; // Status already included
@@ -366,8 +496,8 @@ export default function Competitors() {
         <CompetitorsHeader
           totalCompetitors={competitorsWithStatus.length}
           activeCompetitors={
-            competitorsWithStatus.filter(
-              (c) => c.analysisStatus === "completed"
+            competitorsWithStatus.filter((c) =>
+              isCompetitorActive(c.analysisStatus as CompetitorStatusValue)
             ).length
           }
           dateFilter={(filters as CompetitorFilters).dateFilter}
@@ -381,9 +511,14 @@ export default function Competitors() {
           websitesLoading={workspaceLoading || isLoading}
           isExporting={isExporting}
           competitorsData={competitors}
-          setDateFilter={(value) =>
-            setFilters({ ...(filters as CompetitorFilters), dateFilter: value })
-          }
+          setDateFilter={(value) => {
+            console.log("🗓️ Date filter changed:", {
+              from: (filters as CompetitorFilters).dateFilter,
+              to: value,
+              timestamp: new Date().toISOString()
+            });
+            setFilters({ ...(filters as CompetitorFilters), dateFilter: value });
+          }}
           setSortBy={(value) =>
             setFilters({ ...(filters as CompetitorFilters), sortBy: value })
           }
@@ -408,35 +543,84 @@ export default function Competitors() {
         {/* Share of Voice Chart */}
         <ShareOfVoiceChart
           data={shareOfVoiceChartData}
+          timeSeriesData={
+            Array.isArray(analytics?.timeSeriesData)
+              ? (analytics.timeSeriesData as Record<string, unknown>[]).map(
+                  (item) => ({
+                    date: item.date as string,
+                    competitors: Array.isArray(item.competitors)
+                      ? (
+                          item.competitors as Array<Record<string, unknown>>
+                        ).map((comp) => ({
+                          competitorId: (comp.competitorId as string) || "",
+                          name: (comp.name as string) || "",
+                          shareOfVoice: (comp.shareOfVoice as number) || 0,
+                          averageRank: (comp.averageRank as number) || 0,
+                          mentionCount: (comp.mentionCount as number) || 0,
+                          sentimentScore: (comp.sentimentScore as number) || 0,
+                        }))
+                      : [],
+                  })
+                )
+              : []
+          }
           dateFilter={(filters as CompetitorFilters).dateFilter}
           chartType="share_of_voice"
         />
 
         {/* Competitors List */}
         <CompetitorsList
-          competitorsWithStatus={competitorsWithStatus as unknown as CompetitorWithStatus[]}
-          marketShareData={Array.isArray(analytics?.marketShareData) ? (analytics.marketShareData).map(item => ({
-            name: (item as Record<string, unknown>).name as string,
-            normalizedValue: (item as Record<string, unknown>).normalizedValue as number,
-            rawValue: (item as Record<string, unknown>).rawValue as number,
-            competitorId: (item as Record<string, unknown>).competitorId as string,
-            mentions: (item as Record<string, unknown>).mentions as number,
-            dataType: "market_share" as const
-          })) : []}
-          performance={Array.isArray(performance) ? (performance as unknown as Record<string, unknown>[]).map(p => ({
-            competitorId: (p.competitorId as string) || "",
-            domain: (p.domain as string) || "",
-            name: (p.name as string) || "",
-            shareOfVoice: (p.shareOfVoice as number) || 0,
-            averageRank: (p.averageRank as number) || 0,
-            mentionCount: (p.mentionCount as number) || 0,
-            sentimentScore: (p.sentimentScore as number) || 0,
-            visibilityScore: (p.visibilityScore as number) || 0,
-            trend: ((p.trend as string) === "up" || (p.trend as string) === "down") ? (p.trend as "up" | "down") : "stable" as const,
-            trendPercentage: (p.trendPercentage as number) || 0,
-            lastAnalyzed: (p.lastAnalyzed as string) || new Date().toISOString(),
-            isActive: (p.isActive as boolean) || true
-          })) : []}
+          competitorsWithStatus={
+            competitorsWithStatus as unknown as CompetitorWithStatus[]
+          }
+          marketShareData={
+            Array.isArray(analytics?.marketShareData)
+              ? analytics.marketShareData.map((item) => ({
+                  name: (item as Record<string, unknown>).name as string,
+                  normalizedValue: (item as Record<string, unknown>)
+                    .normalizedValue as number,
+                  rawValue: (item as Record<string, unknown>)
+                    .rawValue as number,
+                  competitorId: (item as Record<string, unknown>)
+                    .competitorId as string,
+                  mentions: (item as Record<string, unknown>)
+                    .mentions as number,
+                  dataType: "market_share" as const,
+                }))
+              : []
+          }
+          shareOfVoiceData={shareOfVoiceChartData}
+          performance={
+            Array.isArray(performance)
+              ? (performance as unknown as Record<string, unknown>[]).map(
+                  (p) => ({
+                    // Database fields (required by CompetitorPerformance)
+                    visibility_score: (p.visibilityScore as number) || 0,
+                    avg_rank: (p.averageRank as number) || 0,
+                    total_mentions: (p.mentionCount as number) || 0,
+                    sentiment_score: (p.sentimentScore as number) || 0,
+                    // UI fields (optional in CompetitorPerformance)
+                    competitorId: (p.competitorId as string) || "",
+                    domain: (p.domain as string) || "",
+                    name: (p.name as string) || "",
+                    shareOfVoice: (p.shareOfVoice as number) || 0,
+                    averageRank: (p.averageRank as number) || 0,
+                    mentionCount: (p.mentionCount as number) || 0,
+                    sentimentScore: (p.sentimentScore as number) || 0,
+                    visibilityScore: (p.visibilityScore as number) || 0,
+                    trend:
+                      (p.trend as string) === "up" ||
+                      (p.trend as string) === "down"
+                        ? (p.trend as "up" | "down")
+                        : ("stable" as const),
+                    trendPercentage: (p.trendPercentage as number) || 0,
+                    lastAnalyzed:
+                      (p.lastAnalyzed as string) || new Date().toISOString(),
+                    isActive: (p.isActive as boolean) || true,
+                  })
+                )
+              : []
+          }
           sortBy={(filters as CompetitorFilters).sortBy}
           confirmDelete={confirmDelete}
           isDeleting={deleteCompetitorMutation.isPending}
@@ -444,19 +628,32 @@ export default function Competitors() {
 
         {/* Competitive Gap Analysis */}
         <CompetitiveGapChart
-          gapAnalysis={(analytics?.gapAnalysis || []) as CompetitiveGapAnalysis[]}
+          gapAnalysis={
+            (analytics?.gapAnalysis || []) as CompetitiveGapAnalysis[]
+          }
           analytics={analytics as CompetitorAnalytics | null}
           dateFilter={(filters as CompetitorFilters).dateFilter}
         />
 
         {/* Competitive Intelligence */}
         <CompetitorInsights
-          insights={((analytics?.insights as unknown as Record<string, unknown>[]) || []).map(insight => ({
-            type: ((insight.type as string) === "opportunity" || (insight.type as string) === "threat") ? (insight.type as "opportunity" | "threat") : "neutral" as const,
+          insights={(
+            (analytics?.insights as unknown as Record<string, unknown>[]) || []
+          ).map((insight) => ({
+            type:
+              (insight.type as string) === "opportunity" ||
+              (insight.type as string) === "threat"
+                ? (insight.type as "opportunity" | "threat")
+                : ("neutral" as const),
             title: insight.title as string,
             description: insight.description as string,
-            impact: ((insight.impact as string) === "high" || (insight.impact as string) === "medium" || (insight.impact as string) === "low") ? (insight.impact as "high" | "medium" | "low") : "medium" as const,
-            recommendations: insight.recommendations as string[]
+            impact:
+              (insight.impact as string) === "high" ||
+              (insight.impact as string) === "medium" ||
+              (insight.impact as string) === "low"
+                ? (insight.impact as "high" | "medium" | "low")
+                : ("medium" as const),
+            recommendations: insight.recommendations as string[],
           }))}
           isLoading={isLoading}
           onRefresh={handleInsightsRefresh}
@@ -464,17 +661,27 @@ export default function Competitors() {
 
         {/* Time Series Chart */}
         <TimeSeriesChart
-          data={Array.isArray(analytics?.timeSeriesData) ? (analytics.timeSeriesData as Record<string, unknown>[]).map(item => ({
-            date: item.date as string,
-            competitors: Array.isArray(item.competitors) ? (item.competitors as Array<Record<string, unknown>>).map(comp => ({
-              competitorId: (comp.competitorId as string) || "",
-              name: (comp.name as string) || "",
-              shareOfVoice: (comp.shareOfVoice as number) || 0,
-              averageRank: (comp.averageRank as number) || 0,
-              mentionCount: (comp.mentionCount as number) || 0,
-              sentimentScore: (comp.sentimentScore as number) || 0
-            })) : []
-          })) : []}
+          data={
+            Array.isArray(analytics?.timeSeriesData)
+              ? (analytics.timeSeriesData as Record<string, unknown>[]).map(
+                  (item) => ({
+                    date: item.date as string,
+                    competitors: Array.isArray(item.competitors)
+                      ? (
+                          item.competitors as Array<Record<string, unknown>>
+                        ).map((comp) => ({
+                          competitorId: (comp.competitorId as string) || "",
+                          name: (comp.name as string) || "",
+                          shareOfVoice: (comp.shareOfVoice as number) || 0,
+                          averageRank: (comp.averageRank as number) || 0,
+                          mentionCount: (comp.mentionCount as number) || 0,
+                          sentimentScore: (comp.sentimentScore as number) || 0,
+                        }))
+                      : [],
+                  })
+                )
+              : []
+          }
         />
 
         {/* Main Empty State */}

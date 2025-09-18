@@ -1,0 +1,2 @@
+-- This file is intentionally empty to prevent seeding errors during migration
+-- All data is loaded through the migration files instead

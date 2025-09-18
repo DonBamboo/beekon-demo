@@ -1,11 +1,38 @@
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "./useWorkspace";
 import { useToast } from "./use-toast";
-import {
-  competitorService,
-  type Competitor,
-  type CompetitorPerformance,
-} from "@/services/competitorService";
+import { competitorService } from "@/services/competitorService";
+import type { CompetitorPerformance } from "@/types/database";
+import type { CompetitorServicePerformance } from "@/services/competitorService";
+
+// Utility function to map service performance to database performance
+function mapServiceToDbPerformance(servicePerf: CompetitorServicePerformance): CompetitorPerformance {
+  return {
+    // Database fields
+    visibility_score: servicePerf.visibilityScore,
+    avg_rank: servicePerf.averageRank,
+    total_mentions: servicePerf.mentionCount,
+    sentiment_score: servicePerf.sentimentScore,
+
+    // UI-compatible fields
+    competitorId: servicePerf.competitorId,
+    domain: servicePerf.domain,
+    name: servicePerf.name,
+    shareOfVoice: servicePerf.shareOfVoice,
+    averageRank: servicePerf.averageRank,
+    mentionCount: servicePerf.mentionCount,
+    sentimentScore: servicePerf.sentimentScore,
+    visibilityScore: servicePerf.visibilityScore,
+    trend: servicePerf.trend,
+    trendPercentage: servicePerf.trendPercentage,
+    lastAnalyzed: servicePerf.lastAnalyzed,
+    isActive: servicePerf.isActive,
+  };
+}
+import { Competitor, CompetitorWithStatus } from "@/types/database";
+
+// Re-export CompetitorWithStatus for consuming components
+export type { CompetitorWithStatus };
 
 export interface CompetitorFilters {
   dateRange?: { start: string; end: string };
@@ -14,11 +41,7 @@ export interface CompetitorFilters {
   showInactive?: boolean;
 }
 
-export interface CompetitorWithStatus extends Competitor {
-  analysisStatus: "completed" | "in_progress" | "pending";
-  performance?: CompetitorPerformance;
-  addedAt: string;
-}
+// Remove duplicate interface - import from types/database.ts instead
 
 // Query keys for consistent caching
 export const competitorKeys = {
@@ -109,9 +132,11 @@ export function useCompetitorData(websiteId: string, filters: CompetitorFilters 
 
   const [competitorsQuery, performanceQuery, analyticsQuery] = queries;
 
-  // Sort and filter performance data
-  const sortedPerformance = performanceQuery.data ? 
-    sortPerformanceData(performanceQuery.data, filters.sortBy, filters.sortOrder) : [];
+  // Sort and filter performance data - map service type to database type
+  const mappedPerformanceData = performanceQuery.data ?
+    performanceQuery.data.map(mapServiceToDbPerformance) : [];
+  const sortedPerformance = mappedPerformanceData.length > 0 ?
+    sortPerformanceData(mappedPerformanceData, filters.sortBy, filters.sortOrder) : [];
 
   const filteredCompetitors = competitorsQuery.data ? 
     (filters.showInactive ? competitorsQuery.data : competitorsQuery.data.filter(c => c.is_active)) : [];
@@ -121,13 +146,13 @@ export function useCompetitorData(websiteId: string, filters: CompetitorFilters 
     const performanceData = sortedPerformance.find(p => p.competitorId === competitor.id);
     
     // Determine analysis status based on performance data and creation time
-    let analysisStatus: "completed" | "in_progress" | "pending" = "pending";
+    let analysisStatus: "completed" | "analyzing" | "pending" = "pending";
     
     if (performanceData) {
       // Has performance data - analysis is completed
       analysisStatus = "completed";
     } else {
-      // No performance data - check if recently added (within last 30 minutes = in_progress)
+      // No performance data - check if recently added (within last 30 minutes = analyzing)
       if (competitor.created_at) {
         const addedAt = new Date(competitor.created_at);
         const now = new Date();
@@ -135,7 +160,7 @@ export function useCompetitorData(websiteId: string, filters: CompetitorFilters 
         const minutesAgo = Math.floor(timeDiff / (1000 * 60));
         
         if (minutesAgo <= 30) {
-          analysisStatus = "in_progress";
+          analysisStatus = "analyzing";
         } else {
           analysisStatus = "pending";
         }
@@ -283,24 +308,24 @@ function sortPerformanceData(
 
     switch (sortBy) {
       case "shareOfVoice":
-        aValue = a.shareOfVoice;
-        bValue = b.shareOfVoice;
+        aValue = a.shareOfVoice ?? 0;
+        bValue = b.shareOfVoice ?? 0;
         break;
       case "averageRank":
-        aValue = a.averageRank;
-        bValue = b.averageRank;
+        aValue = a.averageRank ?? 0;
+        bValue = b.averageRank ?? 0;
         break;
       case "mentionCount":
-        aValue = a.mentionCount;
-        bValue = b.mentionCount;
+        aValue = a.mentionCount ?? 0;
+        bValue = b.mentionCount ?? 0;
         break;
       case "sentimentScore":
-        aValue = a.sentimentScore;
-        bValue = b.sentimentScore;
+        aValue = a.sentimentScore ?? 0;
+        bValue = b.sentimentScore ?? 0;
         break;
       default:
-        aValue = a.shareOfVoice;
-        bValue = b.shareOfVoice;
+        aValue = a.shareOfVoice ?? 0;
+        bValue = b.shareOfVoice ?? 0;
     }
 
     return sortOrder === "asc" ? aValue - bValue : bValue - aValue;

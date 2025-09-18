@@ -154,7 +154,7 @@ export default function CompetitorInsights({
             </div>
             {onRefresh && (
               <Button variant="outline" size="sm" onClick={onRefresh}>
-                Generate Insights
+                Refresh Insights
               </Button>
             )}
           </div>
@@ -162,10 +162,15 @@ export default function CompetitorInsights({
         <CardContent>
           <div className="text-center py-8">
             <Lightbulb className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Insights Available</h3>
+            <h3 className="text-lg font-medium mb-2">Loading Insights...</h3>
             <p className="text-muted-foreground mb-4">
-              Add competitors and run analyses to generate competitive intelligence.
+              Generating competitive intelligence based on your data.
             </p>
+            {onRefresh && (
+              <Button variant="default" size="sm" onClick={onRefresh}>
+                Try Again
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -391,6 +396,58 @@ export default function CompetitorInsights({
               </div>
             </div>
           )}
+
+          {/* Guidance & Analysis Status */}
+          {processedInsights.grouped.neutral.length > 0 && (
+            <div>
+              <h4 className="font-medium mb-3 flex items-center gap-2">
+                <Info className="h-4 w-4 text-blue-500" />
+                Analysis Status & Guidance ({processedInsights.grouped.neutral.length})
+              </h4>
+              <div className="grid gap-4">
+                {processedInsights.grouped.neutral.map((insight, index) => (
+                  <div
+                    key={index}
+                    className="p-4 rounded-lg border bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <h5 className="font-medium">{insight.title}</h5>
+                      <Badge variant={getPriorityColor(insight.impact)} className="text-xs">
+                        {insight.impact}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {insight.description}
+                    </p>
+                    {insight.recommendations.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {(expandedSections[`neutral-${index}`]
+                          ? insight.recommendations
+                          : insight.recommendations.slice(0, 3)
+                        ).map((rec, recIndex) => (
+                          <Badge key={recIndex} variant="outline" className="text-xs">
+                            {rec}
+                          </Badge>
+                        ))}
+                        {insight.recommendations.length > 3 && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs cursor-pointer hover:bg-muted transition-colors"
+                            onClick={() => toggleSection(`neutral-${index}`)}
+                          >
+                            {expandedSections[`neutral-${index}`]
+                              ? 'Show less'
+                              : `+${insight.recommendations.length - 3} more`
+                            }
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Strategic Summary */}
@@ -400,11 +457,17 @@ export default function CompetitorInsights({
             <div>
               <h4 className="font-medium text-sm text-primary">Strategic Focus</h4>
               <p className="text-sm text-muted-foreground mt-1">
-                {summary.opportunities > summary.threats 
-                  ? `You have ${summary.opportunities} opportunities vs ${summary.threats} threats. Focus on capitalizing on market gaps while monitoring competitive movements.`
-                  : summary.threats > summary.opportunities
-                  ? `You face ${summary.threats} competitive threats vs ${summary.opportunities} opportunities. Prioritize defensive strategies and market differentiation.`
-                  : `You have a balanced competitive landscape with ${summary.opportunities} opportunities and ${summary.threats} threats. Maintain strategic agility.`
+                {summary.total === 0
+                  ? "No competitive insights are currently available. Add competitors and run analysis to get started."
+                  : summary.opportunities > 0 && summary.threats > 0
+                  ? summary.opportunities > summary.threats
+                    ? `You have ${summary.opportunities} opportunities vs ${summary.threats} threats. Focus on capitalizing on market gaps while monitoring competitive movements.`
+                    : `You face ${summary.threats} competitive threats vs ${summary.opportunities} opportunities. Prioritize defensive strategies and market differentiation.`
+                  : summary.opportunities > 0
+                  ? `You have ${summary.opportunities} growth opportunities identified. Focus on executing these strategic initiatives.`
+                  : summary.threats > 0
+                  ? `You face ${summary.threats} competitive challenges. Prioritize defensive strategies and differentiation.`
+                  : `Analysis setup in progress. Follow the guidance above to start generating competitive insights.`
                 }
               </p>
             </div>

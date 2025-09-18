@@ -3,10 +3,36 @@ import { useWorkspace } from "./useWorkspace";
 import { useToast } from "./use-toast";
 import {
   competitorService,
-  type CompetitorPerformance,
   type CompetitorAnalytics,
 } from "@/services/competitorService";
-import { Competitor } from "@/types/database";
+import type { CompetitorPerformance } from "@/types/database";
+import { Competitor, CompetitorWithStatus } from "@/types/database";
+import type { CompetitorServicePerformance } from "@/services/competitorService";
+
+// Utility function to map service performance to database performance
+function mapServiceToDbPerformance(servicePerf: CompetitorServicePerformance): CompetitorPerformance {
+  return {
+    // Database fields
+    visibility_score: servicePerf.visibilityScore,
+    avg_rank: servicePerf.averageRank,
+    total_mentions: servicePerf.mentionCount,
+    sentiment_score: servicePerf.sentimentScore,
+
+    // UI-compatible fields
+    competitorId: servicePerf.competitorId,
+    domain: servicePerf.domain,
+    name: servicePerf.name,
+    shareOfVoice: servicePerf.shareOfVoice,
+    averageRank: servicePerf.averageRank,
+    mentionCount: servicePerf.mentionCount,
+    sentimentScore: servicePerf.sentimentScore,
+    visibilityScore: servicePerf.visibilityScore,
+    trend: servicePerf.trend,
+    trendPercentage: servicePerf.trendPercentage,
+    lastAnalyzed: servicePerf.lastAnalyzed,
+    isActive: servicePerf.isActive,
+  };
+}
 
 export interface CompetitorFilters {
   dateRange?: { start: string; end: string };
@@ -15,11 +41,7 @@ export interface CompetitorFilters {
   showInactive?: boolean;
 }
 
-export interface CompetitorWithStatus extends Competitor {
-  analysisStatus: "completed" | "in_progress" | "pending";
-  performance?: CompetitorPerformance;
-  addedAt: string;
-}
+// Remove duplicate interface - import from types/database.ts instead
 
 interface CompetitorsData {
   competitors: Competitor[];
@@ -131,20 +153,20 @@ export function useCompetitorsCoordinated(
 
               switch (filters.sortBy) {
                 case "shareOfVoice":
-                  comparison =
-                    (aPerf?.shareOfVoice || 0) - (bPerf?.shareOfVoice || 0);
+                  // Note: shareOfVoice needs to be calculated from database fields
+                  comparison = 0; // TODO: Implement shareOfVoice calculation
                   break;
                 case "averageRank":
                   comparison =
-                    (aPerf?.averageRank || 0) - (bPerf?.averageRank || 0);
+                    (aPerf?.avg_rank || 0) - (bPerf?.avg_rank || 0);
                   break;
                 case "mentionCount":
                   comparison =
-                    (aPerf?.mentionCount || 0) - (bPerf?.mentionCount || 0);
+                    (aPerf?.total_mentions || 0) - (bPerf?.total_mentions || 0);
                   break;
                 case "sentimentScore":
                   comparison =
-                    (aPerf?.sentimentScore || 0) - (bPerf?.sentimentScore || 0);
+                    (aPerf?.sentiment_score || 0) - (bPerf?.sentiment_score || 0);
                   break;
               }
 
@@ -155,7 +177,7 @@ export function useCompetitorsCoordinated(
           const resultData: CompetitorsData = {
             competitors: competitorsResult,
             competitorsWithStatus,
-            performance: performanceResult,
+            performance: performanceResult.map(mapServiceToDbPerformance),
             analytics: analyticsResult,
           };
 

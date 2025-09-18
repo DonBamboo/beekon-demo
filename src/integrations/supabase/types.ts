@@ -1136,16 +1136,14 @@ export type Database = {
       };
       get_dashboard_time_series: {
         Args: {
-          p_date_end: string;
-          p_date_start: string;
-          p_interval_type?: string;
           p_website_ids: string[];
+          p_days?: number;
         };
         Returns: {
-          avg_rank: number;
-          avg_sentiment: number;
-          period_start: string;
-          total_mentions: number;
+          date: string;
+          visibility: number;
+          mentions: number;
+          sentiment: number;
         }[];
       };
       get_llm_performance: {

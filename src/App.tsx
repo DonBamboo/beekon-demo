@@ -15,6 +15,7 @@ import { registerSW } from "./lib/serviceWorker";
 import { PageLoading } from "@/components/LoadingStates";
 import AppDashboard from "@/components/AppDashboard";
 import { RealTimeDebugger } from "@/components/debug/RealTimeDebugger";
+import { ErrorBoundary, initializeGlobalErrorHandler } from "@/components/ErrorBoundary";
 
 // Lazy load only non-core pages for code splitting
 const Auth = lazy(() => import("./pages/Auth"));
@@ -60,13 +61,16 @@ const queryClient = new QueryClient({
 
 const App = () => {
   useEffect(() => {
+    // Initialize global error handler for DOM insertion errors
+    initializeGlobalErrorHandler();
+
     // Initialize service worker
     try {
       registerSW();
     } catch (error) {
       // Service worker registration failed - silently continue
     }
-    
+
     // Initialize performance monitoring with error handling
     const initPerformanceMonitoring = async () => {
       try {
@@ -133,18 +137,19 @@ const App = () => {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <AuthProvider>
-          <AppStateProvider>
-            <WebsiteStatusProvider>
-              <WorkspaceProvider>
-                <OptimizedAppProvider>
-                <BrowserRouter>
-                <Suspense fallback={<PageLoading message="Loading application..." />}>
-                  <Routes>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <AuthProvider>
+            <AppStateProvider>
+              <WebsiteStatusProvider>
+                <WorkspaceProvider>
+                  <OptimizedAppProvider>
+                  <BrowserRouter>
+                  <Suspense fallback={<PageLoading message="Loading application..." />}>
+                    <Routes>
                     <Route path="/" element={<LandingPage />} />
                     <Route path="/auth" element={<Auth />} />
                     
@@ -200,19 +205,20 @@ const App = () => {
                       }
                     />
                     
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </Suspense>
-                  <StateManagementDevTools />
-                  <RealTimeDebugger />
-                </BrowserRouter>
-                </OptimizedAppProvider>
-              </WorkspaceProvider>
-            </WebsiteStatusProvider>
-          </AppStateProvider>
-        </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </Suspense>
+                    <StateManagementDevTools />
+                    <RealTimeDebugger />
+                  </BrowserRouter>
+                  </OptimizedAppProvider>
+                </WorkspaceProvider>
+              </WebsiteStatusProvider>
+            </AppStateProvider>
+          </AuthProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 
