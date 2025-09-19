@@ -182,6 +182,7 @@ export default function CompetitorsHeader({
             ))}
           </div>
 
+          {/* Disable this for now since we are not really sorting stuff. */}
           {/* <Select value={sortBy} onValueChange={setSortBy} disabled={isRefreshing}>
             <SelectTrigger className={`w-[180px] ${isRefreshing ? "opacity-75" : ""}`}>
               <Filter className="h-4 w-4 mr-2" />
