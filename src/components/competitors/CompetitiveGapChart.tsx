@@ -227,36 +227,59 @@ export default function CompetitiveGapChart({
       })),
     }));
 
-    // Generate bar chart data with individual competitors
+    // First, extract all unique competitors across all topics to ensure consistency
+    const allUniqueCompetitors = new Map<string, { name: string; id: string }>();
+
+    validatedGapAnalysis.forEach(gap => {
+      gap.competitorData.forEach(comp => {
+        const competitorId = extractCompetitorId(comp);
+        const competitorName = extractCompetitorName(comp, 0);
+
+        if (!allUniqueCompetitors.has(competitorId)) {
+          allUniqueCompetitors.set(competitorId, {
+            name: competitorName,
+            id: competitorId
+          });
+        }
+      });
+    });
+
+    // Create a consistent competitor-to-key mapping
+    const competitorKeyMap = new Map<string, string>();
+    Array.from(allUniqueCompetitors.keys()).forEach((competitorId, index) => {
+      competitorKeyMap.set(competitorId, `competitor${index + 1}`);
+    });
+
+    // Generate bar chart data with consistent competitor keys
     const barChartData = validatedGapAnalysis.map((gap) => {
       const data: Record<string, number | string> = {
         topic: gap.topicName,
         yourBrand: sanitizeChartNumber(gap.yourBrandScore, 0),
       };
 
-      gap.competitorData.forEach((comp, index) => {
-        // Use robust competitor identification
-        const competitorId = extractCompetitorId(comp);
-        const competitorName = extractCompetitorName(comp, index);
-
-        // CRITICAL FIX: Sanitize score to prevent NaN from reaching Recharts
-        data[`competitor${index + 1}`] = sanitizeChartNumber(comp.score, 0);
-        data[`competitor${index + 1}_name`] = competitorName;
-        data[`competitor${index + 1}_id`] = competitorId;
+      // Initialize all competitor keys with 0 scores (for missing data)
+      allUniqueCompetitors.forEach((competitor, competitorId) => {
+        const key = competitorKeyMap.get(competitorId)!;
+        data[key] = 0; // Default value
+        data[`${key}_name`] = competitor.name;
+        data[`${key}_id`] = competitorId;
       });
+
+      // Fill in actual scores for competitors present in this topic
+      gap.competitorData.forEach((comp) => {
+        const competitorId = extractCompetitorId(comp);
+        const key = competitorKeyMap.get(competitorId);
+
+        if (key) {
+          data[key] = sanitizeChartNumber(comp.score, 0);
+        }
+      });
+
       return data;
     });
 
-    // Get all unique competitor keys for dynamic rendering
-    const competitorKeys = new Set<string>();
-    barChartData.forEach((item) => {
-      Object.keys(item).forEach((key) => {
-        if (key.startsWith("competitor") && key.endsWith("_name")) {
-          const competitorKey = key.replace("_name", "");
-          competitorKeys.add(competitorKey);
-        }
-      });
-    });
+    // Get all unique competitor keys for dynamic rendering (now we can use the mapping directly)
+    const competitorKeys = new Set<string>(Array.from(competitorKeyMap.values()));
 
     // Debug logging for competitor key extraction
     if (process.env.NODE_ENV !== "production") {
@@ -268,35 +291,61 @@ export default function CompetitiveGapChart({
       });
     }
 
-    // Extract all unique competitors for standardized mapping
+    // Extract all unique competitors for standardized mapping (use the consistent mapping we created)
     const allCompetitors: Array<{
       competitorId: string;
       name: string;
       key: string;
     }> = [];
 
-    Array.from(competitorKeys).forEach((key) => {
-      const sampleData = barChartData.find((item) => item[`${key}_name`]);
-      const competitorId = safeString(sampleData?.[`${key}_id`]);
-      const competitorName = safeString(
-        sampleData?.[`${key}_name`],
-        `Competitor ${allCompetitors.length + 1}`
-      );
-
+    allUniqueCompetitors.forEach((competitor, competitorId) => {
+      const key = competitorKeyMap.get(competitorId)!;
       allCompetitors.push({
         competitorId,
-        name: competitorName,
+        name: competitor.name,
         key,
       });
     });
 
     // Register all competitors in fixed color slots for predictable color assignment
-    registerCompetitorsInFixedSlots(
-      allCompetitors.map((comp) => ({
-        competitorId: comp.competitorId,
-        name: comp.name,
-      }))
-    );
+    const competitorsForRegistration = allCompetitors.map((comp) => ({
+      competitorId: comp.competitorId,
+      name: comp.name,
+    }));
+
+    registerCompetitorsInFixedSlots(competitorsForRegistration);
+
+    // Validate that all competitors were properly registered
+    if (process.env.NODE_ENV !== "production") {
+      const registrationValidation = competitorsForRegistration.every(comp => {
+        const colorInfo = getCompetitorFixedColorInfo({
+          competitorId: comp.competitorId,
+          name: comp.name,
+        });
+        return colorInfo.colorSlot !== -1; // -1 indicates failed registration
+      });
+
+      console.log("🎨 [DEBUG] Color registration validation:", {
+        allCompetitorsRegistered: registrationValidation,
+        competitorsCount: competitorsForRegistration.length,
+        registrationDetails: competitorsForRegistration.map(comp => {
+          const colorInfo = getCompetitorFixedColorInfo({
+            competitorId: comp.competitorId,
+            name: comp.name,
+          });
+          return {
+            competitorId: comp.competitorId,
+            name: comp.name,
+            colorSlot: colorInfo.colorSlot,
+            colorName: colorInfo.name,
+            color: getCompetitorFixedColor({
+              competitorId: comp.competitorId,
+              name: comp.name,
+            })
+          };
+        })
+      });
+    }
 
     // Create competitor info array for rendering with fixed color assignment
     const competitorInfo = allCompetitors.map((comp) => {
@@ -347,35 +396,39 @@ export default function CompetitiveGapChart({
         yourBrand: sanitizeChartNumber(gap.yourBrandScore, 0),
       };
 
-      // Map competitor data to proper competitor keys for consistent coloring
-      gap.competitorData.forEach(
-        (
-          comp: {
-            score: string | number;
-            competitorId?: string;
-            name?: string;
-          },
-          compIndex: number
-        ) => {
-          // Find matching competitor info for proper key assignment
-          const matchingCompetitor = competitorInfo.find(
-            (info) =>
-              info.competitorId === comp.competitorId ||
-              info.name === comp.name ||
-              info.name.includes(String(comp.name || ""))
-          );
+      // Initialize all competitor keys with 0 scores (for missing data) to ensure consistency
+      allCompetitors.forEach((competitor) => {
+        data[competitor.key] = 0; // Default value for missing competitors in this topic
+      });
 
-          if (matchingCompetitor) {
-            data[matchingCompetitor.key] = sanitizeChartNumber(comp.score, 0);
-          } else {
-            // Fallback to generic key if no match found
-            data[`competitor${compIndex + 1}`] = sanitizeChartNumber(
-              comp.score,
-              0
-            );
+      // Fill in actual scores for competitors present in this topic
+      gap.competitorData.forEach((comp) => {
+        const competitorId = extractCompetitorId(comp);
+        const key = competitorKeyMap.get(competitorId);
+
+        if (key) {
+          data[key] = sanitizeChartNumber(comp.score, 0);
+
+          // Debug logging for radar data mapping
+          if (process.env.NODE_ENV !== "production") {
+            console.log(`📡 [DEBUG] Radar mapping for ${gap.topicName}:`, {
+              competitorId,
+              comp: {
+                competitorId: comp.competitor_id,
+                name: comp.competitor_name,
+                score: comp.score
+              },
+              assignedKey: key,
+              finalValue: sanitizeChartNumber(comp.score, 0)
+            });
+          }
+        } else {
+          // This should not happen with the new consistent approach
+          if (process.env.NODE_ENV !== "production") {
+            console.warn(`⚠️ [WARNING] Competitor ${competitorId} not found in key mapping`);
           }
         }
-      );
+      });
 
       return data;
     });
@@ -383,6 +436,63 @@ export default function CompetitiveGapChart({
     // Final safety validation for all chart data
     const finalBarChartData = sanitizeCompetitorData(barChartData);
     const finalRadarData = sanitizeCompetitorData(radarData);
+
+    // Debug logging for final radar data and comprehensive validation
+    if (process.env.NODE_ENV !== "production") {
+      const radarCompetitorKeys = finalRadarData.length > 0 && finalRadarData[0] ?
+        Object.keys(finalRadarData[0]).filter(key =>
+          key.startsWith('competitor') && key !== 'competitor_name' && key !== 'competitor_id'
+        ) : [];
+
+      const barCompetitorKeys = finalBarChartData.length > 0 && finalBarChartData[0] ?
+        Object.keys(finalBarChartData[0]).filter(key =>
+          key.startsWith('competitor') && key !== 'competitor_name' && key !== 'competitor_id'
+        ) : [];
+
+      const competitorValidation = competitorInfo.map(comp => ({
+        key: comp.key,
+        name: comp.name,
+        competitorId: comp.competitorId,
+        presentInBarChart: barCompetitorKeys.includes(comp.key),
+        presentInRadarChart: radarCompetitorKeys.includes(comp.key),
+        hasDataInRadar: finalRadarData.some(dataPoint =>
+          dataPoint.hasOwnProperty(comp.key) && Number(dataPoint[comp.key]) > 0
+        ),
+        hasDataInBar: finalBarChartData.some(dataPoint =>
+          dataPoint.hasOwnProperty(comp.key) && Number(dataPoint[comp.key]) > 0
+        ),
+        color: comp.color,
+        colorIndex: comp.colorIndex
+      }));
+
+      console.log("📊 [DEBUG] Final comprehensive validation:", {
+        inputCompetitorsCount: Array.from(allUniqueCompetitors.keys()).length,
+        processedCompetitorsCount: competitorInfo.length,
+        radarDataCount: finalRadarData.length,
+        barDataCount: finalBarChartData.length,
+        radarCompetitorKeysCount: radarCompetitorKeys.length,
+        barCompetitorKeysCount: barCompetitorKeys.length,
+        radarCompetitorKeys,
+        barCompetitorKeys,
+        competitorValidation,
+        allCompetitorsHaveColors: competitorValidation.every(comp => comp.color && comp.colorIndex !== undefined),
+        allCompetitorsInRadar: competitorValidation.every(comp => comp.presentInRadarChart),
+        allCompetitorsInBar: competitorValidation.every(comp => comp.presentInBarChart),
+        competitorsWithRadarData: competitorValidation.filter(comp => comp.hasDataInRadar).length,
+        competitorsWithBarData: competitorValidation.filter(comp => comp.hasDataInBar).length
+      });
+
+      // Warning for competitors missing from charts
+      const missingFromRadar = competitorValidation.filter(comp => !comp.presentInRadarChart);
+      const missingFromBar = competitorValidation.filter(comp => !comp.presentInBarChart);
+
+      if (missingFromRadar.length > 0) {
+        console.warn("⚠️ [WARNING] Competitors missing from radar chart:", missingFromRadar);
+      }
+      if (missingFromBar.length > 0) {
+        console.warn("⚠️ [WARNING] Competitors missing from bar chart:", missingFromBar);
+      }
+    }
 
     return {
       barChartData: finalBarChartData,

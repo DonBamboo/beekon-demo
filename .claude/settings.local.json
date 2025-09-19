@@ -23,7 +23,8 @@
       "mcp__supabase__apply_migration",
       "Bash(npm run lint)",
       "Bash(npm run build:*)",
-      "Bash(npm run lint:*)"
+      "Bash(npm run lint:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": [],
