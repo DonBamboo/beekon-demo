@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
+import { useTrueNavigation } from "@/hooks/useTrueNavigation";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,6 +21,12 @@ export function AppHeader() {
   const { user, signOut } = useAuth();
   const { profile, loadProfile, getInitials, getDisplayName } = useProfile();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const { navigateTo } = useTrueNavigation();
+
+  const handleSettingsClick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    navigateTo("/settings");
+  };
 
   return (
     <>
@@ -62,7 +69,7 @@ export function AppHeader() {
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSettingsClick}>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Settings</span>
               </DropdownMenuItem>
