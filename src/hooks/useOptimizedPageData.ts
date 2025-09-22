@@ -193,13 +193,6 @@ export function useOptimizedAnalysisData() {
           // Use current transformed filters (from ref for stability)
           const currentFilters = prevFiltersRef.current;
 
-          console.log("🚀 Initial loadAnalysisData API call:", {
-            selectedWebsiteId,
-            limit: 20,
-            filters: currentFilters,
-            forceRefresh,
-          });
-
           // OPTIMIZED: Use materialized view service for lightning-fast pagination
           const response =
             await analysisService.getAnalysisResultsPaginatedOptimized(
@@ -210,23 +203,11 @@ export function useOptimizedAnalysisData() {
               }
             );
 
-          console.log("📦 Initial API response:", {
-            resultsCount: response.results.length,
-            hasMore: response.hasMore,
-            nextCursor: response.nextCursor,
-          });
-
           // Update results with deduplication
           const results = deduplicateById(response.results);
           setAnalysisResults(results);
           setHasMore(response.hasMore);
           setCursor(response.nextCursor);
-
-          console.log("🏁 Initial data loading complete:", {
-            finalResultsCount: results.length,
-            cursor: response.nextCursor,
-            hasMore: response.hasMore,
-          });
 
           // Smart caching strategy: Cache both base and filtered data
           // Base cache (for website switching)
@@ -260,21 +241,7 @@ export function useOptimizedAnalysisData() {
 
   // Load more results for infinite scroll
   const loadMoreResults = useCallback(async () => {
-    console.log("🔄 loadMoreResults called - Initial state check:", {
-      selectedWebsiteId,
-      isLoadingMore,
-      hasMore,
-      cursor,
-      currentResultsLength: analysisResults.length,
-    });
-
     if (!selectedWebsiteId || isLoadingMore || !hasMore || !cursor) {
-      console.log("❌ loadMoreResults early return - conditions not met:", {
-        hasWebsiteId: !!selectedWebsiteId,
-        isNotLoadingMore: !isLoadingMore,
-        hasMoreResults: hasMore,
-        hasCursor: !!cursor,
-      });
       return;
     }
 
@@ -282,12 +249,6 @@ export function useOptimizedAnalysisData() {
     try {
       // Use stable filter reference for pagination
       const currentFilters = prevFiltersRef.current;
-
-      console.log("📡 Making API call with cursor:", {
-        cursor,
-        limit: 20,
-        filters: currentFilters,
-      });
 
       const additionalResults =
         await analysisService.getAnalysisResultsPaginatedOptimized(
@@ -299,13 +260,6 @@ export function useOptimizedAnalysisData() {
           }
         );
 
-      console.log("📥 API response received:", {
-        newResultsCount: additionalResults.results.length,
-        hasMore: additionalResults.hasMore,
-        nextCursor: additionalResults.nextCursor,
-        currentResultsLength: analysisResults.length,
-      });
-
       // Deduplicate results to prevent duplicate keys
       const combinedResults = [
         ...analysisResults,
@@ -313,22 +267,9 @@ export function useOptimizedAnalysisData() {
       ];
       const newResults = deduplicateById(combinedResults);
 
-      console.log("🔧 After deduplication:", {
-        beforeCombine: analysisResults.length,
-        afterCombine: combinedResults.length,
-        afterDedup: newResults.length,
-        addedCount: newResults.length - analysisResults.length,
-      });
-
       setAnalysisResults(newResults);
       setHasMore(additionalResults.hasMore);
       setCursor(additionalResults.nextCursor);
-
-      console.log("✅ State updated:", {
-        newCursor: additionalResults.nextCursor,
-        newHasMore: additionalResults.hasMore,
-        totalResults: newResults.length,
-      });
 
       // Update cache with deduplicated results (both base and filtered cache)
       setCache(baseCacheKey, newResults, 10 * 60 * 1000);
@@ -784,28 +725,13 @@ export function useOptimizedCompetitorsData() {
     const currentOriginal = filters as CompetitorFilters;
 
     // Compare original filter string values instead of calculated dates
-    const dateFilterChanged = prevOriginal.dateFilter !== currentOriginal.dateFilter;
+    const dateFilterChanged =
+      prevOriginal.dateFilter !== currentOriginal.dateFilter;
     const sortByChanged = prevOriginal.sortBy !== currentOriginal.sortBy;
-    const sortOrderChanged = prevOriginal.sortOrder !== currentOriginal.sortOrder;
+    const sortOrderChanged =
+      prevOriginal.sortOrder !== currentOriginal.sortOrder;
 
     const hasChanged = dateFilterChanged || sortByChanged || sortOrderChanged;
-
-    if (hasChanged) {
-      console.log("🔄 Competitor filters changed (FIXED DETECTION):", {
-        dateFilterChanged: dateFilterChanged ? {
-          from: prevOriginal.dateFilter,
-          to: currentOriginal.dateFilter
-        } : false,
-        sortByChanged: sortByChanged ? {
-          from: prevOriginal.sortBy,
-          to: currentOriginal.sortBy
-        } : false,
-        sortOrderChanged: sortOrderChanged ? {
-          from: prevOriginal.sortOrder,
-          to: currentOriginal.sortOrder
-        } : false
-      });
-    }
 
     return hasChanged;
   }, [filters]); // Use original filters as dependency, not transformed ones
@@ -835,20 +761,28 @@ export function useOptimizedCompetitorsData() {
 
   // FIXED: Use current transformed filters for cache key generation instead of previous ref
   // This ensures cache keys reflect the latest filter changes immediately
-  const competitorsFilteredCacheKey = createCacheKey(filters as CompetitorFilters);
+  const competitorsFilteredCacheKey = createCacheKey(
+    filters as CompetitorFilters
+  );
 
   // VALIDATION: Ensure all cache keys are properly formed and contain website ID
-  const validateCacheKey = useCallback((key: string, context: string) => {
-    if (!key) {
-      console.error(`🚨 Invalid cache key (empty) in context: ${context}`);
-      return false;
-    }
-    if (!key.includes(selectedWebsiteId || '')) {
-      console.error(`🚨 Cache key missing website ID in context: ${context}`, { key, expectedWebsiteId: selectedWebsiteId });
-      return false;
-    }
-    return true;
-  }, [selectedWebsiteId]);
+  const validateCacheKey = useCallback(
+    (key: string, context: string) => {
+      if (!key) {
+        console.error(`🚨 Invalid cache key (empty) in context: ${context}`);
+        return false;
+      }
+      if (!key.includes(selectedWebsiteId || "")) {
+        console.error(
+          `🚨 Cache key missing website ID in context: ${context}`,
+          { key, expectedWebsiteId: selectedWebsiteId }
+        );
+        return false;
+      }
+      return true;
+    },
+    [selectedWebsiteId]
+  );
 
   // SYNCHRONIZATION: Ensure all cache operations use synchronized keys
   const getSynchronizedCacheKeys = useCallback(() => {
@@ -918,12 +852,19 @@ export function useOptimizedCompetitorsData() {
 
     // CRITICAL FIX: Always use current cache keys instead of potentially stale ones
     // Generate cache keys dynamically using current filter state
-    const currentFilteredCacheKey = createCacheKey(filters as CompetitorFilters);
+    const currentFilteredCacheKey = createCacheKey(
+      filters as CompetitorFilters
+    );
     const currentBaseCacheKey = `competitors_data_${selectedWebsiteId}`;
 
     // Website validation: Ensure cache keys match current website to prevent cross-contamination
-    if (!currentFilteredCacheKey.includes(selectedWebsiteId) || !currentBaseCacheKey.includes(selectedWebsiteId)) {
-      console.warn("🚨 Cache key website mismatch detected, returning null to force fresh fetch");
+    if (
+      !currentFilteredCacheKey.includes(selectedWebsiteId) ||
+      !currentBaseCacheKey.includes(selectedWebsiteId)
+    ) {
+      console.warn(
+        "🚨 Cache key website mismatch detected, returning null to force fresh fetch"
+      );
       return null;
     }
 
@@ -942,20 +883,28 @@ export function useOptimizedCompetitorsData() {
       (filteredCompetitors.length > 0 || filteredPerformance.length > 0)
     ) {
       // CROSS-WEBSITE PREVENTION: Validate cached data belongs to current website
-      const isValidCacheForWebsite = filteredCompetitors.every((competitor: Competitor) => {
-        const isFromCurrentWebsite = competitor.website_id === selectedWebsiteId;
-        if (!isFromCurrentWebsite) {
-          console.warn("🚨 Cross-website contamination detected in filtered cache:", {
-            competitorId: competitor.id,
-            competitorWebsiteId: competitor.website_id,
-            currentWebsiteId: selectedWebsiteId
-          });
+      const isValidCacheForWebsite = filteredCompetitors.every(
+        (competitor: Competitor) => {
+          const isFromCurrentWebsite =
+            competitor.website_id === selectedWebsiteId;
+          if (!isFromCurrentWebsite) {
+            console.warn(
+              "🚨 Cross-website contamination detected in filtered cache:",
+              {
+                competitorId: competitor.id,
+                competitorWebsiteId: competitor.website_id,
+                currentWebsiteId: selectedWebsiteId,
+              }
+            );
+          }
+          return isFromCurrentWebsite;
         }
-        return isFromCurrentWebsite;
-      });
+      );
 
       if (!isValidCacheForWebsite) {
-        console.warn("🧹 Clearing contaminated filtered cache for website protection");
+        console.warn(
+          "🧹 Clearing contaminated filtered cache for website protection"
+        );
         clearCache(currentFilteredCacheKey);
         return null;
       }
@@ -968,9 +917,8 @@ export function useOptimizedCompetitorsData() {
     }
 
     // Priority 2: Try base cache (unfiltered data for this website)
-    const baseCache = getFromCache<Record<string, unknown>>(
-      currentBaseCacheKey
-    );
+    const baseCache =
+      getFromCache<Record<string, unknown>>(currentBaseCacheKey);
     const baseCompetitors = Array.isArray(baseCache?.competitors)
       ? baseCache.competitors
       : [];
@@ -982,20 +930,28 @@ export function useOptimizedCompetitorsData() {
       (baseCompetitors.length > 0 || basePerformance.length > 0)
     ) {
       // CROSS-WEBSITE PREVENTION: Validate base cached data belongs to current website
-      const isValidBaseCacheForWebsite = baseCompetitors.every((competitor: Competitor) => {
-        const isFromCurrentWebsite = competitor.website_id === selectedWebsiteId;
-        if (!isFromCurrentWebsite) {
-          console.warn("🚨 Cross-website contamination detected in base cache:", {
-            competitorId: competitor.id,
-            competitorWebsiteId: competitor.website_id,
-            currentWebsiteId: selectedWebsiteId
-          });
+      const isValidBaseCacheForWebsite = baseCompetitors.every(
+        (competitor: Competitor) => {
+          const isFromCurrentWebsite =
+            competitor.website_id === selectedWebsiteId;
+          if (!isFromCurrentWebsite) {
+            console.warn(
+              "🚨 Cross-website contamination detected in base cache:",
+              {
+                competitorId: competitor.id,
+                competitorWebsiteId: competitor.website_id,
+                currentWebsiteId: selectedWebsiteId,
+              }
+            );
+          }
+          return isFromCurrentWebsite;
         }
-        return isFromCurrentWebsite;
-      });
+      );
 
       if (!isValidBaseCacheForWebsite) {
-        console.warn("🧹 Clearing contaminated base cache for website protection");
+        console.warn(
+          "🧹 Clearing contaminated base cache for website protection"
+        );
         clearCache(currentBaseCacheKey);
         return null;
       }
@@ -1004,13 +960,7 @@ export function useOptimizedCompetitorsData() {
     }
 
     return null;
-  }, [
-    selectedWebsiteId,
-    filters,
-    createCacheKey,
-    getFromCache,
-    clearCache,
-  ]);
+  }, [selectedWebsiteId, filters, createCacheKey, getFromCache, clearCache]);
 
   const loadCompetitorsData = useCallback(
     async (forceRefresh = false) => {
@@ -1124,8 +1074,6 @@ export function useOptimizedCompetitorsData() {
                 }
               : null;
 
-            console.log("validatedAnalytics", validatedAnalytics);
-
             setAnalytics(validatedAnalytics);
             setIsLoading(false);
 
@@ -1142,21 +1090,10 @@ export function useOptimizedCompetitorsData() {
           // FIXED: Use current transformed filters for API calls instead of previous ref
           // This ensures API calls use the latest filter changes immediately
           const currentFilters = transformedFilters;
-          console.log(
-            `🔄 Loading competitors data for website ${selectedWebsiteId}`,
-            {
-              filters: currentFilters,
-              cacheKey: competitorsFilteredCacheKey,
-            }
-          );
-
-          const loadStart = Date.now();
           const batchResponse = await batchAPI.loadCompetitorsPage(
             selectedWebsiteId,
             currentFilters
           );
-          const loadTime = Date.now() - loadStart;
-          console.log(`✅ Competitors data loaded in ${loadTime}ms`);
 
           // Handle batch API errors
           if (batchResponse.error) {
@@ -1167,10 +1104,6 @@ export function useOptimizedCompetitorsData() {
 
           // Handle empty or invalid data gracefully
           if (!data || typeof data !== "object") {
-            console.warn(
-              "⚠️ Received invalid data structure from batch API:",
-              data
-            );
             throw new Error("Invalid data structure received from server");
           }
 
@@ -1182,20 +1115,8 @@ export function useOptimizedCompetitorsData() {
             ? data.performance
             : [];
 
-          console.log(`📊 Data received:`, {
-            competitors: dataCompetitors.length,
-            performance: dataPerformance.length,
-            hasAnalytics: !!data.analytics,
-          });
-
           // Handle empty performance data (common with restrictive date filters)
           if (dataCompetitors.length > 0 && dataPerformance.length === 0) {
-            if (process.env.NODE_ENV !== "production") {
-              console.warn(
-                "⚠️ No performance data found - possibly due to date range filters excluding recent analysis"
-              );
-            }
-
             // Add helpful context for developers
             const context = {
               competitorCount: dataCompetitors.length,
@@ -1313,7 +1234,8 @@ export function useOptimizedCompetitorsData() {
 
           // SYNCHRONIZED CACHING: Use validated cache keys for consistency
           try {
-            const { baseCacheKey, filteredCacheKey } = getSynchronizedCacheKeys();
+            const { baseCacheKey, filteredCacheKey } =
+              getSynchronizedCacheKeys();
 
             // Base cache (for website switching)
             setCache(baseCacheKey, competitorsData, 10 * 60 * 1000); // 10 minutes cache
@@ -1321,13 +1243,19 @@ export function useOptimizedCompetitorsData() {
 
             // Filtered cache (for exact filter match)
             setCache(filteredCacheKey, competitorsData, 5 * 60 * 1000); // 5 minutes cache
-            console.log("✅ Filtered cache set successfully:", filteredCacheKey);
-
+            console.log(
+              "✅ Filtered cache set successfully:",
+              filteredCacheKey
+            );
           } catch (error) {
             console.error("❌ Cache key synchronization failed:", error);
             // Fallback to original cache keys if synchronization fails
             setCache(competitorsBaseCacheKey, competitorsData, 10 * 60 * 1000);
-            setCache(competitorsFilteredCacheKey, competitorsData, 5 * 60 * 1000);
+            setCache(
+              competitorsFilteredCacheKey,
+              competitorsData,
+              5 * 60 * 1000
+            );
           }
         } catch (error) {
           console.error("❌ Failed to process competitors data:", error);
@@ -1391,10 +1319,13 @@ export function useOptimizedCompetitorsData() {
     // CRITICAL FIX: Website switching cache invalidation
     // Clear all cache entries for the previous website when switching to prevent cross-contamination
     if (prevWebsiteId && prevWebsiteId !== currentWebsiteId) {
-      console.log("🔄 Website switching detected, invalidating previous website cache:", {
-        from: prevWebsiteId,
-        to: currentWebsiteId
-      });
+      console.log(
+        "🔄 Website switching detected, invalidating previous website cache:",
+        {
+          from: prevWebsiteId,
+          to: currentWebsiteId,
+        }
+      );
 
       // Clear all cache entries that contain the previous website ID
       const prevBaseCacheKey = `competitors_data_${prevWebsiteId}`;
@@ -1414,7 +1345,7 @@ export function useOptimizedCompetitorsData() {
       clearCache(prevBaseCacheKey);
 
       // Clear common filter combinations
-      prevFilterVariations.forEach(key => clearCache(key));
+      prevFilterVariations.forEach((key) => clearCache(key));
 
       console.log("✅ Previous website cache cleared successfully");
     }
@@ -1534,16 +1465,30 @@ export function useOptimizedCompetitorsData() {
     const prev = prevCompetitorFiltersRef.current;
     const current = filters as CompetitorFilters;
     const isDateFilterChange = prev.dateFilter !== current.dateFilter;
-    const isSortChange = prev.sortBy !== current.sortBy || prev.sortOrder !== current.sortOrder;
+    const isSortChange =
+      prev.sortBy !== current.sortBy || prev.sortOrder !== current.sortOrder;
 
     if (isDateFilterChange || isSortChange) {
-      console.log("📅 Filter changed, invalidating cache and forcing fresh data fetch:", {
-        dateFilterChange: isDateFilterChange ? { from: prev.dateFilter, to: current.dateFilter } : false,
-        sortChange: isSortChange ? {
-          sortBy: prev.sortBy !== current.sortBy ? { from: prev.sortBy, to: current.sortBy } : false,
-          sortOrder: prev.sortOrder !== current.sortOrder ? { from: prev.sortOrder, to: current.sortOrder } : false
-        } : false
-      });
+      console.log(
+        "📅 Filter changed, invalidating cache and forcing fresh data fetch:",
+        {
+          dateFilterChange: isDateFilterChange
+            ? { from: prev.dateFilter, to: current.dateFilter }
+            : false,
+          sortChange: isSortChange
+            ? {
+                sortBy:
+                  prev.sortBy !== current.sortBy
+                    ? { from: prev.sortBy, to: current.sortBy }
+                    : false,
+                sortOrder:
+                  prev.sortOrder !== current.sortOrder
+                    ? { from: prev.sortOrder, to: current.sortOrder }
+                    : false,
+              }
+            : false,
+        }
+      );
 
       // IMPROVED: Comprehensive cache invalidation for filter changes
       // Clear ALL possible cache variations to prevent stale data showing up
@@ -1566,16 +1511,16 @@ export function useOptimizedCompetitorsData() {
 
       // For date filter changes, invalidate all combinations with the new date
       if (isDateFilterChange) {
-        sortByVariations.forEach(sortBy => {
-          sortOrderVariations.forEach(sortOrder => {
+        sortByVariations.forEach((sortBy) => {
+          sortOrderVariations.forEach((sortOrder) => {
             const key = `competitors_filtered_${selectedWebsiteId}_${current.dateFilter}_${sortBy}_${sortOrder}`;
             cacheKeysToInvalidate.add(key);
           });
         });
 
         // Also clear the previous date filter combinations
-        sortByVariations.forEach(sortBy => {
-          sortOrderVariations.forEach(sortOrder => {
+        sortByVariations.forEach((sortBy) => {
+          sortOrderVariations.forEach((sortOrder) => {
             const key = `competitors_filtered_${selectedWebsiteId}_${prev.dateFilter}_${sortBy}_${sortOrder}`;
             cacheKeysToInvalidate.add(key);
           });
@@ -1584,28 +1529,29 @@ export function useOptimizedCompetitorsData() {
 
       // For sort changes, invalidate all date combinations with the new sort
       if (isSortChange) {
-        dateVariations.forEach(dateFilter => {
+        dateVariations.forEach((dateFilter) => {
           const key = `competitors_filtered_${selectedWebsiteId}_${dateFilter}_${current.sortBy}_${current.sortOrder}`;
           cacheKeysToInvalidate.add(key);
         });
 
         // Also clear the previous sort combinations
-        dateVariations.forEach(dateFilter => {
+        dateVariations.forEach((dateFilter) => {
           const key = `competitors_filtered_${selectedWebsiteId}_${dateFilter}_${prev.sortBy}_${prev.sortOrder}`;
           cacheKeysToInvalidate.add(key);
         });
       }
 
       // Clear all identified cache keys
-      cacheKeysToInvalidate.forEach(key => {
-        if (key) { // Only clear non-empty keys
+      cacheKeysToInvalidate.forEach((key) => {
+        if (key) {
+          // Only clear non-empty keys
           clearCache(key);
         }
       });
 
       console.log("🧹 Comprehensive cache invalidation completed:", {
         totalKeysCleared: cacheKeysToInvalidate.size,
-        keys: Array.from(cacheKeysToInvalidate)
+        keys: Array.from(cacheKeysToInvalidate),
       });
 
       // Force immediate data reload without checking cache
@@ -1712,12 +1658,14 @@ export function useOptimizedCompetitorsData() {
 
     console.log("🔍 Direct filter change watcher triggered:", {
       filters: filters as CompetitorFilters,
-      hasLoadFunction: !!loadCompetitorsDataRef.current
+      hasLoadFunction: !!loadCompetitorsDataRef.current,
     });
 
     // Only trigger on actual filter changes, not initial mount
     if (prevCompetitorFiltersRef.current && competitorFiltersChanged) {
-      console.log("🚀 FALLBACK: Directly triggering data reload due to filter change");
+      console.log(
+        "🚀 FALLBACK: Directly triggering data reload due to filter change"
+      );
 
       setIsLoading(true);
       setError(null);

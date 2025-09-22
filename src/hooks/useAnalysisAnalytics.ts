@@ -55,6 +55,15 @@ export function useAnalysisAnalytics() {
     // Transform other filters
     if (appFilters.topic && appFilters.topic !== 'all') {
       serviceFilters.topic = appFilters.topic;
+
+      // Debug: Log topic filter transformation
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🎯 [DEBUG] Topic filter transformed:', {
+          original: appFilters.topic,
+          transformed: serviceFilters.topic,
+          filterType: 'topic_id'
+        });
+      }
     }
     
     if (appFilters.llm && appFilters.llm !== 'all') {

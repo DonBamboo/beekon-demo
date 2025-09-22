@@ -170,7 +170,16 @@ class AnalyticsService {
       }
 
       if (filters.topic && filters.topic !== "all") {
-        query = query.eq("prompts.topics.topic_name", filters.topic);
+        query = query.eq("prompts.topics.id", filters.topic);
+
+        // Debug: Log topic filtering query
+        if (process.env.NODE_ENV !== "production") {
+          console.log('🔍 [DEBUG] Analytics query filtering by topic:', {
+            topicId: filters.topic,
+            queryField: 'prompts.topics.id',
+            message: 'Filtering analytics by topic ID'
+          });
+        }
       }
 
       if (filters.llmProvider && filters.llmProvider !== "all") {
@@ -186,6 +195,20 @@ class AnalyticsService {
     const { data: results, error } = await query;
 
     if (error) throw error;
+
+    // Debug: Log query results
+    if (process.env.NODE_ENV !== "production") {
+      console.log('📊 [DEBUG] Analytics query results:', {
+        resultCount: (results || []).length,
+        hasTopicFilter: !!(filters?.topic && filters.topic !== "all"),
+        topicFilter: filters?.topic,
+        sampleResult: results?.[0] ? {
+          topic: results[0].prompts?.topics?.topic_name,
+          topicId: results[0].prompts?.topics?.id,
+          isMentioned: results[0].is_mentioned
+        } : null
+      });
+    }
 
     // Calculate analytics from complete dataset
     return this.calculateAnalysisAnalytics((results || []) as AnalysisResultData[]);
