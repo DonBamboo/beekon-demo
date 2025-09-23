@@ -219,8 +219,13 @@ export default function ShareOfVoiceChart({
 
     registerCompetitorsInFixedSlots(competitorsList);
 
+    // Sort time series data from oldest to newest for proper X-axis display
+    const sortedTimeSeriesData = [...timeSeriesData].sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
     // Transform time-series data into format suitable for stacked area chart
-    return timeSeriesData.map((point) => {
+    return sortedTimeSeriesData.map((point) => {
       const transformedPoint: any = {
         date: point.date,
         dateFormatted: new Date(point.date).toLocaleDateString(),
@@ -934,10 +939,14 @@ export default function ShareOfVoiceChart({
 
                       {/* Render stacked areas for each competitor */}
                       {competitorsList.map((competitor, index) => {
-                        const color = getCompetitorFixedColor({
-                          competitorId: competitor.competitorId,
-                          name: competitor.name,
-                        });
+                        // Handle "Your Brand" separately to ensure consistent primary color
+                        const isYourBrand = competitor.competitorId === "your-brand" || competitor.name === "Your Brand";
+                        const color = isYourBrand
+                          ? getYourBrandColor()
+                          : getCompetitorFixedColor({
+                              competitorId: competitor.competitorId,
+                              name: competitor.name,
+                            });
 
                         return (
                           <Area
