@@ -9,6 +9,9 @@
 -- 1. UPDATE get_competitor_share_of_voice TO INCLUDE ANALYSIS_STATUS
 -- =================================================================
 
+DROP FUNCTION IF EXISTS beekon_data.get_competitor_share_of_voice(UUID, TIMESTAMPTZ, TIMESTAMPTZ);
+DROP FUNCTION IF EXISTS beekon_data.get_competitor_performance(UUID, INTEGER, INTEGER);
+
 CREATE OR REPLACE FUNCTION beekon_data.get_competitor_share_of_voice(
     p_website_id UUID,
     p_date_start TIMESTAMP WITH TIME ZONE,

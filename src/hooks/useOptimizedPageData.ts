@@ -1073,7 +1073,6 @@ export function useOptimizedCompetitorsData() {
                     : [],
                 }
               : null;
-
             setAnalytics(validatedAnalytics);
             setIsLoading(false);
 
@@ -1192,7 +1191,6 @@ export function useOptimizedCompetitorsData() {
 
           setCompetitors(competitorsWithStatus);
           setPerformance(dataPerformance);
-
           // Validate and ensure analytics data structure has required arrays
           const analyticsData = data.analytics as Record<
             string,
@@ -1221,7 +1219,6 @@ export function useOptimizedCompetitorsData() {
                   : [],
               }
             : null;
-
           setAnalytics(validatedAnalytics);
 
           // Smart caching strategy: Cache both base and filtered data
@@ -1431,7 +1428,6 @@ export function useOptimizedCompetitorsData() {
               : [],
           }
         : null;
-
       setAnalytics(validatedAnalytics);
       setIsLoading(false);
       setError(null);

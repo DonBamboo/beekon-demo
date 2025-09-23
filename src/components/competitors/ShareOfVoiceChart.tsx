@@ -36,10 +36,12 @@ import {
   autoFixColorConflicts,
 } from "@/lib/color-utils";
 import { ColorLegend } from "@/components/ui/color-indicator";
-import { validateAndSanitizeChartData, sanitizeChartNumber } from "@/utils/chartDataValidation";
+import {
+  validateAndSanitizeChartData,
+  sanitizeChartNumber,
+} from "@/utils/chartDataValidation";
 import { ChartErrorFallback, ErrorBoundary } from "@/components/ErrorBoundary";
 import { CompetitorTimeSeriesData } from "@/services/competitorService";
-
 
 interface ShareOfVoiceData {
   name: string;
@@ -196,18 +198,18 @@ export default function ShareOfVoiceChart({
 
     // Get all unique competitors from the time series data
     const allCompetitors = new Set<string>();
-    timeSeriesData.forEach(point => {
-      point.competitors?.forEach(comp => {
+    timeSeriesData.forEach((point) => {
+      point.competitors?.forEach((comp) => {
         allCompetitors.add(comp.competitorId);
       });
     });
 
     // Register all competitors in fixed color slots for predictable coloring
-    const competitorsList = Array.from(allCompetitors).map(competitorId => {
+    const competitorsList = Array.from(allCompetitors).map((competitorId) => {
       // Find the competitor name from any data point
       const competitorData = timeSeriesData
-        .flatMap(point => point.competitors || [])
-        .find(comp => comp.competitorId === competitorId);
+        .flatMap((point) => point.competitors || [])
+        .find((comp) => comp.competitorId === competitorId);
 
       return {
         competitorId,
@@ -217,21 +219,28 @@ export default function ShareOfVoiceChart({
 
     registerCompetitorsInFixedSlots(competitorsList);
 
+    // Sort time series data from oldest to newest for proper X-axis display
+    const sortedTimeSeriesData = [...timeSeriesData].sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
     // Transform time-series data into format suitable for stacked area chart
-    return timeSeriesData.map(point => {
+    return sortedTimeSeriesData.map((point) => {
       const transformedPoint: any = {
         date: point.date,
         dateFormatted: new Date(point.date).toLocaleDateString(),
       };
 
       // Add each competitor's share of voice for this time point
-      competitorsList.forEach(competitor => {
+      competitorsList.forEach((competitor) => {
         const competitorData = point.competitors?.find(
-          comp => comp.competitorId === competitor.competitorId
+          (comp) => comp.competitorId === competitor.competitorId
         );
 
         // Sanitize the share of voice value
-        const shareOfVoice = sanitizeChartNumber(competitorData?.shareOfVoice || 0);
+        const shareOfVoice = sanitizeChartNumber(
+          competitorData?.shareOfVoice || 0
+        );
         transformedPoint[competitor.name] = shareOfVoice;
       });
 
@@ -246,16 +255,16 @@ export default function ShareOfVoiceChart({
     }
 
     const allCompetitors = new Set<string>();
-    timeSeriesData.forEach(point => {
-      point.competitors?.forEach(comp => {
+    timeSeriesData.forEach((point) => {
+      point.competitors?.forEach((comp) => {
         allCompetitors.add(comp.competitorId);
       });
     });
 
-    return Array.from(allCompetitors).map(competitorId => {
+    return Array.from(allCompetitors).map((competitorId) => {
       const competitorData = timeSeriesData
-        .flatMap(point => point.competitors || [])
-        .find(comp => comp.competitorId === competitorId);
+        .flatMap((point) => point.competitors || [])
+        .find((comp) => comp.competitorId === competitorId);
 
       return {
         competitorId,
@@ -498,7 +507,6 @@ export default function ShareOfVoiceChart({
       </Card>
     );
   }
-
 
   return (
     <Card>
@@ -891,11 +899,10 @@ export default function ShareOfVoiceChart({
           {/* Stacked Area Chart - Share of Voice Over Time */}
           <div>
             <div className="mb-3">
-              <h4 className="text-sm font-medium">
-                Share of Voice Over Time
-              </h4>
+              <h4 className="text-sm font-medium">Share of Voice Over Time</h4>
               <p className="text-xs text-muted-foreground mt-1">
-                Stacked area chart showing how each competitor's share of voice changes over time
+                Stacked area chart showing how each competitor's share of voice
+                changes over time
               </p>
             </div>
             <ErrorBoundary fallback={ChartErrorFallback}>
@@ -909,7 +916,9 @@ export default function ShareOfVoiceChart({
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis
                         dataKey="date"
-                        tickFormatter={(value) => new Date(value).toLocaleDateString()}
+                        tickFormatter={(value) =>
+                          new Date(value).toLocaleDateString()
+                        }
                         height={60}
                         tick={{ fontSize: 12 }}
                         interval="preserveStartEnd"
@@ -919,16 +928,25 @@ export default function ShareOfVoiceChart({
                         tickFormatter={(value) => `${value}%`}
                       />
                       <Tooltip
-                        labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                        formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]}
+                        labelFormatter={(value) =>
+                          new Date(value).toLocaleDateString()
+                        }
+                        formatter={(value, name) => [
+                          `${Number(value).toFixed(1)}%`,
+                          name,
+                        ]}
                       />
 
                       {/* Render stacked areas for each competitor */}
                       {competitorsList.map((competitor, index) => {
-                        const color = getCompetitorFixedColor({
-                          competitorId: competitor.competitorId,
-                          name: competitor.name,
-                        });
+                        // Handle "Your Brand" separately to ensure consistent primary color
+                        const isYourBrand = competitor.competitorId === "your-brand" || competitor.name === "Your Brand";
+                        const color = isYourBrand
+                          ? getYourBrandColor()
+                          : getCompetitorFixedColor({
+                              competitorId: competitor.competitorId,
+                              name: competitor.name,
+                            });
 
                         return (
                           <Area
@@ -952,7 +970,8 @@ export default function ShareOfVoiceChart({
                       No time-series data available
                       <br />
                       <span className="text-xs">
-                        Time-series data is needed to show Share of Voice over time
+                        Time-series data is needed to show Share of Voice over
+                        time
                       </span>
                     </p>
                   </div>

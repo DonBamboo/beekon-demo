@@ -296,19 +296,28 @@ class BatchService {
         analysisService.getTopicsForWebsite(websiteId).catch(error => {
           console.warn('⚠️ Failed to load topics (non-critical):', error);
           return []; // Fallback
+        }),
+        competitorService.getCompetitorTimeSeriesData(
+          websiteId,
+          undefined, // all competitors
+          this.calculateDaysFromDateRange(filters?.dateRange as { start: string; end: string } | undefined)
+        ).catch(error => {
+          console.warn('⚠️ Failed to load time series data (non-critical):', error);
+          return []; // Fallback
         })
       ];
 
       // Load core data first, then optional data
       const [competitors, shareOfVoice] = await Promise.all(coreDataPromises);
-      const [gapAnalysis, insights, topics] = await Promise.all(optionalDataPromises);
+      const [gapAnalysis, insights, topics, timeSeriesData] = await Promise.all(optionalDataPromises);
 
       console.log(`✅ BatchService: Data loaded successfully`, {
         competitors: competitors?.length || 0,
         shareOfVoice: shareOfVoice?.length || 0,
         gapAnalysis: gapAnalysis?.length || 0,
         insights: insights?.length || 0,
-        topics: topics?.length || 0
+        topics: topics?.length || 0,
+        timeSeriesData: timeSeriesData?.length || 0
       });
 
       // Transform shareOfVoice data to match expected performance interface with NaN protection
@@ -364,7 +373,7 @@ class BatchService {
         gapAnalysis,
         insights,
         marketShareData: [], // Will be populated by UI if needed
-        timeSeriesData: [], // Will be populated by UI if needed
+        timeSeriesData: timeSeriesData || [], // FIXED: Now populated with actual data from competitorService
         competitiveGaps: [], // Will be populated by UI if needed
       };
 
@@ -630,6 +639,20 @@ class BatchService {
   }
 
   // Helper methods
+  private calculateDaysFromDateRange(dateRange?: { start: string; end: string }): number {
+    if (!dateRange || !dateRange.start || !dateRange.end) {
+      return 30; // Default to 30 days
+    }
+
+    const startDate = new Date(dateRange.start);
+    const endDate = new Date(dateRange.end);
+    const timeDiff = endDate.getTime() - startDate.getTime();
+    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+    // Ensure reasonable bounds
+    return Math.max(1, Math.min(365, daysDiff));
+  }
+
   private async getRecentAnalyses(
     websiteId: string,
     limit: number = 5
