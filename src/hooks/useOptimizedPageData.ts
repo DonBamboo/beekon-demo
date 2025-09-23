@@ -1101,8 +1101,6 @@ export function useOptimizedCompetitorsData() {
 
           const data = batchResponse.data as Record<string, unknown>;
 
-          console.log("data", data);
-
           // Handle empty or invalid data gracefully
           if (!data || typeof data !== "object") {
             throw new Error("Invalid data structure received from server");

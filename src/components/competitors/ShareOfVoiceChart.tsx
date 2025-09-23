@@ -186,9 +186,7 @@ export default function ShareOfVoiceChart({
 
   // Process time-series data for stacked area chart
   const stackedAreaData = useMemo(() => {
-    console.log("ShareOfVoiceChart timeSeriesData received:", timeSeriesData?.length || 0, timeSeriesData);
     if (!timeSeriesData || timeSeriesData.length === 0) {
-      console.log("ShareOfVoiceChart: timeSeriesData is empty, returning empty stackedAreaData");
       return [];
     }
 

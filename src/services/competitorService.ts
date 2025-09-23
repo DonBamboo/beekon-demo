@@ -7,6 +7,7 @@ import {
   type CompetitiveGapAnalysis,
   type CompetitorInsight,
 } from "./competitorAnalysisService";
+import { calculateTimeSeriesShareOfVoice, validateShareOfVoiceTotal } from "@/utils/shareOfVoiceUtils";
 
 // Re-export types for external use
 export type {
@@ -268,19 +269,8 @@ export class OptimizedCompetitorService extends BaseService {
     }_${days}`;
 
     return this.getCachedData(cacheKey, async () => {
-      // First check if there are any competitors for this website
-      const { data: competitors } = await supabase
-        .schema("beekon_data")
-        .from("competitors")
-        .select("id")
-        .eq("website_id", websiteId)
-        .eq("is_active", true)
-        .limit(1);
-
-      // If no competitors exist, return empty array immediately
-      if (!competitors || competitors.length === 0) {
-        return [];
-      }
+      // Note: We no longer exit early if no competitors exist because we want
+      // to include "Your Brand" data even when there are no competitors
 
       const { data, error } = await supabase
         .schema("beekon_data")
@@ -290,6 +280,12 @@ export class OptimizedCompetitorService extends BaseService {
           p_days: days,
         });
       if (error) throw error;
+
+      console.log('🚀 Time series data received:', {
+        dataCount: Array.isArray(data) ? data.length : 0,
+        websiteId,
+        days
+      });
 
       // Group by date
       const timeSeriesMap = new Map<string, CompetitorTimeSeriesData>();
@@ -304,26 +300,25 @@ export class OptimizedCompetitorService extends BaseService {
           });
         }
 
-        const dailyMentions = Number(row.daily_mentions) || 0;
         const dailyPositiveMentions = Number(row.daily_positive_mentions) || 0;
         const dailyAvgSentiment = Number(row.daily_avg_sentiment);
         const dailyAvgRank = Number(row.daily_avg_rank);
 
         timeSeriesMap.get(dateStr)!.competitors.push({
-          competitorId: String(row.competitor_id || ""), // FIXED: Now includes competitor_id from corrected function
+          competitorId: row.is_your_brand ? "your-brand" : String(row.competitor_id || ""), // Use special ID for Your Brand
           name: String(row.competitor_name || row.competitor_domain),
-          shareOfVoice:
-            dailyMentions > 0
-              ? Math.round((dailyPositiveMentions / dailyMentions) * 100)
-              : 0,
+          shareOfVoice: 0, // Will be calculated during normalization
           averageRank:
-            dailyAvgRank &&
-            !isNaN(dailyAvgRank) &&
-            dailyAvgRank > 0 &&
-            dailyAvgRank <= 20
-              ? Math.round(dailyAvgRank * 10) / 10 // Round to 1 decimal place
-              : 0,
-          mentionCount: dailyMentions,
+            // Your Brand doesn't have rank position, only competitors do
+            row.is_your_brand
+              ? 0
+              : (dailyAvgRank &&
+                !isNaN(dailyAvgRank) &&
+                dailyAvgRank > 0 &&
+                dailyAvgRank <= 20
+                  ? Math.round(dailyAvgRank * 10) / 10 // Round to 1 decimal place
+                  : 0),
+          mentionCount: dailyPositiveMentions, // Use positive mentions for share calculation
           sentimentScore:
             dailyAvgSentiment && !isNaN(dailyAvgSentiment)
               ? Math.round(
@@ -333,9 +328,33 @@ export class OptimizedCompetitorService extends BaseService {
         });
       });
 
-      return Array.from(timeSeriesMap.values()).sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
+      // Use shared utility for consistent normalization across time series and pie charts
+      const normalizedResult = Array.from(timeSeriesMap.values()).map(timePoint => {
+        // Apply standardized share of voice calculation
+        const normalizedCompetitors = calculateTimeSeriesShareOfVoice(timePoint.competitors);
+
+        return {
+          ...timePoint,
+          competitors: normalizedCompetitors
+        };
+      }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // Validate that each date totals to 100%
+      normalizedResult.forEach((timePoint, index) => {
+        const validation = validateShareOfVoiceTotal(timePoint.competitors);
+        if (!validation.isValid && index < 3) { // Only log first 3 validation failures
+          console.warn(`⚠️ Share of voice validation failed for ${timePoint.date}:`, validation);
+        }
+      });
+
+      console.log('✅ Time series processed with normalization:', {
+        timeSeriesCount: normalizedResult.length,
+        hasYourBrand: normalizedResult.some(tp => tp.competitors.some(c => c.competitorId === 'your-brand')),
+        competitorNames: [...new Set(normalizedResult.flatMap(tp => tp.competitors.map(c => c.name)))],
+        firstDateValidation: normalizedResult[0] ? validateShareOfVoiceTotal(normalizedResult[0].competitors) : null
+      });
+
+      return normalizedResult;
     });
   }
 
