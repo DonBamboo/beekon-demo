@@ -1073,7 +1073,6 @@ export function useOptimizedCompetitorsData() {
                     : [],
                 }
               : null;
-
             setAnalytics(validatedAnalytics);
             setIsLoading(false);
 
@@ -1101,6 +1100,8 @@ export function useOptimizedCompetitorsData() {
           }
 
           const data = batchResponse.data as Record<string, unknown>;
+
+          console.log("data", data);
 
           // Handle empty or invalid data gracefully
           if (!data || typeof data !== "object") {
@@ -1192,7 +1193,6 @@ export function useOptimizedCompetitorsData() {
 
           setCompetitors(competitorsWithStatus);
           setPerformance(dataPerformance);
-
           // Validate and ensure analytics data structure has required arrays
           const analyticsData = data.analytics as Record<
             string,
@@ -1221,7 +1221,6 @@ export function useOptimizedCompetitorsData() {
                   : [],
               }
             : null;
-
           setAnalytics(validatedAnalytics);
 
           // Smart caching strategy: Cache both base and filtered data
@@ -1431,7 +1430,6 @@ export function useOptimizedCompetitorsData() {
               : [],
           }
         : null;
-
       setAnalytics(validatedAnalytics);
       setIsLoading(false);
       setError(null);

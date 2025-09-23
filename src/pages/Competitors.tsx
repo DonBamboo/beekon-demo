@@ -242,7 +242,7 @@ export default function Competitors() {
               }),
       };
     });
-  }, [analytics?.shareOfVoiceData, analytics]);
+  }, [analytics]);
 
   // Derive additional data for backward compatibility
   const competitorsWithStatus = competitors; // Status already included
@@ -515,9 +515,12 @@ export default function Competitors() {
             console.log("🗓️ Date filter changed:", {
               from: (filters as CompetitorFilters).dateFilter,
               to: value,
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
             });
-            setFilters({ ...(filters as CompetitorFilters), dateFilter: value });
+            setFilters({
+              ...(filters as CompetitorFilters),
+              dateFilter: value,
+            });
           }}
           setSortBy={(value) =>
             setFilters({ ...(filters as CompetitorFilters), sortBy: value })

@@ -202,7 +202,7 @@ export class OptimizedCompetitorService extends BaseService {
           });
 
         if (error) {
-          console.warn('Competitor performance query error:', error);
+          console.warn("Competitor performance query error:", error);
           return [];
         }
 
@@ -214,7 +214,7 @@ export class OptimizedCompetitorService extends BaseService {
           const avgSentiment = Number(row.avg_sentiment_score);
           const avgRank = Number(row.avg_rank_position);
           const mentionTrend = Number(row.mention_trend_7d) || 0;
-          const analysisStatus = String(row.analysis_status || 'completed');
+          const analysisStatus = String(row.analysis_status || "completed");
 
           return {
             competitorId: String(row.competitor_id),
@@ -231,7 +231,9 @@ export class OptimizedCompetitorService extends BaseService {
             mentionCount: totalMentions,
             sentimentScore:
               avgSentiment && !isNaN(avgSentiment)
-                ? Math.round(Math.max(0, Math.min(100, (avgSentiment + 1) * 50)))
+                ? Math.round(
+                    Math.max(0, Math.min(100, (avgSentiment + 1) * 50))
+                  )
                 : 50,
             visibilityScore:
               totalMentions > 0
@@ -242,11 +244,12 @@ export class OptimizedCompetitorService extends BaseService {
             lastAnalyzed: String(
               row.last_analysis_date || new Date().toISOString()
             ),
-            isActive: analysisStatus === 'completed' || analysisStatus === 'analyzing',
+            isActive:
+              analysisStatus === "completed" || analysisStatus === "analyzing",
           };
         });
       } catch (error) {
-        console.error('Error fetching competitor performance:', error);
+        console.error("Error fetching competitor performance:", error);
         return [];
       }
     });
@@ -286,7 +289,6 @@ export class OptimizedCompetitorService extends BaseService {
           p_competitor_domain: competitorDomain,
           p_days: days,
         });
-
       if (error) throw error;
 
       // Group by date
@@ -308,8 +310,8 @@ export class OptimizedCompetitorService extends BaseService {
         const dailyAvgRank = Number(row.daily_avg_rank);
 
         timeSeriesMap.get(dateStr)!.competitors.push({
-          competitorId: String(row.competitor_id || ''), // FIXED: Now includes competitor_id from corrected function
-          name: String(row.competitor_domain),
+          competitorId: String(row.competitor_id || ""), // FIXED: Now includes competitor_id from corrected function
+          name: String(row.competitor_name || row.competitor_domain),
           shareOfVoice:
             dailyMentions > 0
               ? Math.round((dailyPositiveMentions / dailyMentions) * 100)
@@ -324,7 +326,9 @@ export class OptimizedCompetitorService extends BaseService {
           mentionCount: dailyMentions,
           sentimentScore:
             dailyAvgSentiment && !isNaN(dailyAvgSentiment)
-              ? Math.round(Math.max(0, Math.min(100, (dailyAvgSentiment + 1) * 50)))
+              ? Math.round(
+                  Math.max(0, Math.min(100, (dailyAvgSentiment + 1) * 50))
+                )
               : 50,
         });
       });
@@ -424,16 +428,17 @@ export class OptimizedCompetitorService extends BaseService {
         0
       );
 
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('📈 [DEBUG] Your Brand mention calculation:', {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("📈 [DEBUG] Your Brand mention calculation:", {
           yourBrandResultsCount: yourBrandResults.length,
           yourBrandMentions,
           yourBrandAnalyses,
-          sampleResults: yourBrandResults.slice(0, 2).map(r => ({
+          sampleResults: yourBrandResults.slice(0, 2).map((r) => ({
             topicName: r.topic_name,
             llmResultsCount: r.llm_results.length,
-            mentionedCount: r.llm_results.filter(llm => llm.is_mentioned).length
-          }))
+            mentionedCount: r.llm_results.filter((llm) => llm.is_mentioned)
+              .length,
+          })),
         });
       }
 
@@ -480,19 +485,24 @@ export class OptimizedCompetitorService extends BaseService {
       const normalizationFactor = totalTrueShare > 0 ? 100 / totalTrueShare : 1;
 
       // Create normalized market share data with fallback protection
-      const safeNormalizedValue = !isNaN(yourBrandTrueShareOfVoice) && isFinite(yourBrandTrueShareOfVoice)
-        ? Number((yourBrandTrueShareOfVoice * normalizationFactor).toFixed(1))
-        : 0;
-      const safeRawValue = !isNaN(yourBrandMentionRate) && isFinite(yourBrandMentionRate)
-        ? yourBrandMentionRate
-        : 0;
+      const safeNormalizedValue =
+        !isNaN(yourBrandTrueShareOfVoice) && isFinite(yourBrandTrueShareOfVoice)
+          ? Number((yourBrandTrueShareOfVoice * normalizationFactor).toFixed(1))
+          : 0;
+      const safeRawValue =
+        !isNaN(yourBrandMentionRate) && isFinite(yourBrandMentionRate)
+          ? yourBrandMentionRate
+          : 0;
 
       const marketShareData: MarketShareDataPoint[] = [
         {
           name: "Your Brand",
           normalizedValue: safeNormalizedValue,
           rawValue: safeRawValue, // Keep old mention rate for reference
-          mentions: !isNaN(yourBrandMentions) && isFinite(yourBrandMentions) ? yourBrandMentions : 0,
+          mentions:
+            !isNaN(yourBrandMentions) && isFinite(yourBrandMentions)
+              ? yourBrandMentions
+              : 0,
           avgRank: undefined, // Your brand doesn't have a rank position
           dataType: "market_share",
         },
@@ -519,46 +529,52 @@ export class OptimizedCompetitorService extends BaseService {
         dataType: "share_of_voice" as const,
       };
 
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('🏆 [DEBUG] Your Brand data point created:', {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🏆 [DEBUG] Your Brand data point created:", {
           yourBrandDataPoint,
           calculationDetails: {
             totalMentionsAllBrands,
             yourBrandTrueShareOfVoice,
-            yourBrandMentionRate
-          }
+            yourBrandMentionRate,
+          },
         });
       }
 
       // Ensure Your Brand data point is valid and always included
-      const validShareOfVoice = !isNaN(yourBrandTrueShareOfVoice) && isFinite(yourBrandTrueShareOfVoice)
-        ? yourBrandTrueShareOfVoice
-        : 0; // Fallback to 0 if invalid
+      const validShareOfVoice =
+        !isNaN(yourBrandTrueShareOfVoice) && isFinite(yourBrandTrueShareOfVoice)
+          ? yourBrandTrueShareOfVoice
+          : 0; // Fallback to 0 if invalid
 
       const safeBrandDataPoint = {
         name: "Your Brand",
         shareOfVoice: validShareOfVoice,
         value: validShareOfVoice, // Add value field for ShareOfVoiceChart compatibility
-        totalMentions: !isNaN(yourBrandMentions) && isFinite(yourBrandMentions)
-          ? yourBrandMentions
-          : 0, // Fallback to 0 if invalid
-        totalAnalyses: !isNaN(yourBrandAnalyses) && isFinite(yourBrandAnalyses)
-          ? yourBrandAnalyses
-          : 0, // Fallback to 0 if invalid
+        totalMentions:
+          !isNaN(yourBrandMentions) && isFinite(yourBrandMentions)
+            ? yourBrandMentions
+            : 0, // Fallback to 0 if invalid
+        totalAnalyses:
+          !isNaN(yourBrandAnalyses) && isFinite(yourBrandAnalyses)
+            ? yourBrandAnalyses
+            : 0, // Fallback to 0 if invalid
         avgRank: undefined,
         dataType: "share_of_voice" as const,
       };
 
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('🔧 [DEBUG] Sanitized Your Brand data point:', {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔧 [DEBUG] Sanitized Your Brand data point:", {
           original: yourBrandDataPoint,
           sanitized: safeBrandDataPoint,
-          hadValidationIssues: JSON.stringify(yourBrandDataPoint) !== JSON.stringify(safeBrandDataPoint),
+          hadValidationIssues:
+            JSON.stringify(yourBrandDataPoint) !==
+            JSON.stringify(safeBrandDataPoint),
           fieldMapping: {
             shareOfVoice: safeBrandDataPoint.shareOfVoice,
             value: safeBrandDataPoint.value,
-            hasBothFields: safeBrandDataPoint.shareOfVoice === safeBrandDataPoint.value
-          }
+            hasBothFields:
+              safeBrandDataPoint.shareOfVoice === safeBrandDataPoint.value,
+          },
         });
       }
 
@@ -576,18 +592,22 @@ export class OptimizedCompetitorService extends BaseService {
         })),
       ];
 
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('📊 [DEBUG] Final shareOfVoiceData array created:', {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("📊 [DEBUG] Final shareOfVoiceData array created:", {
           totalDataPoints: shareOfVoiceData.length,
-          hasYourBrand: shareOfVoiceData.some(item => item.name === "Your Brand"),
-          yourBrandData: shareOfVoiceData.find(item => item.name === "Your Brand"),
-          allDataPoints: shareOfVoiceData.map(item => ({
+          hasYourBrand: shareOfVoiceData.some(
+            (item) => item.name === "Your Brand"
+          ),
+          yourBrandData: shareOfVoiceData.find(
+            (item) => item.name === "Your Brand"
+          ),
+          allDataPoints: shareOfVoiceData.map((item) => ({
             name: item.name,
             shareOfVoice: item.shareOfVoice,
             value: (item as any).value,
-            hasValueField: 'value' in item,
-            totalMentions: item.totalMentions
-          }))
+            hasValueField: "value" in item,
+            totalMentions: item.totalMentions,
+          })),
         });
       }
 
@@ -1121,19 +1141,24 @@ export class OptimizedCompetitorService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<AnalysisResult[]> {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🚀 [DEBUG] getAnalysisResultsForWebsite OPTIMIZED called with:', {
-        websiteId,
-        dateRange,
-        timestamp: new Date().toISOString(),
-        optimizationUsed: 'materialized_view_function'
-      });
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        "🚀 [DEBUG] getAnalysisResultsForWebsite OPTIMIZED called with:",
+        {
+          websiteId,
+          dateRange,
+          timestamp: new Date().toISOString(),
+          optimizationUsed: "materialized_view_function",
+        }
+      );
     }
 
     // OPTIMIZED: Use materialized view function instead of expensive raw table JOINs
     const defaultDateRange = {
-      start: dateRange?.start || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      end: dateRange?.end || new Date().toISOString()
+      start:
+        dateRange?.start ||
+        new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+      end: dateRange?.end || new Date().toISOString(),
     };
 
     const { data, error } = await supabase
@@ -1143,74 +1168,83 @@ export class OptimizedCompetitorService extends BaseService {
         p_date_start: defaultDateRange.start,
         p_date_end: defaultDateRange.end,
         p_limit: 10000, // Large limit for comprehensive analysis
-        p_offset: 0
+        p_offset: 0,
       });
 
     if (error) {
-      console.error('❌ [ERROR] getAnalysisResultsForWebsite OPTIMIZED query failed:', error);
+      console.error(
+        "❌ [ERROR] getAnalysisResultsForWebsite OPTIMIZED query failed:",
+        error
+      );
       throw error;
     }
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('⚡ [DEBUG] OPTIMIZED analysis results query returned:', {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("⚡ [DEBUG] OPTIMIZED analysis results query returned:", {
         resultsCount: Array.isArray(data) ? data.length : 0,
         websiteId,
         dateRange: defaultDateRange,
-        performanceNote: 'Using materialized view - 10-100x faster than raw JOINs',
-        sampleData: Array.isArray(data) ? data.slice(0, 2) : [] // Show first 2 results for debugging
+        performanceNote:
+          "Using materialized view - 10-100x faster than raw JOINs",
+        sampleData: Array.isArray(data) ? data.slice(0, 2) : [], // Show first 2 results for debugging
       });
     }
 
     // Transform materialized view data to expected AnalysisResult format
     const resultsMap = new Map<string, AnalysisResult>();
 
-    (Array.isArray(data) ? data : []).forEach((row: Record<string, unknown>) => {
-      const topicName = row.topic;
+    (Array.isArray(data) ? data : []).forEach(
+      (row: Record<string, unknown>) => {
+        const topicName = row.topic;
 
-      if (!resultsMap.has(topicName)) {
-        resultsMap.set(topicName, {
-          id: row.topic_id,
-          topic: topicName,
-          topic_name: topicName,
-          topic_keywords: [], // Keywords not available in materialized view
-          llm_results: [],
-          total_mentions: 0,
-          avg_rank: null,
-          avg_confidence: null,
-          avg_sentiment: null,
-        } as AnalysisResult);
+        if (!resultsMap.has(topicName)) {
+          resultsMap.set(topicName, {
+            id: row.topic_id,
+            topic: topicName,
+            topic_name: topicName,
+            topic_keywords: [], // Keywords not available in materialized view
+            llm_results: [],
+            total_mentions: 0,
+            avg_rank: null,
+            avg_confidence: null,
+            avg_sentiment: null,
+          } as AnalysisResult);
+        }
+
+        const analysisResult = resultsMap.get(topicName)!;
+        analysisResult.llm_results.push({
+          id: row.id,
+          llm_provider: row.llm_provider,
+          is_mentioned: row.is_mentioned || false,
+          rank_position: row.rank_position,
+          confidence_score: row.confidence_score,
+          sentiment_score: row.sentiment_score,
+          summary_text: row.summary_text,
+          response_text: "", // Not available in materialized view
+          analyzed_at: row.analyzed_at || new Date().toISOString(),
+        });
+
+        if (row.is_mentioned) {
+          analysisResult.total_mentions++;
+        }
       }
-
-      const analysisResult = resultsMap.get(topicName)!;
-      analysisResult.llm_results.push({
-        id: row.id,
-        llm_provider: row.llm_provider,
-        is_mentioned: row.is_mentioned || false,
-        rank_position: row.rank_position,
-        confidence_score: row.confidence_score,
-        sentiment_score: row.sentiment_score,
-        summary_text: row.summary_text,
-        response_text: "", // Not available in materialized view
-        analyzed_at: row.analyzed_at || new Date().toISOString(),
-      });
-
-      if (row.is_mentioned) {
-        analysisResult.total_mentions++;
-      }
-    });
+    );
 
     const results = Array.from(resultsMap.values());
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🎯 [DEBUG] Final OPTIMIZED analysis results processed:', {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🎯 [DEBUG] Final OPTIMIZED analysis results processed:", {
         topicsCount: results.length,
-        totalLlmResults: results.reduce((sum, r) => sum + r.llm_results.length, 0),
+        totalLlmResults: results.reduce(
+          (sum, r) => sum + r.llm_results.length,
+          0
+        ),
         totalMentions: results.reduce((sum, r) => sum + r.total_mentions, 0),
-        sampleTopics: results.slice(0, 3).map(r => ({
+        sampleTopics: results.slice(0, 3).map((r) => ({
           topic: r.topic_name,
           mentions: r.total_mentions,
-          llmResultsCount: r.llm_results.length
-        }))
+          llmResultsCount: r.llm_results.length,
+        })),
       });
     }
 
@@ -1335,15 +1369,17 @@ export class OptimizedCompetitorService extends BaseService {
     yourBrandMentions: number;
     // Note: totalMentionsAllBrands and yourBrandMentions can be calculated from shareOfVoice data
   }): CompetitorAnalytics {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🔧 [DEBUG] createUnifiedCompetitorAnalytics called with:', {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🔧 [DEBUG] createUnifiedCompetitorAnalytics called with:", {
         shareOfVoiceDataCount: shareOfVoiceData.length,
-        hasYourBrandInShareOfVoice: shareOfVoiceData.some(item => item.name === "Your Brand"),
-        shareOfVoiceEntries: shareOfVoiceData.map(item => ({
+        hasYourBrandInShareOfVoice: shareOfVoiceData.some(
+          (item) => item.name === "Your Brand"
+        ),
+        shareOfVoiceEntries: shareOfVoiceData.map((item) => ({
           name: item.name,
           shareOfVoice: item.shareOfVoice,
-          totalMentions: item.totalMentions
-        }))
+          totalMentions: item.totalMentions,
+        })),
       });
     }
     // Validate data consistency before creating analytics
@@ -1374,7 +1410,7 @@ export class OptimizedCompetitorService extends BaseService {
     } else {
       console.log("✅ Share of voice validation passed:", {
         total: shareOfVoiceTotal.toFixed(2) + "%",
-        variance: Math.abs(shareOfVoiceTotal - 100).toFixed(2) + "%"
+        variance: Math.abs(shareOfVoiceTotal - 100).toFixed(2) + "%",
       });
     }
 
@@ -1478,7 +1514,9 @@ export class OptimizedCompetitorService extends BaseService {
     // UPDATED: Expect normalized data to be very close to 100%
     if (Math.abs(shareOfVoiceTotal - 100) > 1) {
       warnings.push(
-        `Share of voice total deviates from expected 100%: ${shareOfVoiceTotal.toFixed(2)}% (±1% tolerance)`
+        `Share of voice total deviates from expected 100%: ${shareOfVoiceTotal.toFixed(
+          2
+        )}% (±1% tolerance)`
       );
     }
 
