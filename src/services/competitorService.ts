@@ -18,6 +18,13 @@ export type {
 export type { Competitor };
 
 export interface CompetitorServicePerformance {
+  // Database fields (required by CompetitorPerformance interface)
+  visibility_score: number;
+  avg_rank: number;
+  total_mentions: number;
+  sentiment_score: number;
+
+  // UI-compatible fields
   competitorId: string;
   domain: string;
   name: string;
@@ -217,29 +224,32 @@ export class OptimizedCompetitorService extends BaseService {
           const mentionTrend = Number(row.mention_trend_7d) || 0;
           const analysisStatus = String(row.analysis_status || "completed");
 
+          const shareOfVoiceValue = totalMentions > 0
+            ? Math.round((positiveMentions / totalMentions) * 100)
+            : 0;
+          const averageRankValue = avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20
+            ? Math.round(avgRank * 10) / 10
+            : 0;
+          const sentimentScoreValue = avgSentiment && !isNaN(avgSentiment)
+            ? Math.round(Math.max(0, Math.min(100, (avgSentiment + 1) * 50)))
+            : 50;
+
           return {
+            // Database fields (required by CompetitorPerformance interface)
+            visibility_score: shareOfVoiceValue,
+            avg_rank: averageRankValue,
+            total_mentions: totalMentions,
+            sentiment_score: sentimentScoreValue,
+
+            // UI-compatible fields
             competitorId: String(row.competitor_id),
             domain: String(row.competitor_domain),
             name: String(row.competitor_name || row.competitor_domain),
-            shareOfVoice:
-              totalMentions > 0
-                ? Math.round((positiveMentions / totalMentions) * 100)
-                : 0,
-            averageRank:
-              avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20
-                ? Math.round(avgRank * 10) / 10 // Round to 1 decimal place
-                : 0,
+            shareOfVoice: shareOfVoiceValue,
+            averageRank: averageRankValue,
             mentionCount: totalMentions,
-            sentimentScore:
-              avgSentiment && !isNaN(avgSentiment)
-                ? Math.round(
-                    Math.max(0, Math.min(100, (avgSentiment + 1) * 50))
-                  )
-                : 50,
-            visibilityScore:
-              totalMentions > 0
-                ? Math.round((positiveMentions / totalMentions) * 100)
-                : 0,
+            sentimentScore: sentimentScoreValue,
+            visibilityScore: shareOfVoiceValue,
             trend: this.calculateTrend(mentionTrend),
             trendPercentage: Math.abs(mentionTrend),
             lastAnalyzed: String(
@@ -623,7 +633,7 @@ export class OptimizedCompetitorService extends BaseService {
           allDataPoints: shareOfVoiceData.map((item) => ({
             name: item.name,
             shareOfVoice: item.shareOfVoice,
-            value: (item as any).value,
+            value: 'value' in item ? (item as { value: number }).value : item.shareOfVoice,
             hasValueField: "value" in item,
             totalMentions: item.totalMentions,
           })),
@@ -1180,8 +1190,8 @@ export class OptimizedCompetitorService extends BaseService {
       end: dateRange?.end || new Date().toISOString(),
     };
 
-    const { data, error } = await supabase
-      .schema("beekon_data")
+    const { data, error } = await (supabase
+      .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
       .rpc("get_analysis_results_optimized", {
         p_website_id: websiteId,
         p_date_start: defaultDateRange.start,
@@ -1216,11 +1226,11 @@ export class OptimizedCompetitorService extends BaseService {
       (row: Record<string, unknown>) => {
         const topicName = row.topic;
 
-        if (!resultsMap.has(topicName)) {
-          resultsMap.set(topicName, {
-            id: row.topic_id,
-            topic: topicName,
-            topic_name: topicName,
+        if (!resultsMap.has(String(topicName))) {
+          resultsMap.set(String(topicName), {
+            id: String(row.topic_id),
+            topic: String(topicName),
+            topic_name: String(topicName),
             topic_keywords: [], // Keywords not available in materialized view
             llm_results: [],
             total_mentions: 0,
@@ -1230,17 +1240,16 @@ export class OptimizedCompetitorService extends BaseService {
           } as AnalysisResult);
         }
 
-        const analysisResult = resultsMap.get(topicName)!;
+        const analysisResult = resultsMap.get(String(topicName))!;
         analysisResult.llm_results.push({
-          id: row.id,
-          llm_provider: row.llm_provider,
-          is_mentioned: row.is_mentioned || false,
-          rank_position: row.rank_position,
-          confidence_score: row.confidence_score,
-          sentiment_score: row.sentiment_score,
-          summary_text: row.summary_text,
+          llm_provider: String(row.llm_provider),
+          is_mentioned: Boolean(row.is_mentioned) || false,
+          rank_position: row.rank_position as number | null,
+          confidence_score: row.confidence_score as number | null,
+          sentiment_score: row.sentiment_score as number | null,
+          summary_text: row.summary_text as string | null,
           response_text: "", // Not available in materialized view
-          analyzed_at: row.analyzed_at || new Date().toISOString(),
+          analyzed_at: String(row.analyzed_at) || new Date().toISOString(),
         });
 
         if (row.is_mentioned) {

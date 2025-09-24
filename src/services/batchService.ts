@@ -17,6 +17,11 @@ import type {
 import type { AnalysisFilters } from "@/hooks/useAnalysisQuery";
 import { normalizeCompetitorStatus } from "@/utils/competitorStatusUtils";
 import { sanitizeChartNumber, sanitizeSentimentScore } from "@/utils/chartDataValidation";
+import { ShareOfVoiceDataItem, ShareOfVoiceCompetitor } from "@/types/competitor-data";
+import { CompetitorShareOfVoice } from "./competitorAnalysisService";
+
+// Union type for competitor data that may come in different formats
+type ShareOfVoiceUnion = ShareOfVoiceCompetitor | CompetitorShareOfVoice;
 
 // Batch request types
 export interface BatchRequest {
@@ -321,32 +326,39 @@ class BatchService {
       });
 
       // Transform shareOfVoice data to match expected performance interface with NaN protection
-      const performance = (shareOfVoice || []).map((competitor: any) => {
+      const performance = ((shareOfVoice as ShareOfVoiceUnion[]) || []).map((competitor: ShareOfVoiceUnion) => {
         // Sanitize all numeric values to prevent NaN propagation to charts
         const sanitizedShareOfVoice = sanitizeChartNumber(competitor.shareOfVoice, 0);
-        const rankPosition = competitor.avgRankPosition || competitor.avg_rank || 0;
+        const rankPosition = competitor.avgRankPosition || (competitor as ShareOfVoiceCompetitor).avg_rank || 0;
         const sanitizedRankPosition = sanitizeChartNumber(rankPosition, 0);
-        const totalMentions = competitor.totalMentions || competitor.total_mentions || 0;
+        const totalMentions = competitor.totalMentions || (competitor as ShareOfVoiceCompetitor).total_mentions || 0;
         const sanitizedTotalMentions = sanitizeChartNumber(totalMentions, 0);
-        const sentimentScore = competitor.avgSentimentScore || competitor.sentiment_score || 0;
+        const sentimentScore = competitor.avgSentimentScore || (competitor as ShareOfVoiceCompetitor).sentiment_score || 0;
         const sanitizedSentimentScore = sanitizeSentimentScore(sentimentScore);
 
         return {
-          competitorId: competitor.competitorId || competitor.id,
-          domain: competitor.competitorDomain || competitor.competitor_domain,
-          name: competitor.competitorName || competitor.competitor_name || competitor.name,
+          // Database fields (required by CompetitorPerformance interface)
+          visibility_score: sanitizedShareOfVoice,
+          avg_rank: sanitizedRankPosition,
+          total_mentions: sanitizedTotalMentions,
+          sentiment_score: sanitizedSentimentScore,
+
+          // UI-compatible fields (mapped from database)
+          competitorId: competitor.competitorId || (competitor as ShareOfVoiceCompetitor).id,
+          domain: competitor.competitorDomain || (competitor as ShareOfVoiceCompetitor).competitor_domain,
+          name: competitor.competitorName || (competitor as ShareOfVoiceCompetitor).competitor_name || (competitor as ShareOfVoiceCompetitor).name,
           shareOfVoice: sanitizedShareOfVoice,
           averageRank: sanitizedRankPosition,
           mentionCount: sanitizedTotalMentions,
           sentimentScore: sanitizedSentimentScore,
-          visibilityScore: sanitizedShareOfVoice, // Use sanitized value
+          visibilityScore: sanitizedShareOfVoice, // Same as visibility_score
           trend: "stable" as const, // Default trend
           trendPercentage: 0,
-          lastAnalyzed: competitor.lastAnalyzedAt || competitor.analysis_completed_at || new Date().toISOString(),
-          isActive: competitor.is_active !== undefined ? competitor.is_active : true,
+          lastAnalyzed: competitor.lastAnalyzedAt || (competitor as ShareOfVoiceCompetitor).analysis_completed_at || new Date().toISOString(),
+          isActive: (competitor as ShareOfVoiceCompetitor).is_active !== undefined ? (competitor as ShareOfVoiceCompetitor).is_active : true,
           // FIXED: Use normalized status mapping with proper fallback
           analysisStatus: normalizeCompetitorStatus(
-            competitor.analysisStatus || competitor.analysis_status
+            competitor.analysisStatus || (competitor as ShareOfVoiceCompetitor).analysis_status
           ),
         };
       });
@@ -354,21 +366,19 @@ class BatchService {
       // Create comprehensive analytics object
       const analytics = {
         totalCompetitors: competitors?.length || 0,
-        activeCompetitors: competitors?.filter((c: any) => c.is_active)?.length || 0,
+        activeCompetitors: (competitors as { is_active?: boolean }[])?.filter((c: { is_active?: boolean }) => c.is_active)?.length || 0,
         averageCompetitorRank: shareOfVoice && shareOfVoice.length > 0
-          ? shareOfVoice.reduce((sum, c: any) => {
-              const rank = sanitizeChartNumber(c.avgRankPosition || c.avg_rank, 0);
+          ? (shareOfVoice as ShareOfVoiceUnion[]).reduce((sum: number, c: ShareOfVoiceUnion) => {
+              const rank = sanitizeChartNumber(c.avgRankPosition || (c as ShareOfVoiceCompetitor).avg_rank, 0);
               return sum + rank;
             }, 0) / shareOfVoice.length
           : 0,
-        shareOfVoiceData: (shareOfVoice || []).map((competitor: any) => ({
-          name: competitor.competitorName || competitor.competitor_name || competitor.competitorDomain || competitor.competitor_domain,
+        shareOfVoiceData: ((shareOfVoice as ShareOfVoiceUnion[]) || []).map((competitor: ShareOfVoiceUnion): ShareOfVoiceDataItem => ({
+          name: competitor.competitorName || (competitor as ShareOfVoiceCompetitor).competitor_name || competitor.competitorDomain || (competitor as ShareOfVoiceCompetitor).competitor_domain || "Unknown",
           shareOfVoice: sanitizeChartNumber(competitor.shareOfVoice, 0),
-          totalMentions: sanitizeChartNumber(competitor.totalMentions || competitor.total_mentions, 0),
-          totalAnalyses: sanitizeChartNumber(competitor.totalAnalyses || competitor.total_analyses, 0),
-          competitorId: competitor.competitorId || competitor.id,
-          avgRank: sanitizeChartNumber(competitor.avgRankPosition || competitor.avg_rank, 0),
-          dataType: "share_of_voice" as const,
+          totalMentions: sanitizeChartNumber(competitor.totalMentions || (competitor as ShareOfVoiceCompetitor).total_mentions, 0),
+          totalAnalyses: sanitizeChartNumber((competitor as ShareOfVoiceCompetitor).totalAnalyses || (competitor as ShareOfVoiceCompetitor).total_analyses, 0),
+          competitorId: competitor.competitorId || (competitor as ShareOfVoiceCompetitor).id || "unknown",
         })),
         gapAnalysis,
         insights,

@@ -958,9 +958,9 @@ export class AnalysisService {
   ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
     try {
       // OPTIMIZED: Use materialized view function for instant topics
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_topics_optimized" as any, {
+      const { data, error } = await (supabase
+        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
+        .rpc("get_topics_optimized", {
           p_website_id: websiteId,
         });
 

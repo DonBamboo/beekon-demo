@@ -1,10 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
-  analysisService,
   type AnalysisResult,
   type LLMResult,
 } from "./analysisService";
 import { generateExportFilename } from "@/lib/export-utils";
+import {
+  DashboardMetricsResult
+} from "@/types/supabase-rpc";
 
 export interface DashboardMetrics {
   overallVisibilityScore: number;
@@ -90,21 +92,22 @@ export class DashboardService {
         functionName: "get_dashboard_metrics",
       });
 
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_dashboard_metrics" as any, {
+      const { data, error } = await (supabase
+        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
+        .rpc("get_dashboard_metrics", {
           p_website_ids: websiteIds,
           p_date_start: defaultDateRange.start,
           p_date_end: defaultDateRange.end,
         });
 
       if (error) {
+        const errorObj = error as { code?: string; message?: string; details?: string; hint?: string } | null;
         console.error("❌ Dashboard metrics error:", {
           error,
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
+          code: errorObj?.code,
+          message: errorObj?.message,
+          details: errorObj?.details,
+          hint: errorObj?.hint,
           parameters: { websiteIds, dateRange: defaultDateRange },
         });
         throw error;
@@ -120,7 +123,7 @@ export class DashboardService {
         return this.getEmptyMetrics();
       }
 
-      const metrics = result as any;
+      const metrics = result as DashboardMetricsResult;
       return {
         overallVisibilityScore: Number(
           metrics.overall_visibility_score.toFixed(2) || 0
@@ -158,12 +161,12 @@ export class DashboardService {
       const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
 
       // OPTIMIZED: Use materialized view function for instant time series data
-      const { data, error } = await supabase.schema("beekon_data").rpc(
-        "get_dashboard_time_series" as any,
+      const { data, error } = await (supabase.schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> }).rpc(
+        "get_dashboard_time_series",
         {
           p_website_ids: websiteIds,
           p_days: days,
-        } as any
+        }
       );
 
       if (error) throw error;
@@ -201,9 +204,9 @@ export class DashboardService {
 
     try {
       // OPTIMIZED: Use materialized view function for topic performance
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_topic_performance_dashboard" as any, {
+      const { data, error } = await (supabase
+        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
+        .rpc("get_topic_performance_dashboard", {
           p_website_ids: websiteIds,
           p_limit: limit,
         });
@@ -244,9 +247,9 @@ export class DashboardService {
 
     try {
       // OPTIMIZED: Use materialized view function for LLM performance
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_llm_performance_dashboard" as any, {
+      const { data, error } = await (supabase
+        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
+        .rpc("get_llm_performance_dashboard", {
           p_website_ids: websiteIds,
         });
 
@@ -286,9 +289,9 @@ export class DashboardService {
 
     try {
       // OPTIMIZED: Use materialized view function for website performance
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_website_performance_dashboard" as any, {
+      const { data, error } = await (supabase
+        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
+        .rpc("get_website_performance_dashboard", {
           p_website_ids: websiteIds,
         });
 
@@ -321,51 +324,8 @@ export class DashboardService {
     }
   }
 
-  private async getAllAnalysisResults(
-    websiteIds: string[],
-    dateRange?: { start: string; end: string }
-  ): Promise<AnalysisResult[]> {
-    if (websiteIds.length === 0) {
-      return [];
-    }
 
-    try {
-      // Execute all website analysis fetching in parallel
-      const allResultsPromises = websiteIds.map((websiteId) =>
-        analysisService.getAnalysisResults(websiteId, { dateRange })
-      );
-
-      const allResultsArrays = await Promise.all(allResultsPromises);
-
-      // Flatten all results into a single array and convert to AnalysisResult format
-      const flatResults = allResultsArrays.flat();
-      return flatResults.map((result) => ({
-        id: result.id,
-        topic_name: result.topic,
-        topic: result.topic,
-        topic_keywords: [],
-        llm_results: result.llm_results,
-        total_mentions: result.llm_results.filter((r) => r.is_mentioned).length,
-        avg_rank:
-          result.llm_results.reduce(
-            (acc, r) => acc + (r.rank_position || 0),
-            0
-          ) / result.llm_results.length || null,
-        avg_confidence: result.confidence,
-        avg_sentiment:
-          result.llm_results.reduce(
-            (acc, r) => acc + (r.sentiment_score || 0),
-            0
-          ) / result.llm_results.length || null,
-        created_at: result.created_at,
-        website_id: result.website_id,
-      }));
-    } catch (error) {
-      // Failed to get analysis results
-      return [];
-    }
-  }
-
+  // @ts-expect-error - Unused function - can be removed in future cleanup
   private calculateAggregatedMetrics(
     results: AnalysisResult[]
   ): DashboardMetrics {
@@ -434,11 +394,6 @@ export class DashboardService {
     };
   }
 
-  private _calculateMetricsForResults(
-    results: AnalysisResult[]
-  ): DashboardMetrics {
-    return this.calculateAggregatedMetrics(results);
-  }
 
   private calculateTopicPerformance(
     results: AnalysisResult[],
@@ -510,166 +465,9 @@ export class DashboardService {
       .slice(0, limit);
   }
 
-  private _calculateLLMPerformance(
-    results: AnalysisResult[]
-  ): LLMPerformance[] {
-    const llmMap = new Map<string, LLMResult[]>();
 
-    // Group results by LLM provider
-    results.forEach((result) => {
-      result.llm_results.forEach((llmResult) => {
-        if (!llmMap.has(llmResult.llm_provider)) {
-          llmMap.set(llmResult.llm_provider, []);
-        }
-        llmMap.get(llmResult.llm_provider)!.push(llmResult);
-      });
-    });
 
-    const llmPerformance: LLMPerformance[] = [];
 
-    llmMap.forEach((llmResults, provider) => {
-      const mentionedResults = llmResults.filter((r) => r.is_mentioned);
-      const mentionRate =
-        llmResults.length > 0
-          ? (mentionedResults.length / llmResults.length) * 100
-          : 0;
-
-      const rankedResults = mentionedResults.filter(
-        (r) => r.rank_position !== null
-      );
-      const averageRank =
-        rankedResults.length > 0
-          ? rankedResults.reduce((sum, r) => sum + (r.rank_position || 0), 0) /
-            rankedResults.length
-          : 0;
-
-      const sentimentResults = llmResults.filter(
-        (r) => r.sentiment_score !== null
-      );
-      const sentiment =
-        sentimentResults.length > 0
-          ? (sentimentResults.reduce(
-              (sum, r) => sum + (r.sentiment_score || 0),
-              0
-            ) /
-              sentimentResults.length +
-              1) *
-            50
-          : 0;
-
-      llmPerformance.push({
-        provider: provider.charAt(0).toUpperCase() + provider.slice(1),
-        mentionRate: Math.round(mentionRate),
-        averageRank: Math.round(averageRank * 10) / 10,
-        sentiment: Math.round(sentiment),
-        totalAnalyses: llmResults.length,
-      });
-    });
-
-    return llmPerformance.sort((a, b) => b.mentionRate - a.mentionRate);
-  }
-
-  private _aggregateByDate(
-    results: AnalysisResult[],
-    startDate: Date,
-    endDate: Date
-  ): TimeSeriesData[] {
-    const dateMap = new Map<
-      string,
-      {
-        mentions: number;
-        totalResults: number;
-        sentimentSum: number;
-        sentimentCount: number;
-      }
-    >();
-
-    // Initialize all dates in range
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const dateKey = currentDate.toISOString().split("T")[0]!;
-      dateMap.set(dateKey, {
-        mentions: 0,
-        totalResults: 0,
-        sentimentSum: 0,
-        sentimentCount: 0,
-      });
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    // Aggregate results by date
-    results.forEach((result) => {
-      result.llm_results.forEach((llmResult) => {
-        const date = new Date(llmResult.analyzed_at)
-          .toISOString()
-          .split("T")[0]!;
-        const data = dateMap.get(date);
-
-        if (data) {
-          data.totalResults++;
-          if (llmResult.is_mentioned) {
-            data.mentions++;
-          }
-          if (llmResult.sentiment_score !== null) {
-            data.sentimentSum += llmResult.sentiment_score;
-            data.sentimentCount++;
-          }
-        }
-      });
-    });
-
-    // Convert to time series format
-    const timeSeriesData: TimeSeriesData[] = [];
-    dateMap.forEach((data, date) => {
-      const visibility =
-        data.totalResults > 0 ? (data.mentions / data.totalResults) * 100 : 0;
-      const sentiment =
-        data.sentimentCount > 0
-          ? (data.sentimentSum / data.sentimentCount + 1) * 50
-          : 50;
-
-      timeSeriesData.push({
-        date,
-        visibility: Math.round(visibility),
-        mentions: data.mentions,
-        sentiment: Math.round(sentiment),
-      });
-    });
-
-    return timeSeriesData.sort((a, b) => a.date.localeCompare(b.date));
-  }
-
-  private async _getPreviousPeriodMetrics(
-    websiteIds: string[],
-    currentRange?: { start: string; end: string }
-  ): Promise<DashboardMetrics> {
-    if (!currentRange) {
-      return this.getEmptyMetrics();
-    }
-
-    const currentStart = new Date(currentRange.start);
-    const currentEnd = new Date(currentRange.end);
-    const periodLength = currentEnd.getTime() - currentStart.getTime();
-
-    const previousEnd = new Date(currentStart.getTime() - 1);
-    const previousStart = new Date(previousEnd.getTime() - periodLength);
-
-    const previousRange = {
-      start: previousStart.toISOString(),
-      end: previousEnd.toISOString(),
-    };
-
-    const previousResults = await this.getAllAnalysisResults(
-      websiteIds,
-      previousRange
-    );
-    return this.calculateAggregatedMetrics(previousResults);
-  }
-
-  private _calculateTrend(current: number, previous: number): number {
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return Math.round(((current - previous) / previous) * 100);
-  }
 
   private getEmptyMetrics(): DashboardMetrics {
     return {

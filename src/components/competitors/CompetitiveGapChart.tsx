@@ -259,10 +259,7 @@ export default function CompetitiveGapChart({
       return data;
     });
 
-    // Get all unique competitor keys for dynamic rendering (now we can use the mapping directly)
-    const competitorKeys = new Set<string>(
-      Array.from(competitorKeyMap.values())
-    );
+    // Note: competitorKeyMap contains all unique competitor keys for dynamic rendering
 
     // Extract all unique competitors for standardized mapping (use the consistent mapping we created)
     const allCompetitors: Array<{
@@ -290,7 +287,7 @@ export default function CompetitiveGapChart({
 
     // Validate that all competitors were properly registered
     if (process.env.NODE_ENV !== "production") {
-      const registrationValidation = competitorsForRegistration.every(
+      const allRegistered = competitorsForRegistration.every(
         (comp) => {
           const colorInfo = getCompetitorFixedColorInfo({
             competitorId: comp.competitorId,
@@ -299,6 +296,9 @@ export default function CompetitiveGapChart({
           return colorInfo.colorSlot !== -1; // -1 indicates failed registration
         }
       );
+      if (!allRegistered) {
+        console.warn("⚠️ Some competitors failed color registration");
+      }
     }
 
     // Create competitor info array for rendering with fixed color assignment

@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, RefreshCw, Filter, Globe } from "lucide-react";
+import { Plus, RefreshCw, Globe } from "lucide-react";
 import { ExportFormat } from "@/types/database";
 import { useSelectedWebsite } from "@/hooks/appStateHooks";
 
@@ -28,7 +28,7 @@ interface CompetitorsHeaderProps {
   totalCompetitors: number;
   activeCompetitors: number;
   dateFilter: "7d" | "30d" | "90d";
-  sortBy: "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore";
+  // sortBy: "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore"; // Currently unused
   isRefreshing: boolean;
   hasData: boolean;
   isAddDialogOpen: boolean;
@@ -37,9 +37,7 @@ interface CompetitorsHeaderProps {
   isAdding: boolean;
   websitesLoading: boolean;
   setDateFilter: (value: "7d" | "30d" | "90d") => void;
-  setSortBy: (
-    value: "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore"
-  ) => void;
+  // setSortBy: (value: "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore") => void; // Currently unused
   setIsAddDialogOpen: (value: boolean) => void;
   setCompetitorDomain: (value: string) => void;
   setCompetitorName: (value: string) => void;
@@ -54,7 +52,7 @@ export default function CompetitorsHeader({
   totalCompetitors,
   activeCompetitors,
   dateFilter,
-  sortBy,
+  // sortBy, // Currently unused
   isRefreshing,
   hasData,
   isAddDialogOpen,
@@ -63,7 +61,7 @@ export default function CompetitorsHeader({
   isAdding,
   websitesLoading,
   setDateFilter,
-  setSortBy,
+  // setSortBy, // Currently unused
   setIsAddDialogOpen,
   setCompetitorDomain,
   setCompetitorName,

@@ -42,6 +42,7 @@ import {
 } from "@/utils/chartDataValidation";
 import { ChartErrorFallback, ErrorBoundary } from "@/components/ErrorBoundary";
 import { CompetitorTimeSeriesData } from "@/services/competitorService";
+import { ChartDataPoint } from "@/types/chart-data";
 
 interface ShareOfVoiceData {
   name: string;
@@ -226,7 +227,7 @@ export default function ShareOfVoiceChart({
 
     // Transform time-series data into format suitable for stacked area chart
     return sortedTimeSeriesData.map((point) => {
-      const transformedPoint: any = {
+      const transformedPoint: ChartDataPoint = {
         date: point.date,
         dateFormatted: new Date(point.date).toLocaleDateString(),
       };

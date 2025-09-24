@@ -501,7 +501,7 @@ export default function Competitors() {
             ).length
           }
           dateFilter={(filters as CompetitorFilters).dateFilter}
-          sortBy={(filters as CompetitorFilters).sortBy}
+          // sortBy={(filters as CompetitorFilters).sortBy} // Currently unused
           isRefreshing={isRefreshing}
           hasData={hasData}
           isAddDialogOpen={isAddDialogOpen}
@@ -522,9 +522,9 @@ export default function Competitors() {
               dateFilter: value,
             });
           }}
-          setSortBy={(value) =>
-            setFilters({ ...(filters as CompetitorFilters), sortBy: value })
-          }
+          // setSortBy={(value: "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore") =>
+          //   setFilters({ ...(filters as CompetitorFilters), sortBy: value })
+          // } // Currently unused
           setIsAddDialogOpen={setIsAddDialogOpen}
           setCompetitorDomain={setCompetitorDomain}
           setCompetitorName={setCompetitorName}

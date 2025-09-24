@@ -277,31 +277,9 @@ interface MentionTrendChartProps {
 }
 
 export const MentionTrendChart = React.memo(
-  forwardRef<HTMLDivElement, MentionTrendChartProps>(({ trendData }, ref) => {
-    // Validate and sanitize chart data to detect NaN/Infinity values
-    const sanitizedData = useMemo(() => {
-      const validation = validateAndSanitizeChartData(
-        trendData as unknown as Record<string, unknown>[],
-        ["mentions", "sentiment"]
-      );
-
-      if (validation.hasIssues && process.env.NODE_ENV !== "production") {
-        console.warn(
-          "⚠️ MentionTrendChart: NaN/Infinity detected in trendData:",
-          {
-            issues: validation.issues,
-            originalData: trendData,
-            sanitizedData: validation.data,
-          }
-        );
-      }
-
-      return validation.data as unknown as Array<{
-        date: string;
-        mentions: number;
-        sentiment: number;
-      }>;
-    }, [trendData]);
+  forwardRef<HTMLDivElement, MentionTrendChartProps>(({ trendData: _ }, ref) => {
+    // TODO: Chart implementation temporarily disabled
+    // When re-enabling, add data validation using validateAndSanitizeChartData
 
     return (
       <Card ref={ref}>
