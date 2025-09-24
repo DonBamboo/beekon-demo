@@ -35,7 +35,7 @@ function isValidSettingsJson(json: Json): json is {
   country_code?: string;
   country_name?: string;
 } {
-  return json !== null && typeof json === 'object' && !Array.isArray(json);
+  return json !== null && typeof json === "object" && !Array.isArray(json);
 }
 
 export class WebsiteSettingsService {
@@ -66,22 +66,29 @@ export class WebsiteSettingsService {
     }
 
     if (settingsData) {
-      const settings = isValidSettingsJson(settingsData.settings) ? settingsData.settings : {};
-      
+      const settings = isValidSettingsJson(settingsData.settings)
+        ? settingsData.settings
+        : {};
+
       return {
         id: settingsData.id,
         website_id: settingsData.website_id,
         analysis_frequency:
-          (settings.analysis_frequency as WebsiteSettingsUpdateData['analysis_frequency']) || "weekly",
+          (settings.analysis_frequency as WebsiteSettingsUpdateData["analysis_frequency"]) ||
+          "weekly",
         auto_analysis: settings.auto_analysis ?? true,
         notifications: settings.notifications ?? true,
         competitor_tracking: settings.competitor_tracking ?? false,
         weekly_reports: settings.weekly_reports ?? true,
         show_in_dashboard: settings.show_in_dashboard ?? true,
-        priority_level: (settings.priority_level as WebsiteSettingsUpdateData['priority_level']) || "medium",
+        priority_level:
+          (settings.priority_level as WebsiteSettingsUpdateData["priority_level"]) ||
+          "medium",
         custom_labels: settings.custom_labels || "",
         api_access: settings.api_access ?? false,
-        data_retention: (settings.data_retention as WebsiteSettingsUpdateData['data_retention']) || "90",
+        data_retention:
+          (settings.data_retention as WebsiteSettingsUpdateData["data_retention"]) ||
+          "90",
         export_enabled: settings.export_enabled ?? true,
         country_code: settings.country_code || undefined,
         country_name: settings.country_name || undefined,
@@ -137,9 +144,9 @@ export class WebsiteSettingsService {
     updates: WebsiteSettingsUpdateData
   ): Promise<WebsiteSettings> {
     // Only proceed if country is selected
-    if (!updates.country_code || !updates.country_name) {
-      throw new Error("Website settings can only be saved when a country is selected");
-    }
+    // if (!updates.country_code || !updates.country_name) {
+    //   throw new Error("Website settings can only be saved when a country is selected");
+    // }
 
     // First, check if settings record exists
     const { data: existingSettings } = await supabase
@@ -161,8 +168,8 @@ export class WebsiteSettingsService {
       api_access: updates.api_access,
       data_retention: updates.data_retention,
       export_enabled: updates.export_enabled,
-      country_code: updates.country_code,
-      country_name: updates.country_name,
+      country_code: updates.country_code || null,
+      country_name: updates.country_name || null,
     };
 
     let data;
@@ -195,20 +202,26 @@ export class WebsiteSettingsService {
     }
 
     const settings = isValidSettingsJson(data.settings) ? data.settings : {};
-    
+
     return {
       id: data.id,
       website_id: data.website_id,
-      analysis_frequency: (settings.analysis_frequency as WebsiteSettingsUpdateData['analysis_frequency']) || "weekly",
+      analysis_frequency:
+        (settings.analysis_frequency as WebsiteSettingsUpdateData["analysis_frequency"]) ||
+        "weekly",
       auto_analysis: settings.auto_analysis ?? true,
       notifications: settings.notifications ?? true,
       competitor_tracking: settings.competitor_tracking ?? false,
       weekly_reports: settings.weekly_reports ?? true,
       show_in_dashboard: settings.show_in_dashboard ?? true,
-      priority_level: (settings.priority_level as WebsiteSettingsUpdateData['priority_level']) || "medium",
+      priority_level:
+        (settings.priority_level as WebsiteSettingsUpdateData["priority_level"]) ||
+        "medium",
       custom_labels: settings.custom_labels || "",
       api_access: settings.api_access ?? false,
-      data_retention: (settings.data_retention as WebsiteSettingsUpdateData['data_retention']) || "90",
+      data_retention:
+        (settings.data_retention as WebsiteSettingsUpdateData["data_retention"]) ||
+        "90",
       export_enabled: settings.export_enabled ?? true,
       country_code: settings.country_code || undefined,
       country_name: settings.country_name || undefined,
