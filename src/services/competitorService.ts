@@ -347,7 +347,7 @@ export class OptimizedCompetitorService extends BaseService {
           ...timePoint,
           competitors: normalizedCompetitors
         };
-      }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // FIXED: Chronological order (oldest to newest)
 
       // Validate that each date totals to 100%
       normalizedResult.forEach((timePoint, index) => {

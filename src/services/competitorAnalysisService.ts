@@ -595,6 +595,24 @@ export class CompetitorAnalysisService extends BaseService {
   }
 
   /**
+   * Helper function to check if a competitor is actually "Your Brand"
+   * This prevents "Your Brand" from being treated as a competitor/threat
+   */
+  private isYourBrand(competitor: { competitorName?: string; competitorId?: string }): boolean {
+    return competitor.competitorName === "Your Brand" ||
+           competitor.competitorId === "your-brand";
+  }
+
+  /**
+   * Filter out "Your Brand" from competitor analysis
+   */
+  private filterOutYourBrand<T extends { competitorName?: string; competitorId?: string }>(
+    competitors: T[]
+  ): T[] {
+    return competitors.filter(comp => !this.isYourBrand(comp));
+  }
+
+  /**
    * Generate insights from actual analysis data
    */
   private generateInsightsFromData(
@@ -603,7 +621,8 @@ export class CompetitorAnalysisService extends BaseService {
     gapAnalysis: CompetitiveGapAnalysis[]
   ): void {
     // Analyze share of voice for threats and opportunities
-    const dominantCompetitor = shareOfVoice.find(
+    // FIXED: Exclude "Your Brand" from threat detection - only actual competitors should be threats
+    const dominantCompetitor = this.filterOutYourBrand(shareOfVoice).find(
       (comp) => comp.shareOfVoice > 40
     );
 
@@ -627,7 +646,8 @@ export class CompetitorAnalysisService extends BaseService {
     }
 
     // Look for emerging competitors (high share of voice but not dominant)
-    const emergingCompetitors = shareOfVoice.filter(
+    // FIXED: Exclude "Your Brand" from emerging competitor threat detection
+    const emergingCompetitors = this.filterOutYourBrand(shareOfVoice).filter(
       (comp) => comp.shareOfVoice > 15 && comp.shareOfVoice <= 40
     );
 
@@ -682,7 +702,8 @@ export class CompetitorAnalysisService extends BaseService {
     });
 
     // Analyze ranking performance for quick wins
-    const poorRankingCompetitors = shareOfVoice.filter(
+    // FIXED: Exclude "Your Brand" from competitor ranking analysis - we don't compete against ourselves
+    const poorRankingCompetitors = this.filterOutYourBrand(shareOfVoice).filter(
       (comp) =>
         comp.avgRankPosition &&
         comp.avgRankPosition > 3 &&
@@ -710,22 +731,76 @@ export class CompetitorAnalysisService extends BaseService {
 
     // Add strategic insights if we have sufficient data
     if (shareOfVoice.length >= 2) {
-      const totalCompetitorShare = shareOfVoice.reduce(
-        (sum, comp) => sum + comp.shareOfVoice,
-        0
-      );
-      if (totalCompetitorShare < 80) {
+      // FIXED: Proper market share analysis including Your Brand's position
+      const yourBrandData = shareOfVoice.find(comp => this.isYourBrand(comp));
+      const yourBrandShare = yourBrandData?.shareOfVoice || 0;
+
+      const competitorData = this.filterOutYourBrand(shareOfVoice);
+      const totalCompetitorShare = competitorData.reduce((sum, comp) => sum + comp.shareOfVoice, 0);
+
+      const totalTrackedShare = yourBrandShare + totalCompetitorShare;
+      const unaccountedShare = Math.max(0, 100 - totalTrackedShare);
+
+      // Generate contextual market insights based on Your Brand's actual position
+      if (yourBrandShare > 60) {
+        // Market Leadership Position
         insights.push({
           type: "opportunity",
-          title: "Market Share Opportunity",
-          description: `Only ${totalCompetitorShare.toFixed(
-            1
-          )}% of voice share is captured by tracked competitors`,
+          title: "Market Leadership Position",
+          description: `Your Brand dominates with ${yourBrandShare.toFixed(1)}% market share vs ${totalCompetitorShare.toFixed(1)}% by competitors`,
+          impact: "medium",
+          recommendations: [
+            "Focus on defensive strategies to maintain market leadership",
+            "Monitor emerging competitors and potential threats",
+            "Leverage dominant position to expand into adjacent topics",
+          ],
+        });
+      } else if (yourBrandShare >= 30) {
+        // Competitive Market Position
+        const topCompetitor = competitorData.length > 0
+          ? competitorData.reduce((prev, current) =>
+              current.shareOfVoice > prev.shareOfVoice ? current : prev)
+          : null;
+
+        if (topCompetitor) {
+          insights.push({
+            type: "opportunity",
+            title: "Competitive Market Dynamics",
+            description: `Your Brand (${yourBrandShare.toFixed(1)}%) competes in a ${competitorData.length}-player market with top competitor ${topCompetitor.competitorName} at ${topCompetitor.shareOfVoice.toFixed(1)}%`,
+            impact: "high",
+            recommendations: [
+              `Target specific weaknesses of ${topCompetitor.competitorName}`,
+              "Identify content gaps where competitors underperform",
+              "Focus on topics where you can outrank key competitors",
+            ],
+          });
+        }
+      } else {
+        // Growth Opportunity Position
+        insights.push({
+          type: "opportunity",
+          title: "Market Share Growth Opportunity",
+          description: `Your Brand (${yourBrandShare.toFixed(1)}%) vs competitors (${totalCompetitorShare.toFixed(1)}%) - significant growth potential available`,
           impact: "high",
           recommendations: [
-            "Research and add more competitors in your space",
-            "Identify uncontested topic areas",
-            "Focus on topics with low competitor coverage",
+            "Aggressively target competitor content gaps",
+            "Increase content volume and quality in key topic areas",
+            "Focus on topics where competitors have weak rankings",
+          ],
+        });
+      }
+
+      // Additional insight for truly uncontested market space
+      if (unaccountedShare > 10) {
+        insights.push({
+          type: "opportunity",
+          title: "Uncontested Market Opportunity",
+          description: `${unaccountedShare.toFixed(1)}% of market voice appears uncontested - potential for expansion`,
+          impact: "high",
+          recommendations: [
+            "Research additional competitors in your space",
+            "Identify entirely new topic areas to dominate",
+            "Expand content coverage into uncontested segments",
           ],
         });
       }
