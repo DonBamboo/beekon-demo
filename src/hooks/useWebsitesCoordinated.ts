@@ -64,31 +64,33 @@ export function useWebsitesCoordinated() {
   const loadWebsiteMetrics = useCallback(
     async (websiteId: string): Promise<WebsiteMetrics> => {
       try {
-        // Get total topics for this website
-        const topicsQuery = await supabase
-          .schema("beekon_data")
-          .from("topics")
-          .select("*", { count: "exact", head: true })
-          .eq("website_id", websiteId);
+        // OPTIMIZED: Use materialized view for lightning-fast website metrics
+        console.log(`🚀 Using mv_analysis_results materialized view for website metrics (website: ${websiteId})`);
 
-        // Get visibility data for this website
-        const visibilityQuery = await supabase
-          .schema("beekon_data")
-          .from("llm_analysis_results")
-          .select("is_mentioned, created_at")
+        // Get comprehensive data from materialized view in one query
+        const { data: analysisData, error: analysisError } = await (supabase
+          .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+          .from("mv_analysis_results")
+          .select(`
+            is_mentioned,
+            analyzed_at,
+            topic_name
+          `)
           .eq("website_id", websiteId)
-          .order("created_at", { ascending: false });
+          .order("analyzed_at", { ascending: false });
 
-        const totalTopics = topicsQuery.count || 0;
-        const visibilityData = visibilityQuery.data || [];
-        const totalAnalyses = visibilityData.length;
-        const visibleCount = visibilityData.filter(
-          (item) => item.is_mentioned
-        ).length;
-        const avgVisibility =
-          totalAnalyses > 0 ? (visibleCount / totalAnalyses) * 100 : 0;
-        const lastAnalysisDate =
-          visibilityData.length > 0 ? visibilityData[0]?.created_at : undefined;
+        if (analysisError) throw analysisError;
+
+        // Calculate metrics from materialized view data
+        const analysisResults = analysisData || [];
+        const totalAnalyses = analysisResults.length;
+        const visibleCount = analysisResults.filter((item: any) => item.is_mentioned).length; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const avgVisibility = totalAnalyses > 0 ? (visibleCount / totalAnalyses) * 100 : 0;
+        const lastAnalysisDate = analysisResults.length > 0 ? analysisResults[0]?.analyzed_at : undefined;
+
+        // Get unique topics count from materialized view data
+        const uniqueTopics = new Set(analysisResults.map((item: any) => item.topic_name)); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const totalTopics = uniqueTopics.size;
 
         return {
           totalTopics,
@@ -96,12 +98,52 @@ export function useWebsitesCoordinated() {
           totalAnalyses,
           lastAnalysisDate: lastAnalysisDate || undefined,
         };
+
       } catch (error) {
-        return {
-          totalTopics: 0,
-          avgVisibility: 0,
-          totalAnalyses: 0,
-        };
+        console.warn(`⚠️ Materialized view query failed for website metrics, falling back (website: ${websiteId}):`, error);
+
+        // Fallback to original queries if materialized view fails
+        try {
+          // Get total topics for this website
+          const topicsQuery = await supabase
+            .schema("beekon_data")
+            .from("topics")
+            .select("*", { count: "exact", head: true })
+            .eq("website_id", websiteId);
+
+          // Get visibility data for this website
+          const visibilityQuery = await supabase
+            .schema("beekon_data")
+            .from("llm_analysis_results")
+            .select("is_mentioned, created_at")
+            .eq("website_id", websiteId)
+            .order("created_at", { ascending: false });
+
+          const totalTopics = topicsQuery.count || 0;
+          const visibilityData = visibilityQuery.data || [];
+          const totalAnalyses = visibilityData.length;
+          const visibleCount = visibilityData.filter(
+            (item) => item.is_mentioned
+          ).length;
+          const avgVisibility =
+            totalAnalyses > 0 ? (visibleCount / totalAnalyses) * 100 : 0;
+          const lastAnalysisDate =
+            visibilityData.length > 0 ? visibilityData[0]?.created_at : undefined;
+
+          return {
+            totalTopics,
+            avgVisibility,
+            totalAnalyses,
+            lastAnalysisDate: lastAnalysisDate || undefined,
+          };
+        } catch (fallbackError) {
+          console.error(`❌ Both materialized view and fallback queries failed for website ${websiteId}:`, fallbackError);
+          return {
+            totalTopics: 0,
+            avgVisibility: 0,
+            totalAnalyses: 0,
+          };
+        }
       }
     },
     []

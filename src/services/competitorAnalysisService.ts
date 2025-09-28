@@ -300,8 +300,97 @@ export class CompetitorAnalysisService extends BaseService {
     const timeSeriesData = Array.isArray(data) ? data : [];
     console.log("📊 Processing time series data for share of voice:", {
       totalRecords: timeSeriesData.length,
+      hasData: timeSeriesData.length > 0,
+      sampleRecord: timeSeriesData.length > 0 ? timeSeriesData[0] : null,
     });
 
+    // ENHANCED FALLBACK: If no time series data, try materialized view directly
+    if (timeSeriesData.length === 0) {
+      console.log("⚠️ No time series data found, attempting materialized view fallback...");
+
+      try {
+        const { data: fallbackData, error: fallbackError } = await (supabase
+          .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+          .from("mv_analysis_results")
+          .select(`
+            website_id,
+            competitor_id,
+            competitor_name,
+            competitor_domain,
+            is_mentioned,
+            analyzed_at
+          `)
+          .eq("website_id", websiteId)
+          .gte("analyzed_at", finalDateRange.start)
+          .lte("analyzed_at", finalDateRange.end);
+
+        if (fallbackError) {
+          console.error("❌ Materialized view fallback failed:", fallbackError);
+        } else if (fallbackData && fallbackData.length > 0) {
+          console.log("✅ Using materialized view fallback data:", {
+            recordCount: fallbackData.length,
+            dateRange: finalDateRange
+          });
+
+          // Convert materialized view data to time series format
+          const groupedData = new Map<string, {
+            competitor_id: string;
+            competitor_name: string;
+            competitor_domain: string;
+            is_your_brand: boolean;
+            daily_mentions: number;
+            daily_positive_mentions: number;
+            analysis_date: string;
+          }>();
+
+          fallbackData.forEach((row: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            const competitorKey = `${row.competitor_id || 'your-brand'}_${row.analyzed_at?.split('T')[0]}`;
+
+            if (!groupedData.has(competitorKey)) {
+              groupedData.set(competitorKey, {
+                competitor_id: row.competitor_id || '00000000-0000-0000-0000-000000000000',
+                competitor_name: row.competitor_name || 'Your Brand',
+                competitor_domain: row.competitor_domain || '',
+                is_your_brand: !row.competitor_id, // If no competitor_id, it's your brand
+                daily_mentions: 0,
+                daily_positive_mentions: 0,
+                analysis_date: row.analyzed_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+              });
+            }
+
+            const dayData = groupedData.get(competitorKey)!;
+            dayData.daily_mentions += 1;
+            if (row.is_mentioned) {
+              dayData.daily_positive_mentions += 1;
+            }
+          });
+
+          // Process the converted fallback data instead of recursion
+          const convertedTimeSeriesData = Array.from(groupedData.values());
+          console.log("🔄 Processing converted materialized view data:", {
+            convertedRecords: convertedTimeSeriesData.length,
+            sampleData: convertedTimeSeriesData[0] || null
+          });
+
+          // Continue processing with converted data (skip to aggregation logic)
+          return this.processShareOfVoiceAggregation(convertedTimeSeriesData);
+        }
+      } catch (fallbackError) {
+        console.error("🚨 Materialized view fallback error:", fallbackError);
+      }
+    }
+
+    // Use the normal aggregation logic for time series data
+    return this.processShareOfVoiceAggregation(timeSeriesData);
+  }
+
+  /**
+   * Process share of voice aggregation from time series data
+   * Extracted method to avoid code duplication between normal and fallback flows
+   */
+  private processShareOfVoiceAggregation(
+    timeSeriesData: Record<string, unknown>[]
+  ): CompetitorShareOfVoice[] {
     // Group data by competitor and aggregate across all dates
     const competitorMap = new Map<string, {
       competitorId: string;
@@ -343,8 +432,21 @@ export class CompetitorAnalysisService extends BaseService {
       }
 
       const competitor = competitorMap.get(competitorId)!;
-      competitor.totalMentions += dailyPositiveMentions; // Use positive mentions for consistency
-      competitor.totalAnalyses += dailyMentions; // Total analyses = all mentions (positive + negative)
+
+      // DEBUGGING: Log the values being processed
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`🔢 Processing competitor ${competitor.competitorName}:`, {
+          dailyMentions,
+          dailyPositiveMentions,
+          currentTotalMentions: competitor.totalMentions,
+          analysisDate
+        });
+      }
+
+      // FIXED: Use all mentions for share of voice calculation, not just positive mentions
+      // Share of voice should represent total brand visibility, not just positive sentiment
+      competitor.totalMentions += dailyMentions; // Use total mentions for share of voice
+      competitor.totalAnalyses += dailyMentions; // Total analyses = all mentions
 
       if (dailyAvgRank > 0) {
         competitor.avgRankSum += dailyAvgRank;
@@ -364,6 +466,26 @@ export class CompetitorAnalysisService extends BaseService {
     // Convert to CompetitorShareOfVoice format with proper calculation
     const allCompetitors = Array.from(competitorMap.values());
     const totalMentionsAcrossAll = allCompetitors.reduce((sum, comp) => sum + comp.totalMentions, 0);
+
+    // ENHANCED: If no competitors found, ensure "Your Brand" is always included
+    if (allCompetitors.length === 0) {
+      console.log("⚠️ No competitor data found in aggregation, creating default Your Brand entry");
+
+      // Add a default "Your Brand" entry to prevent empty charts
+      allCompetitors.push({
+        competitorId: "00000000-0000-0000-0000-000000000000",
+        competitorName: "Your Brand",
+        competitorDomain: "", // Will be filled from website data if needed
+        isYourBrand: true,
+        totalMentions: 0,
+        totalAnalyses: 0,
+        avgRankSum: 0,
+        avgRankCount: 0,
+        avgSentimentSum: 0,
+        avgSentimentCount: 0,
+        lastAnalyzedAt: new Date().toISOString(),
+      });
+    }
 
     const shareOfVoiceData = allCompetitors.map((comp) => {
       const rawShareOfVoice = totalMentionsAcrossAll > 0

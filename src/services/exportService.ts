@@ -191,32 +191,80 @@ export class ExportService {
     // Add metrics if requested
     if (includeMetrics) {
       const metricsPromises = websiteIds.map(async (websiteId) => {
-        let metricsQuery = supabase
-          .schema("beekon_data")
-          .from("llm_analysis_results")
-          .select(`
-            confidence_score,
-            sentiment_score,
-            is_mentioned,
-            rank_position,
-            created_at,
-            prompts!inner(
-              topics!inner(
-                website_id,
-                topic_name
+        try {
+          // OPTIMIZED: Use materialized view for lightning-fast export metrics
+          console.log(`🚀 Using mv_analysis_results materialized view for export metrics (website: ${websiteId})`);
+
+          let metricsQuery = (supabase
+            .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+            .from("mv_analysis_results")
+            .select(`
+              confidence_score,
+              sentiment_score,
+              is_mentioned,
+              rank_position,
+              analyzed_at,
+              topic_name
+            `)
+            .eq("website_id", websiteId);
+
+          if (dateRange) {
+            metricsQuery = metricsQuery
+              .gte("analyzed_at", dateRange.start)
+              .lte("analyzed_at", dateRange.end);
+          }
+
+          const { data: metrics, error } = await metricsQuery;
+          if (error) throw error;
+
+          // Transform materialized view data to expected format
+          const transformedMetrics = (metrics || []).map((row: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+            confidence_score: row.confidence_score,
+            sentiment_score: row.sentiment_score,
+            is_mentioned: row.is_mentioned,
+            rank_position: row.rank_position,
+            created_at: row.analyzed_at,
+            prompts: {
+              topics: {
+                website_id: websiteId,
+                topic_name: row.topic_name,
+              },
+            },
+          }));
+
+          return { websiteId, metrics: transformedMetrics };
+
+        } catch (error) {
+          console.warn(`⚠️ Materialized view query failed for export metrics, falling back (website: ${websiteId}):`, error);
+
+          // Fallback to original expensive query
+          let metricsQuery = supabase
+            .schema("beekon_data")
+            .from("llm_analysis_results")
+            .select(`
+              confidence_score,
+              sentiment_score,
+              is_mentioned,
+              rank_position,
+              created_at,
+              prompts!inner(
+                topics!inner(
+                  website_id,
+                  topic_name
+                )
               )
-            )
-          `)
-          .eq("prompts.topics.website_id", websiteId);
+            `)
+            .eq("prompts.topics.website_id", websiteId);
 
-        if (dateRange) {
-          metricsQuery = metricsQuery
-            .gte("created_at", dateRange.start)
-            .lte("created_at", dateRange.end);
+          if (dateRange) {
+            metricsQuery = metricsQuery
+              .gte("created_at", dateRange.start)
+              .lte("created_at", dateRange.end);
+          }
+
+          const { data: metrics } = await metricsQuery;
+          return { websiteId, metrics: metrics || [] };
         }
-
-        const { data: metrics } = await metricsQuery;
-        return { websiteId, metrics: metrics || [] };
       });
 
       const metricsResults = await Promise.all(metricsPromises);
@@ -228,10 +276,10 @@ export class ExportService {
         // Calculate metrics
         const totalAnalyses = websiteMetrics?.metrics.length || 0;
         const metrics = websiteMetrics?.metrics || [];
-        const averageConfidence = metrics.length > 0 ? metrics.reduce((sum, m) => sum + (m.confidence_score || 0), 0) / metrics.length : 0;
-        const averageSentiment = metrics.length > 0 ? metrics.reduce((sum, m) => sum + (m.sentiment_score || 0), 0) / metrics.length : 0;
-        const mentionRate = metrics.length > 0 ? (metrics.filter(m => m.is_mentioned).length / metrics.length) * 100 : 0;
-        const averageRank = metrics.length > 0 ? metrics.reduce((sum, m) => sum + (m.rank_position || 0), 0) / metrics.length : 0;
+        const averageConfidence = metrics.length > 0 ? metrics.reduce((sum: number, m: any) => sum + (m.confidence_score || 0), 0) / metrics.length : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const averageSentiment = metrics.length > 0 ? metrics.reduce((sum: number, m: any) => sum + (m.sentiment_score || 0), 0) / metrics.length : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const mentionRate = metrics.length > 0 ? (metrics.filter((m: any) => m.is_mentioned).length / metrics.length) * 100 : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const averageRank = metrics.length > 0 ? metrics.reduce((sum: number, m: any) => sum + (m.rank_position || 0), 0) / metrics.length : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
         
         // Return flattened tabular data - each row represents one data point
         return [
@@ -257,36 +305,91 @@ export class ExportService {
     // Add analysis history if requested
     if (includeAnalysisHistory) {
       const historyPromises = websiteIds.map(async (websiteId) => {
-        let historyQuery = supabase
-          .schema("beekon_data")
-          .from("llm_analysis_results")
-          .select(`
-            created_at,
-            llm_provider,
-            is_mentioned,
-            rank_position,
-            confidence_score,
-            sentiment_score,
-            response_text,
-            prompts!inner(
+        try {
+          // OPTIMIZED: Use materialized view for lightning-fast export history
+          console.log(`🚀 Using mv_analysis_results materialized view for export history (website: ${websiteId})`);
+
+          let historyQuery = (supabase
+            .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+            .from("mv_analysis_results")
+            .select(`
+              analyzed_at,
+              llm_provider,
+              is_mentioned,
+              rank_position,
+              confidence_score,
+              sentiment_score,
+              response_text,
               prompt_text,
-              topics!inner(
-                website_id,
-                topic_name
+              topic_name
+            `)
+            .eq("website_id", websiteId)
+            .order("analyzed_at", { ascending: false });
+
+          if (dateRange) {
+            historyQuery = historyQuery
+              .gte("analyzed_at", dateRange.start)
+              .lte("analyzed_at", dateRange.end);
+          }
+
+          const { data: history, error } = await historyQuery;
+          if (error) throw error;
+
+          // Transform materialized view data to expected format
+          const transformedHistory = (history || []).map((row: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+            created_at: row.analyzed_at,
+            llm_provider: row.llm_provider,
+            is_mentioned: row.is_mentioned,
+            rank_position: row.rank_position,
+            confidence_score: row.confidence_score,
+            sentiment_score: row.sentiment_score,
+            response_text: row.response_text,
+            prompts: {
+              prompt_text: row.prompt_text,
+              topics: {
+                website_id: websiteId,
+                topic_name: row.topic_name,
+              },
+            },
+          }));
+
+          return { websiteId, history: transformedHistory };
+
+        } catch (error) {
+          console.warn(`⚠️ Materialized view query failed for export history, falling back (website: ${websiteId}):`, error);
+
+          // Fallback to original expensive query
+          let historyQuery = supabase
+            .schema("beekon_data")
+            .from("llm_analysis_results")
+            .select(`
+              created_at,
+              llm_provider,
+              is_mentioned,
+              rank_position,
+              confidence_score,
+              sentiment_score,
+              response_text,
+              prompts!inner(
+                prompt_text,
+                topics!inner(
+                  website_id,
+                  topic_name
+                )
               )
-            )
-          `)
-          .eq("prompts.topics.website_id", websiteId)
-          .order("created_at", { ascending: false });
+            `)
+            .eq("prompts.topics.website_id", websiteId)
+            .order("created_at", { ascending: false });
 
-        if (dateRange) {
-          historyQuery = historyQuery
-            .gte("created_at", dateRange.start)
-            .lte("created_at", dateRange.end);
+          if (dateRange) {
+            historyQuery = historyQuery
+              .gte("created_at", dateRange.start)
+              .lte("created_at", dateRange.end);
+          }
+
+          const { data: history } = await historyQuery;
+          return { websiteId, history: history || [] };
         }
-
-        const { data: history } = await historyQuery;
-        return { websiteId, history: history || [] };
       });
 
       const historyResults = await Promise.all(historyPromises);
@@ -297,7 +400,7 @@ export class ExportService {
           return [{ category: "Analysis History", metric: "History Status", value: "No analysis history available", unit: "text", websiteId }];
         }
         
-        return history.slice(0, 5).map((analysis, index) => ({
+        return history.slice(0, 5).map((analysis: any, index: number) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           category: "Analysis History",
           metric: `Analysis #${index + 1}`,
           value: `${analysis.llm_provider} - ${analysis.is_mentioned ? 'Mentioned' : 'Not Mentioned'} - Rank: ${analysis.rank_position || 'N/A'}`,

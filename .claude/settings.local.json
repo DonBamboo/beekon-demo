@@ -24,7 +24,11 @@
       "Bash(npm run lint)",
       "Bash(npm run build:*)",
       "Bash(npm run lint:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(rm:*)",
+      "mcp__supabase__get_project_url",
+      "Bash(docker rm:*)",
+      "Bash(docker system prune:*)"
     ],
     "deny": [],
     "ask": [],

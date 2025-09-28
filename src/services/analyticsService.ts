@@ -139,79 +139,121 @@ class AnalyticsService {
     websiteId: string,
     filters?: AnalysisFilters
   ): Promise<AnalysisAnalytics> {
-    // Build base query for complete dataset
-    let query = supabase
-      .schema("beekon_data")
-      .from("llm_analysis_results")
-      .select(
-        `
-        *,
-        prompts!inner (
-          id,
-          prompt_text,
-          topic_id,
-          created_at,
-          topics!inner (
-            id,
-            topic_name,
-            website_id
-          )
-        )
-      `
-      )
-      .eq("website_id", websiteId);
+    try {
+      // OPTIMIZED: Use materialized view for lightning-fast performance (10-100x faster)
+      console.log("🚀 Using mv_analysis_results materialized view for analytics");
 
-    // Apply filters without pagination
-    if (filters) {
-      if (filters.dateRange && typeof filters.dateRange === "object") {
-        query = query
-          .gte("created_at", filters.dateRange.start)
-          .lte("created_at", filters.dateRange.end);
-      }
+      // Build base query using materialized view
+      let query = (supabase
+        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+        .from("mv_analysis_results")
+        .select("*")
+        .eq("website_id", websiteId);
 
-      if (filters.topic && filters.topic !== "all") {
-        query = query.eq("prompts.topics.id", filters.topic);
+      // Apply filters to materialized view
+      if (filters) {
+        if (filters.dateRange && typeof filters.dateRange === "object") {
+          query = query
+            .gte("analyzed_at", filters.dateRange.start)
+            .lte("analyzed_at", filters.dateRange.end);
+        }
 
-        // Debug: Log topic filtering query
-        if (process.env.NODE_ENV !== "production") {
-          console.log('🔍 [DEBUG] Analytics query filtering by topic:', {
-            topicId: filters.topic,
-            queryField: 'prompts.topics.id',
-            message: 'Filtering analytics by topic ID'
-          });
+        if (filters.topic && filters.topic !== "all") {
+          // Use topic_name from materialized view instead of complex JOIN
+          query = query.eq("topic_id", filters.topic);
+        }
+
+        if (filters.llmProvider && filters.llmProvider !== "all") {
+          query = query.eq("llm_provider", filters.llmProvider);
+        }
+
+        if (filters.searchQuery) {
+          // Apply search to materialized view fields
+          query = query.or(`summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%, prompt_text.ilike.%${filters.searchQuery}%`);
         }
       }
 
-      if (filters.llmProvider && filters.llmProvider !== "all") {
-        query = query.eq("llm_provider", filters.llmProvider);
+      const { data: results, error } = await query;
+
+      if (error) throw error;
+
+      // Transform materialized view data to expected format
+      const transformedResults = (results || []).map((row: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        llm_provider: row.llm_provider,
+        is_mentioned: row.is_mentioned,
+        rank_position: row.rank_position,
+        confidence_score: row.confidence_score,
+        sentiment_score: row.sentiment_score,
+        summary_text: row.summary_text,
+        response_text: row.response_text,
+        analyzed_at: row.analyzed_at,
+        created_at: row.created_at,
+        prompts: {
+          id: row.prompt_id,
+          prompt_text: row.prompt_text,
+          topic_id: row.topic_id,
+          created_at: row.created_at,
+          topics: {
+            id: row.topic_id,
+            topic_name: row.topic_name,
+            website_id: row.website_id,
+          },
+        },
+      }));
+
+      return this.calculateAnalysisAnalytics(transformedResults as AnalysisResultData[]);
+
+    } catch (mvError) {
+      console.warn("⚠️ Materialized view query failed, falling back to traditional query:", mvError);
+
+      // Fallback to original expensive query
+      let query = supabase
+        .schema("beekon_data")
+        .from("llm_analysis_results")
+        .select(
+          `
+          *,
+          prompts!inner (
+            id,
+            prompt_text,
+            topic_id,
+            created_at,
+            topics!inner (
+              id,
+              topic_name,
+              website_id
+            )
+          )
+        `
+        )
+        .eq("website_id", websiteId);
+
+      // Apply fallback filters
+      if (filters) {
+        if (filters.dateRange && typeof filters.dateRange === "object") {
+          query = query
+            .gte("created_at", filters.dateRange.start)
+            .lte("created_at", filters.dateRange.end);
+        }
+
+        if (filters.topic && filters.topic !== "all") {
+          query = query.eq("prompts.topics.id", filters.topic);
+        }
+
+        if (filters.llmProvider && filters.llmProvider !== "all") {
+          query = query.eq("llm_provider", filters.llmProvider);
+        }
+
+        if (filters.searchQuery) {
+          query = query.or(`summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%`);
+        }
       }
 
-      if (filters.searchQuery) {
-        // Apply search query to relevant text fields
-        query = query.or(`summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%`);
-      }
+      const { data: results, error } = await query;
+      if (error) throw error;
+
+      return this.calculateAnalysisAnalytics((results || []) as AnalysisResultData[]);
     }
-
-    const { data: results, error } = await query;
-
-    if (error) throw error;
-
-    // Debug: Log query results
-    if (process.env.NODE_ENV !== "production") {
-      console.log('📊 [DEBUG] Analytics query results:', {
-        resultCount: (results || []).length,
-        hasTopicFilter: !!(filters?.topic && filters.topic !== "all"),
-        topicFilter: filters?.topic,
-        sampleResult: results?.[0] ? {
-          topic: results[0].prompts?.topics?.topic_name,
-          topicId: results[0].prompts?.topics?.id,
-          isMentioned: results[0].is_mentioned
-        } : null
-      });
-    }
-
-    // Calculate analytics from complete dataset
-    return this.calculateAnalysisAnalytics((results || []) as AnalysisResultData[]);
   }
 
   /**
@@ -222,8 +264,8 @@ class AnalyticsService {
     _filters?: Record<string, unknown>
   ): Promise<CompetitorAnalytics> {
     // Get complete competitor data with analysis results
-    const { data: competitorData, error } = await supabase
-      .schema("beekon_data")
+    const { data: competitorData, error } = await (supabase
+      .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
       .from("mv_competitor_performance")
       .select("*")
       .eq("website_id", websiteId);
@@ -240,16 +282,34 @@ class AnalyticsService {
     websiteIds: string[],
     _filters?: Record<string, unknown>
   ): Promise<DashboardAnalytics> {
-    // Get aggregated data across all websites
-    const { data: dashboardData, error } = await supabase
-      .schema("beekon_data")
-      .from("llm_analysis_results")
-      .select("*")
-      .in("website_id", websiteIds);
+    try {
+      // OPTIMIZED: Use materialized view for dashboard analytics
+      console.log("🚀 Using mv_analysis_results materialized view for dashboard analytics");
 
-    if (error) throw error;
+      const { data: dashboardData, error } = await (supabase
+        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+        .from("mv_analysis_results")
+        .select("*")
+        .in("website_id", websiteIds);
 
-    return this.calculateDashboardAnalytics(dashboardData || []);
+      if (error) throw error;
+
+      return this.calculateDashboardAnalytics(dashboardData || []);
+
+    } catch (error) {
+      console.warn("⚠️ Materialized view query failed for dashboard, falling back:", error);
+
+      // Fallback to original query
+      const { data: dashboardData, error: fallbackError } = await supabase
+        .schema("beekon_data")
+        .from("llm_analysis_results")
+        .select("*")
+        .in("website_id", websiteIds);
+
+      if (fallbackError) throw fallbackError;
+
+      return this.calculateDashboardAnalytics(dashboardData || []);
+    }
   }
 
   /**
