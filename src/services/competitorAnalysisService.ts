@@ -743,9 +743,17 @@ export class CompetitorAnalysisService extends BaseService {
     gapAnalysis: CompetitiveGapAnalysis[]
   ): void {
     // Analyze share of voice for threats and opportunities
-    // FIXED: Exclude "Your Brand" from threat detection - only actual competitors should be threats
-    const dominantCompetitor = this.filterOutYourBrand(shareOfVoice).find(
-      (comp) => comp.shareOfVoice > 40
+    // FIXED: Proper dominance detection - only flag competitors who actually outperform Your Brand
+    const yourBrandData = shareOfVoice.find(comp => this.isYourBrand(comp));
+    const yourBrandShare = yourBrandData?.shareOfVoice || 0;
+    const competitorData = this.filterOutYourBrand(shareOfVoice);
+
+    // Find the actual market leader (highest share of voice)
+    const marketLeader = [...shareOfVoice].sort((a, b) => b.shareOfVoice - a.shareOfVoice)[0];
+
+    // Only generate "competitor dominates" insight if a competitor actually outperforms Your Brand
+    const dominantCompetitor = competitorData.find(
+      (comp) => comp.shareOfVoice > yourBrandShare && comp.shareOfVoice > 40
     );
 
     if (dominantCompetitor) {
@@ -756,7 +764,7 @@ export class CompetitorAnalysisService extends BaseService {
           dominantCompetitor.competitorName
         } dominates with ${dominantCompetitor.shareOfVoice.toFixed(
           1
-        )}% share of voice`,
+        )}% share of voice vs Your Brand's ${yourBrandShare.toFixed(1)}%`,
         impact: "high",
         competitorId: dominantCompetitor.competitorId,
         recommendations: [
@@ -765,22 +773,40 @@ export class CompetitorAnalysisService extends BaseService {
           "Focus on topics where they have lower rankings",
         ],
       });
+    } else if (marketLeader && this.isYourBrand(marketLeader) && yourBrandShare > 40) {
+      // Generate positive insight when Your Brand is the market leader
+      insights.push({
+        type: "opportunity",
+        title: "Market Leadership Position",
+        description: `Your Brand leads the market with ${yourBrandShare.toFixed(
+          1
+        )}% share of voice, outperforming all competitors`,
+        impact: "high",
+        recommendations: [
+          "Maintain your competitive advantage with consistent content quality",
+          "Monitor emerging competitors who might challenge your position",
+          "Leverage your market leadership to expand into new topic areas",
+        ],
+      });
     }
 
     // Look for emerging competitors (high share of voice but not dominant)
-    // FIXED: Exclude "Your Brand" from emerging competitor threat detection
-    const emergingCompetitors = this.filterOutYourBrand(shareOfVoice).filter(
-      (comp) => comp.shareOfVoice > 15 && comp.shareOfVoice <= 40
+    // FIXED: Only flag competitors as "emerging threats" if they're within striking distance of Your Brand
+    const emergingCompetitors = competitorData.filter(
+      (comp) => comp.shareOfVoice > 15 &&
+               comp.shareOfVoice <= Math.max(40, yourBrandShare * 0.8) && // Within 80% of Your Brand's share
+               comp.shareOfVoice < yourBrandShare // But still below Your Brand
     );
 
     emergingCompetitors.slice(0, 2).forEach((competitor) => {
+      const gapToYourBrand = yourBrandShare - competitor.shareOfVoice;
       insights.push({
         type: "threat",
         title: `Emerging Competitor: ${competitor.competitorName}`,
         description: `${
           competitor.competitorName
-        } has gained ${competitor.shareOfVoice.toFixed(1)}% share of voice`,
-        impact: "medium",
+        } has ${competitor.shareOfVoice.toFixed(1)}% share of voice, ${gapToYourBrand.toFixed(1)}% behind Your Brand`,
+        impact: gapToYourBrand < 10 ? "high" : "medium", // Higher threat if gap is small
         competitorId: competitor.competitorId,
         recommendations: [
           "Monitor their content strategy closely",
@@ -824,15 +850,18 @@ export class CompetitorAnalysisService extends BaseService {
     });
 
     // Analyze ranking performance for quick wins
-    // FIXED: Exclude "Your Brand" from competitor ranking analysis - we don't compete against ourselves
-    const poorRankingCompetitors = this.filterOutYourBrand(shareOfVoice).filter(
+    // FIXED: Only suggest ranking opportunities for competitors with meaningful market share
+    const yourBrandRank = yourBrandData?.avgRankPosition || 0;
+    const poorRankingCompetitors = competitorData.filter(
       (comp) =>
         comp.avgRankPosition &&
-        comp.avgRankPosition > 3 &&
+        comp.avgRankPosition > Math.max(yourBrandRank, 2.5) && // Only if they rank worse than Your Brand
+        comp.shareOfVoice > 10 && // Only for competitors with meaningful market share
         comp.totalMentions > 0
     );
 
     poorRankingCompetitors.slice(0, 2).forEach((competitor) => {
+      const rankingGap = competitor.avgRankPosition! - (yourBrandRank || 1);
       insights.push({
         type: "opportunity",
         title: `Ranking Opportunity vs ${competitor.competitorName}`,
@@ -840,13 +869,13 @@ export class CompetitorAnalysisService extends BaseService {
           competitor.competitorName
         } averages position ${competitor.avgRankPosition?.toFixed(
           1
-        )} - opportunity to outrank`,
-        impact: "medium",
+        )} vs Your Brand's ${(yourBrandRank || 1).toFixed(1)} - clear ranking advantage`,
+        impact: rankingGap > 2 ? "high" : "medium",
         competitorId: competitor.competitorId,
         recommendations: [
-          "Focus on topics where they rank lower",
-          "Improve content quality and relevance",
-          "Optimize for better search positioning",
+          "Leverage your superior ranking position in competitive content",
+          "Target topics where they have high share but poor rankings",
+          "Focus on maintaining ranking advantages in key areas",
         ],
       });
     });

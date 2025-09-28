@@ -188,8 +188,29 @@ export default function ShareOfVoiceChart({
   // Process time-series data for stacked area chart
   const stackedAreaData = useMemo(() => {
     if (!timeSeriesData || timeSeriesData.length === 0) {
+      console.log("📊 ShareOfVoiceChart: No time series data available");
       return [];
     }
+
+    // Validate that we have valid data structure
+    const validTimeSeriesData = timeSeriesData.filter(point => {
+      return point &&
+             point.date &&
+             Array.isArray(point.competitors) &&
+             point.competitors.length > 0;
+    });
+
+    if (validTimeSeriesData.length === 0) {
+      console.warn("⚠️ ShareOfVoiceChart: No valid time series data found");
+      return [];
+    }
+
+    console.log("📊 ShareOfVoiceChart: Processing time series data:", {
+      originalCount: timeSeriesData.length,
+      validCount: validTimeSeriesData.length,
+      firstDataPoint: validTimeSeriesData[0],
+      competitorCounts: validTimeSeriesData.map(point => point.competitors?.length || 0)
+    });
 
     // Validate color assignments and fix conflicts if needed
     const colorValidation = validateAllColorAssignments();
@@ -197,20 +218,27 @@ export default function ShareOfVoiceChart({
       autoFixColorConflicts({ logResults: false });
     }
 
-    // Get all unique competitors from the time series data
+    // Get all unique competitors from the validated time series data
     const allCompetitors = new Set<string>();
-    timeSeriesData.forEach((point) => {
+    validTimeSeriesData.forEach((point) => {
       point.competitors?.forEach((comp) => {
-        allCompetitors.add(comp.competitorId);
+        if (comp && comp.competitorId) {
+          allCompetitors.add(comp.competitorId);
+        }
       });
     });
+
+    if (allCompetitors.size === 0) {
+      console.warn("⚠️ ShareOfVoiceChart: No competitors found in time series data");
+      return [];
+    }
 
     // Register all competitors in fixed color slots for predictable coloring
     const competitorsList = Array.from(allCompetitors).map((competitorId) => {
       // Find the competitor name from any data point
-      const competitorData = timeSeriesData
+      const competitorData = validTimeSeriesData
         .flatMap((point) => point.competitors || [])
-        .find((comp) => comp.competitorId === competitorId);
+        .find((comp) => comp && comp.competitorId === competitorId);
 
       return {
         competitorId,
@@ -221,16 +249,18 @@ export default function ShareOfVoiceChart({
     registerCompetitorsInFixedSlots(competitorsList);
 
     // Sort time series data from oldest to newest for proper X-axis display
-    const sortedTimeSeriesData = [...timeSeriesData].sort((a, b) =>
+    const sortedTimeSeriesData = [...validTimeSeriesData].sort((a, b) =>
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
 
     // Transform time-series data into format suitable for stacked area chart
-    return sortedTimeSeriesData.map((point) => {
+    const transformedData = sortedTimeSeriesData.map((point) => {
       const transformedPoint: ChartDataPoint = {
         date: point.date,
         dateFormatted: new Date(point.date).toLocaleDateString(),
       };
+
+      let pointTotal = 0;
 
       // Add each competitor's share of voice for this time point
       competitorsList.forEach((competitor) => {
@@ -243,10 +273,24 @@ export default function ShareOfVoiceChart({
           competitorData?.shareOfVoice || 0
         );
         transformedPoint[competitor.name] = shareOfVoice;
+        pointTotal += shareOfVoice;
       });
+
+      // Log any normalization issues
+      if (Math.abs(pointTotal - 100) > 5) {
+        console.warn(`⚠️ ShareOfVoiceChart: Share of voice total for ${point.date} is ${pointTotal}% (should be ~100%)`);
+      }
 
       return transformedPoint;
     });
+
+    console.log("📊 ShareOfVoiceChart: Transformed stacked area data:", {
+      dataPointCount: transformedData.length,
+      samplePoint: transformedData[0],
+      competitorNames: competitorsList.map(c => c.name)
+    });
+
+    return transformedData;
   }, [timeSeriesData]);
 
   // Get competitors list for stacked area chart

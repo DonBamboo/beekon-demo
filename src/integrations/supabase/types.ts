@@ -1113,11 +1113,16 @@ export type Database = {
         Returns: {
           analysis_date: string;
           competitor_domain: string;
+          competitor_id: string;
+          competitor_name: string;
           daily_avg_rank: number;
           daily_avg_sentiment: number;
           daily_llm_providers: number;
           daily_mentions: number;
           daily_positive_mentions: number;
+          is_your_brand: boolean;
+          share_of_voice: number;
+          total_daily_mentions: number;
         }[];
       };
       get_competitors_by_status: {
