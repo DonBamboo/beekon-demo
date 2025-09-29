@@ -181,15 +181,15 @@ export function WebsiteSettingsModal({
   const onSubmit = async (data: WebsiteSettingsFormData) => {
     if (!website?.id) return;
 
-    // Validate that country is selected before saving settings
-    if (!data.countryCode || !data.countryName || !selectedCountry) {
-      toast({
-        title: "Country Required",
-        description: "Please select a country before saving settings.",
-        variant: "destructive",
-      });
-      return;
-    }
+    // // Validate that country is selected before saving settings
+    // if (!data.countryCode || !data.countryName || !selectedCountry) {
+    //   toast({
+    //     title: "Country Required",
+    //     description: "Please select a country before saving settings.",
+    //     variant: "destructive",
+    //   });
+    //   return;
+    // }
 
     setIsSaving(true);
     try {

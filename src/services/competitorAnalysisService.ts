@@ -300,8 +300,97 @@ export class CompetitorAnalysisService extends BaseService {
     const timeSeriesData = Array.isArray(data) ? data : [];
     console.log("📊 Processing time series data for share of voice:", {
       totalRecords: timeSeriesData.length,
+      hasData: timeSeriesData.length > 0,
+      sampleRecord: timeSeriesData.length > 0 ? timeSeriesData[0] : null,
     });
 
+    // ENHANCED FALLBACK: If no time series data, try materialized view directly
+    if (timeSeriesData.length === 0) {
+      console.log("⚠️ No time series data found, attempting materialized view fallback...");
+
+      try {
+        const { data: fallbackData, error: fallbackError } = await (supabase
+          .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+          .from("mv_analysis_results")
+          .select(`
+            website_id,
+            competitor_id,
+            competitor_name,
+            competitor_domain,
+            is_mentioned,
+            analyzed_at
+          `)
+          .eq("website_id", websiteId)
+          .gte("analyzed_at", finalDateRange.start)
+          .lte("analyzed_at", finalDateRange.end);
+
+        if (fallbackError) {
+          console.error("❌ Materialized view fallback failed:", fallbackError);
+        } else if (fallbackData && fallbackData.length > 0) {
+          console.log("✅ Using materialized view fallback data:", {
+            recordCount: fallbackData.length,
+            dateRange: finalDateRange
+          });
+
+          // Convert materialized view data to time series format
+          const groupedData = new Map<string, {
+            competitor_id: string;
+            competitor_name: string;
+            competitor_domain: string;
+            is_your_brand: boolean;
+            daily_mentions: number;
+            daily_positive_mentions: number;
+            analysis_date: string;
+          }>();
+
+          fallbackData.forEach((row: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            const competitorKey = `${row.competitor_id || 'your-brand'}_${row.analyzed_at?.split('T')[0]}`;
+
+            if (!groupedData.has(competitorKey)) {
+              groupedData.set(competitorKey, {
+                competitor_id: row.competitor_id || '00000000-0000-0000-0000-000000000000',
+                competitor_name: row.competitor_name || 'Your Brand',
+                competitor_domain: row.competitor_domain || '',
+                is_your_brand: !row.competitor_id, // If no competitor_id, it's your brand
+                daily_mentions: 0,
+                daily_positive_mentions: 0,
+                analysis_date: row.analyzed_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+              });
+            }
+
+            const dayData = groupedData.get(competitorKey)!;
+            dayData.daily_mentions += 1;
+            if (row.is_mentioned) {
+              dayData.daily_positive_mentions += 1;
+            }
+          });
+
+          // Process the converted fallback data instead of recursion
+          const convertedTimeSeriesData = Array.from(groupedData.values());
+          console.log("🔄 Processing converted materialized view data:", {
+            convertedRecords: convertedTimeSeriesData.length,
+            sampleData: convertedTimeSeriesData[0] || null
+          });
+
+          // Continue processing with converted data (skip to aggregation logic)
+          return this.processShareOfVoiceAggregation(convertedTimeSeriesData);
+        }
+      } catch (fallbackError) {
+        console.error("🚨 Materialized view fallback error:", fallbackError);
+      }
+    }
+
+    // Use the normal aggregation logic for time series data
+    return this.processShareOfVoiceAggregation(timeSeriesData);
+  }
+
+  /**
+   * Process share of voice aggregation from time series data
+   * Extracted method to avoid code duplication between normal and fallback flows
+   */
+  private processShareOfVoiceAggregation(
+    timeSeriesData: Record<string, unknown>[]
+  ): CompetitorShareOfVoice[] {
     // Group data by competitor and aggregate across all dates
     const competitorMap = new Map<string, {
       competitorId: string;
@@ -343,8 +432,21 @@ export class CompetitorAnalysisService extends BaseService {
       }
 
       const competitor = competitorMap.get(competitorId)!;
-      competitor.totalMentions += dailyPositiveMentions; // Use positive mentions for consistency
-      competitor.totalAnalyses += dailyMentions; // Total analyses = all mentions (positive + negative)
+
+      // DEBUGGING: Log the values being processed
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`🔢 Processing competitor ${competitor.competitorName}:`, {
+          dailyMentions,
+          dailyPositiveMentions,
+          currentTotalMentions: competitor.totalMentions,
+          analysisDate
+        });
+      }
+
+      // FIXED: Use all mentions for share of voice calculation, not just positive mentions
+      // Share of voice should represent total brand visibility, not just positive sentiment
+      competitor.totalMentions += dailyMentions; // Use total mentions for share of voice
+      competitor.totalAnalyses += dailyMentions; // Total analyses = all mentions
 
       if (dailyAvgRank > 0) {
         competitor.avgRankSum += dailyAvgRank;
@@ -364,6 +466,26 @@ export class CompetitorAnalysisService extends BaseService {
     // Convert to CompetitorShareOfVoice format with proper calculation
     const allCompetitors = Array.from(competitorMap.values());
     const totalMentionsAcrossAll = allCompetitors.reduce((sum, comp) => sum + comp.totalMentions, 0);
+
+    // ENHANCED: If no competitors found, ensure "Your Brand" is always included
+    if (allCompetitors.length === 0) {
+      console.log("⚠️ No competitor data found in aggregation, creating default Your Brand entry");
+
+      // Add a default "Your Brand" entry to prevent empty charts
+      allCompetitors.push({
+        competitorId: "00000000-0000-0000-0000-000000000000",
+        competitorName: "Your Brand",
+        competitorDomain: "", // Will be filled from website data if needed
+        isYourBrand: true,
+        totalMentions: 0,
+        totalAnalyses: 0,
+        avgRankSum: 0,
+        avgRankCount: 0,
+        avgSentimentSum: 0,
+        avgSentimentCount: 0,
+        lastAnalyzedAt: new Date().toISOString(),
+      });
+    }
 
     const shareOfVoiceData = allCompetitors.map((comp) => {
       const rawShareOfVoice = totalMentionsAcrossAll > 0
@@ -595,6 +717,24 @@ export class CompetitorAnalysisService extends BaseService {
   }
 
   /**
+   * Helper function to check if a competitor is actually "Your Brand"
+   * This prevents "Your Brand" from being treated as a competitor/threat
+   */
+  private isYourBrand(competitor: { competitorName?: string; competitorId?: string }): boolean {
+    return competitor.competitorName === "Your Brand" ||
+           competitor.competitorId === "your-brand";
+  }
+
+  /**
+   * Filter out "Your Brand" from competitor analysis
+   */
+  private filterOutYourBrand<T extends { competitorName?: string; competitorId?: string }>(
+    competitors: T[]
+  ): T[] {
+    return competitors.filter(comp => !this.isYourBrand(comp));
+  }
+
+  /**
    * Generate insights from actual analysis data
    */
   private generateInsightsFromData(
@@ -603,8 +743,17 @@ export class CompetitorAnalysisService extends BaseService {
     gapAnalysis: CompetitiveGapAnalysis[]
   ): void {
     // Analyze share of voice for threats and opportunities
-    const dominantCompetitor = shareOfVoice.find(
-      (comp) => comp.shareOfVoice > 40
+    // FIXED: Proper dominance detection - only flag competitors who actually outperform Your Brand
+    const yourBrandData = shareOfVoice.find(comp => this.isYourBrand(comp));
+    const yourBrandShare = yourBrandData?.shareOfVoice || 0;
+    const competitorData = this.filterOutYourBrand(shareOfVoice);
+
+    // Find the actual market leader (highest share of voice)
+    const marketLeader = [...shareOfVoice].sort((a, b) => b.shareOfVoice - a.shareOfVoice)[0];
+
+    // Only generate "competitor dominates" insight if a competitor actually outperforms Your Brand
+    const dominantCompetitor = competitorData.find(
+      (comp) => comp.shareOfVoice > yourBrandShare && comp.shareOfVoice > 40
     );
 
     if (dominantCompetitor) {
@@ -615,7 +764,7 @@ export class CompetitorAnalysisService extends BaseService {
           dominantCompetitor.competitorName
         } dominates with ${dominantCompetitor.shareOfVoice.toFixed(
           1
-        )}% share of voice`,
+        )}% share of voice vs Your Brand's ${yourBrandShare.toFixed(1)}%`,
         impact: "high",
         competitorId: dominantCompetitor.competitorId,
         recommendations: [
@@ -624,21 +773,40 @@ export class CompetitorAnalysisService extends BaseService {
           "Focus on topics where they have lower rankings",
         ],
       });
+    } else if (marketLeader && this.isYourBrand(marketLeader) && yourBrandShare > 40) {
+      // Generate positive insight when Your Brand is the market leader
+      insights.push({
+        type: "opportunity",
+        title: "Market Leadership Position",
+        description: `Your Brand leads the market with ${yourBrandShare.toFixed(
+          1
+        )}% share of voice, outperforming all competitors`,
+        impact: "high",
+        recommendations: [
+          "Maintain your competitive advantage with consistent content quality",
+          "Monitor emerging competitors who might challenge your position",
+          "Leverage your market leadership to expand into new topic areas",
+        ],
+      });
     }
 
     // Look for emerging competitors (high share of voice but not dominant)
-    const emergingCompetitors = shareOfVoice.filter(
-      (comp) => comp.shareOfVoice > 15 && comp.shareOfVoice <= 40
+    // FIXED: Only flag competitors as "emerging threats" if they're within striking distance of Your Brand
+    const emergingCompetitors = competitorData.filter(
+      (comp) => comp.shareOfVoice > 15 &&
+               comp.shareOfVoice <= Math.max(40, yourBrandShare * 0.8) && // Within 80% of Your Brand's share
+               comp.shareOfVoice < yourBrandShare // But still below Your Brand
     );
 
     emergingCompetitors.slice(0, 2).forEach((competitor) => {
+      const gapToYourBrand = yourBrandShare - competitor.shareOfVoice;
       insights.push({
         type: "threat",
         title: `Emerging Competitor: ${competitor.competitorName}`,
         description: `${
           competitor.competitorName
-        } has gained ${competitor.shareOfVoice.toFixed(1)}% share of voice`,
-        impact: "medium",
+        } has ${competitor.shareOfVoice.toFixed(1)}% share of voice, ${gapToYourBrand.toFixed(1)}% behind Your Brand`,
+        impact: gapToYourBrand < 10 ? "high" : "medium", // Higher threat if gap is small
         competitorId: competitor.competitorId,
         recommendations: [
           "Monitor their content strategy closely",
@@ -682,14 +850,18 @@ export class CompetitorAnalysisService extends BaseService {
     });
 
     // Analyze ranking performance for quick wins
-    const poorRankingCompetitors = shareOfVoice.filter(
+    // FIXED: Only suggest ranking opportunities for competitors with meaningful market share
+    const yourBrandRank = yourBrandData?.avgRankPosition || 0;
+    const poorRankingCompetitors = competitorData.filter(
       (comp) =>
         comp.avgRankPosition &&
-        comp.avgRankPosition > 3 &&
+        comp.avgRankPosition > Math.max(yourBrandRank, 2.5) && // Only if they rank worse than Your Brand
+        comp.shareOfVoice > 10 && // Only for competitors with meaningful market share
         comp.totalMentions > 0
     );
 
     poorRankingCompetitors.slice(0, 2).forEach((competitor) => {
+      const rankingGap = competitor.avgRankPosition! - (yourBrandRank || 1);
       insights.push({
         type: "opportunity",
         title: `Ranking Opportunity vs ${competitor.competitorName}`,
@@ -697,35 +869,89 @@ export class CompetitorAnalysisService extends BaseService {
           competitor.competitorName
         } averages position ${competitor.avgRankPosition?.toFixed(
           1
-        )} - opportunity to outrank`,
-        impact: "medium",
+        )} vs Your Brand's ${(yourBrandRank || 1).toFixed(1)} - clear ranking advantage`,
+        impact: rankingGap > 2 ? "high" : "medium",
         competitorId: competitor.competitorId,
         recommendations: [
-          "Focus on topics where they rank lower",
-          "Improve content quality and relevance",
-          "Optimize for better search positioning",
+          "Leverage your superior ranking position in competitive content",
+          "Target topics where they have high share but poor rankings",
+          "Focus on maintaining ranking advantages in key areas",
         ],
       });
     });
 
     // Add strategic insights if we have sufficient data
     if (shareOfVoice.length >= 2) {
-      const totalCompetitorShare = shareOfVoice.reduce(
-        (sum, comp) => sum + comp.shareOfVoice,
-        0
-      );
-      if (totalCompetitorShare < 80) {
+      // FIXED: Proper market share analysis including Your Brand's position
+      const yourBrandData = shareOfVoice.find(comp => this.isYourBrand(comp));
+      const yourBrandShare = yourBrandData?.shareOfVoice || 0;
+
+      const competitorData = this.filterOutYourBrand(shareOfVoice);
+      const totalCompetitorShare = competitorData.reduce((sum, comp) => sum + comp.shareOfVoice, 0);
+
+      const totalTrackedShare = yourBrandShare + totalCompetitorShare;
+      const unaccountedShare = Math.max(0, 100 - totalTrackedShare);
+
+      // Generate contextual market insights based on Your Brand's actual position
+      if (yourBrandShare > 60) {
+        // Market Leadership Position
         insights.push({
           type: "opportunity",
-          title: "Market Share Opportunity",
-          description: `Only ${totalCompetitorShare.toFixed(
-            1
-          )}% of voice share is captured by tracked competitors`,
+          title: "Market Leadership Position",
+          description: `Your Brand dominates with ${yourBrandShare.toFixed(1)}% market share vs ${totalCompetitorShare.toFixed(1)}% by competitors`,
+          impact: "medium",
+          recommendations: [
+            "Focus on defensive strategies to maintain market leadership",
+            "Monitor emerging competitors and potential threats",
+            "Leverage dominant position to expand into adjacent topics",
+          ],
+        });
+      } else if (yourBrandShare >= 30) {
+        // Competitive Market Position
+        const topCompetitor = competitorData.length > 0
+          ? competitorData.reduce((prev, current) =>
+              current.shareOfVoice > prev.shareOfVoice ? current : prev)
+          : null;
+
+        if (topCompetitor) {
+          insights.push({
+            type: "opportunity",
+            title: "Competitive Market Dynamics",
+            description: `Your Brand (${yourBrandShare.toFixed(1)}%) competes in a ${competitorData.length}-player market with top competitor ${topCompetitor.competitorName} at ${topCompetitor.shareOfVoice.toFixed(1)}%`,
+            impact: "high",
+            recommendations: [
+              `Target specific weaknesses of ${topCompetitor.competitorName}`,
+              "Identify content gaps where competitors underperform",
+              "Focus on topics where you can outrank key competitors",
+            ],
+          });
+        }
+      } else {
+        // Growth Opportunity Position
+        insights.push({
+          type: "opportunity",
+          title: "Market Share Growth Opportunity",
+          description: `Your Brand (${yourBrandShare.toFixed(1)}%) vs competitors (${totalCompetitorShare.toFixed(1)}%) - significant growth potential available`,
           impact: "high",
           recommendations: [
-            "Research and add more competitors in your space",
-            "Identify uncontested topic areas",
-            "Focus on topics with low competitor coverage",
+            "Aggressively target competitor content gaps",
+            "Increase content volume and quality in key topic areas",
+            "Focus on topics where competitors have weak rankings",
+          ],
+        });
+      }
+
+      // Additional insight for truly uncontested market space
+      if (unaccountedShare > 10) {
+        insights.push({
+          type: "opportunity",
+          title: "Uncontested Market Opportunity",
+          description: `${unaccountedShare.toFixed(1)}% of market voice appears uncontested - potential for expansion`,
+          impact: "high",
+          recommendations: [
+            "Research additional competitors in your space",
+            "Identify entirely new topic areas to dominate",
+            "Expand content coverage into uncontested segments",
           ],
         });
       }

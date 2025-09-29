@@ -413,6 +413,68 @@ export class AnalysisService {
     }
   }
 
+  // OPTIMIZED: Transform materialized view data for maximum performance
+  private transformMaterializedViewData(
+    data: Record<string, unknown>[],
+    websiteId?: string
+  ): UIAnalysisResult[] {
+    const resultsMap = new Map<string, UIAnalysisResult>();
+
+    data?.forEach((row) => {
+      const promptId = safeString(row.prompt_id);
+      if (!promptId) return;
+
+      // Extract data from materialized view columns
+      const promptText = safeString(row.prompt_text);
+      const topicName = safeString(row.topic_name);
+      const reportingText = safeString(row.prompt_reporting_text) || null;
+      const recommendationText = safeString(row.recommendation_text) || null;
+      const promptStrengths = row.strengths as string[] | null;
+      const promptOpportunities = row.opportunities as string[] | null;
+
+      // Analysis session information from materialized view
+      const analysisSessionId = safeString(row.session_id) || null;
+      const analysisName = safeString(row.analysis_name) || null;
+      const analysisSessionStatus = safeString(row.session_status) || null;
+
+      if (!resultsMap.has(promptId)) {
+        resultsMap.set(promptId, {
+          id: promptId,
+          prompt: promptText,
+          website_id: websiteId || safeString(row.website_id),
+          topic: topicName,
+          status: "completed" as AnalysisStatus,
+          confidence: safeNumber(row.confidence_score),
+          created_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
+          updated_at: safeString(row.created_at) || new Date().toISOString(),
+          reporting_text: reportingText,
+          recommendation_text: recommendationText,
+          prompt_strengths: promptStrengths,
+          prompt_opportunities: promptOpportunities,
+          llm_results: [],
+          // Include analysis session information
+          analysis_session_id: analysisSessionId,
+          analysis_name: analysisName,
+          analysis_session_status: analysisSessionStatus,
+        });
+      }
+
+      const result = resultsMap.get(promptId)!;
+      result.llm_results.push({
+        llm_provider: safeString(row.llm_provider),
+        is_mentioned: safeBoolean(row.is_mentioned),
+        rank_position: safeNumber(row.rank_position),
+        confidence_score: safeNumber(row.confidence_score),
+        sentiment_score: safeNumber(row.sentiment_score),
+        summary_text: safeString(row.summary_text),
+        response_text: safeString(row.response_text),
+        analyzed_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
+      });
+    });
+
+    return Array.from(resultsMap.values());
+  }
+
   // Shared data transformation function to standardize logic
   private transformAnalysisData(
     data: Record<string, unknown>[],
@@ -586,11 +648,153 @@ export class AnalysisService {
     });
 
     try {
-      // For the optimized function, we need to use cursor-based pagination
-      // Since the materialized view doesn't support cursor filtering,
-      // we'll fall back to the original method for proper pagination
-      console.log("📋 Using original method for proper cursor-based pagination");
-      return this.getAnalysisResultsPaginatedOriginal(websiteId, options);
+      // OPTIMIZED: Use materialized view for lightning-fast performance
+      console.log("🚀 Using mv_analysis_results materialized view for optimized performance");
+
+      // Step 1: Get unique prompt IDs with pagination from materialized view
+      // Note: Using type assertion as mv_analysis_results is not in current types
+      let promptQuery = (supabase
+        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+        .from("mv_analysis_results")
+        .select("prompt_id, analyzed_at")
+        .eq("website_id", websiteId)
+        .order("analyzed_at", { ascending: false });
+
+      // Apply cursor-based pagination
+      if (cursor) {
+        promptQuery = promptQuery.lt("analyzed_at", cursor);
+      }
+
+      // Apply date range filter at database level for performance
+      if (filters?.dateRange) {
+        promptQuery = promptQuery
+          .gte("analyzed_at", filters.dateRange.start)
+          .lte("analyzed_at", filters.dateRange.end);
+      }
+
+      // Apply topic filter at database level
+      if (filters?.topic && filters.topic !== "all") {
+        promptQuery = promptQuery.eq("topic_name", filters.topic);
+      }
+
+      // Apply LLM provider filter at database level
+      if (filters?.llmProvider && filters.llmProvider !== "all") {
+        promptQuery = promptQuery.eq("llm_provider", filters.llmProvider);
+      }
+
+      // Apply analysis session filter at database level
+      if (filters?.analysisSession && filters.analysisSession !== "all") {
+        promptQuery = promptQuery.eq("session_id", filters.analysisSession);
+      }
+
+      // Get unique prompt IDs (DISTINCT equivalent)
+      const { data: promptsData, error: promptsError } = await promptQuery.limit(limit * 5); // Get more to handle DISTINCT
+
+      if (promptsError) throw promptsError;
+
+      // Get unique prompt IDs and determine pagination
+      const uniquePromptIds = Array.from(new Set(promptsData?.map((p: any) => p.prompt_id) || [])); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const selectedPromptIds = uniquePromptIds.slice(0, limit);
+      const hasMore = uniquePromptIds.length > limit;
+
+      if (selectedPromptIds.length === 0) {
+        return {
+          results: [],
+          hasMore: false,
+          nextCursor: null,
+          totalCount: 0,
+        };
+      }
+
+      // Step 2: Get ALL analysis data for selected prompts from materialized view
+      const analysisQuery = (supabase
+        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+        .from("mv_analysis_results")
+        .select("*")
+        .in("prompt_id", selectedPromptIds);
+
+      const { data, error } = await analysisQuery;
+
+      if (error) throw error;
+
+      // Transform the materialized view data using optimized transformation
+      const transformedResults = this.transformMaterializedViewData(data || [], websiteId);
+
+      // Apply remaining client-side filters for complex filtering
+      let filteredResults = transformedResults;
+
+      // Apply search query filter
+      if (filters?.searchQuery && filters.searchQuery.trim()) {
+        const searchTerm = filters.searchQuery.toLowerCase().trim();
+        filteredResults = filteredResults.filter(
+          (result) =>
+            result.prompt.toLowerCase().includes(searchTerm) ||
+            result.topic.toLowerCase().includes(searchTerm) ||
+            (result.analysis_name &&
+              result.analysis_name.toLowerCase().includes(searchTerm)) ||
+            result.llm_results.some((llm) =>
+              llm.response_text?.toLowerCase().includes(searchTerm)
+            )
+        );
+      }
+
+      // Apply mention status filter
+      if (filters?.mentionStatus && filters.mentionStatus !== "all") {
+        if (filters.mentionStatus === "mentioned") {
+          filteredResults = filteredResults.filter((result) =>
+            result.llm_results.some((llm) => llm.is_mentioned)
+          );
+        } else if (filters.mentionStatus === "not_mentioned") {
+          filteredResults = filteredResults.filter(
+            (result) => !result.llm_results.some((llm) => llm.is_mentioned)
+          );
+        }
+      }
+
+      // Apply confidence range filter
+      if (filters?.confidenceRange) {
+        const [minConfidence, maxConfidence] = filters.confidenceRange;
+        const minDecimal = minConfidence / 100;
+        const maxDecimal = maxConfidence / 100;
+
+        filteredResults = filteredResults.filter(
+          (result) =>
+            result.confidence >= minDecimal && result.confidence <= maxDecimal
+        );
+      }
+
+      // Apply sentiment filter
+      if (filters?.sentiment && filters.sentiment !== "all") {
+        filteredResults = filteredResults.filter((result) =>
+          result.llm_results.some((llm) => {
+            if (!llm.sentiment_score) return false;
+
+            if (filters.sentiment === "positive") {
+              return llm.sentiment_score > 0.1;
+            } else if (filters.sentiment === "negative") {
+              return llm.sentiment_score < -0.1;
+            } else if (filters.sentiment === "neutral") {
+              return llm.sentiment_score >= -0.1 && llm.sentiment_score <= 0.1;
+            }
+            return false;
+          })
+        );
+      }
+
+      // Get the next cursor from the last item
+      const nextCursor = hasMore && promptsData && promptsData.length > 0
+        ? promptsData[promptsData.length - 1]?.analyzed_at || null
+        : null;
+
+      console.log("🎯 Materialized view optimization completed successfully");
+
+      return {
+        results: filteredResults,
+        hasMore,
+        nextCursor,
+        totalCount: undefined, // Don't calculate total count for performance
+      };
+
     } catch (error) {
       console.error(
         "Optimized analysis results failed, falling back to original method:",
@@ -836,18 +1040,80 @@ export class AnalysisService {
       analysisSession?: string;
     }
   ): Promise<UIAnalysisResult[]> {
-    const { analysisResultsLoader } = await import("./dataLoaders");
+    try {
+      // OPTIMIZED: Use materialized view for lightning-fast performance
+      console.log("🚀 Using mv_analysis_results materialized view for getAnalysisResults");
 
-    // Use data loader for efficient batching and caching
-    const results = await analysisResultsLoader.load({
-      websiteId,
-      dateRange: filters?.dateRange,
-    });
+      let query = (supabase
+        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+        .from("mv_analysis_results")
+        .select("*")
+        .eq("website_id", websiteId)
+        .order("analyzed_at", { ascending: false });
 
-    // Apply client-side filtering for better performance
+      // Apply server-side filters for better performance
+      if (filters?.dateRange) {
+        query = query
+          .gte("analyzed_at", filters.dateRange.start)
+          .lte("analyzed_at", filters.dateRange.end);
+      }
+
+      if (filters?.topic && filters.topic !== "all") {
+        query = query.eq("topic_name", filters.topic);
+      }
+
+      if (filters?.llmProvider && filters.llmProvider !== "all") {
+        query = query.eq("llm_provider", filters.llmProvider);
+      }
+
+      if (filters?.analysisSession && filters.analysisSession !== "all") {
+        query = query.eq("session_id", filters.analysisSession);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Transform the materialized view data
+      const results = this.transformMaterializedViewData(data || [], websiteId);
+
+      console.log("🎯 Materialized view query completed successfully");
+
+      return this.applyClientSideFilters(results, filters);
+
+    } catch (error) {
+      console.error("Materialized view query failed, falling back to data loader:", error);
+
+      // Fallback to original data loader approach
+      const { analysisResultsLoader } = await import("./dataLoaders");
+      const results = await analysisResultsLoader.load({
+        websiteId,
+        dateRange: filters?.dateRange,
+      });
+
+      return this.applyClientSideFilters(results, filters);
+    }
+  }
+
+  // Extract client-side filtering logic for reuse
+  private applyClientSideFilters(
+    results: UIAnalysisResult[],
+    filters?: {
+      topic?: string;
+      llmProvider?: string;
+      status?: AnalysisStatus;
+      dateRange?: { start: string; end: string };
+      searchQuery?: string;
+      mentionStatus?: string;
+      confidenceRange?: [number, number];
+      sentiment?: string;
+      analysisSession?: string;
+    }
+  ): UIAnalysisResult[] {
+    // Apply client-side filtering for complex filters
     let filteredResults = results;
 
-    // Apply topic filter
+    // Apply topic filter (if not already applied server-side)
     if (filters?.topic && filters.topic !== "all") {
       filteredResults = filteredResults.filter(
         (result) => result.topic === filters.topic
@@ -930,7 +1196,7 @@ export class AnalysisService {
       );
     }
 
-    // Apply analysis session filter
+    // Apply analysis session filter (if not already applied server-side)
     if (filters?.analysisSession && filters.analysisSession !== "all") {
       filteredResults = filteredResults.filter(
         (result) =>
@@ -958,9 +1224,9 @@ export class AnalysisService {
   ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
     try {
       // OPTIMIZED: Use materialized view function for instant topics
-      const { data, error } = await supabase
-        .schema("beekon_data")
-        .rpc("get_topics_optimized" as any, {
+      const { data, error } = await (supabase
+        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
+        .rpc("get_topics_optimized", {
           p_website_id: websiteId,
         });
 
@@ -1646,56 +1912,100 @@ export class AnalysisService {
     analysisIds: string[],
     format: "pdf" | "csv" | "json" | "word"
   ): Promise<Blob> {
-    // Fetch all analysis results for the given IDs
-    const { data, error } = await supabase
-      .schema("beekon_data")
-      .from("llm_analysis_results")
-      .select(
-        `
-        *,
-        prompts (
-          id,
-          prompt_text,
-          reporting_text,
-          recommendation_text,
-          strengths,
-          opportunities,
-          topics (
-            topic_name,
-            topic_keywords
+    try {
+      // OPTIMIZED: Use materialized view for export performance
+      console.log("🚀 Using mv_analysis_results materialized view for export");
+
+      const { data, error } = await (supabase
+        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+        .from("mv_analysis_results")
+        .select("*")
+        .in("prompt_id", analysisIds);
+
+      if (error) throw error;
+
+      // Transform data using the optimized transformation function
+      const results = this.transformMaterializedViewData(data || []);
+
+      console.log("🎯 Materialized view export query completed successfully");
+
+      // Transform to clean, flattened export format
+      const exportFormattedData = this.transformAnalysisForExport(results);
+
+      // Use enhanced export service for all formats
+      const { exportService } = await import("./exportService");
+      const exportData = {
+        title: "Analysis Results Export",
+        data: exportFormattedData,
+        exportedAt: new Date().toISOString(),
+        totalRecords: results.length,
+        metadata: {
+          exportType: "analysis_results",
+          generatedBy: "Beekon AI Analysis Service (Optimized)",
+          originalResultCount: results.length,
+          exportRowCount: exportFormattedData.length,
+        },
+      };
+
+      return await exportService.exportData(exportData, format, {
+        exportType: "analysis",
+        customFilename: `analysis_results_${results.length}_items`,
+      });
+
+    } catch (error) {
+      console.error("Materialized view export failed, falling back to original method:", error);
+
+      // Fallback to original method
+      const { data, error: fallbackError } = await supabase
+        .schema("beekon_data")
+        .from("llm_analysis_results")
+        .select(
+          `
+          *,
+          prompts (
+            id,
+            prompt_text,
+            reporting_text,
+            recommendation_text,
+            strengths,
+            opportunities,
+            topics (
+              topic_name,
+              topic_keywords
+            )
           )
+        `
         )
-      `
-      )
-      .in("prompt_id", analysisIds);
+        .in("prompt_id", analysisIds);
 
-    if (error) throw error;
+      if (fallbackError) throw fallbackError;
 
-    // Transform data using the shared transformation function
-    const results = this.transformAnalysisData(data);
+      // Transform data using the shared transformation function
+      const results = this.transformAnalysisData(data || []);
 
-    // Transform to clean, flattened export format
-    const exportFormattedData = this.transformAnalysisForExport(results);
+      // Transform to clean, flattened export format
+      const exportFormattedData = this.transformAnalysisForExport(results);
 
-    // Use enhanced export service for all formats
-    const { exportService } = await import("./exportService");
-    const exportData = {
-      title: "Analysis Results Export",
-      data: exportFormattedData,
-      exportedAt: new Date().toISOString(),
-      totalRecords: results.length,
-      metadata: {
-        exportType: "analysis_results",
-        generatedBy: "Beekon AI Analysis Service",
-        originalResultCount: results.length,
-        exportRowCount: exportFormattedData.length,
-      },
-    };
+      // Use enhanced export service for all formats
+      const { exportService } = await import("./exportService");
+      const exportData = {
+        title: "Analysis Results Export",
+        data: exportFormattedData,
+        exportedAt: new Date().toISOString(),
+        totalRecords: results.length,
+        metadata: {
+          exportType: "analysis_results",
+          generatedBy: "Beekon AI Analysis Service",
+          originalResultCount: results.length,
+          exportRowCount: exportFormattedData.length,
+        },
+      };
 
-    return await exportService.exportData(exportData, format, {
-      exportType: "analysis",
-      customFilename: `analysis_results_${results.length}_items`,
-    });
+      return await exportService.exportData(exportData, format, {
+        exportType: "analysis",
+        customFilename: `analysis_results_${results.length}_items`,
+      });
+    }
   }
 
   // JSON export functionality (reserved for future implementation)

@@ -15,7 +15,8 @@ import { registerSW } from "./lib/serviceWorker";
 import { PageLoading } from "@/components/LoadingStates";
 import AppDashboard from "@/components/AppDashboard";
 import { RealTimeDebugger } from "@/components/debug/RealTimeDebugger";
-import { ErrorBoundary, initializeGlobalErrorHandler } from "@/components/ErrorBoundary";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { initializeGlobalErrorHandler } from "@/utils/errorHandler";
 
 // Lazy load only non-core pages for code splitting
 const Auth = lazy(() => import("./pages/Auth"));

@@ -34,28 +34,32 @@ export default function CompetitorInsights({
   onRefresh,
 }: CompetitorInsightsProps) {
   // State for expanding collapsed sections
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >({});
 
   // Helper function to toggle section expansion
   const toggleSection = (sectionId: string) => {
-    setExpandedSections(prev => ({
+    setExpandedSections((prev) => ({
       ...prev,
-      [sectionId]: !prev[sectionId]
+      [sectionId]: !prev[sectionId],
     }));
   };
 
   // Process insights by type and priority
   const processedInsights = useMemo(() => {
     const grouped = {
-      threats: insights.filter(insight => insight.type === 'threat'),
-      opportunities: insights.filter(insight => insight.type === 'opportunity'),
-      neutral: insights.filter(insight => insight.type === 'neutral'),
+      threats: insights.filter((insight) => insight.type === "threat"),
+      opportunities: insights.filter(
+        (insight) => insight.type === "opportunity"
+      ),
+      neutral: insights.filter((insight) => insight.type === "neutral"),
     };
 
     const byPriority = {
-      high: insights.filter(insight => insight.impact === 'high'),
-      medium: insights.filter(insight => insight.impact === 'medium'),
-      low: insights.filter(insight => insight.impact === 'low'),
+      high: insights.filter((insight) => insight.impact === "high"),
+      medium: insights.filter((insight) => insight.impact === "medium"),
+      low: insights.filter((insight) => insight.impact === "low"),
     };
 
     return { grouped, byPriority };
@@ -68,53 +72,54 @@ export default function CompetitorInsights({
       threats: processedInsights.grouped.threats.length,
       opportunities: processedInsights.grouped.opportunities.length,
       highPriority: processedInsights.byPriority.high.length,
-      actionableRecommendations: insights.reduce((sum, insight) => 
-        sum + insight.recommendations.length, 0
+      actionableRecommendations: insights.reduce(
+        (sum, insight) => sum + insight.recommendations.length,
+        0
       ),
     };
   }, [insights, processedInsights]);
 
-  const getInsightIcon = (type: CompetitorInsight['type']) => {
+  const getInsightIcon = (type: CompetitorInsight["type"]) => {
     switch (type) {
-      case 'threat':
+      case "threat":
         return AlertTriangle;
-      case 'opportunity':
+      case "opportunity":
         return Target;
       default:
         return Info;
     }
   };
 
-  const getInsightColor = (type: CompetitorInsight['type']) => {
+  const getInsightColor = (type: CompetitorInsight["type"]) => {
     switch (type) {
-      case 'threat':
-        return 'text-destructive';
-      case 'opportunity':
-        return 'text-orange-500';
+      case "threat":
+        return "text-destructive";
+      case "opportunity":
+        return "text-orange-500";
       default:
-        return 'text-blue-500';
+        return "text-blue-500";
     }
   };
 
-  const getInsightBg = (type: CompetitorInsight['type']) => {
+  const getInsightBg = (type: CompetitorInsight["type"]) => {
     switch (type) {
-      case 'threat':
-        return 'bg-destructive/10 border-destructive/20';
-      case 'opportunity':
-        return 'bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800';
+      case "threat":
+        return "bg-destructive/10 border-destructive/20";
+      case "opportunity":
+        return "bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800";
       default:
-        return 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800';
+        return "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800";
     }
   };
 
-  const getPriorityColor = (priority: CompetitorInsight['impact']) => {
+  const getPriorityColor = (priority: CompetitorInsight["impact"]) => {
     switch (priority) {
-      case 'high':
-        return 'destructive';
-      case 'medium':
-        return 'default';
-      case 'low':
-        return 'outline';
+      case "high":
+        return "destructive";
+      case "medium":
+        return "default";
+      case "low":
+        return "outline";
     }
   };
 
@@ -125,7 +130,9 @@ export default function CompetitorInsights({
           <div className="flex justify-between items-center">
             <div>
               <CardTitle>Competitive Intelligence</CardTitle>
-              <CardDescription>AI-powered insights and recommendations</CardDescription>
+              <CardDescription>
+                AI-powered insights and recommendations
+              </CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -150,7 +157,9 @@ export default function CompetitorInsights({
           <div className="flex justify-between items-center">
             <div>
               <CardTitle>Competitive Intelligence</CardTitle>
-              <CardDescription>AI-powered insights and recommendations</CardDescription>
+              <CardDescription>
+                AI-powered insights and recommendations
+              </CardDescription>
             </div>
             {onRefresh && (
               <Button variant="outline" size="sm" onClick={onRefresh}>
@@ -186,7 +195,9 @@ export default function CompetitorInsights({
               <Zap className="h-5 w-5" />
               Competitive Intelligence
             </CardTitle>
-            <CardDescription>AI-powered insights and recommendations</CardDescription>
+            <CardDescription>
+              AI-powered insights and recommendations
+            </CardDescription>
           </div>
           {onRefresh && (
             <Button variant="outline" size="sm" onClick={onRefresh}>
@@ -203,19 +214,27 @@ export default function CompetitorInsights({
             <div className="text-sm text-muted-foreground">Total Insights</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-orange-500">{summary.opportunities}</div>
+            <div className="text-2xl font-bold text-orange-500">
+              {summary.opportunities}
+            </div>
             <div className="text-sm text-muted-foreground">Opportunities</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-destructive">{summary.threats}</div>
+            <div className="text-2xl font-bold text-destructive">
+              {summary.threats}
+            </div>
             <div className="text-sm text-muted-foreground">Threats</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-yellow-500">{summary.highPriority}</div>
+            <div className="text-2xl font-bold text-yellow-500">
+              {summary.highPriority}
+            </div>
             <div className="text-sm text-muted-foreground">High Priority</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-500">{summary.actionableRecommendations}</div>
+            <div className="text-2xl font-bold text-blue-500">
+              {summary.actionableRecommendations}
+            </div>
             <div className="text-sm text-muted-foreground">Recommendations</div>
           </div>
         </div>
@@ -229,10 +248,12 @@ export default function CompetitorInsights({
           <div className="space-y-2">
             <div className="flex justify-between items-center text-sm">
               <span>High Priority</span>
-              <span>{summary.highPriority} of {summary.total}</span>
+              <span>
+                {summary.highPriority} of {summary.total}
+              </span>
             </div>
-            <Progress 
-              value={(summary.highPriority / Math.max(summary.total, 1)) * 100} 
+            <Progress
+              value={(summary.highPriority / Math.max(summary.total, 1)) * 100}
               className="h-2"
             />
           </div>
@@ -251,14 +272,23 @@ export default function CompetitorInsights({
                 return (
                   <div
                     key={index}
-                    className={`p-4 rounded-lg border ${getInsightBg(insight.type)}`}
+                    className={`p-4 rounded-lg border ${getInsightBg(
+                      insight.type
+                    )}`}
                   >
                     <div className="flex items-start gap-3">
-                      <Icon className={`h-5 w-5 mt-0.5 flex-shrink-0 ${getInsightColor(insight.type)}`} />
+                      <Icon
+                        className={`h-5 w-5 mt-0.5 flex-shrink-0 ${getInsightColor(
+                          insight.type
+                        )}`}
+                      />
                       <div className="flex-1">
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <h5 className="font-medium">{insight.title}</h5>
-                          <Badge variant={getPriorityColor(insight.impact)} className="text-xs">
+                          <Badge
+                            variant={getPriorityColor(insight.impact)}
+                            className="text-xs"
+                          >
                             {insight.impact} impact
                           </Badge>
                         </div>
@@ -271,12 +301,17 @@ export default function CompetitorInsights({
                               Recommended Actions
                             </h6>
                             <ul className="space-y-1">
-                              {insight.recommendations.slice(0, 3).map((rec, recIndex) => (
-                                <li key={recIndex} className="text-sm flex items-start gap-2">
-                                  <ArrowRight className="h-3 w-3 mt-0.5 flex-shrink-0 text-muted-foreground" />
-                                  {rec}
-                                </li>
-                              ))}
+                              {insight.recommendations
+                                .slice(0, 3)
+                                .map((rec, recIndex) => (
+                                  <li
+                                    key={recIndex}
+                                    className="text-sm flex items-start gap-2"
+                                  >
+                                    <ArrowRight className="h-3 w-3 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                                    {rec}
+                                  </li>
+                                ))}
                             </ul>
                           </div>
                         )}
@@ -298,49 +333,60 @@ export default function CompetitorInsights({
             <div>
               <h4 className="font-medium mb-3 flex items-center gap-2">
                 <Target className="h-4 w-4 text-orange-500" />
-                Market Opportunities ({processedInsights.grouped.opportunities.length})
+                Market Opportunities (
+                {processedInsights.grouped.opportunities.length})
               </h4>
               <div className="grid gap-4">
-                {processedInsights.grouped.opportunities.map((insight, index) => (
-                  <div
-                    key={index}
-                    className="p-4 rounded-lg border bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800"
-                  >
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <h5 className="font-medium">{insight.title}</h5>
-                      <Badge variant={getPriorityColor(insight.impact)} className="text-xs">
-                        {insight.impact}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {insight.description}
-                    </p>
-                    {insight.recommendations.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {(expandedSections[`opportunity-${index}`] 
-                          ? insight.recommendations 
-                          : insight.recommendations.slice(0, 2)
-                        ).map((rec, recIndex) => (
-                          <Badge key={recIndex} variant="outline" className="text-xs">
-                            {rec}
-                          </Badge>
-                        ))}
-                        {insight.recommendations.length > 2 && (
-                          <Badge 
-                            variant="outline" 
-                            className="text-xs cursor-pointer hover:bg-muted transition-colors"
-                            onClick={() => toggleSection(`opportunity-${index}`)}
-                          >
-                            {expandedSections[`opportunity-${index}`] 
-                              ? 'Show less' 
-                              : `+${insight.recommendations.length - 2} more`
-                            }
-                          </Badge>
-                        )}
+                {processedInsights.grouped.opportunities.map(
+                  (insight, index) => (
+                    <div
+                      key={index}
+                      className="p-4 rounded-lg border bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800"
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <h5 className="font-medium">{insight.title}</h5>
+                        <Badge
+                          variant={getPriorityColor(insight.impact)}
+                          className="text-xs"
+                        >
+                          {insight.impact}
+                        </Badge>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <p className="text-sm text-muted-foreground mb-3">
+                        {insight.description}
+                      </p>
+                      {insight.recommendations.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {(expandedSections[`opportunity-${index}`]
+                            ? insight.recommendations
+                            : insight.recommendations.slice(0, 2)
+                          ).map((rec, recIndex) => (
+                            <Badge
+                              key={recIndex}
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              {rec}
+                            </Badge>
+                          ))}
+                          {insight.recommendations.length > 2 && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs cursor-pointer hover:bg-muted transition-colors"
+                              onClick={() =>
+                                toggleSection(`opportunity-${index}`)
+                              }
+                            >
+                              {expandedSections[`opportunity-${index}`]
+                                ? "Show less"
+                                : `+${insight.recommendations.length - 2} more`}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
               </div>
             </div>
           )}
@@ -360,7 +406,10 @@ export default function CompetitorInsights({
                   >
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <h5 className="font-medium">{insight.title}</h5>
-                      <Badge variant={getPriorityColor(insight.impact)} className="text-xs">
+                      <Badge
+                        variant={getPriorityColor(insight.impact)}
+                        className="text-xs"
+                      >
                         {insight.impact}
                       </Badge>
                     </div>
@@ -369,24 +418,27 @@ export default function CompetitorInsights({
                     </p>
                     {insight.recommendations.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {(expandedSections[`threat-${index}`] 
-                          ? insight.recommendations 
+                        {(expandedSections[`threat-${index}`]
+                          ? insight.recommendations
                           : insight.recommendations.slice(0, 2)
                         ).map((rec, recIndex) => (
-                          <Badge key={recIndex} variant="outline" className="text-xs">
+                          <Badge
+                            key={recIndex}
+                            variant="outline"
+                            className="text-xs"
+                          >
                             {rec}
                           </Badge>
                         ))}
                         {insight.recommendations.length > 2 && (
-                          <Badge 
-                            variant="outline" 
+                          <Badge
+                            variant="outline"
                             className="text-xs cursor-pointer hover:bg-muted transition-colors"
                             onClick={() => toggleSection(`threat-${index}`)}
                           >
-                            {expandedSections[`threat-${index}`] 
-                              ? 'Show less' 
-                              : `+${insight.recommendations.length - 2} more`
-                            }
+                            {expandedSections[`threat-${index}`]
+                              ? "Show less"
+                              : `+${insight.recommendations.length - 2} more`}
                           </Badge>
                         )}
                       </div>
@@ -402,7 +454,8 @@ export default function CompetitorInsights({
             <div>
               <h4 className="font-medium mb-3 flex items-center gap-2">
                 <Info className="h-4 w-4 text-blue-500" />
-                Analysis Status & Guidance ({processedInsights.grouped.neutral.length})
+                Analysis Status & Guidance (
+                {processedInsights.grouped.neutral.length})
               </h4>
               <div className="grid gap-4">
                 {processedInsights.grouped.neutral.map((insight, index) => (
@@ -412,7 +465,10 @@ export default function CompetitorInsights({
                   >
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <h5 className="font-medium">{insight.title}</h5>
-                      <Badge variant={getPriorityColor(insight.impact)} className="text-xs">
+                      <Badge
+                        variant={getPriorityColor(insight.impact)}
+                        className="text-xs"
+                      >
                         {insight.impact}
                       </Badge>
                     </div>
@@ -425,7 +481,11 @@ export default function CompetitorInsights({
                           ? insight.recommendations
                           : insight.recommendations.slice(0, 3)
                         ).map((rec, recIndex) => (
-                          <Badge key={recIndex} variant="outline" className="text-xs">
+                          <Badge
+                            key={recIndex}
+                            variant="outline"
+                            className="text-xs"
+                          >
                             {rec}
                           </Badge>
                         ))}
@@ -436,9 +496,8 @@ export default function CompetitorInsights({
                             onClick={() => toggleSection(`neutral-${index}`)}
                           >
                             {expandedSections[`neutral-${index}`]
-                              ? 'Show less'
-                              : `+${insight.recommendations.length - 3} more`
-                            }
+                              ? "Show less"
+                              : `+${insight.recommendations.length - 3} more`}
                           </Badge>
                         )}
                       </div>
@@ -455,7 +514,9 @@ export default function CompetitorInsights({
           <div className="flex items-start gap-3">
             <Award className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
             <div>
-              <h4 className="font-medium text-sm text-primary">Strategic Focus</h4>
+              <h4 className="font-medium text-sm text-primary">
+                Strategic Focus
+              </h4>
               <p className="text-sm text-muted-foreground mt-1">
                 {summary.total === 0
                   ? "No competitive insights are currently available. Add competitors and run analysis to get started."
@@ -467,8 +528,7 @@ export default function CompetitorInsights({
                   ? `You have ${summary.opportunities} growth opportunities identified. Focus on executing these strategic initiatives.`
                   : summary.threats > 0
                   ? `You face ${summary.threats} competitive challenges. Prioritize defensive strategies and differentiation.`
-                  : `Analysis setup in progress. Follow the guidance above to start generating competitive insights.`
-                }
+                  : `Analysis setup in progress. Follow the guidance above to start generating competitive insights.`}
               </p>
             </div>
           </div>

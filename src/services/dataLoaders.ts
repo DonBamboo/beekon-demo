@@ -15,7 +15,7 @@ function safeBoolean(value: unknown, fallback = false): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-// Data loader for analysis results
+// OPTIMIZED: Data loader for analysis results using materialized view
 export const analysisResultsLoader = new DataLoader<
   { websiteId: string; dateRange?: { start: string; end: string } },
   UIAnalysisResult[]
@@ -25,57 +25,84 @@ export const analysisResultsLoader = new DataLoader<
 
     // Group keys by websiteId to batch queries efficiently
     const websiteGroups = new Map<string, { websiteId: string; dateRange?: { start: string; end: string } }[]>();
-    
+
     keys.forEach(key => {
       const group = websiteGroups.get(key.websiteId) || [];
       group.push(key);
       websiteGroups.set(key.websiteId, group);
     });
 
-    // Execute queries in parallel for each website
+    // Execute queries in parallel for each website using materialized view
     const websitePromises = Array.from(websiteGroups.entries()).map(async ([websiteId, websiteKeys]) => {
       // For each website, we need to handle different date ranges
       const dateRangePromises = websiteKeys.map(async (key) => {
-        let query = supabase
-          .schema("beekon_data")
-          .from("llm_analysis_results")
-          .select(`
-            *,
-            prompts!inner (
-              id,
-              prompt_text,
-              reporting_text,
-              recommendation_text,
-              strengths,
-              opportunities,
-              topic_id,
-              topics!inner (
+        try {
+          // OPTIMIZED: Use materialized view for lightning-fast performance
+          let query = (supabase
+            .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+            .from("mv_analysis_results")
+            .select("*")
+            .eq("website_id", websiteId)
+            .order("analyzed_at", { ascending: false });
+
+          // Apply date range filter if specified
+          if (key.dateRange) {
+            query = query
+              .gte("analyzed_at", key.dateRange.start)
+              .lte("analyzed_at", key.dateRange.end);
+          }
+
+          const { data, error } = await query;
+          if (error) throw error;
+
+          const transformed = transformMaterializedViewData(data || [], websiteId);
+          results.set(key, transformed);
+
+        } catch (error) {
+          console.error("Materialized view query failed in data loader, falling back:", error);
+
+          // Fallback to original query structure
+          let fallbackQuery = supabase
+            .schema("beekon_data")
+            .from("llm_analysis_results")
+            .select(`
+              *,
+              prompts!inner (
                 id,
-                topic_name,
-                website_id
+                prompt_text,
+                reporting_text,
+                recommendation_text,
+                strengths,
+                opportunities,
+                topic_id,
+                topics!inner (
+                  id,
+                  topic_name,
+                  website_id
+                )
+              ),
+              analysis_sessions (
+                id,
+                analysis_name,
+                status
               )
-            ),
-            analysis_sessions (
-              id,
-              analysis_name,
-              status
-            )
-          `)
-          .eq("prompts.topics.website_id", websiteId)
-          .order("created_at", { ascending: false });
+            `)
+            .eq("prompts.topics.website_id", websiteId)
+            .order("created_at", { ascending: false });
 
-        // Apply date range filter if specified
-        if (key.dateRange) {
-          query = query
-            .gte("created_at", key.dateRange.start)
-            .lte("created_at", key.dateRange.end);
+          // Apply date range filter if specified
+          if (key.dateRange) {
+            fallbackQuery = fallbackQuery
+              .gte("created_at", key.dateRange.start)
+              .lte("created_at", key.dateRange.end);
+          }
+
+          const { data, error: fallbackError } = await fallbackQuery;
+          if (fallbackError) throw fallbackError;
+
+          const transformed = transformAnalysisData(data || [], websiteId);
+          results.set(key, transformed);
         }
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        const transformed = transformAnalysisData(data || [], websiteId);
-        results.set(key, transformed);
       });
 
       await Promise.all(dateRangePromises);
@@ -258,7 +285,69 @@ export const llmProviderLoader = new DataLoader<
   }
 );
 
-// Shared data transformation function
+// OPTIMIZED: Transform materialized view data for maximum performance
+function transformMaterializedViewData(
+  data: Record<string, unknown>[],
+  websiteId?: string
+): UIAnalysisResult[] {
+  const resultsMap = new Map<string, UIAnalysisResult>();
+
+  data?.forEach((row) => {
+    const promptId = safeString(row.prompt_id);
+    if (!promptId) return;
+
+    // Extract data from materialized view columns
+    const promptText = safeString(row.prompt_text);
+    const topicName = safeString(row.topic_name);
+    const reportingText = safeString(row.prompt_reporting_text) || null;
+    const recommendationText = safeString(row.recommendation_text) || null;
+    const promptStrengths = row.strengths as string[] | null;
+    const promptOpportunities = row.opportunities as string[] | null;
+
+    // Analysis session information from materialized view
+    const analysisSessionId = safeString(row.session_id) || null;
+    const analysisName = safeString(row.analysis_name) || null;
+    const analysisSessionStatus = safeString(row.session_status) || null;
+
+    if (!resultsMap.has(promptId)) {
+      resultsMap.set(promptId, {
+        id: promptId,
+        prompt: promptText,
+        website_id: websiteId || safeString(row.website_id),
+        topic: topicName,
+        status: "completed",
+        confidence: safeNumber(row.confidence_score),
+        created_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
+        updated_at: safeString(row.created_at) || new Date().toISOString(),
+        reporting_text: reportingText,
+        recommendation_text: recommendationText,
+        prompt_strengths: promptStrengths,
+        prompt_opportunities: promptOpportunities,
+        llm_results: [],
+        // Include analysis session information
+        analysis_session_id: analysisSessionId,
+        analysis_name: analysisName,
+        analysis_session_status: analysisSessionStatus,
+      });
+    }
+
+    const result = resultsMap.get(promptId)!;
+    result.llm_results.push({
+      llm_provider: safeString(row.llm_provider),
+      is_mentioned: safeBoolean(row.is_mentioned),
+      rank_position: safeNumber(row.rank_position),
+      confidence_score: safeNumber(row.confidence_score),
+      sentiment_score: safeNumber(row.sentiment_score),
+      summary_text: safeString(row.summary_text),
+      response_text: safeString(row.response_text),
+      analyzed_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
+    });
+  });
+
+  return Array.from(resultsMap.values());
+}
+
+// Shared data transformation function (fallback)
 function transformAnalysisData(
   data: Record<string, unknown>[],
   websiteId?: string

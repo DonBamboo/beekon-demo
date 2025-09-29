@@ -206,6 +206,7 @@ export default function CompetitiveGapChart({
     }));
 
     // First, extract all unique competitors across all topics to ensure consistency
+    // FIXED: Only include competitors that have meaningful data (non-zero scores or mentions)
     const allUniqueCompetitors = new Map<
       string,
       { name: string; id: string }
@@ -216,6 +217,8 @@ export default function CompetitiveGapChart({
         const competitorId = extractCompetitorId(comp);
         const competitorName = extractCompetitorName(comp, 0);
 
+        // FIXED: Include ALL competitors from gap analysis data, regardless of performance
+        // Zero-score competitors are valuable for gap analysis visualization
         if (!allUniqueCompetitors.has(competitorId)) {
           allUniqueCompetitors.set(competitorId, {
             name: competitorName,
@@ -252,17 +255,21 @@ export default function CompetitiveGapChart({
         const key = competitorKeyMap.get(competitorId);
 
         if (key) {
+          // Include ALL competitor scores, including zeros - they're meaningful for gap analysis
           data[key] = sanitizeChartNumber(comp.score, 0);
         }
       });
 
+      // EDGE CASE HANDLING: Ensure topic is included even if no competitors have data
+      // This prevents topics from being filtered out due to sparse competitor data
+      if (Object.keys(data).filter(k => k.startsWith('competitor')).length === 0 && process.env.NODE_ENV !== "production") {
+        console.info(`📊 Topic "${gap.topicName}" has no competitor data but will still be visualized`);
+      }
+
       return data;
     });
 
-    // Get all unique competitor keys for dynamic rendering (now we can use the mapping directly)
-    const competitorKeys = new Set<string>(
-      Array.from(competitorKeyMap.values())
-    );
+    // Note: competitorKeyMap contains all unique competitor keys for dynamic rendering
 
     // Extract all unique competitors for standardized mapping (use the consistent mapping we created)
     const allCompetitors: Array<{
@@ -290,7 +297,7 @@ export default function CompetitiveGapChart({
 
     // Validate that all competitors were properly registered
     if (process.env.NODE_ENV !== "production") {
-      const registrationValidation = competitorsForRegistration.every(
+      const allRegistered = competitorsForRegistration.every(
         (comp) => {
           const colorInfo = getCompetitorFixedColorInfo({
             competitorId: comp.competitorId,
@@ -299,6 +306,9 @@ export default function CompetitiveGapChart({
           return colorInfo.colorSlot !== -1; // -1 indicates failed registration
         }
       );
+      if (!allRegistered) {
+        console.warn("⚠️ Some competitors failed color registration");
+      }
     }
 
     // Create competitor info array for rendering with fixed color assignment
@@ -351,6 +361,39 @@ export default function CompetitiveGapChart({
     // Final safety validation for all chart data
     const finalBarChartData = sanitizeCompetitorData(barChartData);
     const finalRadarData = sanitizeCompetitorData(radarData);
+
+    // VALIDATION: Ensure all topics are preserved in chart data
+    if (process.env.NODE_ENV !== "production") {
+      const expectedTopicCount = gapAnalysis.length;
+      const actualBarTopicCount = finalBarChartData.length;
+      const actualRadarTopicCount = finalRadarData.length;
+
+      if (actualBarTopicCount !== expectedTopicCount) {
+        console.warn("⚠️ Topic count mismatch in bar chart:", {
+          expected: expectedTopicCount,
+          actual: actualBarTopicCount,
+          expectedTopics: gapAnalysis.map(g => g.topicName),
+          actualTopics: finalBarChartData.map(d => d.topic)
+        });
+      }
+
+      if (actualRadarTopicCount !== expectedTopicCount) {
+        console.warn("⚠️ Topic count mismatch in radar chart:", {
+          expected: expectedTopicCount,
+          actual: actualRadarTopicCount,
+          expectedTopics: gapAnalysis.map(g => g.topicName),
+          actualTopics: finalRadarData.map(d => d.topic)
+        });
+      }
+
+      // Success validation
+      if (actualBarTopicCount === expectedTopicCount && actualRadarTopicCount === expectedTopicCount) {
+        console.log("✅ All topics preserved in competitive gap charts:", {
+          topicCount: expectedTopicCount,
+          topics: gapAnalysis.map(g => g.topicName)
+        });
+      }
+    }
 
     // Debug logging for final radar data and comprehensive validation
     if (process.env.NODE_ENV !== "production") {

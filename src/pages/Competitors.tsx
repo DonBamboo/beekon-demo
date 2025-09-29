@@ -471,6 +471,18 @@ export default function Competitors() {
     }
   };
 
+  // Debug logging for competitors page state
+  console.log("🏆 Competitors page state:", {
+    workspaceLoading,
+    isLoading,
+    hasCompetitors: competitors?.length > 0,
+    hasAnalytics: !!analytics,
+    hasTimeSeriesData: Array.isArray(analytics?.timeSeriesData) && analytics.timeSeriesData.length > 0,
+    hasShareOfVoiceData: shareOfVoiceChartData.length > 0,
+    hasData,
+    error: error?.message
+  });
+
   // Show skeleton immediately unless we have synchronous cache data
   // This eliminates empty state flash by showing skeleton first
   const shouldShowSkeleton = workspaceLoading || (isLoading && !hasSyncCache());
@@ -501,7 +513,7 @@ export default function Competitors() {
             ).length
           }
           dateFilter={(filters as CompetitorFilters).dateFilter}
-          sortBy={(filters as CompetitorFilters).sortBy}
+          // sortBy={(filters as CompetitorFilters).sortBy} // Currently unused
           isRefreshing={isRefreshing}
           hasData={hasData}
           isAddDialogOpen={isAddDialogOpen}
@@ -522,9 +534,9 @@ export default function Competitors() {
               dateFilter: value,
             });
           }}
-          setSortBy={(value) =>
-            setFilters({ ...(filters as CompetitorFilters), sortBy: value })
-          }
+          // setSortBy={(value: "shareOfVoice" | "averageRank" | "mentionCount" | "sentimentScore") =>
+          //   setFilters({ ...(filters as CompetitorFilters), sortBy: value })
+          // } // Currently unused
           setIsAddDialogOpen={setIsAddDialogOpen}
           setCompetitorDomain={setCompetitorDomain}
           setCompetitorName={setCompetitorName}
@@ -689,7 +701,24 @@ export default function Competitors() {
 
         {/* Main Empty State */}
         {!hasData && !isLoading && (
-          <CompetitorsEmptyState setIsAddDialogOpen={setIsAddDialogOpen} />
+          <>
+            <CompetitorsEmptyState setIsAddDialogOpen={setIsAddDialogOpen} />
+            {process.env.NODE_ENV !== "production" && (
+              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h4 className="text-sm font-medium text-yellow-800">Debug Info (Development Only)</h4>
+                <pre className="text-xs text-yellow-700 mt-2">
+                  {JSON.stringify({
+                    competitors: competitors?.length || 0,
+                    analytics: !!analytics,
+                    shareOfVoiceData: shareOfVoiceChartData.length,
+                    timeSeriesData: Array.isArray(analytics?.timeSeriesData) ? analytics.timeSeriesData.length : 0,
+                    hasData,
+                    error: error?.message
+                  }, null, 2)}
+                </pre>
+              </div>
+            )}
+          </>
         )}
 
         {/* Empty Charts State */}
