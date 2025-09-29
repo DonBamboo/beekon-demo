@@ -1701,6 +1701,96 @@ export function useOptimizedCompetitorsData() {
     return undefined;
   }, [selectedWebsiteId, loadCompetitorsData]);
 
+  // CRITICAL FIX: Listen for competitor deletion events to immediately update UI
+  useEffect(() => {
+    const handleCompetitorDeleted = (event: CustomEvent) => {
+      const { competitorId, websiteId } = event.detail;
+      console.log(`🗑️ Competitor deletion detected in custom hook:`, { competitorId, websiteId });
+
+      // Only handle deletion if it's for the current website
+      if (websiteId === selectedWebsiteId) {
+        console.log(`🧹 Processing competitor deletion for current website: ${competitorId}`);
+
+        // Step 1: Optimistic update - immediately remove competitor from local state
+        setCompetitors(prevCompetitors => {
+          const updatedCompetitors = prevCompetitors.filter(comp => comp.id !== competitorId);
+          console.log(`✅ Removed competitor from local state. Count: ${prevCompetitors.length} → ${updatedCompetitors.length}`);
+          return updatedCompetitors;
+        });
+
+        // Step 2: Remove competitor from performance data
+        setPerformance(prevPerformance => {
+          const updatedPerformance = prevPerformance.filter((perf: CompetitorProfile & { competitorId?: string }) =>
+            perf.competitorId !== competitorId &&
+            perf.domain !== competitorId // Handle domain-based matching
+          );
+          console.log(`✅ Removed competitor from performance data. Count: ${prevPerformance.length} → ${updatedPerformance.length}`);
+          return updatedPerformance;
+        });
+
+        // Step 3: Clear all related custom cache entries
+        try {
+          const { baseCacheKey, filteredCacheKey } = getSynchronizedCacheKeys();
+
+          // Clear base and filtered caches
+          clearCache(baseCacheKey);
+          clearCache(filteredCacheKey);
+
+          // Clear additional cache variations that might contain the deleted competitor
+          const dateVariations = ["7d", "30d", "90d"];
+          const sortByVariations = ["shareOfVoice", "averageRank", "mentionCount", "sentimentScore"];
+          const sortOrderVariations = ["desc", "asc"];
+
+          const cacheKeysToInvalidate = new Set<string>();
+          cacheKeysToInvalidate.add(baseCacheKey);
+          cacheKeysToInvalidate.add(filteredCacheKey);
+
+          // Add comprehensive cache variations
+          dateVariations.forEach(date => {
+            sortByVariations.forEach(sortBy => {
+              sortOrderVariations.forEach(sortOrder => {
+                const cacheKey = `competitors_filtered_${selectedWebsiteId}_${date}_${sortBy}_${sortOrder}`;
+                cacheKeysToInvalidate.add(cacheKey);
+              });
+            });
+          });
+
+          // Clear all identified cache entries
+          cacheKeysToInvalidate.forEach(key => clearCache(key));
+          console.log(`🧹 Cleared ${cacheKeysToInvalidate.size} cache entries for deleted competitor`);
+
+        } catch (cacheError) {
+          console.error(`❌ Error clearing custom cache entries:`, cacheError);
+        }
+
+        // Step 4: Trigger immediate data refresh to confirm deletion
+        console.log(`🔄 Triggering fresh data reload after competitor deletion`);
+        if (loadCompetitorsDataRef.current) {
+          // Use setTimeout to avoid potential race conditions with backend cleanup
+          setTimeout(() => {
+            if (loadCompetitorsDataRef.current) {
+              loadCompetitorsDataRef.current(true); // Force refresh
+            }
+          }, 500); // Small delay to allow backend cleanup to complete
+        }
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener(
+        "competitorDeleted",
+        handleCompetitorDeleted as EventListener
+      );
+      return () => {
+        window.removeEventListener(
+          "competitorDeleted",
+          handleCompetitorDeleted as EventListener
+        );
+      };
+    }
+    return undefined;
+  }, [selectedWebsiteId, getSynchronizedCacheKeys, clearCache, setCompetitors, setPerformance]);
+
   return {
     // Data
     competitors,

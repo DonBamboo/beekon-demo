@@ -271,22 +271,75 @@ export function useDeleteCompetitor() {
   return useMutation({
     mutationFn: ({ competitorId }: { competitorId: string; websiteId: string }) =>
       competitorService.deleteCompetitor(competitorId),
-    onSuccess: (_, variables) => {
-      // Invalidate all related queries for this website
-      queryClient.invalidateQueries({ 
-        queryKey: competitorKeys.all,
-        predicate: (query) => {
-          // Invalidate any competitor-related query for this website
-          return query.queryKey.includes(variables.websiteId);
+    onSuccess: async (_, variables) => {
+      console.log(`🔄 Invalidating React Query cache for deleted competitor: ${variables.competitorId}`);
+
+      // ENHANCED: More comprehensive cache invalidation
+      try {
+        // 1. Remove the specific competitor from all queries immediately
+        queryClient.setQueriesData(
+          { queryKey: competitorKeys.list(variables.websiteId) },
+          (oldData: unknown) => {
+            if (Array.isArray(oldData)) {
+              return oldData.filter((competitor: { id: string }) => competitor.id !== variables.competitorId);
+            }
+            return oldData;
+          }
+        );
+
+        // 2. Remove competitor from performance data
+        queryClient.setQueriesData(
+          { queryKey: competitorKeys.all, predicate: (query) =>
+            query.queryKey.includes('performance') && query.queryKey.includes(variables.websiteId)
+          },
+          (oldData: unknown) => {
+            if (Array.isArray(oldData)) {
+              return oldData.filter((perf: { competitorId: string }) => perf.competitorId !== variables.competitorId);
+            }
+            return oldData;
+          }
+        );
+
+        // 3. Invalidate all queries related to this website
+        await queryClient.invalidateQueries({
+          queryKey: competitorKeys.all,
+          predicate: (query) => {
+            const queryKey = query.queryKey;
+            return queryKey.includes(variables.websiteId) ||
+                   queryKey.includes(variables.competitorId);
+          }
+        });
+
+        // 4. Force refetch of critical data immediately
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: competitorKeys.list(variables.websiteId) }),
+          queryClient.refetchQueries({ queryKey: competitorKeys.analytics(variables.websiteId) })
+        ]);
+
+        console.log(`✅ Successfully invalidated cache for competitor: ${variables.competitorId}`);
+
+        // 5. Dispatch custom event for other components to listen to
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("competitorDeleted", {
+            detail: {
+              competitorId: variables.competitorId,
+              websiteId: variables.websiteId
+            }
+          }));
         }
-      });
-      
+
+      } catch (cacheError) {
+        console.error("❌ Error during cache invalidation:", cacheError);
+        // Don't fail the entire operation if cache invalidation fails
+      }
+
       toast({
         title: "Competitor removed",
-        description: "Competitor has been removed from tracking.",
+        description: "Competitor has been completely removed from tracking.",
       });
     },
     onError: (error) => {
+      console.error("❌ Competitor deletion failed:", error);
       toast({
         title: "Error removing competitor",
         description: error instanceof Error ? error.message : "Failed to remove competitor",

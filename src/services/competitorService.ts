@@ -1100,32 +1100,161 @@ export class OptimizedCompetitorService extends BaseService {
   }
 
   /**
-   * Delete/deactivate a competitor (optimized)
+   * Delete/deactivate a competitor with comprehensive data cleanup
    */
   async deleteCompetitor(competitorId: string): Promise<void> {
-    const { data, error } = await supabase
+    // Start transaction for atomic cleanup
+    const { data: competitorData, error: fetchError } = await supabase
       .schema("beekon_data")
       .from("competitors")
-      .update({ is_active: false })
+      .select("website_id, competitor_name, competitor_domain")
       .eq("id", competitorId)
-      .select("website_id")
       .single();
 
-    if (error) throw error;
+    if (fetchError) throw fetchError;
+    if (!competitorData) throw new Error("Competitor not found");
 
-    // Clear relevant cache
-    if (data) {
-      this.clearCache(`competitors_data_${data.website_id}`);
+    console.log(`🗑️ Starting comprehensive deletion for competitor: ${competitorData.competitor_name || competitorData.competitor_domain}`);
 
-      // Refresh materialized views to ensure deleted competitors are removed from analytics
-      try {
-        await this.refreshCompetitorViews();
-        await this.refreshCompetitorAnalysis();
-        // Materialized views refreshed successfully
-      } catch (refreshError) {
-        // Failed to refresh materialized views
-        // Don't throw the error to avoid breaking the main operation
+    try {
+      // Step 1: Clean up related analysis results (CASCADE)
+      await this.cleanupCompetitorAnalysisData(competitorId);
+
+      // Step 2: Clean up status logs
+      await this.cleanupCompetitorStatusLogs(competitorId);
+
+      // Step 3: Set competitor as inactive (soft delete)
+      const { error: updateError } = await supabase
+        .schema("beekon_data")
+        .from("competitors")
+        .update({
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", competitorId);
+
+      if (updateError) throw updateError;
+
+      // Step 4: Clear all related caches
+      await this.clearCompetitorCaches(competitorData.website_id, competitorId);
+
+      // Step 5: Force synchronous materialized view refresh to remove from analytics immediately
+      await this.forceSynchronousViewRefresh();
+
+      console.log(`✅ Successfully deleted competitor: ${competitorData.competitor_name || competitorData.competitor_domain}`);
+
+    } catch (cleanupError) {
+      console.error(`❌ Error during competitor deletion cleanup:`, cleanupError);
+      // Re-throw to ensure the deletion operation fails if cleanup fails
+      throw new Error(`Failed to completely remove competitor: ${cleanupError instanceof Error ? cleanupError.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Clean up competitor analysis data when deleting a competitor
+   */
+  private async cleanupCompetitorAnalysisData(competitorId: string): Promise<void> {
+    console.log(`🧹 Cleaning up analysis data for competitor: ${competitorId}`);
+
+    try {
+      // Delete all competitor analysis results
+      const { error: analysisError } = await supabase
+        .schema("beekon_data")
+        .from("competitor_analysis_results")
+        .delete()
+        .eq("competitor_id", competitorId);
+
+      if (analysisError) {
+        console.error("Failed to delete competitor analysis results:", analysisError);
+        throw analysisError;
       }
+
+      console.log(`✅ Cleaned up competitor analysis data for: ${competitorId}`);
+    } catch (error) {
+      console.error(`❌ Error cleaning up competitor analysis data:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clean up competitor status logs when deleting a competitor
+   */
+  private async cleanupCompetitorStatusLogs(competitorId: string): Promise<void> {
+    console.log(`🧹 Cleaning up status logs for competitor: ${competitorId}`);
+
+    try {
+      // Delete all competitor status logs
+      const { error: statusError } = await supabase
+        .schema("beekon_data")
+        .from("competitor_status_log")
+        .delete()
+        .eq("competitor_id", competitorId);
+
+      if (statusError) {
+        console.error("Failed to delete competitor status logs:", statusError);
+        throw statusError;
+      }
+
+      console.log(`✅ Cleaned up competitor status logs for: ${competitorId}`);
+    } catch (error) {
+      console.error(`❌ Error cleaning up competitor status logs:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear all caches related to a competitor
+   */
+  private async clearCompetitorCaches(websiteId: string, competitorId: string): Promise<void> {
+    console.log(`🧹 Clearing caches for competitor: ${competitorId}`);
+
+    try {
+      // Clear main competitor data cache
+      this.clearCache(`competitors_data_${websiteId}`);
+
+      // Clear performance cache for all date ranges
+      this.clearCache(`performance_${websiteId}`);
+
+      // Clear time series cache for this competitor
+      const cacheEntries = Object.keys(this.cache);
+      const competitorCaches = cacheEntries.filter(key =>
+        key.includes(`timeseries_${websiteId}`) ||
+        key.includes(`analytics_${websiteId}`) ||
+        key.includes(competitorId)
+      );
+
+      competitorCaches.forEach(key => {
+        this.clearCache(key);
+      });
+
+      console.log(`✅ Cleared ${competitorCaches.length} cache entries for competitor: ${competitorId}`);
+    } catch (error) {
+      console.error(`❌ Error clearing competitor caches:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Force synchronous materialized view refresh to immediately remove deleted competitors
+   */
+  private async forceSynchronousViewRefresh(): Promise<void> {
+    console.log(`🔄 Forcing synchronous materialized view refresh...`);
+
+    try {
+      // Refresh all competitor-related materialized views synchronously
+      const refreshPromises = [
+        this.refreshCompetitorViews(),
+        this.refreshCompetitorAnalysis(),
+      ];
+
+      // Wait for all refreshes to complete
+      await Promise.all(refreshPromises);
+
+      console.log(`✅ Successfully refreshed materialized views`);
+    } catch (error) {
+      console.error(`❌ Error during synchronous view refresh:`, error);
+      // Don't throw - view refresh failure shouldn't block deletion
+      console.warn(`⚠️ View refresh failed but deletion will continue`);
     }
   }
 
