@@ -98,15 +98,40 @@ export default function CompetitorsList({
       // Component will re-render automatically when data changes through context updates
     };
 
+    const handleCompetitorDeleted = (event: CustomEvent) => {
+      const { competitorId } = event.detail;
+      console.log(`🧹 Cleaning up UI state for deleted competitor: ${competitorId}`);
+
+      // Force re-validation of color assignments to remove deleted competitor
+      const colorValidation = validateAllColorAssignments();
+      if (!colorValidation.isValid) {
+        console.log(`🎨 Fixing color conflicts after competitor deletion`);
+        autoFixColorConflicts({ logResults: true });
+      }
+
+      // Component will re-render automatically due to the cache invalidation in the mutation
+    };
+
     if (typeof window !== "undefined") {
       window.addEventListener(
         "competitorStatusUpdate",
         handleCompetitorStatusUpdate as EventListener
       );
+
+      // Listen for competitor deletion events
+      window.addEventListener(
+        "competitorDeleted",
+        handleCompetitorDeleted as EventListener
+      );
+
       return () => {
         window.removeEventListener(
           "competitorStatusUpdate",
           handleCompetitorStatusUpdate as EventListener
+        );
+        window.removeEventListener(
+          "competitorDeleted",
+          handleCompetitorDeleted as EventListener
         );
       };
     }
