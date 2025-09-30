@@ -29,7 +29,10 @@
       "mcp__supabase__get_project_url",
       "Bash(docker rm:*)",
       "Bash(docker system prune:*)",
-      "Bash(/bashes)"
+      "Bash(/bashes)",
+      "mcp__supabase__get_logs",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": [],
