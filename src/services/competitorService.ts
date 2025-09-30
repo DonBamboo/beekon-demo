@@ -1100,105 +1100,66 @@ export class OptimizedCompetitorService extends BaseService {
   }
 
   /**
-   * Delete/deactivate a competitor with comprehensive data cleanup
+   * Delete a competitor with transaction-safe CASCADE cleanup
+   * Uses database stored procedure for atomic deletion of competitor and all related data
    */
   async deleteCompetitor(competitorId: string): Promise<void> {
-    // Start transaction for atomic cleanup
-    const { data: competitorData, error: fetchError } = await supabase
-      .schema("beekon_data")
-      .from("competitors")
-      .select("website_id, competitor_name, competitor_domain")
-      .eq("id", competitorId)
-      .single();
-
-    if (fetchError) throw fetchError;
-    if (!competitorData) throw new Error("Competitor not found");
-
-    console.log(`🗑️ Starting comprehensive deletion for competitor: ${competitorData.competitor_name || competitorData.competitor_domain}`);
+    console.log(`🗑️ Starting transaction-safe deletion for competitor: ${competitorId}`);
 
     try {
-      // Step 1: Clean up related analysis results (CASCADE)
-      await this.cleanupCompetitorAnalysisData(competitorId);
+      // Execute transaction-safe deletion via database stored procedure
+      // This handles all CASCADE deletions atomically with rollback on failure
+      const { data: rawResult, error: rpcError } = await supabase.rpc(
+        "delete_competitor_with_transaction" as never,
+        {
+          competitor_id_param: competitorId
+        } as never
+      );
 
-      // Step 2: Clean up status logs
-      await this.cleanupCompetitorStatusLogs(competitorId);
+      if (rpcError) {
+        console.error(`❌ Database deletion failed:`, rpcError);
+        throw rpcError;
+      }
 
-      // Step 3: Set competitor as inactive (soft delete)
-      const { error: updateError } = await supabase
-        .schema("beekon_data")
-        .from("competitors")
-        .update({
-          is_active: false,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", competitorId);
+      // Parse the result as JSON response from stored procedure
+      const result = rawResult as unknown as {
+        success: boolean;
+        competitor_id: string;
+        competitor_name: string | null;
+        competitor_domain: string;
+        website_id: string;
+        deleted_analysis_results: number;
+        deleted_status_logs: number;
+        timestamp: string;
+      };
 
-      if (updateError) throw updateError;
+      // Log the deletion results
+      if (result && result.success) {
+        console.log(`✅ Competitor deleted successfully:`, {
+          competitor: result.competitor_name || result.competitor_domain,
+          deletedAnalysisResults: result.deleted_analysis_results,
+          deletedStatusLogs: result.deleted_status_logs,
+          websiteId: result.website_id
+        });
 
-      // Step 4: Clear all related caches
-      await this.clearCompetitorCaches(competitorData.website_id, competitorId);
+        // Clear all related application caches
+        await this.clearCompetitorCaches(result.website_id, competitorId);
+      }
 
-      // Step 5: Force synchronous materialized view refresh to remove from analytics immediately
+      // Force synchronous materialized view refresh to update analytics immediately
       await this.forceSynchronousViewRefresh();
 
-      console.log(`✅ Successfully deleted competitor: ${competitorData.competitor_name || competitorData.competitor_domain}`);
+      console.log(`✅ Successfully completed competitor deletion and cache cleanup`);
 
-    } catch (cleanupError) {
-      console.error(`❌ Error during competitor deletion cleanup:`, cleanupError);
-      // Re-throw to ensure the deletion operation fails if cleanup fails
-      throw new Error(`Failed to completely remove competitor: ${cleanupError instanceof Error ? cleanupError.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
-   * Clean up competitor analysis data when deleting a competitor
-   */
-  private async cleanupCompetitorAnalysisData(competitorId: string): Promise<void> {
-    console.log(`🧹 Cleaning up analysis data for competitor: ${competitorId}`);
-
-    try {
-      // Delete all competitor analysis results
-      const { error: analysisError } = await supabase
-        .schema("beekon_data")
-        .from("competitor_analysis_results")
-        .delete()
-        .eq("competitor_id", competitorId);
-
-      if (analysisError) {
-        console.error("Failed to delete competitor analysis results:", analysisError);
-        throw analysisError;
-      }
-
-      console.log(`✅ Cleaned up competitor analysis data for: ${competitorId}`);
     } catch (error) {
-      console.error(`❌ Error cleaning up competitor analysis data:`, error);
-      throw error;
-    }
-  }
+      console.error(`❌ Error during competitor deletion:`, error);
 
-  /**
-   * Clean up competitor status logs when deleting a competitor
-   */
-  private async cleanupCompetitorStatusLogs(competitorId: string): Promise<void> {
-    console.log(`🧹 Cleaning up status logs for competitor: ${competitorId}`);
+      // Provide detailed error message
+      const errorMessage = error instanceof Error
+        ? error.message
+        : 'Unknown error during deletion';
 
-    try {
-      // Delete all competitor status logs
-      const { error: statusError } = await supabase
-        .schema("beekon_data")
-        .from("competitor_status_log")
-        .delete()
-        .eq("competitor_id", competitorId);
-
-      if (statusError) {
-        console.error("Failed to delete competitor status logs:", statusError);
-        throw statusError;
-      }
-
-      console.log(`✅ Cleaned up competitor status logs for: ${competitorId}`);
-    } catch (error) {
-      console.error(`❌ Error cleaning up competitor status logs:`, error);
-      throw error;
+      throw new Error(`Failed to delete competitor: ${errorMessage}`);
     }
   }
 
