@@ -773,8 +773,14 @@ export class CompetitorAnalysisService extends BaseService {
           "Focus on topics where they have lower rankings",
         ],
       });
-    } else if (marketLeader && this.isYourBrand(marketLeader) && yourBrandShare > 40) {
+    } else if (
+      competitorData.length > 0 && // MUST have real competitors to claim leadership
+      marketLeader &&
+      this.isYourBrand(marketLeader) &&
+      yourBrandShare > 40
+    ) {
       // Generate positive insight when Your Brand is the market leader
+      // Only show this when there are actual competitors to lead against
       insights.push({
         type: "opportunity",
         title: "Market Leadership Position",
@@ -792,62 +798,71 @@ export class CompetitorAnalysisService extends BaseService {
 
     // Look for emerging competitors (high share of voice but not dominant)
     // FIXED: Only flag competitors as "emerging threats" if they're within striking distance of Your Brand
-    const emergingCompetitors = competitorData.filter(
-      (comp) => comp.shareOfVoice > 15 &&
-               comp.shareOfVoice <= Math.max(40, yourBrandShare * 0.8) && // Within 80% of Your Brand's share
-               comp.shareOfVoice < yourBrandShare // But still below Your Brand
-    );
-
-    emergingCompetitors.slice(0, 2).forEach((competitor) => {
-      const gapToYourBrand = yourBrandShare - competitor.shareOfVoice;
-      insights.push({
-        type: "threat",
-        title: `Emerging Competitor: ${competitor.competitorName}`,
-        description: `${
-          competitor.competitorName
-        } has ${competitor.shareOfVoice.toFixed(1)}% share of voice, ${gapToYourBrand.toFixed(1)}% behind Your Brand`,
-        impact: gapToYourBrand < 10 ? "high" : "medium", // Higher threat if gap is small
-        competitorId: competitor.competitorId,
-        recommendations: [
-          "Monitor their content strategy closely",
-          "Identify their key topics and coverage gaps",
-          "Develop counter-strategies for key battleground topics",
-        ],
-      });
-    });
-
-    // Analyze competitive gaps for opportunities
-    const opportunityTopics = gapAnalysis.filter((gap) => {
-      if (gap.competitorData.length === 0) return false;
-      const avgCompetitorScore =
-        gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) /
-        gap.competitorData.length;
-      return gap.yourBrandScore < avgCompetitorScore && avgCompetitorScore > 0;
-    });
-
-    opportunityTopics.slice(0, 3).forEach((topic) => {
-      const topCompetitor = topic.competitorData.reduce((prev, current) =>
-        prev.score > current.score ? prev : current
+    // Only generate these insights if we actually have competitors
+    if (competitorData.length > 0) {
+      const emergingCompetitors = competitorData.filter(
+        (comp) =>
+          comp.shareOfVoice > 15 &&
+          comp.shareOfVoice <= Math.max(40, yourBrandShare * 0.8) && // Within 80% of Your Brand's share
+          comp.shareOfVoice < yourBrandShare // But still below Your Brand
       );
 
-      insights.push({
-        type: "opportunity",
-        title: `Improvement Opportunity: ${topic.topicName}`,
-        description: `Your brand scores ${topic.yourBrandScore.toFixed(
-          1
-        )}% vs ${topCompetitor.competitor_name}'s ${topCompetitor.score.toFixed(
-          1
-        )}%`,
-        impact: topic.yourBrandScore < 20 ? "high" : "medium",
-        topicId: topic.topicId,
-        competitorId: topCompetitor.competitor_id,
-        recommendations: [
-          "Create more comprehensive content on this topic",
-          "Optimize for better ranking positions",
-          "Study competitor approaches and improve upon them",
-        ],
+      emergingCompetitors.slice(0, 2).forEach((competitor) => {
+        const gapToYourBrand = yourBrandShare - competitor.shareOfVoice;
+        insights.push({
+          type: "threat",
+          title: `Emerging Competitor: ${competitor.competitorName}`,
+          description: `${
+            competitor.competitorName
+          } has ${competitor.shareOfVoice.toFixed(
+            1
+          )}% share of voice, ${gapToYourBrand.toFixed(1)}% behind Your Brand`,
+          impact: gapToYourBrand < 10 ? "high" : "medium", // Higher threat if gap is small
+          competitorId: competitor.competitorId,
+          recommendations: [
+            "Monitor their content strategy closely",
+            "Identify their key topics and coverage gaps",
+            "Develop counter-strategies for key battleground topics",
+          ],
+        });
       });
-    });
+    }
+
+    // Analyze competitive gaps for opportunities
+    // Only generate gap analysis insights if we have competitors and gap data
+    if (competitorData.length > 0 && gapAnalysis.length > 0) {
+      const opportunityTopics = gapAnalysis.filter((gap) => {
+        if (gap.competitorData.length === 0) return false;
+        const avgCompetitorScore =
+          gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) /
+          gap.competitorData.length;
+        return gap.yourBrandScore < avgCompetitorScore && avgCompetitorScore > 0;
+      });
+
+      opportunityTopics.slice(0, 3).forEach((topic) => {
+        const topCompetitor = topic.competitorData.reduce((prev, current) =>
+          prev.score > current.score ? prev : current
+        );
+
+        insights.push({
+          type: "opportunity",
+          title: `Improvement Opportunity: ${topic.topicName}`,
+          description: `Your brand scores ${topic.yourBrandScore.toFixed(
+            1
+          )}% vs ${topCompetitor.competitor_name}'s ${topCompetitor.score.toFixed(
+            1
+          )}%`,
+          impact: topic.yourBrandScore < 20 ? "high" : "medium",
+          topicId: topic.topicId,
+          competitorId: topCompetitor.competitor_id,
+          recommendations: [
+            "Create more comprehensive content on this topic",
+            "Optimize for better ranking positions",
+            "Study competitor approaches and improve upon them",
+          ],
+        });
+      });
+    }
 
     // Analyze ranking performance for quick wins
     // FIXED: Only suggest ranking opportunities for competitors with meaningful market share
