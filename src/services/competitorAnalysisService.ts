@@ -304,80 +304,18 @@ export class CompetitorAnalysisService extends BaseService {
       sampleRecord: timeSeriesData.length > 0 ? timeSeriesData[0] : null,
     });
 
-    // ENHANCED FALLBACK: If no time series data, try materialized view directly
+    // If no time series data, return empty array (expected for new websites)
+    // This allows proper empty state handling in the UI
     if (timeSeriesData.length === 0) {
-      console.log("⚠️ No time series data found, attempting materialized view fallback...");
-
-      try {
-        const { data: fallbackData, error: fallbackError } = await (supabase
-          .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
-          .from("mv_analysis_results")
-          .select(`
-            website_id,
-            competitor_id,
-            competitor_name,
-            competitor_domain,
-            is_mentioned,
-            analyzed_at
-          `)
-          .eq("website_id", websiteId)
-          .gte("analyzed_at", finalDateRange.start)
-          .lte("analyzed_at", finalDateRange.end);
-
-        if (fallbackError) {
-          console.error("❌ Materialized view fallback failed:", fallbackError);
-        } else if (fallbackData && fallbackData.length > 0) {
-          console.log("✅ Using materialized view fallback data:", {
-            recordCount: fallbackData.length,
-            dateRange: finalDateRange
-          });
-
-          // Convert materialized view data to time series format
-          const groupedData = new Map<string, {
-            competitor_id: string;
-            competitor_name: string;
-            competitor_domain: string;
-            is_your_brand: boolean;
-            daily_mentions: number;
-            daily_positive_mentions: number;
-            analysis_date: string;
-          }>();
-
-          fallbackData.forEach((row: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            const competitorKey = `${row.competitor_id || 'your-brand'}_${row.analyzed_at?.split('T')[0]}`;
-
-            if (!groupedData.has(competitorKey)) {
-              groupedData.set(competitorKey, {
-                competitor_id: row.competitor_id || '00000000-0000-0000-0000-000000000000',
-                competitor_name: row.competitor_name || 'Your Brand',
-                competitor_domain: row.competitor_domain || '',
-                is_your_brand: !row.competitor_id, // If no competitor_id, it's your brand
-                daily_mentions: 0,
-                daily_positive_mentions: 0,
-                analysis_date: row.analyzed_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-              });
-            }
-
-            const dayData = groupedData.get(competitorKey)!;
-            dayData.daily_mentions += 1;
-            if (row.is_mentioned) {
-              dayData.daily_positive_mentions += 1;
-            }
-          });
-
-          // Process the converted fallback data instead of recursion
-          const convertedTimeSeriesData = Array.from(groupedData.values());
-          console.log("🔄 Processing converted materialized view data:", {
-            convertedRecords: convertedTimeSeriesData.length,
-            sampleData: convertedTimeSeriesData[0] || null
-          });
-
-          // Continue processing with converted data (skip to aggregation logic)
-          return this.processShareOfVoiceAggregation(convertedTimeSeriesData);
+      console.log(
+        "ℹ️ No time series data found for website. This is expected for new websites or when no competitor analysis has been performed yet.",
+        {
+          websiteId,
+          dateRange: finalDateRange,
+          note: "Data will appear after N8N completes competitor analysis",
         }
-      } catch (fallbackError) {
-        console.error("🚨 Materialized view fallback error:", fallbackError);
-      }
+      );
+      return []; // Empty array triggers proper empty state in UI
     }
 
     // Use the normal aggregation logic for time series data
