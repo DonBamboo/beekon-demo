@@ -11,13 +11,13 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import {
   AlertTriangle,
-  Lightbulb,
   Target,
   Award,
   ArrowRight,
   Info,
   Zap,
   Shield,
+  Users,
 } from "lucide-react";
 import { type CompetitorInsight } from "@/services/competitorAnalysisService";
 import { useMemo, useState } from "react";
@@ -150,7 +150,20 @@ export default function CompetitorInsights({
     );
   }
 
-  if (insights.length === 0) {
+  // Check if we have meaningful competitor insights (not just setup guidance)
+  const hasCompetitorInsights = useMemo(() => {
+    // If no insights at all, show empty state
+    if (insights.length === 0) return false;
+
+    // Check if all insights are "neutral" type (typically setup/guidance messages)
+    const hasActionableInsights = insights.some(
+      (insight) => insight.type === "threat" || insight.type === "opportunity"
+    );
+
+    return hasActionableInsights;
+  }, [insights]);
+
+  if (insights.length === 0 || !hasCompetitorInsights) {
     return (
       <Card>
         <CardHeader>
@@ -169,17 +182,19 @@ export default function CompetitorInsights({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8">
-            <Lightbulb className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">Loading Insights...</h3>
-            <p className="text-muted-foreground mb-4">
-              Generating competitive intelligence based on your data.
+          <div className="text-center py-12">
+            <Users className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <h3 className="text-lg font-medium mb-2">
+              No Competitor Insights Yet
+            </h3>
+            <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+              Add competitors to start generating competitive intelligence and
+              strategic recommendations based on AI-powered analysis.
             </p>
-            {onRefresh && (
-              <Button variant="default" size="sm" onClick={onRefresh}>
-                Try Again
-              </Button>
-            )}
+            <Badge variant="outline" className="text-xs">
+              <Target className="h-3 w-3 mr-1" />
+              Competitor tracking required
+            </Badge>
           </div>
         </CardContent>
       </Card>

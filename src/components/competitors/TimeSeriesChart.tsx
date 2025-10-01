@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ComposedChart } from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TrendingUp, TrendingDown, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, Target, Info, BarChart3 } from 'lucide-react';
 import { CompetitorTimeSeriesData } from '@/services/competitorService';
 import {
   getCompetitorFixedColor,
@@ -12,7 +12,7 @@ import {
   autoFixColorConflicts
 } from '@/lib/color-utils';
 import { sanitizeChartNumber } from '@/utils/chartDataValidation';
-import { Info } from 'lucide-react';
+import { hasCompetitorsInTimeSeries } from '@/utils/competitorDataUtils';
 
 interface TimeSeriesChartProps {
   data: CompetitorTimeSeriesData[];
@@ -138,7 +138,41 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
     }
   }, [data]);
 
-  if (!sanitizedData || sanitizedData.length === 0) return null;
+  // Check if we have competitor data (not just "Your Brand")
+  const hasCompetitorData = React.useMemo(() => {
+    if (!sanitizedData || sanitizedData.length === 0) return false;
+    return hasCompetitorsInTimeSeries(sanitizedData);
+  }, [sanitizedData]);
+
+  // Show empty state if no data or only "Your Brand" exists
+  if (!sanitizedData || sanitizedData.length === 0 || !hasCompetitorData) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Competitive Performance Dashboard
+          </CardTitle>
+          <CardDescription>
+            Multi-metric analysis with benchmarks and trend indicators
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-12">
+            <BarChart3 className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <h3 className="text-lg font-medium mb-2">No Competitor Data</h3>
+            <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+              Add and analyze competitors to see performance trends, rankings, and share of voice over time.
+            </p>
+            <Badge variant="outline" className="text-xs">
+              <Info className="h-3 w-3 mr-1" />
+              Competitor tracking required
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
