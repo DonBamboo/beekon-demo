@@ -688,15 +688,30 @@ export class AnalysisService {
       }
 
       // Get unique prompt IDs (DISTINCT equivalent)
-      const { data: promptsData, error: promptsError } = await promptQuery.limit(limit * 5); // Get more to handle DISTINCT
+      // Increased multiplier from 5 to 10 for better unique prompt detection
+      const { data: promptsData, error: promptsError } = await promptQuery.limit(limit * 10);
 
       if (promptsError) throw promptsError;
 
       // Get unique prompt IDs and determine pagination
       const uniquePromptIds = Array.from(new Set(promptsData?.map((p: any) => p.prompt_id) || [])); // eslint-disable-line @typescript-eslint/no-explicit-any
       const selectedPromptIds = uniquePromptIds.slice(0, limit);
-      const hasMore = uniquePromptIds.length > limit;
 
+      // FIXED: Correct hasMore logic - check if we got full batch (more likely available) OR have excess prompts
+      // Previous bug: only checked uniquePromptIds.length > limit, which failed when buffer ran low
+      const hasMore = (promptsData?.length === limit * 10) || (uniquePromptIds.length > limit);
+
+      console.log("📊 Pagination state:", {
+        limit,
+        fetchedRows: promptsData?.length || 0,
+        uniquePrompts: uniquePromptIds.length,
+        selectedPrompts: selectedPromptIds.length,
+        hasMore,
+        cursor,
+        determinedBy: promptsData?.length === limit * 10 ? "full-batch" : "excess-prompts"
+      });
+
+      // Early return if no prompts found
       if (selectedPromptIds.length === 0) {
         return {
           results: [],
@@ -705,6 +720,30 @@ export class AnalysisService {
           totalCount: 0,
         };
       }
+
+      // CRITICAL FIX: Calculate nextCursor from last SELECTED prompt, not last raw row
+      // Previous bug: Used promptsData[promptsData.length - 1] which could be row 200
+      // This caused massive data skipping (e.g., rows 21-199 would be skipped)
+      const lastSelectedPromptId = selectedPromptIds[selectedPromptIds.length - 1];
+      const lastPromptRows = promptsData?.filter((p: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
+        p.prompt_id === lastSelectedPromptId
+      ) || [];
+
+      // Use the oldest (minimum) analyzed_at from the last selected prompt's rows
+      // This ensures we don't skip any data on the next pagination fetch
+      const nextCursor = hasMore && lastPromptRows.length > 0
+        ? lastPromptRows[lastPromptRows.length - 1]?.analyzed_at || null
+        : null;
+
+      console.log("🔍 Cursor calculation:", {
+        lastSelectedPromptId,
+        promptRowsFound: lastPromptRows.length,
+        nextCursor,
+        hasMore,
+        cursorExplanation: hasMore
+          ? "Will fetch records with analyzed_at < " + nextCursor
+          : "No more data to fetch"
+      });
 
       // Step 2: Get ALL analysis data for selected prompts from materialized view
       const analysisQuery = (supabase
@@ -781,17 +820,19 @@ export class AnalysisService {
         );
       }
 
-      // Get the next cursor from the last item
-      const nextCursor = hasMore && promptsData && promptsData.length > 0
-        ? promptsData[promptsData.length - 1]?.analyzed_at || null
-        : null;
+      // Note: nextCursor was already calculated earlier (after line 734)
+      // Old buggy cursor calculation removed - it was using promptsData[last] which caused data skipping
 
-      console.log("🎯 Materialized view optimization completed successfully");
+      console.log("🎯 Materialized view optimization completed successfully", {
+        returnedResults: filteredResults.length,
+        hasMore,
+        nextCursor
+      });
 
       return {
         results: filteredResults,
         hasMore,
-        nextCursor,
+        nextCursor, // Using cursor calculated from last SELECTED prompt (line 734)
         totalCount: undefined, // Don't calculate total count for performance
       };
 
