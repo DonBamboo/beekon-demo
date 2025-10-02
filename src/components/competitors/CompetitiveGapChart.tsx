@@ -517,9 +517,63 @@ export default function CompetitiveGapChart({
     }
   }
 
-  // Only show chart if there are competitors and meaningful data
-  if (!processedData || !analytics || analytics.totalCompetitors === 0)
-    return null;
+  // Don't show chart if no competitors exist
+  if (!analytics || analytics.totalCompetitors === 0) return null;
+
+  // Show "analysis in progress" state if data is being processed
+  if (!processedData || analytics.hasInProgressAnalysis) {
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Competitive Gap Analysis</CardTitle>
+              <CardDescription>
+                Topic-by-topic comparison with your competitors (last {dateFilter}
+                )
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-16">
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative">
+                <Target className="h-16 w-16 text-muted-foreground animate-pulse" />
+                <div className="absolute -top-1 -right-1">
+                  <div className="h-4 w-4 bg-orange-500 rounded-full animate-ping" />
+                  <div className="absolute top-0 right-0 h-4 w-4 bg-orange-500 rounded-full" />
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-medium mb-2">
+                  Analyzing Competitors
+                </h3>
+                <p className="text-muted-foreground max-w-md">
+                  {analytics.competitorsWithPendingAnalysis > 0 ? (
+                    <>
+                      We're analyzing{" "}
+                      <strong>{analytics.competitorsWithPendingAnalysis}</strong>{" "}
+                      {analytics.competitorsWithPendingAnalysis === 1
+                        ? "competitor"
+                        : "competitors"}{" "}
+                      across your topics. This usually takes a few minutes.
+                    </>
+                  ) : (
+                    "Generating competitive gap analysis..."
+                  )}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="h-2 w-2 bg-orange-500 rounded-full animate-pulse" />
+                <span>Analysis in progress</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const CustomTooltip = ({
     active,

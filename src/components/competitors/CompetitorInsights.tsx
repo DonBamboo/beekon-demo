@@ -11,13 +11,13 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import {
   AlertTriangle,
-  Lightbulb,
   Target,
   Award,
   ArrowRight,
   Info,
   Zap,
   Shield,
+  Users,
 } from "lucide-react";
 import { type CompetitorInsight } from "@/services/competitorAnalysisService";
 import { useMemo, useState } from "react";
@@ -150,7 +150,20 @@ export default function CompetitorInsights({
     );
   }
 
-  if (insights.length === 0) {
+  // Check if we have meaningful competitor insights (not just setup guidance)
+  const hasCompetitorInsights = useMemo(() => {
+    // If no insights at all, show empty state
+    if (insights.length === 0) return false;
+
+    // Check if all insights are "neutral" type (typically setup/guidance messages)
+    const hasActionableInsights = insights.some(
+      (insight) => insight.type === "threat" || insight.type === "opportunity"
+    );
+
+    return hasActionableInsights;
+  }, [insights]);
+
+  if (insights.length === 0 || !hasCompetitorInsights) {
     return (
       <Card>
         <CardHeader>
@@ -169,17 +182,19 @@ export default function CompetitorInsights({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8">
-            <Lightbulb className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">Loading Insights...</h3>
-            <p className="text-muted-foreground mb-4">
-              Generating competitive intelligence based on your data.
+          <div className="text-center py-12">
+            <Users className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <h3 className="text-lg font-medium mb-2">
+              No Competitor Insights Yet
+            </h3>
+            <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+              Add competitors to start generating competitive intelligence and
+              strategic recommendations based on AI-powered analysis.
             </p>
-            {onRefresh && (
-              <Button variant="default" size="sm" onClick={onRefresh}>
-                Try Again
-              </Button>
-            )}
+            <Badge variant="outline" className="text-xs">
+              <Target className="h-3 w-3 mr-1" />
+              Competitor tracking required
+            </Badge>
           </div>
         </CardContent>
       </Card>
@@ -207,249 +222,271 @@ export default function CompetitorInsights({
         </div>
       </CardHeader>
       <CardContent>
-        {/* Summary Dashboard */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <div className="text-center">
-            <div className="text-2xl font-bold">{summary.total}</div>
-            <div className="text-sm text-muted-foreground">Total Insights</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-orange-500">
-              {summary.opportunities}
+        {/* Only show Summary Dashboard, Priority Progress, and High Priority sections if we have actionable insights */}
+        {hasCompetitorInsights && (
+          <>
+            {/* Summary Dashboard */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold">{summary.total}</div>
+                <div className="text-sm text-muted-foreground">
+                  Total Insights
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-500">
+                  {summary.opportunities}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Opportunities
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-destructive">
+                  {summary.threats}
+                </div>
+                <div className="text-sm text-muted-foreground">Threats</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-500">
+                  {summary.highPriority}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  High Priority
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-500">
+                  {summary.actionableRecommendations}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Recommendations
+                </div>
+              </div>
             </div>
-            <div className="text-sm text-muted-foreground">Opportunities</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-destructive">
-              {summary.threats}
-            </div>
-            <div className="text-sm text-muted-foreground">Threats</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-yellow-500">
-              {summary.highPriority}
-            </div>
-            <div className="text-sm text-muted-foreground">High Priority</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-500">
-              {summary.actionableRecommendations}
-            </div>
-            <div className="text-sm text-muted-foreground">Recommendations</div>
-          </div>
-        </div>
 
-        {/* Priority Progress */}
-        <div className="mb-6 p-4 bg-muted/50 rounded-lg">
-          <h4 className="font-medium mb-3 flex items-center gap-2">
-            <Target className="h-4 w-4" />
-            Priority Distribution
-          </h4>
-          <div className="space-y-2">
-            <div className="flex justify-between items-center text-sm">
-              <span>High Priority</span>
-              <span>
-                {summary.highPriority} of {summary.total}
-              </span>
+            {/* Priority Progress */}
+            <div className="mb-6 p-4 bg-muted/50 rounded-lg">
+              <h4 className="font-medium mb-3 flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Priority Distribution
+              </h4>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span>High Priority</span>
+                  <span>
+                    {summary.highPriority} of {summary.total}
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    (summary.highPriority / Math.max(summary.total, 1)) * 100
+                  }
+                  className="h-2"
+                />
+              </div>
             </div>
-            <Progress
-              value={(summary.highPriority / Math.max(summary.total, 1)) * 100}
-              className="h-2"
-            />
-          </div>
-        </div>
 
-        {/* High Priority Insights */}
-        {processedInsights.byPriority.high.length > 0 && (
-          <div className="mb-6">
-            <h4 className="font-medium mb-3 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              High Priority Actions
-            </h4>
-            <div className="space-y-3">
-              {processedInsights.byPriority.high.map((insight, index) => {
-                const Icon = getInsightIcon(insight.type);
-                return (
-                  <div
-                    key={index}
-                    className={`p-4 rounded-lg border ${getInsightBg(
-                      insight.type
-                    )}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Icon
-                        className={`h-5 w-5 mt-0.5 flex-shrink-0 ${getInsightColor(
+            {/* High Priority Insights */}
+            {processedInsights.byPriority.high.length > 0 && (
+              <div className="mb-6">
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  High Priority Actions
+                </h4>
+                <div className="space-y-3">
+                  {processedInsights.byPriority.high.map((insight, index) => {
+                    const Icon = getInsightIcon(insight.type);
+                    return (
+                      <div
+                        key={index}
+                        className={`p-4 rounded-lg border ${getInsightBg(
                           insight.type
                         )}`}
-                      />
-                      <div className="flex-1">
+                      >
+                        <div className="flex items-start gap-3">
+                          <Icon
+                            className={`h-5 w-5 mt-0.5 flex-shrink-0 ${getInsightColor(
+                              insight.type
+                            )}`}
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                              <h5 className="font-medium">{insight.title}</h5>
+                              <Badge
+                                variant={getPriorityColor(insight.impact)}
+                                className="text-xs"
+                              >
+                                {insight.impact} impact
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mb-3">
+                              {insight.description}
+                            </p>
+                            {insight.recommendations.length > 0 && (
+                              <div>
+                                <h6 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                                  Recommended Actions
+                                </h6>
+                                <ul className="space-y-1">
+                                  {insight.recommendations
+                                    .slice(0, 3)
+                                    .map((rec, recIndex) => (
+                                      <li
+                                        key={recIndex}
+                                        className="text-sm flex items-start gap-2"
+                                      >
+                                        <ArrowRight className="h-3 w-3 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                                        {rec}
+                                      </li>
+                                    ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <Separator className="my-6" />
+
+            {/* All Insights by Category - only show competitive insights if we have competitors */}
+            <div className="space-y-6">
+              {/* Opportunities */}
+              {processedInsights.grouped.opportunities.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <Target className="h-4 w-4 text-orange-500" />
+                    Market Opportunities (
+                    {processedInsights.grouped.opportunities.length})
+                  </h4>
+                  <div className="grid gap-4">
+                    {processedInsights.grouped.opportunities.map(
+                      (insight, index) => (
+                        <div
+                          key={index}
+                          className="p-4 rounded-lg border bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800"
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <h5 className="font-medium">{insight.title}</h5>
+                            <Badge
+                              variant={getPriorityColor(insight.impact)}
+                              className="text-xs"
+                            >
+                              {insight.impact}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            {insight.description}
+                          </p>
+                          {insight.recommendations.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {(expandedSections[`opportunity-${index}`]
+                                ? insight.recommendations
+                                : insight.recommendations.slice(0, 2)
+                              ).map((rec, recIndex) => (
+                                <Badge
+                                  key={recIndex}
+                                  variant="outline"
+                                  className="text-xs"
+                                >
+                                  {rec}
+                                </Badge>
+                              ))}
+                              {insight.recommendations.length > 2 && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs cursor-pointer hover:bg-muted transition-colors"
+                                  onClick={() =>
+                                    toggleSection(`opportunity-${index}`)
+                                  }
+                                >
+                                  {expandedSections[`opportunity-${index}`]
+                                    ? "Show less"
+                                    : `+${
+                                        insight.recommendations.length - 2
+                                      } more`}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Threats */}
+              {processedInsights.grouped.threats.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-destructive" />
+                    Competitive Threats (
+                    {processedInsights.grouped.threats.length})
+                  </h4>
+                  <div className="grid gap-4">
+                    {processedInsights.grouped.threats.map((insight, index) => (
+                      <div
+                        key={index}
+                        className="p-4 rounded-lg border bg-destructive/10 border-destructive/20"
+                      >
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <h5 className="font-medium">{insight.title}</h5>
                           <Badge
                             variant={getPriorityColor(insight.impact)}
                             className="text-xs"
                           >
-                            {insight.impact} impact
+                            {insight.impact}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground mb-3">
                           {insight.description}
                         </p>
                         {insight.recommendations.length > 0 && (
-                          <div>
-                            <h6 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
-                              Recommended Actions
-                            </h6>
-                            <ul className="space-y-1">
-                              {insight.recommendations
-                                .slice(0, 3)
-                                .map((rec, recIndex) => (
-                                  <li
-                                    key={recIndex}
-                                    className="text-sm flex items-start gap-2"
-                                  >
-                                    <ArrowRight className="h-3 w-3 mt-0.5 flex-shrink-0 text-muted-foreground" />
-                                    {rec}
-                                  </li>
-                                ))}
-                            </ul>
+                          <div className="flex flex-wrap gap-2">
+                            {(expandedSections[`threat-${index}`]
+                              ? insight.recommendations
+                              : insight.recommendations.slice(0, 2)
+                            ).map((rec, recIndex) => (
+                              <Badge
+                                key={recIndex}
+                                variant="outline"
+                                className="text-xs"
+                              >
+                                {rec}
+                              </Badge>
+                            ))}
+                            {insight.recommendations.length > 2 && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs cursor-pointer hover:bg-muted transition-colors"
+                                onClick={() => toggleSection(`threat-${index}`)}
+                              >
+                                {expandedSections[`threat-${index}`]
+                                  ? "Show less"
+                                  : `+${
+                                      insight.recommendations.length - 2
+                                    } more`}
+                              </Badge>
+                            )}
                           </div>
                         )}
                       </div>
-                    </div>
+                    ))}
                   </div>
-                );
-              })}
+                </div>
+              )}
             </div>
-          </div>
+          </>
         )}
 
-        <Separator className="my-6" />
-
-        {/* All Insights by Category */}
+        {/* Guidance & Analysis Status - always show if exists */}
         <div className="space-y-6">
-          {/* Opportunities */}
-          {processedInsights.grouped.opportunities.length > 0 && (
-            <div>
-              <h4 className="font-medium mb-3 flex items-center gap-2">
-                <Target className="h-4 w-4 text-orange-500" />
-                Market Opportunities (
-                {processedInsights.grouped.opportunities.length})
-              </h4>
-              <div className="grid gap-4">
-                {processedInsights.grouped.opportunities.map(
-                  (insight, index) => (
-                    <div
-                      key={index}
-                      className="p-4 rounded-lg border bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800"
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <h5 className="font-medium">{insight.title}</h5>
-                        <Badge
-                          variant={getPriorityColor(insight.impact)}
-                          className="text-xs"
-                        >
-                          {insight.impact}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        {insight.description}
-                      </p>
-                      {insight.recommendations.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {(expandedSections[`opportunity-${index}`]
-                            ? insight.recommendations
-                            : insight.recommendations.slice(0, 2)
-                          ).map((rec, recIndex) => (
-                            <Badge
-                              key={recIndex}
-                              variant="outline"
-                              className="text-xs"
-                            >
-                              {rec}
-                            </Badge>
-                          ))}
-                          {insight.recommendations.length > 2 && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs cursor-pointer hover:bg-muted transition-colors"
-                              onClick={() =>
-                                toggleSection(`opportunity-${index}`)
-                              }
-                            >
-                              {expandedSections[`opportunity-${index}`]
-                                ? "Show less"
-                                : `+${insight.recommendations.length - 2} more`}
-                            </Badge>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Threats */}
-          {processedInsights.grouped.threats.length > 0 && (
-            <div>
-              <h4 className="font-medium mb-3 flex items-center gap-2">
-                <Shield className="h-4 w-4 text-destructive" />
-                Competitive Threats ({processedInsights.grouped.threats.length})
-              </h4>
-              <div className="grid gap-4">
-                {processedInsights.grouped.threats.map((insight, index) => (
-                  <div
-                    key={index}
-                    className="p-4 rounded-lg border bg-destructive/10 border-destructive/20"
-                  >
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <h5 className="font-medium">{insight.title}</h5>
-                      <Badge
-                        variant={getPriorityColor(insight.impact)}
-                        className="text-xs"
-                      >
-                        {insight.impact}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {insight.description}
-                    </p>
-                    {insight.recommendations.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {(expandedSections[`threat-${index}`]
-                          ? insight.recommendations
-                          : insight.recommendations.slice(0, 2)
-                        ).map((rec, recIndex) => (
-                          <Badge
-                            key={recIndex}
-                            variant="outline"
-                            className="text-xs"
-                          >
-                            {rec}
-                          </Badge>
-                        ))}
-                        {insight.recommendations.length > 2 && (
-                          <Badge
-                            variant="outline"
-                            className="text-xs cursor-pointer hover:bg-muted transition-colors"
-                            onClick={() => toggleSection(`threat-${index}`)}
-                          >
-                            {expandedSections[`threat-${index}`]
-                              ? "Show less"
-                              : `+${insight.recommendations.length - 2} more`}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Guidance & Analysis Status */}
           {processedInsights.grouped.neutral.length > 0 && (
             <div>
               <h4 className="font-medium mb-3 flex items-center gap-2">

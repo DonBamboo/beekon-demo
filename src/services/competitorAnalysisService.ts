@@ -304,80 +304,18 @@ export class CompetitorAnalysisService extends BaseService {
       sampleRecord: timeSeriesData.length > 0 ? timeSeriesData[0] : null,
     });
 
-    // ENHANCED FALLBACK: If no time series data, try materialized view directly
+    // If no time series data, return empty array (expected for new websites)
+    // This allows proper empty state handling in the UI
     if (timeSeriesData.length === 0) {
-      console.log("⚠️ No time series data found, attempting materialized view fallback...");
-
-      try {
-        const { data: fallbackData, error: fallbackError } = await (supabase
-          .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
-          .from("mv_analysis_results")
-          .select(`
-            website_id,
-            competitor_id,
-            competitor_name,
-            competitor_domain,
-            is_mentioned,
-            analyzed_at
-          `)
-          .eq("website_id", websiteId)
-          .gte("analyzed_at", finalDateRange.start)
-          .lte("analyzed_at", finalDateRange.end);
-
-        if (fallbackError) {
-          console.error("❌ Materialized view fallback failed:", fallbackError);
-        } else if (fallbackData && fallbackData.length > 0) {
-          console.log("✅ Using materialized view fallback data:", {
-            recordCount: fallbackData.length,
-            dateRange: finalDateRange
-          });
-
-          // Convert materialized view data to time series format
-          const groupedData = new Map<string, {
-            competitor_id: string;
-            competitor_name: string;
-            competitor_domain: string;
-            is_your_brand: boolean;
-            daily_mentions: number;
-            daily_positive_mentions: number;
-            analysis_date: string;
-          }>();
-
-          fallbackData.forEach((row: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            const competitorKey = `${row.competitor_id || 'your-brand'}_${row.analyzed_at?.split('T')[0]}`;
-
-            if (!groupedData.has(competitorKey)) {
-              groupedData.set(competitorKey, {
-                competitor_id: row.competitor_id || '00000000-0000-0000-0000-000000000000',
-                competitor_name: row.competitor_name || 'Your Brand',
-                competitor_domain: row.competitor_domain || '',
-                is_your_brand: !row.competitor_id, // If no competitor_id, it's your brand
-                daily_mentions: 0,
-                daily_positive_mentions: 0,
-                analysis_date: row.analyzed_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-              });
-            }
-
-            const dayData = groupedData.get(competitorKey)!;
-            dayData.daily_mentions += 1;
-            if (row.is_mentioned) {
-              dayData.daily_positive_mentions += 1;
-            }
-          });
-
-          // Process the converted fallback data instead of recursion
-          const convertedTimeSeriesData = Array.from(groupedData.values());
-          console.log("🔄 Processing converted materialized view data:", {
-            convertedRecords: convertedTimeSeriesData.length,
-            sampleData: convertedTimeSeriesData[0] || null
-          });
-
-          // Continue processing with converted data (skip to aggregation logic)
-          return this.processShareOfVoiceAggregation(convertedTimeSeriesData);
+      console.log(
+        "ℹ️ No time series data found for website. This is expected for new websites or when no competitor analysis has been performed yet.",
+        {
+          websiteId,
+          dateRange: finalDateRange,
+          note: "Data will appear after N8N completes competitor analysis",
         }
-      } catch (fallbackError) {
-        console.error("🚨 Materialized view fallback error:", fallbackError);
-      }
+      );
+      return []; // Empty array triggers proper empty state in UI
     }
 
     // Use the normal aggregation logic for time series data
@@ -773,8 +711,14 @@ export class CompetitorAnalysisService extends BaseService {
           "Focus on topics where they have lower rankings",
         ],
       });
-    } else if (marketLeader && this.isYourBrand(marketLeader) && yourBrandShare > 40) {
+    } else if (
+      competitorData.length > 0 && // MUST have real competitors to claim leadership
+      marketLeader &&
+      this.isYourBrand(marketLeader) &&
+      yourBrandShare > 40
+    ) {
       // Generate positive insight when Your Brand is the market leader
+      // Only show this when there are actual competitors to lead against
       insights.push({
         type: "opportunity",
         title: "Market Leadership Position",
@@ -792,62 +736,71 @@ export class CompetitorAnalysisService extends BaseService {
 
     // Look for emerging competitors (high share of voice but not dominant)
     // FIXED: Only flag competitors as "emerging threats" if they're within striking distance of Your Brand
-    const emergingCompetitors = competitorData.filter(
-      (comp) => comp.shareOfVoice > 15 &&
-               comp.shareOfVoice <= Math.max(40, yourBrandShare * 0.8) && // Within 80% of Your Brand's share
-               comp.shareOfVoice < yourBrandShare // But still below Your Brand
-    );
-
-    emergingCompetitors.slice(0, 2).forEach((competitor) => {
-      const gapToYourBrand = yourBrandShare - competitor.shareOfVoice;
-      insights.push({
-        type: "threat",
-        title: `Emerging Competitor: ${competitor.competitorName}`,
-        description: `${
-          competitor.competitorName
-        } has ${competitor.shareOfVoice.toFixed(1)}% share of voice, ${gapToYourBrand.toFixed(1)}% behind Your Brand`,
-        impact: gapToYourBrand < 10 ? "high" : "medium", // Higher threat if gap is small
-        competitorId: competitor.competitorId,
-        recommendations: [
-          "Monitor their content strategy closely",
-          "Identify their key topics and coverage gaps",
-          "Develop counter-strategies for key battleground topics",
-        ],
-      });
-    });
-
-    // Analyze competitive gaps for opportunities
-    const opportunityTopics = gapAnalysis.filter((gap) => {
-      if (gap.competitorData.length === 0) return false;
-      const avgCompetitorScore =
-        gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) /
-        gap.competitorData.length;
-      return gap.yourBrandScore < avgCompetitorScore && avgCompetitorScore > 0;
-    });
-
-    opportunityTopics.slice(0, 3).forEach((topic) => {
-      const topCompetitor = topic.competitorData.reduce((prev, current) =>
-        prev.score > current.score ? prev : current
+    // Only generate these insights if we actually have competitors
+    if (competitorData.length > 0) {
+      const emergingCompetitors = competitorData.filter(
+        (comp) =>
+          comp.shareOfVoice > 15 &&
+          comp.shareOfVoice <= Math.max(40, yourBrandShare * 0.8) && // Within 80% of Your Brand's share
+          comp.shareOfVoice < yourBrandShare // But still below Your Brand
       );
 
-      insights.push({
-        type: "opportunity",
-        title: `Improvement Opportunity: ${topic.topicName}`,
-        description: `Your brand scores ${topic.yourBrandScore.toFixed(
-          1
-        )}% vs ${topCompetitor.competitor_name}'s ${topCompetitor.score.toFixed(
-          1
-        )}%`,
-        impact: topic.yourBrandScore < 20 ? "high" : "medium",
-        topicId: topic.topicId,
-        competitorId: topCompetitor.competitor_id,
-        recommendations: [
-          "Create more comprehensive content on this topic",
-          "Optimize for better ranking positions",
-          "Study competitor approaches and improve upon them",
-        ],
+      emergingCompetitors.slice(0, 2).forEach((competitor) => {
+        const gapToYourBrand = yourBrandShare - competitor.shareOfVoice;
+        insights.push({
+          type: "threat",
+          title: `Emerging Competitor: ${competitor.competitorName}`,
+          description: `${
+            competitor.competitorName
+          } has ${competitor.shareOfVoice.toFixed(
+            1
+          )}% share of voice, ${gapToYourBrand.toFixed(1)}% behind Your Brand`,
+          impact: gapToYourBrand < 10 ? "high" : "medium", // Higher threat if gap is small
+          competitorId: competitor.competitorId,
+          recommendations: [
+            "Monitor their content strategy closely",
+            "Identify their key topics and coverage gaps",
+            "Develop counter-strategies for key battleground topics",
+          ],
+        });
       });
-    });
+    }
+
+    // Analyze competitive gaps for opportunities
+    // Only generate gap analysis insights if we have competitors and gap data
+    if (competitorData.length > 0 && gapAnalysis.length > 0) {
+      const opportunityTopics = gapAnalysis.filter((gap) => {
+        if (gap.competitorData.length === 0) return false;
+        const avgCompetitorScore =
+          gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) /
+          gap.competitorData.length;
+        return gap.yourBrandScore < avgCompetitorScore && avgCompetitorScore > 0;
+      });
+
+      opportunityTopics.slice(0, 3).forEach((topic) => {
+        const topCompetitor = topic.competitorData.reduce((prev, current) =>
+          prev.score > current.score ? prev : current
+        );
+
+        insights.push({
+          type: "opportunity",
+          title: `Improvement Opportunity: ${topic.topicName}`,
+          description: `Your brand scores ${topic.yourBrandScore.toFixed(
+            1
+          )}% vs ${topCompetitor.competitor_name}'s ${topCompetitor.score.toFixed(
+            1
+          )}%`,
+          impact: topic.yourBrandScore < 20 ? "high" : "medium",
+          topicId: topic.topicId,
+          competitorId: topCompetitor.competitor_id,
+          recommendations: [
+            "Create more comprehensive content on this topic",
+            "Optimize for better ranking positions",
+            "Study competitor approaches and improve upon them",
+          ],
+        });
+      });
+    }
 
     // Analyze ranking performance for quick wins
     // FIXED: Only suggest ranking opportunities for competitors with meaningful market share

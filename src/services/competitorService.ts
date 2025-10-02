@@ -37,6 +37,7 @@ export interface CompetitorServicePerformance {
   trendPercentage: number;
   lastAnalyzed: string;
   isActive: boolean;
+  analysisStatus?: "pending" | "analyzing" | "completed" | "failed"; // Analysis status for progress tracking
 }
 
 export interface CompetitorComparison {
@@ -86,6 +87,8 @@ export interface ShareOfVoiceDataPoint {
 export interface CompetitorAnalytics {
   totalCompetitors: number;
   activeCompetitors: number;
+  competitorsWithPendingAnalysis: number; // Count of competitors with pending/analyzing status
+  hasInProgressAnalysis: boolean; // True if any competitors are being analyzed
   averageCompetitorRank: number;
   // Separate normalized market share from raw share of voice
   marketShareData: MarketShareDataPoint[];
@@ -257,6 +260,7 @@ export class OptimizedCompetitorService extends BaseService {
             ),
             isActive:
               analysisStatus === "completed" || analysisStatus === "analyzing",
+            analysisStatus: analysisStatus as "pending" | "analyzing" | "completed" | "failed",
           };
         });
       } catch (error) {
@@ -674,6 +678,8 @@ export class OptimizedCompetitorService extends BaseService {
         return {
           totalCompetitors: 0,
           activeCompetitors: 0,
+          competitorsWithPendingAnalysis: 0,
+          hasInProgressAnalysis: false,
           averageCompetitorRank: 0,
           marketShareData: [
             {
@@ -1848,9 +1854,16 @@ export class OptimizedCompetitorService extends BaseService {
       marketShareData
     );
 
+    // Count competitors with pending or in-progress analysis
+    const competitorsWithPendingAnalysis = competitors.filter(
+      (c) => c.analysisStatus === "pending" || c.analysisStatus === "analyzing"
+    ).length;
+
     return {
       totalCompetitors: competitors.length,
       activeCompetitors: competitors.filter((c) => c.isActive).length,
+      competitorsWithPendingAnalysis,
+      hasInProgressAnalysis: competitorsWithPendingAnalysis > 0,
       averageCompetitorRank:
         competitors.length > 0
           ? competitors.reduce((sum, c) => sum + (c.averageRank || 0), 0) /
