@@ -333,19 +333,6 @@ export default function Analysis() {
     // refreshAnalytics, // TODO: Add manual refresh functionality
   } = useAnalysisAnalytics();
 
-  // Filters are now managed globally - no local sync needed
-
-  // Helper function to get topic name for filtering (moved after hook definition)
-  // const getTopicNameForFilter = useCallback(
-  //   (topicId: string): string | undefined => {
-  //     if (topicId === "all") return undefined;
-
-  //     const topic = topics.find((topic) => topic.id === topicId);
-  //     return topic?.name;
-  //   },
-  //   [topics]
-  // );
-
   // Handle analysis errors
   useEffect(() => {
     if (analysisError) {
@@ -379,7 +366,7 @@ export default function Analysis() {
           name: "All Sessions",
           resultCount: sessions.length, // Use session count as placeholder
         },
-        ...sessions.map(session => ({
+        ...sessions.map((session) => ({
           id: session.id,
           name: session.analysis_name,
           resultCount: 0, // TODO: Calculate actual result count
@@ -474,7 +461,6 @@ export default function Analysis() {
     };
   }, [analysisResults]);
 
-
   // Use dynamic LLM filters from optimized data
   const llmFilters =
     llmProviders.length > 0
@@ -564,7 +550,7 @@ export default function Analysis() {
       dateRange: "all",
       confidenceRange: [0, 100],
       sentiment: "all",
-      analysisSession: "all"
+      analysisSession: "all",
     });
     setCustomDateRange(null);
   };
@@ -611,7 +597,21 @@ export default function Analysis() {
         description: `"${name}" has been saved as a filter preset.`,
       });
     },
-    [filterPresets, toast, customDateRange, sortBy, sortOrder, typedFilters.analysisSession, typedFilters.confidenceRange, typedFilters.dateRange, typedFilters.llm, typedFilters.mentionStatus, typedFilters.searchQuery, typedFilters.sentiment, typedFilters.topic]
+    [
+      filterPresets,
+      toast,
+      customDateRange,
+      sortBy,
+      sortOrder,
+      typedFilters.analysisSession,
+      typedFilters.confidenceRange,
+      typedFilters.dateRange,
+      typedFilters.llm,
+      typedFilters.mentionStatus,
+      typedFilters.searchQuery,
+      typedFilters.sentiment,
+      typedFilters.topic,
+    ]
   );
 
   const loadFilterPreset = useCallback(
@@ -626,12 +626,25 @@ export default function Analysis() {
         analysisSession: preset.filters.analysisSession || "all",
         searchQuery: preset.filters.searchQuery || "",
       });
-      const dateRange = preset.filters.customDateRange as { start: Date; end: Date } | null;
-      setCustomDateRange(dateRange ? {
-        start: dateRange.start.toISOString(),
-        end: dateRange.end.toISOString()
-      } : null);
-      setSortBy((preset.filters.sortBy as "date" | "confidence" | "mentions" | "rank") || "date");
+      const dateRange = preset.filters.customDateRange as {
+        start: Date;
+        end: Date;
+      } | null;
+      setCustomDateRange(
+        dateRange
+          ? {
+              start: dateRange.start.toISOString(),
+              end: dateRange.end.toISOString(),
+            }
+          : null
+      );
+      setSortBy(
+        (preset.filters.sortBy as
+          | "date"
+          | "confidence"
+          | "mentions"
+          | "rank") || "date"
+      );
       setSortOrder((preset.filters.sortOrder as "asc" | "desc") || "desc");
 
       toast({
@@ -694,7 +707,7 @@ export default function Analysis() {
   const applyQuickPreset = useCallback(
     (preset: (typeof quickPresets)[0]) => {
       const newFilters = { ...(filters || {}) } as Record<string, unknown>;
-      
+
       if (preset.filters.selectedConfidenceRange) {
         newFilters.confidenceRange = preset.filters.selectedConfidenceRange;
       }
@@ -707,11 +720,13 @@ export default function Analysis() {
       if (preset.filters.selectedSentiment) {
         newFilters.sentiment = preset.filters.selectedSentiment;
       }
-      
+
       setFilters(newFilters);
-      
+
       if (preset.filters.sortBy) {
-        setSortBy(preset.filters.sortBy as "date" | "confidence" | "mentions" | "rank");
+        setSortBy(
+          preset.filters.sortBy as "date" | "confidence" | "mentions" | "rank"
+        );
       }
       if (preset.filters.sortOrder) {
         setSortOrder(preset.filters.sortOrder as "asc" | "desc");
@@ -848,7 +863,7 @@ export default function Analysis() {
   const hasActiveFilters =
     typedFilters.topic !== "all" ||
     typedFilters.llm !== "all" ||
-    (typedFilters.searchQuery as string || "").trim() !== "" ||
+    ((typedFilters.searchQuery as string) || "").trim() !== "" ||
     typedFilters.mentionStatus !== "all" ||
     typedFilters.dateRange !== "all" ||
     typedFilters.sentiment !== "all" ||
@@ -1079,7 +1094,10 @@ export default function Analysis() {
                       placeholder="Search by analysis name, topic, or prompt..."
                       value={(typedFilters.searchQuery as string) || ""}
                       onChange={(e) =>
-                        setFilters({ ...(filters || {}), searchQuery: e.target.value })
+                        setFilters({
+                          ...(filters || {}),
+                          searchQuery: e.target.value,
+                        })
                       }
                       className="w-full min-w-0"
                       disabled={isLoadingResults}
@@ -1175,7 +1193,10 @@ export default function Analysis() {
                         isFiltering && typedFilters.mentionStatus !== filter.id
                       }
                       onClick={() =>
-                        setFilters({ ...(filters || {}), mentionStatus: filter.id })
+                        setFilters({
+                          ...(filters || {}),
+                          mentionStatus: filter.id,
+                        })
                       }
                       disabled={isLoadingResults}
                       className="shrink-0"
@@ -1212,8 +1233,10 @@ export default function Analysis() {
                     typedFilters.dateRange !== "all" ||
                     typedFilters.sentiment !== "all" ||
                     typedFilters.analysisSession !== "all" ||
-                    (typedFilters.searchQuery as string || "").trim() ||
-                    (typedFilters.advancedSearchQuery as string || "").trim() ||
+                    ((typedFilters.searchQuery as string) || "").trim() ||
+                    (
+                      (typedFilters.advancedSearchQuery as string) || ""
+                    ).trim() ||
                     sortBy !== "date" ||
                     sortOrder !== "desc") && (
                     <>
@@ -1290,7 +1313,10 @@ export default function Analysis() {
                             }
                             size="sm"
                             onClick={() =>
-                              setFilters({ ...(filters || {}), sentiment: filter.id })
+                              setFilters({
+                                ...(filters || {}),
+                                sentiment: filter.id,
+                              })
                             }
                             disabled={isLoadingResults}
                             className={`shrink-0 ${filter.color || ""}`}
@@ -1309,9 +1335,14 @@ export default function Analysis() {
                         Analysis Session
                       </label>
                       <Select
-                        value={(typedFilters.analysisSession as string) || "all"}
+                        value={
+                          (typedFilters.analysisSession as string) || "all"
+                        }
                         onValueChange={(value) =>
-                          setFilters({ ...(filters || {}), analysisSession: value })
+                          setFilters({
+                            ...(filters || {}),
+                            analysisSession: value,
+                          })
                         }
                         disabled={isLoadingResults}
                       >
@@ -1359,7 +1390,9 @@ export default function Analysis() {
                         <div className="space-y-3">
                           <Input
                             placeholder="Advanced search in analysis data..."
-                            value={(typedFilters.advancedSearchQuery as string) || ""}
+                            value={
+                              (typedFilters.advancedSearchQuery as string) || ""
+                            }
                             onChange={(e) =>
                               setFilters({
                                 ...(filters || {}),
@@ -1404,7 +1437,15 @@ export default function Analysis() {
                       <div className="flex gap-2">
                         <Select
                           value={sortBy}
-                          onValueChange={(value) => setSortBy(value as "date" | "confidence" | "mentions" | "rank")}
+                          onValueChange={(value) =>
+                            setSortBy(
+                              value as
+                                | "date"
+                                | "confidence"
+                                | "mentions"
+                                | "rank"
+                            )
+                          }
                         >
                           <SelectTrigger className="flex-1">
                             <SelectValue />
@@ -1648,10 +1689,17 @@ export default function Analysis() {
               filters={{
                 topic:
                   typedFilters.topic !== "all"
-                    ? capitalizeFirstLetters(getTopicName(typedFilters.topic as string))
+                    ? capitalizeFirstLetters(
+                        getTopicName(typedFilters.topic as string)
+                      )
                     : undefined,
-                llm: typedFilters.llm !== "all" ? (typedFilters.llm as string) : undefined,
-                search: (typedFilters.searchQuery as string || "").trim() || undefined,
+                llm:
+                  typedFilters.llm !== "all"
+                    ? (typedFilters.llm as string)
+                    : undefined,
+                search:
+                  ((typedFilters.searchQuery as string) || "").trim() ||
+                  undefined,
               }}
               onRemoveFilter={handleRemoveFilter}
               onClearAll={handleClearFilters}
@@ -1920,9 +1968,16 @@ export default function Analysis() {
               hasFilters={hasActiveFilters}
               activeFilters={{
                 topic:
-                  typedFilters.topic !== "all" ? (typedFilters.topic as string) : undefined,
-                llm: typedFilters.llm !== "all" ? (typedFilters.llm as string) : undefined,
-                search: (typedFilters.searchQuery as string || "").trim() || undefined,
+                  typedFilters.topic !== "all"
+                    ? (typedFilters.topic as string)
+                    : undefined,
+                llm:
+                  typedFilters.llm !== "all"
+                    ? (typedFilters.llm as string)
+                    : undefined,
+                search:
+                  ((typedFilters.searchQuery as string) || "").trim() ||
+                  undefined,
               }}
               onClearFilters={handleClearFilters}
               onCreateAnalysis={createAnalysis}
@@ -1993,11 +2048,12 @@ export default function Analysis() {
           onSelectSession={(sessionId) => {
             // Filter analysis page to show only results from the selected session
             setFilters({ ...(filters || {}), analysisSession: sessionId });
-            
+
             // Show toast notification
             toast({
               title: "Analysis session selected",
-              description: "The analysis page has been filtered to show results from the selected session.",
+              description:
+                "The analysis page has been filtered to show results from the selected session.",
             });
           }}
         />
