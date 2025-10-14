@@ -208,23 +208,21 @@ export class CompetitorAnalysisService extends BaseService {
     const finalDateRange = dateRange || defaultDateRange;
 
     // Add query timing and timeout protection
-    const queryStart = Date.now();
 
     // Declare data outside try block to fix scoping issue
     let data: unknown = null;
 
     try {
-      console.log("🏆 Share of voice call:", {
-        websiteId,
-        functionName: "get_competitor_time_series",
-      });
-
       // Use the same data source as time series for consistency
       const response = (await Promise.race([
         supabase.schema("beekon_data").rpc("get_competitor_time_series", {
           p_website_id: websiteId,
           p_competitor_domain: undefined, // Get all competitors and Your Brand
-          p_days: Math.ceil((new Date(finalDateRange.end).getTime() - new Date(finalDateRange.start).getTime()) / (1000 * 60 * 60 * 24)),
+          p_days: Math.ceil(
+            (new Date(finalDateRange.end).getTime() -
+              new Date(finalDateRange.start).getTime()) /
+              (1000 * 60 * 60 * 24)
+          ),
         }),
         new Promise((_, reject) =>
           setTimeout(
@@ -233,9 +231,6 @@ export class CompetitorAnalysisService extends BaseService {
           )
         ),
       ])) as { data: unknown; error: unknown };
-
-      const queryTime = Date.now() - queryStart;
-      console.log(`Share of voice query completed in ${queryTime}ms`);
 
       if (response.error) {
         const error = response.error as {
@@ -254,7 +249,6 @@ export class CompetitorAnalysisService extends BaseService {
         });
         // If query fails, try with a shorter date range as fallback
         if (finalDateRange === defaultDateRange) {
-          console.log("Retrying with shorter 30-day range...");
           return this.getCompetitorShareOfVoice(websiteId, {
             start: new Date(
               Date.now() - 30 * 24 * 60 * 60 * 1000
@@ -277,10 +271,8 @@ export class CompetitorAnalysisService extends BaseService {
       });
 
       if (error instanceof Error && error.message.includes("timeout")) {
-        console.log("⏰ Query timed out, trying shorter date range...");
         // Fallback to 7-day range if timeout occurred
         if (finalDateRange === defaultDateRange) {
-          console.log("🔄 Retrying with 7-day range as fallback...");
           return this.getCompetitorShareOfVoice(websiteId, {
             start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
             end: new Date().toISOString(),
@@ -298,23 +290,10 @@ export class CompetitorAnalysisService extends BaseService {
 
     // Process time series data to get aggregated share of voice
     const timeSeriesData = Array.isArray(data) ? data : [];
-    console.log("📊 Processing time series data for share of voice:", {
-      totalRecords: timeSeriesData.length,
-      hasData: timeSeriesData.length > 0,
-      sampleRecord: timeSeriesData.length > 0 ? timeSeriesData[0] : null,
-    });
 
     // If no time series data, return empty array (expected for new websites)
     // This allows proper empty state handling in the UI
     if (timeSeriesData.length === 0) {
-      console.log(
-        "ℹ️ No time series data found for website. This is expected for new websites or when no competitor analysis has been performed yet.",
-        {
-          websiteId,
-          dateRange: finalDateRange,
-          note: "Data will appear after N8N completes competitor analysis",
-        }
-      );
       return []; // Empty array triggers proper empty state in UI
     }
 
@@ -330,19 +309,22 @@ export class CompetitorAnalysisService extends BaseService {
     timeSeriesData: Record<string, unknown>[]
   ): CompetitorShareOfVoice[] {
     // Group data by competitor and aggregate across all dates
-    const competitorMap = new Map<string, {
-      competitorId: string;
-      competitorName: string;
-      competitorDomain: string;
-      isYourBrand: boolean;
-      totalMentions: number;
-      totalAnalyses: number;
-      avgRankSum: number;
-      avgRankCount: number;
-      avgSentimentSum: number;
-      avgSentimentCount: number;
-      lastAnalyzedAt: string;
-    }>();
+    const competitorMap = new Map<
+      string,
+      {
+        competitorId: string;
+        competitorName: string;
+        competitorDomain: string;
+        isYourBrand: boolean;
+        totalMentions: number;
+        totalAnalyses: number;
+        avgRankSum: number;
+        avgRankCount: number;
+        avgSentimentSum: number;
+        avgSentimentCount: number;
+        lastAnalyzedAt: string;
+      }
+    >();
 
     timeSeriesData.forEach((row: Record<string, unknown>) => {
       const competitorId = String(row.competitor_id || "");
@@ -371,16 +353,6 @@ export class CompetitorAnalysisService extends BaseService {
 
       const competitor = competitorMap.get(competitorId)!;
 
-      // DEBUGGING: Log the values being processed
-      if (process.env.NODE_ENV !== "production") {
-        console.log(`🔢 Processing competitor ${competitor.competitorName}:`, {
-          dailyMentions,
-          dailyPositiveMentions,
-          currentTotalMentions: competitor.totalMentions,
-          analysisDate
-        });
-      }
-
       // FIXED: Use all mentions for share of voice calculation, not just positive mentions
       // Share of voice should represent total brand visibility, not just positive sentiment
       competitor.totalMentions += dailyMentions; // Use total mentions for share of voice
@@ -403,12 +375,13 @@ export class CompetitorAnalysisService extends BaseService {
 
     // Convert to CompetitorShareOfVoice format with proper calculation
     const allCompetitors = Array.from(competitorMap.values());
-    const totalMentionsAcrossAll = allCompetitors.reduce((sum, comp) => sum + comp.totalMentions, 0);
+    const totalMentionsAcrossAll = allCompetitors.reduce(
+      (sum, comp) => sum + comp.totalMentions,
+      0
+    );
 
     // ENHANCED: If no competitors found, ensure "Your Brand" is always included
     if (allCompetitors.length === 0) {
-      console.log("⚠️ No competitor data found in aggregation, creating default Your Brand entry");
-
       // Add a default "Your Brand" entry to prevent empty charts
       allCompetitors.push({
         competitorId: "00000000-0000-0000-0000-000000000000",
@@ -426,9 +399,10 @@ export class CompetitorAnalysisService extends BaseService {
     }
 
     const shareOfVoiceData = allCompetitors.map((comp) => {
-      const rawShareOfVoice = totalMentionsAcrossAll > 0
-        ? (comp.totalMentions / totalMentionsAcrossAll) * 100
-        : 0;
+      const rawShareOfVoice =
+        totalMentionsAcrossAll > 0
+          ? (comp.totalMentions / totalMentionsAcrossAll) * 100
+          : 0;
 
       return {
         competitorId: comp.isYourBrand ? "your-brand" : comp.competitorId,
@@ -437,19 +411,16 @@ export class CompetitorAnalysisService extends BaseService {
         totalAnalyses: comp.totalAnalyses,
         totalMentions: comp.totalMentions,
         shareOfVoice: rawShareOfVoice,
-        avgRankPosition: comp.avgRankCount > 0 ? comp.avgRankSum / comp.avgRankCount : null,
-        avgSentimentScore: comp.avgSentimentCount > 0 ? comp.avgSentimentSum / comp.avgSentimentCount : null,
+        avgRankPosition:
+          comp.avgRankCount > 0 ? comp.avgRankSum / comp.avgRankCount : null,
+        avgSentimentScore:
+          comp.avgSentimentCount > 0
+            ? comp.avgSentimentSum / comp.avgSentimentCount
+            : null,
         avgConfidenceScore: null, // Not available from time series data
         analysisStatus: mapDatabaseStatusToUI("completed"), // Assume completed if we have data
         lastAnalyzedAt: comp.lastAnalyzedAt,
       } as CompetitorShareOfVoice;
-    });
-
-    console.log("📈 Share of voice data processed:", {
-      competitorCount: shareOfVoiceData.length,
-      hasYourBrand: shareOfVoiceData.some(c => c.competitorId === "your-brand"),
-      totalMentions: totalMentionsAcrossAll,
-      rawTotalShare: shareOfVoiceData.reduce((sum, c) => sum + c.shareOfVoice, 0),
     });
 
     // Apply shared normalization utility for consistency
@@ -457,8 +428,6 @@ export class CompetitorAnalysisService extends BaseService {
 
     return normalizedResult;
   }
-
-
 
   /**
    * Get competitive gap analysis
@@ -474,9 +443,6 @@ export class CompetitorAnalysisService extends BaseService {
     };
 
     const finalDateRange = dateRange || defaultDateRange;
-
-    // Add query timing and timeout protection for gap analysis
-    const queryStart = Date.now();
 
     // Declare data outside try block to fix scoping issue
     let data: Array<Record<string, unknown>> | null = null;
@@ -496,9 +462,6 @@ export class CompetitorAnalysisService extends BaseService {
         ),
       ])) as { data: Array<Record<string, unknown>>; error: unknown };
 
-      const queryTime = Date.now() - queryStart;
-      console.log(`Gap analysis query completed in ${queryTime}ms`);
-
       if (response.error) {
         console.error("Gap analysis query error:", response.error);
         // Return empty array for fallback instead of throwing
@@ -517,10 +480,8 @@ export class CompetitorAnalysisService extends BaseService {
       });
 
       if (error instanceof Error && error.message.includes("timeout")) {
-        console.log("⏰ Gap analysis query timed out");
         // Try with shorter range if timeout
         if (finalDateRange === defaultDateRange) {
-          console.log("🔄 Retrying gap analysis with 7-day range...");
           return this.getCompetitiveGapAnalysis(websiteId, {
             start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
             end: new Date().toISOString(),
@@ -658,18 +619,23 @@ export class CompetitorAnalysisService extends BaseService {
    * Helper function to check if a competitor is actually "Your Brand"
    * This prevents "Your Brand" from being treated as a competitor/threat
    */
-  private isYourBrand(competitor: { competitorName?: string; competitorId?: string }): boolean {
-    return competitor.competitorName === "Your Brand" ||
-           competitor.competitorId === "your-brand";
+  private isYourBrand(competitor: {
+    competitorName?: string;
+    competitorId?: string;
+  }): boolean {
+    return (
+      competitor.competitorName === "Your Brand" ||
+      competitor.competitorId === "your-brand"
+    );
   }
 
   /**
    * Filter out "Your Brand" from competitor analysis
    */
-  private filterOutYourBrand<T extends { competitorName?: string; competitorId?: string }>(
-    competitors: T[]
-  ): T[] {
-    return competitors.filter(comp => !this.isYourBrand(comp));
+  private filterOutYourBrand<
+    T extends { competitorName?: string; competitorId?: string }
+  >(competitors: T[]): T[] {
+    return competitors.filter((comp) => !this.isYourBrand(comp));
   }
 
   /**
@@ -682,12 +648,14 @@ export class CompetitorAnalysisService extends BaseService {
   ): void {
     // Analyze share of voice for threats and opportunities
     // FIXED: Proper dominance detection - only flag competitors who actually outperform Your Brand
-    const yourBrandData = shareOfVoice.find(comp => this.isYourBrand(comp));
+    const yourBrandData = shareOfVoice.find((comp) => this.isYourBrand(comp));
     const yourBrandShare = yourBrandData?.shareOfVoice || 0;
     const competitorData = this.filterOutYourBrand(shareOfVoice);
 
     // Find the actual market leader (highest share of voice)
-    const marketLeader = [...shareOfVoice].sort((a, b) => b.shareOfVoice - a.shareOfVoice)[0];
+    const marketLeader = [...shareOfVoice].sort(
+      (a, b) => b.shareOfVoice - a.shareOfVoice
+    )[0];
 
     // Only generate "competitor dominates" insight if a competitor actually outperforms Your Brand
     const dominantCompetitor = competitorData.find(
@@ -774,7 +742,9 @@ export class CompetitorAnalysisService extends BaseService {
         const avgCompetitorScore =
           gap.competitorData.reduce((sum, comp) => sum + comp.score, 0) /
           gap.competitorData.length;
-        return gap.yourBrandScore < avgCompetitorScore && avgCompetitorScore > 0;
+        return (
+          gap.yourBrandScore < avgCompetitorScore && avgCompetitorScore > 0
+        );
       });
 
       opportunityTopics.slice(0, 3).forEach((topic) => {
@@ -787,9 +757,9 @@ export class CompetitorAnalysisService extends BaseService {
           title: `Improvement Opportunity: ${topic.topicName}`,
           description: `Your brand scores ${topic.yourBrandScore.toFixed(
             1
-          )}% vs ${topCompetitor.competitor_name}'s ${topCompetitor.score.toFixed(
-            1
-          )}%`,
+          )}% vs ${
+            topCompetitor.competitor_name
+          }'s ${topCompetitor.score.toFixed(1)}%`,
           impact: topic.yourBrandScore < 20 ? "high" : "medium",
           topicId: topic.topicId,
           competitorId: topCompetitor.competitor_id,
@@ -822,7 +792,9 @@ export class CompetitorAnalysisService extends BaseService {
           competitor.competitorName
         } averages position ${competitor.avgRankPosition?.toFixed(
           1
-        )} vs Your Brand's ${(yourBrandRank || 1).toFixed(1)} - clear ranking advantage`,
+        )} vs Your Brand's ${(yourBrandRank || 1).toFixed(
+          1
+        )} - clear ranking advantage`,
         impact: rankingGap > 2 ? "high" : "medium",
         competitorId: competitor.competitorId,
         recommendations: [
@@ -836,11 +808,14 @@ export class CompetitorAnalysisService extends BaseService {
     // Add strategic insights if we have sufficient data
     if (shareOfVoice.length >= 2) {
       // FIXED: Proper market share analysis including Your Brand's position
-      const yourBrandData = shareOfVoice.find(comp => this.isYourBrand(comp));
+      const yourBrandData = shareOfVoice.find((comp) => this.isYourBrand(comp));
       const yourBrandShare = yourBrandData?.shareOfVoice || 0;
 
       const competitorData = this.filterOutYourBrand(shareOfVoice);
-      const totalCompetitorShare = competitorData.reduce((sum, comp) => sum + comp.shareOfVoice, 0);
+      const totalCompetitorShare = competitorData.reduce(
+        (sum, comp) => sum + comp.shareOfVoice,
+        0
+      );
 
       const totalTrackedShare = yourBrandShare + totalCompetitorShare;
       const unaccountedShare = Math.max(0, 100 - totalTrackedShare);
@@ -851,7 +826,11 @@ export class CompetitorAnalysisService extends BaseService {
         insights.push({
           type: "opportunity",
           title: "Market Leadership Position",
-          description: `Your Brand dominates with ${yourBrandShare.toFixed(1)}% market share vs ${totalCompetitorShare.toFixed(1)}% by competitors`,
+          description: `Your Brand dominates with ${yourBrandShare.toFixed(
+            1
+          )}% market share vs ${totalCompetitorShare.toFixed(
+            1
+          )}% by competitors`,
           impact: "medium",
           recommendations: [
             "Focus on defensive strategies to maintain market leadership",
@@ -861,16 +840,24 @@ export class CompetitorAnalysisService extends BaseService {
         });
       } else if (yourBrandShare >= 30) {
         // Competitive Market Position
-        const topCompetitor = competitorData.length > 0
-          ? competitorData.reduce((prev, current) =>
-              current.shareOfVoice > prev.shareOfVoice ? current : prev)
-          : null;
+        const topCompetitor =
+          competitorData.length > 0
+            ? competitorData.reduce((prev, current) =>
+                current.shareOfVoice > prev.shareOfVoice ? current : prev
+              )
+            : null;
 
         if (topCompetitor) {
           insights.push({
             type: "opportunity",
             title: "Competitive Market Dynamics",
-            description: `Your Brand (${yourBrandShare.toFixed(1)}%) competes in a ${competitorData.length}-player market with top competitor ${topCompetitor.competitorName} at ${topCompetitor.shareOfVoice.toFixed(1)}%`,
+            description: `Your Brand (${yourBrandShare.toFixed(
+              1
+            )}%) competes in a ${
+              competitorData.length
+            }-player market with top competitor ${
+              topCompetitor.competitorName
+            } at ${topCompetitor.shareOfVoice.toFixed(1)}%`,
             impact: "high",
             recommendations: [
               `Target specific weaknesses of ${topCompetitor.competitorName}`,
@@ -884,7 +871,11 @@ export class CompetitorAnalysisService extends BaseService {
         insights.push({
           type: "opportunity",
           title: "Market Share Growth Opportunity",
-          description: `Your Brand (${yourBrandShare.toFixed(1)}%) vs competitors (${totalCompetitorShare.toFixed(1)}%) - significant growth potential available`,
+          description: `Your Brand (${yourBrandShare.toFixed(
+            1
+          )}%) vs competitors (${totalCompetitorShare.toFixed(
+            1
+          )}%) - significant growth potential available`,
           impact: "high",
           recommendations: [
             "Aggressively target competitor content gaps",
@@ -899,7 +890,9 @@ export class CompetitorAnalysisService extends BaseService {
         insights.push({
           type: "opportunity",
           title: "Uncontested Market Opportunity",
-          description: `${unaccountedShare.toFixed(1)}% of market voice appears uncontested - potential for expansion`,
+          description: `${unaccountedShare.toFixed(
+            1
+          )}% of market voice appears uncontested - potential for expansion`,
           impact: "high",
           recommendations: [
             "Research additional competitors in your space",

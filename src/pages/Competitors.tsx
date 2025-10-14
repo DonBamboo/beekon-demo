@@ -88,74 +88,10 @@ export default function Competitors() {
     const rawData =
       (analytics?.shareOfVoiceData as Record<string, unknown>[]) || [];
 
-    if (process.env.NODE_ENV !== "production") {
-      console.log(
-        "🎯 [DEBUG] Competitors.tsx shareOfVoiceChartData processing:",
-        {
-          rawDataCount: rawData.length,
-          hasYourBrand: rawData.some((item) => item.name === "Your Brand"),
-          rawDataEntries: rawData.map((item) => ({
-            name: item.name,
-            shareOfVoice: item.shareOfVoice,
-            totalMentions: item.totalMentions,
-            dataType: item.dataType,
-            allFields: Object.keys(item),
-          })),
-          analyticsObject: analytics ? "exists" : "missing",
-          fullAnalyticsStructure: analytics
-            ? {
-                hasShareOfVoiceData: !!analytics.shareOfVoiceData,
-                shareOfVoiceDataType: Array.isArray(analytics.shareOfVoiceData)
-                  ? "array"
-                  : typeof analytics.shareOfVoiceData,
-                shareOfVoiceDataLength: Array.isArray(
-                  analytics.shareOfVoiceData
-                )
-                  ? analytics.shareOfVoiceData.length
-                  : "not-array",
-                analyticsKeys: Object.keys(analytics),
-              }
-            : "analytics-missing",
-        }
-      );
-    }
-
     // Validate that "Your Brand" data is present (should always be provided by service layer)
     const hasYourBrand = rawData.some((item) => item.name === "Your Brand");
 
     if (!hasYourBrand) {
-      // This indicates a service layer issue that needs investigation
-      if (process.env.NODE_ENV !== "production") {
-        console.error(
-          "❌ [DATA ERROR] Your Brand data missing from service layer",
-          {
-            receivedDataCount: rawData.length,
-            receivedItems: rawData.map((item) => ({
-              name: item.name,
-              dataType: item.dataType,
-            })),
-            analyticsStructure: analytics
-              ? {
-                  hasShareOfVoiceData: !!analytics.shareOfVoiceData,
-                  shareOfVoiceDataType: Array.isArray(
-                    analytics.shareOfVoiceData
-                  )
-                    ? "array"
-                    : typeof analytics.shareOfVoiceData,
-                  dataLength: Array.isArray(analytics.shareOfVoiceData)
-                    ? analytics.shareOfVoiceData.length
-                    : "not-array",
-                }
-              : "analytics-missing",
-            criticalIssue:
-              "Service layer should always provide Your Brand data",
-            requiredAction:
-              "Check competitorService.getCompetitiveAnalysis() implementation",
-          }
-        );
-      }
-
-      // Don't add fallback - this should be fixed in the service layer
       // Using empty array to prevent chart errors while maintaining data integrity
       return [];
     }
@@ -471,18 +407,6 @@ export default function Competitors() {
     }
   };
 
-  // Debug logging for competitors page state
-  console.log("🏆 Competitors page state:", {
-    workspaceLoading,
-    isLoading,
-    hasCompetitors: competitors?.length > 0,
-    hasAnalytics: !!analytics,
-    hasTimeSeriesData: Array.isArray(analytics?.timeSeriesData) && analytics.timeSeriesData.length > 0,
-    hasShareOfVoiceData: shareOfVoiceChartData.length > 0,
-    hasData,
-    error: error?.message
-  });
-
   // Show skeleton immediately unless we have synchronous cache data
   // This eliminates empty state flash by showing skeleton first
   const shouldShowSkeleton = workspaceLoading || (isLoading && !hasSyncCache());
@@ -524,11 +448,6 @@ export default function Competitors() {
           isExporting={isExporting}
           competitorsData={competitors}
           setDateFilter={(value) => {
-            console.log("🗓️ Date filter changed:", {
-              from: (filters as CompetitorFilters).dateFilter,
-              to: value,
-              timestamp: new Date().toISOString(),
-            });
             setFilters({
               ...(filters as CompetitorFilters),
               dateFilter: value,
@@ -705,16 +624,24 @@ export default function Competitors() {
             <CompetitorsEmptyState setIsAddDialogOpen={setIsAddDialogOpen} />
             {process.env.NODE_ENV !== "production" && (
               <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <h4 className="text-sm font-medium text-yellow-800">Debug Info (Development Only)</h4>
+                <h4 className="text-sm font-medium text-yellow-800">
+                  Debug Info (Development Only)
+                </h4>
                 <pre className="text-xs text-yellow-700 mt-2">
-                  {JSON.stringify({
-                    competitors: competitors?.length || 0,
-                    analytics: !!analytics,
-                    shareOfVoiceData: shareOfVoiceChartData.length,
-                    timeSeriesData: Array.isArray(analytics?.timeSeriesData) ? analytics.timeSeriesData.length : 0,
-                    hasData,
-                    error: error?.message
-                  }, null, 2)}
+                  {JSON.stringify(
+                    {
+                      competitors: competitors?.length || 0,
+                      analytics: !!analytics,
+                      shareOfVoiceData: shareOfVoiceChartData.length,
+                      timeSeriesData: Array.isArray(analytics?.timeSeriesData)
+                        ? analytics.timeSeriesData.length
+                        : 0,
+                      hasData,
+                      error: error?.message,
+                    },
+                    null,
+                    2
+                  )}
                 </pre>
               </div>
             )}

@@ -1,12 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
-import {
-  type AnalysisResult,
-  type LLMResult,
-} from "./analysisService";
+import { type AnalysisResult, type LLMResult } from "./analysisService";
 import { generateExportFilename } from "@/lib/export-utils";
-import {
-  DashboardMetricsResult
-} from "@/types/supabase-rpc";
+import { DashboardMetricsResult } from "@/types/supabase-rpc";
 
 export interface DashboardMetrics {
   overallVisibilityScore: number;
@@ -86,22 +81,26 @@ export class DashboardService {
         end: dateRange?.end || new Date().toISOString(),
       };
 
-      console.log("📊 Dashboard metrics call:", {
-        websiteIds,
-        dateRange: defaultDateRange,
-        functionName: "get_dashboard_metrics",
+      const { data, error } = await (
+        supabase.schema("beekon_data") as unknown as {
+          rpc: (
+            name: string,
+            params: Record<string, unknown>
+          ) => Promise<{ data: unknown; error: unknown }>;
+        }
+      ).rpc("get_dashboard_metrics", {
+        p_website_ids: websiteIds,
+        p_date_start: defaultDateRange.start,
+        p_date_end: defaultDateRange.end,
       });
 
-      const { data, error } = await (supabase
-        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
-        .rpc("get_dashboard_metrics", {
-          p_website_ids: websiteIds,
-          p_date_start: defaultDateRange.start,
-          p_date_end: defaultDateRange.end,
-        });
-
       if (error) {
-        const errorObj = error as { code?: string; message?: string; details?: string; hint?: string } | null;
+        const errorObj = error as {
+          code?: string;
+          message?: string;
+          details?: string;
+          hint?: string;
+        } | null;
         console.error("❌ Dashboard metrics error:", {
           error,
           code: errorObj?.code,
@@ -112,11 +111,6 @@ export class DashboardService {
         });
         throw error;
       }
-
-      console.log("✅ Dashboard metrics success:", {
-        dataLength: Array.isArray(data) ? data.length : "not array",
-        firstResult: Array.isArray(data) ? data[0] : data,
-      });
 
       const result = Array.isArray(data) ? data[0] : data;
       if (!result) {
@@ -146,10 +140,9 @@ export class DashboardService {
 
       // Fallback: Direct query to materialized view if RPC function fails
       try {
-        console.log("🔄 Attempting direct materialized view fallback...");
-
-        const { data: fallbackData, error: fallbackError } = await (supabase
-          .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+        const { data: fallbackData, error: fallbackError } = await (
+          supabase.schema("beekon_data") as any
+        ) // eslint-disable-line @typescript-eslint/no-explicit-any
           .from("mv_website_dashboard_summary")
           .select("*")
           .in("website_id", websiteIds);
@@ -165,17 +158,24 @@ export class DashboardService {
         }
 
         // Calculate metrics from materialized view data
-        const totalAnalyses = fallbackData.reduce((sum: number, row: any) => sum + (row.total_brand_analyses || 0), 0); // eslint-disable-line @typescript-eslint/no-explicit-any
-        const totalMentions = fallbackData.reduce((sum: number, row: any) => sum + (row.total_brand_mentions || 0), 0); // eslint-disable-line @typescript-eslint/no-explicit-any
-        const avgVisibility = fallbackData.reduce((sum: number, row: any) => sum + (row.brand_mention_rate || 0), 0) / fallbackData.length; // eslint-disable-line @typescript-eslint/no-explicit-any
-        const avgSentiment = fallbackData.reduce((sum: number, row: any) => sum + (row.avg_brand_sentiment || 0), 0) / fallbackData.length; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-        console.log("✅ Fallback calculation successful:", {
-          totalAnalyses,
-          totalMentions,
-          avgVisibility,
-          avgSentiment
-        });
+        const totalAnalyses = fallbackData.reduce(
+          (sum: number, row: any) => sum + (row.total_brand_analyses || 0),
+          0
+        ); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const totalMentions = fallbackData.reduce(
+          (sum: number, row: any) => sum + (row.total_brand_mentions || 0),
+          0
+        ); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const avgVisibility =
+          fallbackData.reduce(
+            (sum: number, row: any) => sum + (row.brand_mention_rate || 0),
+            0
+          ) / fallbackData.length; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const avgSentiment =
+          fallbackData.reduce(
+            (sum: number, row: any) => sum + (row.avg_brand_sentiment || 0),
+            0
+          ) / fallbackData.length; // eslint-disable-line @typescript-eslint/no-explicit-any
 
         return {
           overallVisibilityScore: Number(avgVisibility.toFixed(2)),
@@ -184,10 +184,9 @@ export class DashboardService {
           sentimentScore: Number(((avgSentiment + 1) * 50).toFixed(2)),
           totalAnalyses: totalAnalyses,
           activeWebsites: fallbackData.length,
-          topPerformingTopic: 'Data Available',
+          topPerformingTopic: "Data Available",
           improvementTrend: 0,
         };
-
       } catch (fallbackError) {
         console.error("🚨 All fallback methods failed:", fallbackError);
         return this.getEmptyMetrics();
@@ -209,13 +208,17 @@ export class DashboardService {
       const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
 
       // OPTIMIZED: Use materialized view function for instant time series data
-      const { data, error } = await (supabase.schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> }).rpc(
-        "get_dashboard_time_series",
-        {
-          p_website_ids: websiteIds,
-          p_days: days,
+      const { data, error } = await (
+        supabase.schema("beekon_data") as unknown as {
+          rpc: (
+            name: string,
+            params: Record<string, unknown>
+          ) => Promise<{ data: unknown; error: unknown }>;
         }
-      );
+      ).rpc("get_dashboard_time_series", {
+        p_website_ids: websiteIds,
+        p_days: days,
+      });
 
       if (error) throw error;
 
@@ -239,12 +242,11 @@ export class DashboardService {
       console.error("🚨 Time series RPC error, attempting fallback:", {
         error: error instanceof Error ? error.message : error,
         websiteIds,
-        period
+        period,
       });
 
       // Fallback: Direct query to raw table if RPC function fails
       try {
-        console.log("🔄 Attempting direct table fallback for time series...");
         const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
 
         const { data: fallbackData, error: fallbackError } = await supabase
@@ -252,7 +254,10 @@ export class DashboardService {
           .from("llm_analysis_results")
           .select("analyzed_at, is_mentioned, sentiment_score")
           .in("website_id", websiteIds)
-          .gte("analyzed_at", new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
+          .gte(
+            "analyzed_at",
+            new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+          )
           .order("analyzed_at", { ascending: true });
 
         if (fallbackError) {
@@ -266,10 +271,16 @@ export class DashboardService {
         }
 
         // Group by date and calculate daily metrics
-        const dateMap = new Map<string, { mentions: number; total: number; sentiments: number[] }>();
+        const dateMap = new Map<
+          string,
+          { mentions: number; total: number; sentiments: number[] }
+        >();
 
-        fallbackData.forEach((row: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          const dateString = new Date(row.analyzed_at).toISOString().split('T')[0];
+        fallbackData.forEach((row: any) => {
+          // eslint-disable-line @typescript-eslint/no-explicit-any
+          const dateString = new Date(row.analyzed_at)
+            .toISOString()
+            .split("T")[0];
           if (!dateString) return; // Skip invalid dates
 
           let dayData = dateMap.get(dateString);
@@ -279,21 +290,24 @@ export class DashboardService {
           }
           dayData.total++;
           if (row.is_mentioned) dayData.mentions++;
-          if (row.sentiment_score !== null) dayData.sentiments.push(row.sentiment_score);
+          if (row.sentiment_score !== null)
+            dayData.sentiments.push(row.sentiment_score);
         });
 
         const result = Array.from(dateMap.entries()).map(([date, data]) => ({
           date,
           visibility: data.total > 0 ? (data.mentions / data.total) * 100 : 0,
           mentions: data.mentions,
-          sentiment: data.sentiments.length > 0
-            ? (data.sentiments.reduce((sum, s) => sum + s, 0) / data.sentiments.length + 1) * 50
-            : 50,
+          sentiment:
+            data.sentiments.length > 0
+              ? (data.sentiments.reduce((sum, s) => sum + s, 0) /
+                  data.sentiments.length +
+                  1) *
+                50
+              : 50,
         }));
 
-        console.log("✅ Time series fallback successful, data points:", result.length);
         return result;
-
       } catch (fallbackError) {
         console.error("🚨 Time series fallback failed:", fallbackError);
         return [];
@@ -313,12 +327,17 @@ export class DashboardService {
 
     try {
       // OPTIMIZED: Use materialized view function for topic performance
-      const { data, error } = await (supabase
-        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
-        .rpc("get_topic_performance_dashboard", {
-          p_website_ids: websiteIds,
-          p_limit: limit,
-        });
+      const { data, error } = await (
+        supabase.schema("beekon_data") as unknown as {
+          rpc: (
+            name: string,
+            params: Record<string, unknown>
+          ) => Promise<{ data: unknown; error: unknown }>;
+        }
+      ).rpc("get_topic_performance_dashboard", {
+        p_website_ids: websiteIds,
+        p_limit: limit,
+      });
 
       if (error) throw error;
 
@@ -356,11 +375,16 @@ export class DashboardService {
 
     try {
       // OPTIMIZED: Use materialized view function for LLM performance
-      const { data, error } = await (supabase
-        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
-        .rpc("get_llm_performance_dashboard", {
-          p_website_ids: websiteIds,
-        });
+      const { data, error } = await (
+        supabase.schema("beekon_data") as unknown as {
+          rpc: (
+            name: string,
+            params: Record<string, unknown>
+          ) => Promise<{ data: unknown; error: unknown }>;
+        }
+      ).rpc("get_llm_performance_dashboard", {
+        p_website_ids: websiteIds,
+      });
 
       if (error) throw error;
 
@@ -398,11 +422,16 @@ export class DashboardService {
 
     try {
       // OPTIMIZED: Use materialized view function for website performance
-      const { data, error } = await (supabase
-        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
-        .rpc("get_website_performance_dashboard", {
-          p_website_ids: websiteIds,
-        });
+      const { data, error } = await (
+        supabase.schema("beekon_data") as unknown as {
+          rpc: (
+            name: string,
+            params: Record<string, unknown>
+          ) => Promise<{ data: unknown; error: unknown }>;
+        }
+      ).rpc("get_website_performance_dashboard", {
+        p_website_ids: websiteIds,
+      });
 
       if (error) throw error;
 
@@ -432,7 +461,6 @@ export class DashboardService {
       return [];
     }
   }
-
 
   // @ts-expect-error - Unused function - can be removed in future cleanup
   private calculateAggregatedMetrics(
@@ -503,7 +531,6 @@ export class DashboardService {
     };
   }
 
-
   private calculateTopicPerformance(
     results: AnalysisResult[],
     limit: number
@@ -573,10 +600,6 @@ export class DashboardService {
       .sort((a, b) => b.visibility - a.visibility)
       .slice(0, limit);
   }
-
-
-
-
 
   private getEmptyMetrics(): DashboardMetrics {
     return {

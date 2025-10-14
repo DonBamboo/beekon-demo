@@ -1,4 +1,9 @@
-import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueries,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useWorkspace } from "./useWorkspace";
 import { useToast } from "./use-toast";
 import { competitorService } from "@/services/competitorService";
@@ -6,7 +11,9 @@ import type { CompetitorPerformance } from "@/types/database";
 import type { CompetitorServicePerformance } from "@/services/competitorService";
 
 // Utility function to map service performance to database performance
-function mapServiceToDbPerformance(servicePerf: CompetitorServicePerformance): CompetitorPerformance {
+function mapServiceToDbPerformance(
+  servicePerf: CompetitorServicePerformance
+): CompetitorPerformance {
   return {
     // Database fields
     visibility_score: servicePerf.visibilityScore,
@@ -45,15 +52,21 @@ export interface CompetitorFilters {
 
 // Query keys for consistent caching
 export const competitorKeys = {
-  all: ['competitors'] as const,
-  lists: () => [...competitorKeys.all, 'list'] as const,
+  all: ["competitors"] as const,
+  lists: () => [...competitorKeys.all, "list"] as const,
   list: (websiteId: string) => [...competitorKeys.lists(), websiteId] as const,
-  performance: (websiteId: string, filters?: CompetitorFilters) => 
-    [...competitorKeys.all, 'performance', websiteId, filters] as const,
-  analytics: (websiteId: string, dateRange?: { start: string; end: string }) => 
-    [...competitorKeys.all, 'analytics', websiteId, dateRange] as const,
-  timeSeries: (websiteId: string, competitorDomain?: string, days?: number) => 
-    [...competitorKeys.all, 'timeSeries', websiteId, competitorDomain, days] as const,
+  performance: (websiteId: string, filters?: CompetitorFilters) =>
+    [...competitorKeys.all, "performance", websiteId, filters] as const,
+  analytics: (websiteId: string, dateRange?: { start: string; end: string }) =>
+    [...competitorKeys.all, "analytics", websiteId, dateRange] as const,
+  timeSeries: (websiteId: string, competitorDomain?: string, days?: number) =>
+    [
+      ...competitorKeys.all,
+      "timeSeries",
+      websiteId,
+      competitorDomain,
+      days,
+    ] as const,
 };
 
 export function useCompetitors(websiteId: string) {
@@ -71,7 +84,8 @@ export function useCompetitorPerformance(
 ) {
   return useQuery({
     queryKey: competitorKeys.performance(websiteId, filters),
-    queryFn: () => competitorService.getCompetitorPerformance(websiteId, filters?.dateRange),
+    queryFn: () =>
+      competitorService.getCompetitorPerformance(websiteId, filters?.dateRange),
     enabled: !!websiteId,
     staleTime: 5 * 60 * 1000, // 5 minutes for performance data
   });
@@ -83,7 +97,8 @@ export function useCompetitorAnalytics(
 ) {
   return useQuery({
     queryKey: competitorKeys.analytics(websiteId, dateRange),
-    queryFn: () => competitorService.getCompetitiveAnalysis(websiteId, dateRange),
+    queryFn: () =>
+      competitorService.getCompetitiveAnalysis(websiteId, dateRange),
     enabled: !!websiteId,
     staleTime: 5 * 60 * 1000, // 5 minutes for analytics
   });
@@ -96,34 +111,53 @@ export function useCompetitorTimeSeries(
 ) {
   return useQuery({
     queryKey: competitorKeys.timeSeries(websiteId, competitorDomain, days),
-    queryFn: () => competitorService.getCompetitorTimeSeriesData(websiteId, competitorDomain, days),
+    queryFn: () =>
+      competitorService.getCompetitorTimeSeriesData(
+        websiteId,
+        competitorDomain,
+        days
+      ),
     enabled: !!websiteId,
     staleTime: 5 * 60 * 1000, // 5 minutes for time series
   });
 }
 
 // Combined competitor data hook with parallel queries
-export function useCompetitorData(websiteId: string, filters: CompetitorFilters = {}) {
+export function useCompetitorData(
+  websiteId: string,
+  filters: CompetitorFilters = {}
+) {
   const { websites, loading: workspaceLoading } = useWorkspace();
   const targetWebsiteId = websiteId || websites?.[0]?.id;
 
   const queries = useQueries({
     queries: [
       {
-        queryKey: competitorKeys.list(targetWebsiteId || ''),
-        queryFn: () => competitorService.getCompetitors(targetWebsiteId || ''),
+        queryKey: competitorKeys.list(targetWebsiteId || ""),
+        queryFn: () => competitorService.getCompetitors(targetWebsiteId || ""),
         enabled: !workspaceLoading && !!targetWebsiteId,
         staleTime: 10 * 60 * 1000,
       },
       {
-        queryKey: competitorKeys.performance(targetWebsiteId || '', filters),
-        queryFn: () => competitorService.getCompetitorPerformance(targetWebsiteId || '', filters.dateRange),
+        queryKey: competitorKeys.performance(targetWebsiteId || "", filters),
+        queryFn: () =>
+          competitorService.getCompetitorPerformance(
+            targetWebsiteId || "",
+            filters.dateRange
+          ),
         enabled: !workspaceLoading && !!targetWebsiteId,
         staleTime: 5 * 60 * 1000,
       },
       {
-        queryKey: competitorKeys.analytics(targetWebsiteId || '', filters.dateRange),
-        queryFn: () => competitorService.getCompetitiveAnalysis(targetWebsiteId || '', filters.dateRange),
+        queryKey: competitorKeys.analytics(
+          targetWebsiteId || "",
+          filters.dateRange
+        ),
+        queryFn: () =>
+          competitorService.getCompetitiveAnalysis(
+            targetWebsiteId || "",
+            filters.dateRange
+          ),
         enabled: !workspaceLoading && !!targetWebsiteId,
         staleTime: 5 * 60 * 1000,
       },
@@ -133,48 +167,62 @@ export function useCompetitorData(websiteId: string, filters: CompetitorFilters 
   const [competitorsQuery, performanceQuery, analyticsQuery] = queries;
 
   // Sort and filter performance data - map service type to database type
-  const mappedPerformanceData = performanceQuery.data ?
-    performanceQuery.data.map(mapServiceToDbPerformance) : [];
-  const sortedPerformance = mappedPerformanceData.length > 0 ?
-    sortPerformanceData(mappedPerformanceData, filters.sortBy, filters.sortOrder) : [];
+  const mappedPerformanceData = performanceQuery.data
+    ? performanceQuery.data.map(mapServiceToDbPerformance)
+    : [];
+  const sortedPerformance =
+    mappedPerformanceData.length > 0
+      ? sortPerformanceData(
+          mappedPerformanceData,
+          filters.sortBy,
+          filters.sortOrder
+        )
+      : [];
 
-  const filteredCompetitors = competitorsQuery.data ? 
-    (filters.showInactive ? competitorsQuery.data : competitorsQuery.data.filter(c => c.is_active)) : [];
+  const filteredCompetitors = competitorsQuery.data
+    ? filters.showInactive
+      ? competitorsQuery.data
+      : competitorsQuery.data.filter((c) => c.is_active)
+    : [];
 
   // Merge competitors with performance data and add analysis status
-  const competitorsWithStatus: CompetitorWithStatus[] = filteredCompetitors.map((competitor) => {
-    const performanceData = sortedPerformance.find(p => p.competitorId === competitor.id);
-    
-    // Determine analysis status based on performance data and creation time
-    let analysisStatus: "completed" | "analyzing" | "pending" = "pending";
-    
-    if (performanceData) {
-      // Has performance data - analysis is completed
-      analysisStatus = "completed";
-    } else {
-      // No performance data - check if recently added (within last 30 minutes = analyzing)
-      if (competitor.created_at) {
-        const addedAt = new Date(competitor.created_at);
-        const now = new Date();
-        const timeDiff = now.getTime() - addedAt.getTime();
-        const minutesAgo = Math.floor(timeDiff / (1000 * 60));
-        
-        if (minutesAgo <= 30) {
-          analysisStatus = "analyzing";
-        } else {
-          analysisStatus = "pending";
+  const competitorsWithStatus: CompetitorWithStatus[] = filteredCompetitors.map(
+    (competitor) => {
+      const performanceData = sortedPerformance.find(
+        (p) => p.competitorId === competitor.id
+      );
+
+      // Determine analysis status based on performance data and creation time
+      let analysisStatus: "completed" | "analyzing" | "pending" = "pending";
+
+      if (performanceData) {
+        // Has performance data - analysis is completed
+        analysisStatus = "completed";
+      } else {
+        // No performance data - check if recently added (within last 30 minutes = analyzing)
+        if (competitor.created_at) {
+          const addedAt = new Date(competitor.created_at);
+          const now = new Date();
+          const timeDiff = now.getTime() - addedAt.getTime();
+          const minutesAgo = Math.floor(timeDiff / (1000 * 60));
+
+          if (minutesAgo <= 30) {
+            analysisStatus = "analyzing";
+          } else {
+            analysisStatus = "pending";
+          }
         }
       }
-    }
 
-    return {
-      ...competitor,
-      analysisStatus,
-      performance: performanceData,
-      addedAt: competitor.created_at || new Date().toISOString(), // Provide non-null fallback
-      analysis_frequency: competitor.analysis_frequency,
-    };
-  });
+      return {
+        ...competitor,
+        analysisStatus,
+        performance: performanceData,
+        addedAt: competitor.created_at || new Date().toISOString(), // Provide non-null fallback
+        analysis_frequency: competitor.analysis_frequency,
+      };
+    }
+  );
 
   return {
     competitors: filteredCompetitors,
@@ -198,27 +246,37 @@ export function useAddCompetitor() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: ({ websiteId, domain, name }: { websiteId: string; domain: string; name?: string }) =>
-      competitorService.addCompetitor(websiteId, domain, name),
+    mutationFn: ({
+      websiteId,
+      domain,
+      name,
+    }: {
+      websiteId: string;
+      domain: string;
+      name?: string;
+    }) => competitorService.addCompetitor(websiteId, domain, name),
     onSuccess: (_, variables) => {
       // Invalidate all related queries for this website
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: competitorKeys.all,
         predicate: (query) => {
           // Invalidate any competitor-related query for this website
           return query.queryKey.includes(variables.websiteId);
-        }
+        },
       });
-      
+
       toast({
         title: "Competitor added",
-        description: `${variables.name || variables.domain} has been added to your competitor list.`,
+        description: `${
+          variables.name || variables.domain
+        } has been added to your competitor list.`,
       });
     },
     onError: (error) => {
       toast({
         title: "Error adding competitor",
-        description: error instanceof Error ? error.message : "Failed to add competitor",
+        description:
+          error instanceof Error ? error.message : "Failed to add competitor",
         variant: "destructive",
       });
     },
@@ -230,25 +288,24 @@ export function useUpdateCompetitor() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: ({ 
-      competitorId, 
-      updates 
-    }: { 
-      competitorId: string; 
-      updates: Partial<Pick<Competitor, "competitor_name" | "is_active">>; 
+    mutationFn: ({
+      competitorId,
+      updates,
+    }: {
+      competitorId: string;
+      updates: Partial<Pick<Competitor, "competitor_name" | "is_active">>;
       websiteId: string;
-    }) =>
-      competitorService.updateCompetitor(competitorId, updates),
+    }) => competitorService.updateCompetitor(competitorId, updates),
     onSuccess: (_, variables) => {
       // Invalidate all related queries for this website
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: competitorKeys.all,
         predicate: (query) => {
           // Invalidate any competitor-related query for this website
           return query.queryKey.includes(variables.websiteId);
-        }
+        },
       });
-      
+
       toast({
         title: "Competitor updated",
         description: "Competitor information has been updated successfully.",
@@ -257,7 +314,10 @@ export function useUpdateCompetitor() {
     onError: (error) => {
       toast({
         title: "Error updating competitor",
-        description: error instanceof Error ? error.message : "Failed to update competitor",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to update competitor",
         variant: "destructive",
       });
     },
@@ -269,11 +329,13 @@ export function useDeleteCompetitor() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: ({ competitorId }: { competitorId: string; websiteId: string }) =>
-      competitorService.deleteCompetitor(competitorId),
+    mutationFn: ({
+      competitorId,
+    }: {
+      competitorId: string;
+      websiteId: string;
+    }) => competitorService.deleteCompetitor(competitorId),
     onSuccess: async (_, variables) => {
-      console.log(`🔄 Invalidating React Query cache for deleted competitor: ${variables.competitorId}`);
-
       // ENHANCED: More comprehensive cache invalidation
       try {
         // 1. Remove the specific competitor from all queries immediately
@@ -281,7 +343,10 @@ export function useDeleteCompetitor() {
           { queryKey: competitorKeys.list(variables.websiteId) },
           (oldData: unknown) => {
             if (Array.isArray(oldData)) {
-              return oldData.filter((competitor: { id: string }) => competitor.id !== variables.competitorId);
+              return oldData.filter(
+                (competitor: { id: string }) =>
+                  competitor.id !== variables.competitorId
+              );
             }
             return oldData;
           }
@@ -289,12 +354,18 @@ export function useDeleteCompetitor() {
 
         // 2. Remove competitor from performance data
         queryClient.setQueriesData(
-          { queryKey: competitorKeys.all, predicate: (query) =>
-            query.queryKey.includes('performance') && query.queryKey.includes(variables.websiteId)
+          {
+            queryKey: competitorKeys.all,
+            predicate: (query) =>
+              query.queryKey.includes("performance") &&
+              query.queryKey.includes(variables.websiteId),
           },
           (oldData: unknown) => {
             if (Array.isArray(oldData)) {
-              return oldData.filter((perf: { competitorId: string }) => perf.competitorId !== variables.competitorId);
+              return oldData.filter(
+                (perf: { competitorId: string }) =>
+                  perf.competitorId !== variables.competitorId
+              );
             }
             return oldData;
           }
@@ -305,29 +376,34 @@ export function useDeleteCompetitor() {
           queryKey: competitorKeys.all,
           predicate: (query) => {
             const queryKey = query.queryKey;
-            return queryKey.includes(variables.websiteId) ||
-                   queryKey.includes(variables.competitorId);
-          }
+            return (
+              queryKey.includes(variables.websiteId) ||
+              queryKey.includes(variables.competitorId)
+            );
+          },
         });
 
         // 4. Force refetch of critical data immediately
         await Promise.all([
-          queryClient.refetchQueries({ queryKey: competitorKeys.list(variables.websiteId) }),
-          queryClient.refetchQueries({ queryKey: competitorKeys.analytics(variables.websiteId) })
+          queryClient.refetchQueries({
+            queryKey: competitorKeys.list(variables.websiteId),
+          }),
+          queryClient.refetchQueries({
+            queryKey: competitorKeys.analytics(variables.websiteId),
+          }),
         ]);
-
-        console.log(`✅ Successfully invalidated cache for competitor: ${variables.competitorId}`);
 
         // 5. Dispatch custom event for other components to listen to
         if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("competitorDeleted", {
-            detail: {
-              competitorId: variables.competitorId,
-              websiteId: variables.websiteId
-            }
-          }));
+          window.dispatchEvent(
+            new CustomEvent("competitorDeleted", {
+              detail: {
+                competitorId: variables.competitorId,
+                websiteId: variables.websiteId,
+              },
+            })
+          );
         }
-
       } catch (cacheError) {
         console.error("❌ Error during cache invalidation:", cacheError);
         // Don't fail the entire operation if cache invalidation fails
@@ -342,7 +418,10 @@ export function useDeleteCompetitor() {
       console.error("❌ Competitor deletion failed:", error);
       toast({
         title: "Error removing competitor",
-        description: error instanceof Error ? error.message : "Failed to remove competitor",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to remove competitor",
         variant: "destructive",
       });
     },

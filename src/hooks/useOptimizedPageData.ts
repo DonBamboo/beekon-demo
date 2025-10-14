@@ -1236,14 +1236,9 @@ export function useOptimizedCompetitorsData() {
 
             // Base cache (for website switching)
             setCache(baseCacheKey, competitorsData, 10 * 60 * 1000); // 10 minutes cache
-            console.log("✅ Base cache set successfully:", baseCacheKey);
 
             // Filtered cache (for exact filter match)
             setCache(filteredCacheKey, competitorsData, 5 * 60 * 1000); // 5 minutes cache
-            console.log(
-              "✅ Filtered cache set successfully:",
-              filteredCacheKey
-            );
           } catch (error) {
             console.error("❌ Cache key synchronization failed:", error);
             // Fallback to original cache keys if synchronization fails
@@ -1316,14 +1311,6 @@ export function useOptimizedCompetitorsData() {
     // CRITICAL FIX: Website switching cache invalidation
     // Clear all cache entries for the previous website when switching to prevent cross-contamination
     if (prevWebsiteId && prevWebsiteId !== currentWebsiteId) {
-      console.log(
-        "🔄 Website switching detected, invalidating previous website cache:",
-        {
-          from: prevWebsiteId,
-          to: currentWebsiteId,
-        }
-      );
-
       // Clear all cache entries that contain the previous website ID
       const prevBaseCacheKey = `competitors_data_${prevWebsiteId}`;
       const prevFilterVariations = [
@@ -1343,8 +1330,6 @@ export function useOptimizedCompetitorsData() {
 
       // Clear common filter combinations
       prevFilterVariations.forEach((key) => clearCache(key));
-
-      console.log("✅ Previous website cache cleared successfully");
     }
 
     // Update the ref to current website ID
@@ -1465,30 +1450,6 @@ export function useOptimizedCompetitorsData() {
       prev.sortBy !== current.sortBy || prev.sortOrder !== current.sortOrder;
 
     if (isDateFilterChange || isSortChange) {
-      console.log(
-        "📅 Filter changed, invalidating cache and forcing fresh data fetch:",
-        {
-          dateFilterChange: isDateFilterChange
-            ? { from: prev.dateFilter, to: current.dateFilter }
-            : false,
-          sortChange: isSortChange
-            ? {
-                sortBy:
-                  prev.sortBy !== current.sortBy
-                    ? { from: prev.sortBy, to: current.sortBy }
-                    : false,
-                sortOrder:
-                  prev.sortOrder !== current.sortOrder
-                    ? { from: prev.sortOrder, to: current.sortOrder }
-                    : false,
-              }
-            : false,
-        }
-      );
-
-      // IMPROVED: Comprehensive cache invalidation for filter changes
-      // Clear ALL possible cache variations to prevent stale data showing up
-
       // Generate comprehensive list of cache keys to clear
       const dateVariations = ["7d", "30d", "90d"];
       const sortByVariations = ["shareOfVoice", "marketShare", "contentGap"];
@@ -1543,11 +1504,6 @@ export function useOptimizedCompetitorsData() {
           // Only clear non-empty keys
           clearCache(key);
         }
-      });
-
-      console.log("🧹 Comprehensive cache invalidation completed:", {
-        totalKeysCleared: cacheKeysToInvalidate.size,
-        keys: Array.from(cacheKeysToInvalidate),
       });
 
       // Force immediate data reload without checking cache
@@ -1652,17 +1608,8 @@ export function useOptimizedCompetitorsData() {
   useEffect(() => {
     if (!selectedWebsiteId) return;
 
-    console.log("🔍 Direct filter change watcher triggered:", {
-      filters: filters as CompetitorFilters,
-      hasLoadFunction: !!loadCompetitorsDataRef.current,
-    });
-
     // Only trigger on actual filter changes, not initial mount
     if (prevCompetitorFiltersRef.current && competitorFiltersChanged) {
-      console.log(
-        "🚀 FALLBACK: Directly triggering data reload due to filter change"
-      );
-
       setIsLoading(true);
       setError(null);
 
@@ -1705,26 +1652,23 @@ export function useOptimizedCompetitorsData() {
   useEffect(() => {
     const handleCompetitorDeleted = (event: CustomEvent) => {
       const { competitorId, websiteId } = event.detail;
-      console.log(`🗑️ Competitor deletion detected in custom hook:`, { competitorId, websiteId });
 
       // Only handle deletion if it's for the current website
       if (websiteId === selectedWebsiteId) {
-        console.log(`🧹 Processing competitor deletion for current website: ${competitorId}`);
-
         // Step 1: Optimistic update - immediately remove competitor from local state
-        setCompetitors(prevCompetitors => {
-          const updatedCompetitors = prevCompetitors.filter(comp => comp.id !== competitorId);
-          console.log(`✅ Removed competitor from local state. Count: ${prevCompetitors.length} → ${updatedCompetitors.length}`);
+        setCompetitors((prevCompetitors) => {
+          const updatedCompetitors = prevCompetitors.filter(
+            (comp) => comp.id !== competitorId
+          );
           return updatedCompetitors;
         });
 
         // Step 2: Remove competitor from performance data
-        setPerformance(prevPerformance => {
-          const updatedPerformance = prevPerformance.filter((perf: CompetitorProfile & { competitorId?: string }) =>
-            perf.competitorId !== competitorId &&
-            perf.domain !== competitorId // Handle domain-based matching
+        setPerformance((prevPerformance) => {
+          const updatedPerformance = prevPerformance.filter(
+            (perf: CompetitorProfile & { competitorId?: string }) =>
+              perf.competitorId !== competitorId && perf.domain !== competitorId // Handle domain-based matching
           );
-          console.log(`✅ Removed competitor from performance data. Count: ${prevPerformance.length} → ${updatedPerformance.length}`);
           return updatedPerformance;
         });
 
@@ -1738,7 +1682,12 @@ export function useOptimizedCompetitorsData() {
 
           // Clear additional cache variations that might contain the deleted competitor
           const dateVariations = ["7d", "30d", "90d"];
-          const sortByVariations = ["shareOfVoice", "averageRank", "mentionCount", "sentimentScore"];
+          const sortByVariations = [
+            "shareOfVoice",
+            "averageRank",
+            "mentionCount",
+            "sentimentScore",
+          ];
           const sortOrderVariations = ["desc", "asc"];
 
           const cacheKeysToInvalidate = new Set<string>();
@@ -1746,9 +1695,9 @@ export function useOptimizedCompetitorsData() {
           cacheKeysToInvalidate.add(filteredCacheKey);
 
           // Add comprehensive cache variations
-          dateVariations.forEach(date => {
-            sortByVariations.forEach(sortBy => {
-              sortOrderVariations.forEach(sortOrder => {
+          dateVariations.forEach((date) => {
+            sortByVariations.forEach((sortBy) => {
+              sortOrderVariations.forEach((sortOrder) => {
                 const cacheKey = `competitors_filtered_${selectedWebsiteId}_${date}_${sortBy}_${sortOrder}`;
                 cacheKeysToInvalidate.add(cacheKey);
               });
@@ -1756,15 +1705,12 @@ export function useOptimizedCompetitorsData() {
           });
 
           // Clear all identified cache entries
-          cacheKeysToInvalidate.forEach(key => clearCache(key));
-          console.log(`🧹 Cleared ${cacheKeysToInvalidate.size} cache entries for deleted competitor`);
-
+          cacheKeysToInvalidate.forEach((key) => clearCache(key));
         } catch (cacheError) {
           console.error(`❌ Error clearing custom cache entries:`, cacheError);
         }
 
         // Step 4: Trigger immediate data refresh to confirm deletion
-        console.log(`🔄 Triggering fresh data reload after competitor deletion`);
         if (loadCompetitorsDataRef.current) {
           // Use setTimeout to avoid potential race conditions with backend cleanup
           setTimeout(() => {
@@ -1789,7 +1735,13 @@ export function useOptimizedCompetitorsData() {
       };
     }
     return undefined;
-  }, [selectedWebsiteId, getSynchronizedCacheKeys, clearCache, setCompetitors, setPerformance]);
+  }, [
+    selectedWebsiteId,
+    getSynchronizedCacheKeys,
+    clearCache,
+    setCompetitors,
+    setPerformance,
+  ]);
 
   return {
     // Data

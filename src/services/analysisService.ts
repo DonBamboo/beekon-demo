@@ -445,7 +445,10 @@ export class AnalysisService {
           topic: topicName,
           status: "completed" as AnalysisStatus,
           confidence: safeNumber(row.confidence_score),
-          created_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
+          created_at:
+            safeString(row.analyzed_at) ||
+            safeString(row.created_at) ||
+            new Date().toISOString(),
           updated_at: safeString(row.created_at) || new Date().toISOString(),
           reporting_text: reportingText,
           recommendation_text: recommendationText,
@@ -468,7 +471,10 @@ export class AnalysisService {
         sentiment_score: safeNumber(row.sentiment_score),
         summary_text: safeString(row.summary_text),
         response_text: safeString(row.response_text),
-        analyzed_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
+        analyzed_at:
+          safeString(row.analyzed_at) ||
+          safeString(row.created_at) ||
+          new Date().toISOString(),
       });
     });
 
@@ -640,21 +646,10 @@ export class AnalysisService {
   ): Promise<PaginatedAnalysisResults> {
     const { cursor, limit = 20, filters } = options;
 
-    console.log("🔍 Pagination Debug - getAnalysisResultsPaginatedOptimized called:", {
-      websiteId,
-      cursor,
-      limit,
-      filters
-    });
-
     try {
-      // OPTIMIZED: Use materialized view for lightning-fast performance
-      console.log("🚀 Using mv_analysis_results materialized view for optimized performance");
-
       // Step 1: Get unique prompt IDs with pagination from materialized view
       // Note: Using type assertion as mv_analysis_results is not in current types
-      let promptQuery = (supabase
-        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+      let promptQuery = (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
         .from("mv_analysis_results")
         .select("prompt_id, analyzed_at")
         .eq("website_id", websiteId)
@@ -689,27 +684,21 @@ export class AnalysisService {
 
       // Get unique prompt IDs (DISTINCT equivalent)
       // Increased multiplier from 5 to 10 for better unique prompt detection
-      const { data: promptsData, error: promptsError } = await promptQuery.limit(limit * 10);
+      const { data: promptsData, error: promptsError } =
+        await promptQuery.limit(limit * 10);
 
       if (promptsError) throw promptsError;
 
       // Get unique prompt IDs and determine pagination
-      const uniquePromptIds = Array.from(new Set(promptsData?.map((p: any) => p.prompt_id) || [])); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const uniquePromptIds = Array.from(
+        new Set(promptsData?.map((p: any) => p.prompt_id) || [])
+      ); // eslint-disable-line @typescript-eslint/no-explicit-any
       const selectedPromptIds = uniquePromptIds.slice(0, limit);
 
       // FIXED: Correct hasMore logic - check if we got full batch (more likely available) OR have excess prompts
       // Previous bug: only checked uniquePromptIds.length > limit, which failed when buffer ran low
-      const hasMore = (promptsData?.length === limit * 10) || (uniquePromptIds.length > limit);
-
-      console.log("📊 Pagination state:", {
-        limit,
-        fetchedRows: promptsData?.length || 0,
-        uniquePrompts: uniquePromptIds.length,
-        selectedPrompts: selectedPromptIds.length,
-        hasMore,
-        cursor,
-        determinedBy: promptsData?.length === limit * 10 ? "full-batch" : "excess-prompts"
-      });
+      const hasMore =
+        promptsData?.length === limit * 10 || uniquePromptIds.length > limit;
 
       // Early return if no prompts found
       if (selectedPromptIds.length === 0) {
@@ -724,30 +713,24 @@ export class AnalysisService {
       // CRITICAL FIX: Calculate nextCursor from last SELECTED prompt, not last raw row
       // Previous bug: Used promptsData[promptsData.length - 1] which could be row 200
       // This caused massive data skipping (e.g., rows 21-199 would be skipped)
-      const lastSelectedPromptId = selectedPromptIds[selectedPromptIds.length - 1];
-      const lastPromptRows = promptsData?.filter((p: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
-        p.prompt_id === lastSelectedPromptId
-      ) || [];
+      const lastSelectedPromptId =
+        selectedPromptIds[selectedPromptIds.length - 1];
+      const lastPromptRows =
+        promptsData?.filter(
+          (
+            p: any // eslint-disable-line @typescript-eslint/no-explicit-any
+          ) => p.prompt_id === lastSelectedPromptId
+        ) || [];
 
       // Use the oldest (minimum) analyzed_at from the last selected prompt's rows
       // This ensures we don't skip any data on the next pagination fetch
-      const nextCursor = hasMore && lastPromptRows.length > 0
-        ? lastPromptRows[lastPromptRows.length - 1]?.analyzed_at || null
-        : null;
-
-      console.log("🔍 Cursor calculation:", {
-        lastSelectedPromptId,
-        promptRowsFound: lastPromptRows.length,
-        nextCursor,
-        hasMore,
-        cursorExplanation: hasMore
-          ? "Will fetch records with analyzed_at < " + nextCursor
-          : "No more data to fetch"
-      });
+      const nextCursor =
+        hasMore && lastPromptRows.length > 0
+          ? lastPromptRows[lastPromptRows.length - 1]?.analyzed_at || null
+          : null;
 
       // Step 2: Get ALL analysis data for selected prompts from materialized view
-      const analysisQuery = (supabase
-        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+      const analysisQuery = (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
         .from("mv_analysis_results")
         .select("*")
         .in("prompt_id", selectedPromptIds);
@@ -757,7 +740,10 @@ export class AnalysisService {
       if (error) throw error;
 
       // Transform the materialized view data using optimized transformation
-      const transformedResults = this.transformMaterializedViewData(data || [], websiteId);
+      const transformedResults = this.transformMaterializedViewData(
+        data || [],
+        websiteId
+      );
 
       // Apply remaining client-side filters for complex filtering
       let filteredResults = transformedResults;
@@ -823,19 +809,12 @@ export class AnalysisService {
       // Note: nextCursor was already calculated earlier (after line 734)
       // Old buggy cursor calculation removed - it was using promptsData[last] which caused data skipping
 
-      console.log("🎯 Materialized view optimization completed successfully", {
-        returnedResults: filteredResults.length,
-        hasMore,
-        nextCursor
-      });
-
       return {
         results: filteredResults,
         hasMore,
         nextCursor, // Using cursor calculated from last SELECTED prompt (line 734)
         totalCount: undefined, // Don't calculate total count for performance
       };
-
     } catch (error) {
       console.error(
         "Optimized analysis results failed, falling back to original method:",
@@ -1082,11 +1061,7 @@ export class AnalysisService {
     }
   ): Promise<UIAnalysisResult[]> {
     try {
-      // OPTIMIZED: Use materialized view for lightning-fast performance
-      console.log("🚀 Using mv_analysis_results materialized view for getAnalysisResults");
-
-      let query = (supabase
-        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+      let query = (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
         .from("mv_analysis_results")
         .select("*")
         .eq("website_id", websiteId)
@@ -1118,12 +1093,12 @@ export class AnalysisService {
       // Transform the materialized view data
       const results = this.transformMaterializedViewData(data || [], websiteId);
 
-      console.log("🎯 Materialized view query completed successfully");
-
       return this.applyClientSideFilters(results, filters);
-
     } catch (error) {
-      console.error("Materialized view query failed, falling back to data loader:", error);
+      console.error(
+        "Materialized view query failed, falling back to data loader:",
+        error
+      );
 
       // Fallback to original data loader approach
       const { analysisResultsLoader } = await import("./dataLoaders");
@@ -1265,11 +1240,16 @@ export class AnalysisService {
   ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
     try {
       // OPTIMIZED: Use materialized view function for instant topics
-      const { data, error } = await (supabase
-        .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
-        .rpc("get_topics_optimized", {
-          p_website_id: websiteId,
-        });
+      const { data, error } = await (
+        supabase.schema("beekon_data") as unknown as {
+          rpc: (
+            name: string,
+            params: Record<string, unknown>
+          ) => Promise<{ data: unknown; error: unknown }>;
+        }
+      ).rpc("get_topics_optimized", {
+        p_website_id: websiteId,
+      });
 
       if (error) throw error;
 
@@ -1954,11 +1934,7 @@ export class AnalysisService {
     format: "pdf" | "csv" | "json" | "word"
   ): Promise<Blob> {
     try {
-      // OPTIMIZED: Use materialized view for export performance
-      console.log("🚀 Using mv_analysis_results materialized view for export");
-
-      const { data, error } = await (supabase
-        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
         .from("mv_analysis_results")
         .select("*")
         .in("prompt_id", analysisIds);
@@ -1967,8 +1943,6 @@ export class AnalysisService {
 
       // Transform data using the optimized transformation function
       const results = this.transformMaterializedViewData(data || []);
-
-      console.log("🎯 Materialized view export query completed successfully");
 
       // Transform to clean, flattened export format
       const exportFormattedData = this.transformAnalysisForExport(results);
@@ -1992,9 +1966,11 @@ export class AnalysisService {
         exportType: "analysis",
         customFilename: `analysis_results_${results.length}_items`,
       });
-
     } catch (error) {
-      console.error("Materialized view export failed, falling back to original method:", error);
+      console.error(
+        "Materialized view export failed, falling back to original method:",
+        error
+      );
 
       // Fallback to original method
       const { data, error: fallbackError } = await supabase

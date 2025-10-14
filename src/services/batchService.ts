@@ -16,8 +16,14 @@ import type {
 } from "@/contexts/AppStateContext";
 import type { AnalysisFilters } from "@/hooks/useAnalysisQuery";
 import { normalizeCompetitorStatus } from "@/utils/competitorStatusUtils";
-import { sanitizeChartNumber, sanitizeSentimentScore } from "@/utils/chartDataValidation";
-import { ShareOfVoiceDataItem, ShareOfVoiceCompetitor } from "@/types/competitor-data";
+import {
+  sanitizeChartNumber,
+  sanitizeSentimentScore,
+} from "@/utils/chartDataValidation";
+import {
+  ShareOfVoiceDataItem,
+  ShareOfVoiceCompetitor,
+} from "@/types/competitor-data";
 import { CompetitorShareOfVoice } from "./competitorAnalysisService";
 
 // Union type for competitor data that may come in different formats
@@ -264,122 +270,189 @@ class BatchService {
     filters?: Partial<CompetitorFilters>
   ): Promise<CompetitorsPageData> {
     try {
-      console.log(`🏆 BatchService: Loading competitors page data for website ${websiteId}`, { filters });
-
       // IMPROVED: Use Promise.allSettled for resilient parallel loading
       // Core data (essential) - if these fail, the whole request fails
       const coreDataPromises = [
-        competitorService.getCompetitors(websiteId).catch(error => {
-          console.error('❌ Failed to load competitors:', error);
+        competitorService.getCompetitors(websiteId).catch((error) => {
+          console.error("❌ Failed to load competitors:", error);
           throw error; // Critical - must succeed
         }),
-        competitorAnalysisService.getCompetitorShareOfVoice(
-          websiteId,
-          filters?.dateRange as { start: string; end: string } | undefined
-        ).catch(error => {
-          console.error('❌ Failed to load share of voice:', error);
-          return []; // Fallback to empty array instead of failing entire request
-        })
+        competitorAnalysisService
+          .getCompetitorShareOfVoice(
+            websiteId,
+            filters?.dateRange as { start: string; end: string } | undefined
+          )
+          .catch((error) => {
+            console.error("❌ Failed to load share of voice:", error);
+            return []; // Fallback to empty array instead of failing entire request
+          }),
       ];
 
       // Optional data (nice-to-have) - if these fail, continue with core data
       const optionalDataPromises = [
-        competitorAnalysisService.getCompetitiveGapAnalysis(
-          websiteId,
-          filters?.dateRange as { start: string; end: string } | undefined
-        ).catch(error => {
-          console.warn('⚠️ Failed to load gap analysis (non-critical):', error);
+        competitorAnalysisService
+          .getCompetitiveGapAnalysis(
+            websiteId,
+            filters?.dateRange as { start: string; end: string } | undefined
+          )
+          .catch((error) => {
+            console.warn(
+              "⚠️ Failed to load gap analysis (non-critical):",
+              error
+            );
+            return []; // Fallback
+          }),
+        competitorAnalysisService
+          .getCompetitorInsights(
+            websiteId,
+            filters?.dateRange as { start: string; end: string } | undefined
+          )
+          .catch((error) => {
+            console.warn(
+              "⚠️ Failed to load competitor insights (non-critical):",
+              error
+            );
+            return []; // Fallback
+          }),
+        analysisService.getTopicsForWebsite(websiteId).catch((error) => {
+          console.warn("⚠️ Failed to load topics (non-critical):", error);
           return []; // Fallback
         }),
-        competitorAnalysisService.getCompetitorInsights(
-          websiteId,
-          filters?.dateRange as { start: string; end: string } | undefined
-        ).catch(error => {
-          console.warn('⚠️ Failed to load competitor insights (non-critical):', error);
-          return []; // Fallback
-        }),
-        analysisService.getTopicsForWebsite(websiteId).catch(error => {
-          console.warn('⚠️ Failed to load topics (non-critical):', error);
-          return []; // Fallback
-        }),
-        competitorService.getCompetitorTimeSeriesData(
-          websiteId,
-          undefined, // all competitors
-          this.calculateDaysFromDateRange(filters?.dateRange as { start: string; end: string } | undefined)
-        ).catch(error => {
-          console.warn('⚠️ Failed to load time series data (non-critical):', error);
-          return []; // Fallback
-        })
+        competitorService
+          .getCompetitorTimeSeriesData(
+            websiteId,
+            undefined, // all competitors
+            this.calculateDaysFromDateRange(
+              filters?.dateRange as { start: string; end: string } | undefined
+            )
+          )
+          .catch((error) => {
+            console.warn(
+              "⚠️ Failed to load time series data (non-critical):",
+              error
+            );
+            return []; // Fallback
+          }),
       ];
 
       // Load core data first, then optional data
       const [competitors, shareOfVoice] = await Promise.all(coreDataPromises);
-      const [gapAnalysis, insights, topics, timeSeriesData] = await Promise.all(optionalDataPromises);
-
-      console.log(`✅ BatchService: Data loaded successfully`, {
-        competitors: competitors?.length || 0,
-        shareOfVoice: shareOfVoice?.length || 0,
-        gapAnalysis: gapAnalysis?.length || 0,
-        insights: insights?.length || 0,
-        topics: topics?.length || 0,
-        timeSeriesData: timeSeriesData?.length || 0
-      });
+      const [gapAnalysis, insights, topics, timeSeriesData] = await Promise.all(
+        optionalDataPromises
+      );
 
       // Transform shareOfVoice data to match expected performance interface with NaN protection
-      const performance = ((shareOfVoice as ShareOfVoiceUnion[]) || []).map((competitor: ShareOfVoiceUnion) => {
-        // Sanitize all numeric values to prevent NaN propagation to charts
-        const sanitizedShareOfVoice = sanitizeChartNumber(competitor.shareOfVoice, 0);
-        const rankPosition = competitor.avgRankPosition || (competitor as ShareOfVoiceCompetitor).avg_rank || 0;
-        const sanitizedRankPosition = sanitizeChartNumber(rankPosition, 0);
-        const totalMentions = competitor.totalMentions || (competitor as ShareOfVoiceCompetitor).total_mentions || 0;
-        const sanitizedTotalMentions = sanitizeChartNumber(totalMentions, 0);
-        const sentimentScore = competitor.avgSentimentScore || (competitor as ShareOfVoiceCompetitor).sentiment_score || 0;
-        const sanitizedSentimentScore = sanitizeSentimentScore(sentimentScore);
+      const performance = ((shareOfVoice as ShareOfVoiceUnion[]) || []).map(
+        (competitor: ShareOfVoiceUnion) => {
+          // Sanitize all numeric values to prevent NaN propagation to charts
+          const sanitizedShareOfVoice = sanitizeChartNumber(
+            competitor.shareOfVoice,
+            0
+          );
+          const rankPosition =
+            competitor.avgRankPosition ||
+            (competitor as ShareOfVoiceCompetitor).avg_rank ||
+            0;
+          const sanitizedRankPosition = sanitizeChartNumber(rankPosition, 0);
+          const totalMentions =
+            competitor.totalMentions ||
+            (competitor as ShareOfVoiceCompetitor).total_mentions ||
+            0;
+          const sanitizedTotalMentions = sanitizeChartNumber(totalMentions, 0);
+          const sentimentScore =
+            competitor.avgSentimentScore ||
+            (competitor as ShareOfVoiceCompetitor).sentiment_score ||
+            0;
+          const sanitizedSentimentScore =
+            sanitizeSentimentScore(sentimentScore);
 
-        return {
-          // Database fields (required by CompetitorPerformance interface)
-          visibility_score: sanitizedShareOfVoice,
-          avg_rank: sanitizedRankPosition,
-          total_mentions: sanitizedTotalMentions,
-          sentiment_score: sanitizedSentimentScore,
+          return {
+            // Database fields (required by CompetitorPerformance interface)
+            visibility_score: sanitizedShareOfVoice,
+            avg_rank: sanitizedRankPosition,
+            total_mentions: sanitizedTotalMentions,
+            sentiment_score: sanitizedSentimentScore,
 
-          // UI-compatible fields (mapped from database)
-          competitorId: competitor.competitorId || (competitor as ShareOfVoiceCompetitor).id,
-          domain: competitor.competitorDomain || (competitor as ShareOfVoiceCompetitor).competitor_domain,
-          name: competitor.competitorName || (competitor as ShareOfVoiceCompetitor).competitor_name || (competitor as ShareOfVoiceCompetitor).name,
-          shareOfVoice: sanitizedShareOfVoice,
-          averageRank: sanitizedRankPosition,
-          mentionCount: sanitizedTotalMentions,
-          sentimentScore: sanitizedSentimentScore,
-          visibilityScore: sanitizedShareOfVoice, // Same as visibility_score
-          trend: "stable" as const, // Default trend
-          trendPercentage: 0,
-          lastAnalyzed: competitor.lastAnalyzedAt || (competitor as ShareOfVoiceCompetitor).analysis_completed_at || new Date().toISOString(),
-          isActive: (competitor as ShareOfVoiceCompetitor).is_active !== undefined ? (competitor as ShareOfVoiceCompetitor).is_active : true,
-          // FIXED: Use normalized status mapping with proper fallback
-          analysisStatus: normalizeCompetitorStatus(
-            competitor.analysisStatus || (competitor as ShareOfVoiceCompetitor).analysis_status
-          ),
-        };
-      });
+            // UI-compatible fields (mapped from database)
+            competitorId:
+              competitor.competitorId ||
+              (competitor as ShareOfVoiceCompetitor).id,
+            domain:
+              competitor.competitorDomain ||
+              (competitor as ShareOfVoiceCompetitor).competitor_domain,
+            name:
+              competitor.competitorName ||
+              (competitor as ShareOfVoiceCompetitor).competitor_name ||
+              (competitor as ShareOfVoiceCompetitor).name,
+            shareOfVoice: sanitizedShareOfVoice,
+            averageRank: sanitizedRankPosition,
+            mentionCount: sanitizedTotalMentions,
+            sentimentScore: sanitizedSentimentScore,
+            visibilityScore: sanitizedShareOfVoice, // Same as visibility_score
+            trend: "stable" as const, // Default trend
+            trendPercentage: 0,
+            lastAnalyzed:
+              competitor.lastAnalyzedAt ||
+              (competitor as ShareOfVoiceCompetitor).analysis_completed_at ||
+              new Date().toISOString(),
+            isActive:
+              (competitor as ShareOfVoiceCompetitor).is_active !== undefined
+                ? (competitor as ShareOfVoiceCompetitor).is_active
+                : true,
+            // FIXED: Use normalized status mapping with proper fallback
+            analysisStatus: normalizeCompetitorStatus(
+              competitor.analysisStatus ||
+                (competitor as ShareOfVoiceCompetitor).analysis_status
+            ),
+          };
+        }
+      );
 
       // Create comprehensive analytics object
       const analytics = {
         totalCompetitors: competitors?.length || 0,
-        activeCompetitors: (competitors as { is_active?: boolean }[])?.filter((c: { is_active?: boolean }) => c.is_active)?.length || 0,
-        averageCompetitorRank: shareOfVoice && shareOfVoice.length > 0
-          ? (shareOfVoice as ShareOfVoiceUnion[]).reduce((sum: number, c: ShareOfVoiceUnion) => {
-              const rank = sanitizeChartNumber(c.avgRankPosition || (c as ShareOfVoiceCompetitor).avg_rank, 0);
-              return sum + rank;
-            }, 0) / shareOfVoice.length
-          : 0,
-        shareOfVoiceData: ((shareOfVoice as ShareOfVoiceUnion[]) || []).map((competitor: ShareOfVoiceUnion): ShareOfVoiceDataItem => ({
-          name: competitor.competitorName || (competitor as ShareOfVoiceCompetitor).competitor_name || competitor.competitorDomain || (competitor as ShareOfVoiceCompetitor).competitor_domain || "Unknown",
-          shareOfVoice: sanitizeChartNumber(competitor.shareOfVoice, 0),
-          totalMentions: sanitizeChartNumber(competitor.totalMentions || (competitor as ShareOfVoiceCompetitor).total_mentions, 0),
-          totalAnalyses: sanitizeChartNumber((competitor as ShareOfVoiceCompetitor).totalAnalyses || (competitor as ShareOfVoiceCompetitor).total_analyses, 0),
-          competitorId: competitor.competitorId || (competitor as ShareOfVoiceCompetitor).id || "unknown",
-        })),
+        activeCompetitors:
+          (competitors as { is_active?: boolean }[])?.filter(
+            (c: { is_active?: boolean }) => c.is_active
+          )?.length || 0,
+        averageCompetitorRank:
+          shareOfVoice && shareOfVoice.length > 0
+            ? (shareOfVoice as ShareOfVoiceUnion[]).reduce(
+                (sum: number, c: ShareOfVoiceUnion) => {
+                  const rank = sanitizeChartNumber(
+                    c.avgRankPosition || (c as ShareOfVoiceCompetitor).avg_rank,
+                    0
+                  );
+                  return sum + rank;
+                },
+                0
+              ) / shareOfVoice.length
+            : 0,
+        shareOfVoiceData: ((shareOfVoice as ShareOfVoiceUnion[]) || []).map(
+          (competitor: ShareOfVoiceUnion): ShareOfVoiceDataItem => ({
+            name:
+              competitor.competitorName ||
+              (competitor as ShareOfVoiceCompetitor).competitor_name ||
+              competitor.competitorDomain ||
+              (competitor as ShareOfVoiceCompetitor).competitor_domain ||
+              "Unknown",
+            shareOfVoice: sanitizeChartNumber(competitor.shareOfVoice, 0),
+            totalMentions: sanitizeChartNumber(
+              competitor.totalMentions ||
+                (competitor as ShareOfVoiceCompetitor).total_mentions,
+              0
+            ),
+            totalAnalyses: sanitizeChartNumber(
+              (competitor as ShareOfVoiceCompetitor).totalAnalyses ||
+                (competitor as ShareOfVoiceCompetitor).total_analyses,
+              0
+            ),
+            competitorId:
+              competitor.competitorId ||
+              (competitor as ShareOfVoiceCompetitor).id ||
+              "unknown",
+          })
+        ),
         gapAnalysis,
         insights,
         marketShareData: [], // Will be populated by UI if needed
@@ -394,9 +467,11 @@ class BatchService {
         topics: (topics as Topic[]) || [],
       };
     } catch (error) {
-      console.error('BatchService competitors page data error:', error);
+      console.error("BatchService competitors page data error:", error);
       throw new Error(
-        `Failed to load competitors data for website ${websiteId}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to load competitors data for website ${websiteId}: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
       );
     }
   }
@@ -497,8 +572,6 @@ class BatchService {
     requests: BatchRequest[]
   ): Promise<BatchResponse<T>[]> {
     const responses: BatchResponse<T>[] = [];
-
-    console.log("requests", requests);
 
     // Process requests in parallel
     const promises = requests.map(async (request) => {
@@ -649,7 +722,10 @@ class BatchService {
   }
 
   // Helper methods
-  private calculateDaysFromDateRange(dateRange?: { start: string; end: string }): number {
+  private calculateDaysFromDateRange(dateRange?: {
+    start: string;
+    end: string;
+  }): number {
     if (!dateRange || !dateRange.start || !dateRange.end) {
       return 30; // Default to 30 days
     }

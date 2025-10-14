@@ -99,13 +99,9 @@ export default function CompetitorsList({
     };
 
     const handleCompetitorDeleted = (event: CustomEvent) => {
-      const { competitorId } = event.detail;
-      console.log(`🧹 Cleaning up UI state for deleted competitor: ${competitorId}`);
-
       // Force re-validation of color assignments to remove deleted competitor
       const colorValidation = validateAllColorAssignments();
       if (!colorValidation.isValid) {
-        console.log(`🎨 Fixing color conflicts after competitor deletion`);
         autoFixColorConflicts({ logResults: true });
       }
 

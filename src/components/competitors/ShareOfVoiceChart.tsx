@@ -188,29 +188,22 @@ export default function ShareOfVoiceChart({
   // Process time-series data for stacked area chart
   const stackedAreaData = useMemo(() => {
     if (!timeSeriesData || timeSeriesData.length === 0) {
-      console.log("📊 ShareOfVoiceChart: No time series data available");
       return [];
     }
 
     // Validate that we have valid data structure
-    const validTimeSeriesData = timeSeriesData.filter(point => {
-      return point &&
-             point.date &&
-             Array.isArray(point.competitors) &&
-             point.competitors.length > 0;
+    const validTimeSeriesData = timeSeriesData.filter((point) => {
+      return (
+        point &&
+        point.date &&
+        Array.isArray(point.competitors) &&
+        point.competitors.length > 0
+      );
     });
 
     if (validTimeSeriesData.length === 0) {
-      console.warn("⚠️ ShareOfVoiceChart: No valid time series data found");
       return [];
     }
-
-    console.log("📊 ShareOfVoiceChart: Processing time series data:", {
-      originalCount: timeSeriesData.length,
-      validCount: validTimeSeriesData.length,
-      firstDataPoint: validTimeSeriesData[0],
-      competitorCounts: validTimeSeriesData.map(point => point.competitors?.length || 0)
-    });
 
     // Validate color assignments and fix conflicts if needed
     const colorValidation = validateAllColorAssignments();
@@ -229,7 +222,6 @@ export default function ShareOfVoiceChart({
     });
 
     if (allCompetitors.size === 0) {
-      console.warn("⚠️ ShareOfVoiceChart: No competitors found in time series data");
       return [];
     }
 
@@ -249,8 +241,8 @@ export default function ShareOfVoiceChart({
     registerCompetitorsInFixedSlots(competitorsList);
 
     // Sort time series data from oldest to newest for proper X-axis display
-    const sortedTimeSeriesData = [...validTimeSeriesData].sort((a, b) =>
-      new Date(a.date).getTime() - new Date(b.date).getTime()
+    const sortedTimeSeriesData = [...validTimeSeriesData].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
 
     // Transform time-series data into format suitable for stacked area chart
@@ -276,18 +268,7 @@ export default function ShareOfVoiceChart({
         pointTotal += shareOfVoice;
       });
 
-      // Log any normalization issues
-      if (Math.abs(pointTotal - 100) > 5) {
-        console.warn(`⚠️ ShareOfVoiceChart: Share of voice total for ${point.date} is ${pointTotal}% (should be ~100%)`);
-      }
-
       return transformedPoint;
-    });
-
-    console.log("📊 ShareOfVoiceChart: Transformed stacked area data:", {
-      dataPointCount: transformedData.length,
-      samplePoint: transformedData[0],
-      competitorNames: competitorsList.map(c => c.name)
     });
 
     return transformedData;
@@ -321,31 +302,6 @@ export default function ShareOfVoiceChart({
   // Sanitize chart data at component level to prevent NaN/Infinity values throughout
   const sanitizedChartData = useMemo(() => {
     const validation = validateAndSanitizeChartData(chartData, ["value"]);
-
-    if (validation.hasIssues && process.env.NODE_ENV !== "production") {
-      console.warn(
-        "⚠️ ShareOfVoiceChart: Invalid chart data detected and sanitized",
-        {
-          totalIssues: validation.issues.length,
-          affectedDataPoints: validation.issues.length,
-          issues: validation.issues,
-          validationSummary: {
-            originalDataPoints: chartData.length,
-            sanitizedDataPoints: validation.data.length,
-            dataConsistency:
-              chartData.length === validation.data.length
-                ? "maintained"
-                : "changed",
-          },
-          impact: "Chart will render with sanitized data to prevent crashes",
-          possibleCauses: [
-            "Service layer returned invalid numeric values",
-            "Data transformation errors",
-            "Network/database issues",
-          ],
-        }
-      );
-    }
 
     return validation.data;
   }, [chartData]);
@@ -985,7 +941,9 @@ export default function ShareOfVoiceChart({
                       {/* Render stacked areas for each competitor */}
                       {competitorsList.map((competitor, index) => {
                         // Handle "Your Brand" separately to ensure consistent primary color
-                        const isYourBrand = competitor.competitorId === "your-brand" || competitor.name === "Your Brand";
+                        const isYourBrand =
+                          competitor.competitorId === "your-brand" ||
+                          competitor.name === "Your Brand";
                         const color = isYourBrand
                           ? getYourBrandColor()
                           : getCompetitorFixedColor({

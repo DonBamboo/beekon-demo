@@ -20,14 +20,13 @@ import { Json } from "@/integrations/supabase/types";
 // Export service class with enhanced functionality
 export class ExportService {
   private static instance: ExportService;
-  
+
   public static getInstance(): ExportService {
     if (!ExportService.instance) {
       ExportService.instance = new ExportService();
     }
     return ExportService.instance;
   }
-
 
   // Main export function with support for all formats and history tracking
   async exportData(
@@ -40,38 +39,49 @@ export class ExportService {
       charts?: ChartInfo[];
     } = {}
   ): Promise<Blob> {
-    const { trackHistory = true, exportType = "filtered_data", customFilename, charts } = options;
-    
+    const {
+      trackHistory = true,
+      exportType = "filtered_data",
+      customFilename,
+      charts,
+    } = options;
+
     // Validate export data before processing
     const validation = validateExportData(data);
     if (!validation.isValid) {
-      throw new Error(`Export validation failed: ${validation.errors.join(', ')}`);
+      throw new Error(
+        `Export validation failed: ${validation.errors.join(", ")}`
+      );
     }
-    
+
     // Sanitize data to prevent issues
     const sanitizedData = sanitizeExportData(data);
-    
+
     let exportRecord: ExportHistoryRecord | null = null;
     let historyTrackingFailed = false;
-    
+
     try {
       // Create export history record if tracking is enabled
       if (trackHistory) {
         try {
-          const { data: { user } } = await supabase.auth.getUser();
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
           if (!user) {
-            throw new Error('User not authenticated');
+            throw new Error("User not authenticated");
           }
 
-          const filename = customFilename || generateExportFilename(
-            data.title.toLowerCase().replace(/\s+/g, '_'),
-            format,
-            { 
-              includeTimestamp: true, 
-              dateRange: data.dateRange 
-            }
-          );
-          
+          const filename =
+            customFilename ||
+            generateExportFilename(
+              data.title.toLowerCase().replace(/\s+/g, "_"),
+              format,
+              {
+                includeTimestamp: true,
+                dateRange: data.dateRange,
+              }
+            );
+
           exportRecord = await exportHistoryService.createExportRecord({
             export_type: exportType,
             format,
@@ -85,7 +95,7 @@ export class ExportService {
               export_title: data.title,
             },
           });
-          
+
           // Mark as processing
           await exportHistoryService.startExportProcessing(exportRecord.id, {
             processing_started: new Date().toISOString(),
@@ -96,7 +106,7 @@ export class ExportService {
           // Continue with export despite history tracking failure
         }
       }
-      
+
       // Generate the export
       let blob: Blob;
       switch (format) {
@@ -113,7 +123,7 @@ export class ExportService {
         default:
           throw new Error(`Unsupported export format: ${format}`);
       }
-      
+
       // Mark as completed if tracking is enabled and not failed
       if (trackHistory && exportRecord && !historyTrackingFailed) {
         try {
@@ -131,7 +141,7 @@ export class ExportService {
           // Don't fail the export if history update fails
         }
       }
-      
+
       return blob;
     } catch (error) {
       // Mark as failed if tracking is enabled and record exists
@@ -150,7 +160,7 @@ export class ExportService {
           // Don't mask the original error
         }
       }
-      
+
       throw error;
     }
   }
@@ -165,13 +175,18 @@ export class ExportService {
       dateRange?: { start: string; end: string };
     } = {}
   ): Promise<Blob> {
-    const { includeMetrics = true, includeAnalysisHistory = false, dateRange } = options;
+    const {
+      includeMetrics = true,
+      includeAnalysisHistory = false,
+      dateRange,
+    } = options;
 
     // Fetch website data
     const { data: websites, error } = await supabase
       .schema("beekon_data")
       .from("websites")
-      .select(`
+      .select(
+        `
         id,
         domain,
         display_name,
@@ -181,7 +196,8 @@ export class ExportService {
         crawl_status,
         last_crawled_at,
         workspace_id
-      `)
+      `
+      )
       .in("id", websiteIds);
 
     if (error) throw error;
@@ -192,20 +208,18 @@ export class ExportService {
     if (includeMetrics) {
       const metricsPromises = websiteIds.map(async (websiteId) => {
         try {
-          // OPTIMIZED: Use materialized view for lightning-fast export metrics
-          console.log(`🚀 Using mv_analysis_results materialized view for export metrics (website: ${websiteId})`);
-
-          let metricsQuery = (supabase
-            .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+          let metricsQuery = (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
             .from("mv_analysis_results")
-            .select(`
+            .select(
+              `
               confidence_score,
               sentiment_score,
               is_mentioned,
               rank_position,
               analyzed_at,
               topic_name
-            `)
+            `
+            )
             .eq("website_id", websiteId);
 
           if (dateRange) {
@@ -218,7 +232,8 @@ export class ExportService {
           if (error) throw error;
 
           // Transform materialized view data to expected format
-          const transformedMetrics = (metrics || []).map((row: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+          const transformedMetrics = (metrics || []).map((row: any) => ({
+            // eslint-disable-line @typescript-eslint/no-explicit-any
             confidence_score: row.confidence_score,
             sentiment_score: row.sentiment_score,
             is_mentioned: row.is_mentioned,
@@ -233,15 +248,18 @@ export class ExportService {
           }));
 
           return { websiteId, metrics: transformedMetrics };
-
         } catch (error) {
-          console.warn(`⚠️ Materialized view query failed for export metrics, falling back (website: ${websiteId}):`, error);
+          console.warn(
+            `⚠️ Materialized view query failed for export metrics, falling back (website: ${websiteId}):`,
+            error
+          );
 
           // Fallback to original expensive query
           let metricsQuery = supabase
             .schema("beekon_data")
             .from("llm_analysis_results")
-            .select(`
+            .select(
+              `
               confidence_score,
               sentiment_score,
               is_mentioned,
@@ -253,7 +271,8 @@ export class ExportService {
                   topic_name
                 )
               )
-            `)
+            `
+            )
             .eq("prompts.topics.website_id", websiteId);
 
           if (dateRange) {
@@ -268,51 +287,152 @@ export class ExportService {
       });
 
       const metricsResults = await Promise.all(metricsPromises);
-      
+
       // Flatten website data with metrics for tabular export format
-      exportData = websites?.flatMap((website) => {
-        const websiteMetrics = metricsResults.find(m => m.websiteId === website.id);
-        
-        // Calculate metrics
-        const totalAnalyses = websiteMetrics?.metrics.length || 0;
-        const metrics = websiteMetrics?.metrics || [];
-        const averageConfidence = metrics.length > 0 ? metrics.reduce((sum: number, m: any) => sum + (m.confidence_score || 0), 0) / metrics.length : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
-        const averageSentiment = metrics.length > 0 ? metrics.reduce((sum: number, m: any) => sum + (m.sentiment_score || 0), 0) / metrics.length : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
-        const mentionRate = metrics.length > 0 ? (metrics.filter((m: any) => m.is_mentioned).length / metrics.length) * 100 : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
-        const averageRank = metrics.length > 0 ? metrics.reduce((sum: number, m: any) => sum + (m.rank_position || 0), 0) / metrics.length : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
-        
-        // Return flattened tabular data - each row represents one data point
-        return [
-          // Website basic info
-          { category: "Website Info", metric: "Website Name", value: website.display_name || website.domain, unit: "text", websiteId: website.id },
-          { category: "Website Info", metric: "Domain URL", value: website.domain, unit: "url", websiteId: website.id },
-          { category: "Website Info", metric: "Active Status", value: website.is_active ? "Active" : "Inactive", unit: "status", websiteId: website.id },
-          { category: "Website Info", metric: "Crawl Status", value: website.crawl_status || "Unknown", unit: "status", websiteId: website.id },
-          { category: "Website Info", metric: "Date Added", value: website.created_at ? new Date(website.created_at).toLocaleDateString() : "Unknown", unit: "date", websiteId: website.id },
-          { category: "Website Info", metric: "Last Modified", value: website.updated_at ? new Date(website.updated_at).toLocaleDateString() : "Unknown", unit: "date", websiteId: website.id },
-          { category: "Website Info", metric: "Last Analyzed", value: website.last_crawled_at ? new Date(website.last_crawled_at).toLocaleDateString() : "Never", unit: "date", websiteId: website.id },
-          
-          // Performance metrics
-          { category: "Performance Metrics", metric: "Total Analyses", value: totalAnalyses.toString(), unit: "count", websiteId: website.id },
-          { category: "Performance Metrics", metric: "Average Confidence", value: `${(averageConfidence * 100).toFixed(1)}%`, unit: "percentage", websiteId: website.id },
-          { category: "Performance Metrics", metric: "Average Sentiment", value: `${(averageSentiment * 100).toFixed(1)}%`, unit: "percentage", websiteId: website.id },
-          { category: "Performance Metrics", metric: "Mention Rate", value: `${mentionRate.toFixed(1)}%`, unit: "percentage", websiteId: website.id },
-          { category: "Performance Metrics", metric: "Average Ranking", value: averageRank.toFixed(1), unit: "position", websiteId: website.id },
-        ];
-      }) || [];
+      exportData =
+        websites?.flatMap((website) => {
+          const websiteMetrics = metricsResults.find(
+            (m) => m.websiteId === website.id
+          );
+
+          // Calculate metrics
+          const totalAnalyses = websiteMetrics?.metrics.length || 0;
+          const metrics = websiteMetrics?.metrics || [];
+          const averageConfidence =
+            metrics.length > 0
+              ? metrics.reduce(
+                  (sum: number, m: any) => sum + (m.confidence_score || 0),
+                  0
+                ) / metrics.length
+              : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
+          const averageSentiment =
+            metrics.length > 0
+              ? metrics.reduce(
+                  (sum: number, m: any) => sum + (m.sentiment_score || 0),
+                  0
+                ) / metrics.length
+              : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
+          const mentionRate =
+            metrics.length > 0
+              ? (metrics.filter((m: any) => m.is_mentioned).length /
+                  metrics.length) *
+                100
+              : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
+          const averageRank =
+            metrics.length > 0
+              ? metrics.reduce(
+                  (sum: number, m: any) => sum + (m.rank_position || 0),
+                  0
+                ) / metrics.length
+              : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+          // Return flattened tabular data - each row represents one data point
+          return [
+            // Website basic info
+            {
+              category: "Website Info",
+              metric: "Website Name",
+              value: website.display_name || website.domain,
+              unit: "text",
+              websiteId: website.id,
+            },
+            {
+              category: "Website Info",
+              metric: "Domain URL",
+              value: website.domain,
+              unit: "url",
+              websiteId: website.id,
+            },
+            {
+              category: "Website Info",
+              metric: "Active Status",
+              value: website.is_active ? "Active" : "Inactive",
+              unit: "status",
+              websiteId: website.id,
+            },
+            {
+              category: "Website Info",
+              metric: "Crawl Status",
+              value: website.crawl_status || "Unknown",
+              unit: "status",
+              websiteId: website.id,
+            },
+            {
+              category: "Website Info",
+              metric: "Date Added",
+              value: website.created_at
+                ? new Date(website.created_at).toLocaleDateString()
+                : "Unknown",
+              unit: "date",
+              websiteId: website.id,
+            },
+            {
+              category: "Website Info",
+              metric: "Last Modified",
+              value: website.updated_at
+                ? new Date(website.updated_at).toLocaleDateString()
+                : "Unknown",
+              unit: "date",
+              websiteId: website.id,
+            },
+            {
+              category: "Website Info",
+              metric: "Last Analyzed",
+              value: website.last_crawled_at
+                ? new Date(website.last_crawled_at).toLocaleDateString()
+                : "Never",
+              unit: "date",
+              websiteId: website.id,
+            },
+
+            // Performance metrics
+            {
+              category: "Performance Metrics",
+              metric: "Total Analyses",
+              value: totalAnalyses.toString(),
+              unit: "count",
+              websiteId: website.id,
+            },
+            {
+              category: "Performance Metrics",
+              metric: "Average Confidence",
+              value: `${(averageConfidence * 100).toFixed(1)}%`,
+              unit: "percentage",
+              websiteId: website.id,
+            },
+            {
+              category: "Performance Metrics",
+              metric: "Average Sentiment",
+              value: `${(averageSentiment * 100).toFixed(1)}%`,
+              unit: "percentage",
+              websiteId: website.id,
+            },
+            {
+              category: "Performance Metrics",
+              metric: "Mention Rate",
+              value: `${mentionRate.toFixed(1)}%`,
+              unit: "percentage",
+              websiteId: website.id,
+            },
+            {
+              category: "Performance Metrics",
+              metric: "Average Ranking",
+              value: averageRank.toFixed(1),
+              unit: "position",
+              websiteId: website.id,
+            },
+          ];
+        }) || [];
     }
 
     // Add analysis history if requested
     if (includeAnalysisHistory) {
       const historyPromises = websiteIds.map(async (websiteId) => {
         try {
-          // OPTIMIZED: Use materialized view for lightning-fast export history
-          console.log(`🚀 Using mv_analysis_results materialized view for export history (website: ${websiteId})`);
-
-          let historyQuery = (supabase
-            .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+          let historyQuery = (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
             .from("mv_analysis_results")
-            .select(`
+            .select(
+              `
               analyzed_at,
               llm_provider,
               is_mentioned,
@@ -322,7 +442,8 @@ export class ExportService {
               response_text,
               prompt_text,
               topic_name
-            `)
+            `
+            )
             .eq("website_id", websiteId)
             .order("analyzed_at", { ascending: false });
 
@@ -336,7 +457,8 @@ export class ExportService {
           if (error) throw error;
 
           // Transform materialized view data to expected format
-          const transformedHistory = (history || []).map((row: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+          const transformedHistory = (history || []).map((row: any) => ({
+            // eslint-disable-line @typescript-eslint/no-explicit-any
             created_at: row.analyzed_at,
             llm_provider: row.llm_provider,
             is_mentioned: row.is_mentioned,
@@ -354,15 +476,18 @@ export class ExportService {
           }));
 
           return { websiteId, history: transformedHistory };
-
         } catch (error) {
-          console.warn(`⚠️ Materialized view query failed for export history, falling back (website: ${websiteId}):`, error);
+          console.warn(
+            `⚠️ Materialized view query failed for export history, falling back (website: ${websiteId}):`,
+            error
+          );
 
           // Fallback to original expensive query
           let historyQuery = supabase
             .schema("beekon_data")
             .from("llm_analysis_results")
-            .select(`
+            .select(
+              `
               created_at,
               llm_provider,
               is_mentioned,
@@ -377,7 +502,8 @@ export class ExportService {
                   topic_name
                 )
               )
-            `)
+            `
+            )
             .eq("prompts.topics.website_id", websiteId)
             .order("created_at", { ascending: false });
 
@@ -393,22 +519,35 @@ export class ExportService {
       });
 
       const historyResults = await Promise.all(historyPromises);
-      
+
       // Add analysis history data to the flattened export format
       const historyData = historyResults.flatMap(({ websiteId, history }) => {
         if (!history || history.length === 0) {
-          return [{ category: "Analysis History", metric: "History Status", value: "No analysis history available", unit: "text", websiteId }];
+          return [
+            {
+              category: "Analysis History",
+              metric: "History Status",
+              value: "No analysis history available",
+              unit: "text",
+              websiteId,
+            },
+          ];
         }
-        
-        return history.slice(0, 5).map((analysis: any, index: number) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+
+        return history.slice(0, 5).map((analysis: any, index: number) => ({
+          // eslint-disable-line @typescript-eslint/no-explicit-any
           category: "Analysis History",
           metric: `Analysis #${index + 1}`,
-          value: `${analysis.llm_provider} - ${analysis.is_mentioned ? 'Mentioned' : 'Not Mentioned'} - Rank: ${analysis.rank_position || 'N/A'}`,
-          unit: `Confidence: ${((analysis.confidence_score || 0) * 100).toFixed(1)}%`,
-          websiteId
+          value: `${analysis.llm_provider} - ${
+            analysis.is_mentioned ? "Mentioned" : "Not Mentioned"
+          } - Rank: ${analysis.rank_position || "N/A"}`,
+          unit: `Confidence: ${((analysis.confidence_score || 0) * 100).toFixed(
+            1
+          )}%`,
+          websiteId,
         }));
       });
-      
+
       exportData = [...exportData, ...historyData];
     }
 
@@ -430,12 +569,12 @@ export class ExportService {
       },
     };
 
-    return this.exportData(exportContent, format, { 
-      exportType: "website", 
-      customFilename: generateExportFilename("website_data", format, { 
-        includeTimestamp: true, 
-        dateRange 
-      }) 
+    return this.exportData(exportContent, format, {
+      exportType: "website",
+      customFilename: generateExportFilename("website_data", format, {
+        includeTimestamp: true,
+        dateRange,
+      }),
     });
   }
 
@@ -446,7 +585,9 @@ export class ExportService {
     format: ExportFormat
   ): Promise<Blob> {
     const exportContent: ExportData = {
-      title: `${configType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} Configuration`,
+      title: `${configType
+        .replace("_", " ")
+        .replace(/\b\w/g, (l) => l.toUpperCase())} Configuration`,
       data: configData,
       exportedAt: new Date().toISOString(),
       totalRecords: Array.isArray(configData) ? configData.length : 1,
@@ -458,11 +599,11 @@ export class ExportService {
       },
     };
 
-    return this.exportData(exportContent, format, { 
-      exportType: "configuration", 
-      customFilename: generateExportFilename(`${configType}_config`, format, { 
-        includeTimestamp: true 
-      }) 
+    return this.exportData(exportContent, format, {
+      exportType: "configuration",
+      customFilename: generateExportFilename(`${configType}_config`, format, {
+        includeTimestamp: true,
+      }),
     });
   }
 
@@ -490,13 +631,13 @@ export class ExportService {
     // Build query
     let query = supabase
       .schema("beekon_data")
-      .from(tableName as keyof Database['beekon_data']['Tables'])
+      .from(tableName as keyof Database["beekon_data"]["Tables"])
       .select(selectFields)
       .order(orderBy, { ascending: false });
 
     // Apply filters
     Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
+      if (value !== undefined && value !== null && value !== "") {
         if (Array.isArray(value)) {
           query = query.in(key, value);
         } else {
@@ -522,7 +663,9 @@ export class ExportService {
 
     const exportContent: ExportData = {
       title,
-      data: Array.isArray(data) ? (data as unknown as Record<string, unknown>[]) : [],
+      data: Array.isArray(data)
+        ? (data as unknown as Record<string, unknown>[])
+        : [],
       exportedAt: new Date().toISOString(),
       totalRecords: data?.length || 0,
       filters,
@@ -535,12 +678,12 @@ export class ExportService {
       },
     };
 
-    return this.exportData(exportContent, format, { 
-      exportType: "filtered_data", 
-      customFilename: generateExportFilename(tableName, format, { 
-        includeTimestamp: true, 
-        dateRange 
-      }) 
+    return this.exportData(exportContent, format, {
+      exportType: "filtered_data",
+      customFilename: generateExportFilename(tableName, format, {
+        includeTimestamp: true,
+        dateRange,
+      }),
     });
   }
 }

@@ -262,8 +262,14 @@ export default function CompetitiveGapChart({
 
       // EDGE CASE HANDLING: Ensure topic is included even if no competitors have data
       // This prevents topics from being filtered out due to sparse competitor data
-      if (Object.keys(data).filter(k => k.startsWith('competitor')).length === 0 && process.env.NODE_ENV !== "production") {
-        console.info(`📊 Topic "${gap.topicName}" has no competitor data but will still be visualized`);
+      if (
+        Object.keys(data).filter((k) => k.startsWith("competitor")).length ===
+          0 &&
+        process.env.NODE_ENV !== "production"
+      ) {
+        console.info(
+          `📊 Topic "${gap.topicName}" has no competitor data but will still be visualized`
+        );
       }
 
       return data;
@@ -297,15 +303,13 @@ export default function CompetitiveGapChart({
 
     // Validate that all competitors were properly registered
     if (process.env.NODE_ENV !== "production") {
-      const allRegistered = competitorsForRegistration.every(
-        (comp) => {
-          const colorInfo = getCompetitorFixedColorInfo({
-            competitorId: comp.competitorId,
-            name: comp.name,
-          });
-          return colorInfo.colorSlot !== -1; // -1 indicates failed registration
-        }
-      );
+      const allRegistered = competitorsForRegistration.every((comp) => {
+        const colorInfo = getCompetitorFixedColorInfo({
+          competitorId: comp.competitorId,
+          name: comp.name,
+        });
+        return colorInfo.colorSlot !== -1; // -1 indicates failed registration
+      });
       if (!allRegistered) {
         console.warn("⚠️ Some competitors failed color registration");
       }
@@ -372,8 +376,8 @@ export default function CompetitiveGapChart({
         console.warn("⚠️ Topic count mismatch in bar chart:", {
           expected: expectedTopicCount,
           actual: actualBarTopicCount,
-          expectedTopics: gapAnalysis.map(g => g.topicName),
-          actualTopics: finalBarChartData.map(d => d.topic)
+          expectedTopics: gapAnalysis.map((g) => g.topicName),
+          actualTopics: finalBarChartData.map((d) => d.topic),
         });
       }
 
@@ -381,16 +385,8 @@ export default function CompetitiveGapChart({
         console.warn("⚠️ Topic count mismatch in radar chart:", {
           expected: expectedTopicCount,
           actual: actualRadarTopicCount,
-          expectedTopics: gapAnalysis.map(g => g.topicName),
-          actualTopics: finalRadarData.map(d => d.topic)
-        });
-      }
-
-      // Success validation
-      if (actualBarTopicCount === expectedTopicCount && actualRadarTopicCount === expectedTopicCount) {
-        console.log("✅ All topics preserved in competitive gap charts:", {
-          topicCount: expectedTopicCount,
-          topics: gapAnalysis.map(g => g.topicName)
+          expectedTopics: gapAnalysis.map((g) => g.topicName),
+          actualTopics: finalRadarData.map((d) => d.topic),
         });
       }
     }
@@ -529,8 +525,8 @@ export default function CompetitiveGapChart({
             <div>
               <CardTitle>Competitive Gap Analysis</CardTitle>
               <CardDescription>
-                Topic-by-topic comparison with your competitors (last {dateFilter}
-                )
+                Topic-by-topic comparison with your competitors (last{" "}
+                {dateFilter})
               </CardDescription>
             </div>
           </div>
@@ -553,7 +549,9 @@ export default function CompetitiveGapChart({
                   {analytics.competitorsWithPendingAnalysis > 0 ? (
                     <>
                       We're analyzing{" "}
-                      <strong>{analytics.competitorsWithPendingAnalysis}</strong>{" "}
+                      <strong>
+                        {analytics.competitorsWithPendingAnalysis}
+                      </strong>{" "}
                       {analytics.competitorsWithPendingAnalysis === 1
                         ? "competitor"
                         : "competitors"}{" "}

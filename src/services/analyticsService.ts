@@ -140,12 +140,8 @@ class AnalyticsService {
     filters?: AnalysisFilters
   ): Promise<AnalysisAnalytics> {
     try {
-      // OPTIMIZED: Use materialized view for lightning-fast performance (10-100x faster)
-      console.log("🚀 Using mv_analysis_results materialized view for analytics");
-
       // Build base query using materialized view
-      let query = (supabase
-        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+      let query = (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
         .from("mv_analysis_results")
         .select("*")
         .eq("website_id", websiteId);
@@ -169,7 +165,9 @@ class AnalyticsService {
 
         if (filters.searchQuery) {
           // Apply search to materialized view fields
-          query = query.or(`summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%, prompt_text.ilike.%${filters.searchQuery}%`);
+          query = query.or(
+            `summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%, prompt_text.ilike.%${filters.searchQuery}%`
+          );
         }
       }
 
@@ -178,7 +176,8 @@ class AnalyticsService {
       if (error) throw error;
 
       // Transform materialized view data to expected format
-      const transformedResults = (results || []).map((row: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      const transformedResults = (results || []).map((row: any) => ({
+        // eslint-disable-line @typescript-eslint/no-explicit-any
         llm_provider: row.llm_provider,
         is_mentioned: row.is_mentioned,
         rank_position: row.rank_position,
@@ -201,10 +200,14 @@ class AnalyticsService {
         },
       }));
 
-      return this.calculateAnalysisAnalytics(transformedResults as AnalysisResultData[]);
-
+      return this.calculateAnalysisAnalytics(
+        transformedResults as AnalysisResultData[]
+      );
     } catch (mvError) {
-      console.warn("⚠️ Materialized view query failed, falling back to traditional query:", mvError);
+      console.warn(
+        "⚠️ Materialized view query failed, falling back to traditional query:",
+        mvError
+      );
 
       // Fallback to original expensive query
       let query = supabase
@@ -245,14 +248,18 @@ class AnalyticsService {
         }
 
         if (filters.searchQuery) {
-          query = query.or(`summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%`);
+          query = query.or(
+            `summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%`
+          );
         }
       }
 
       const { data: results, error } = await query;
       if (error) throw error;
 
-      return this.calculateAnalysisAnalytics((results || []) as AnalysisResultData[]);
+      return this.calculateAnalysisAnalytics(
+        (results || []) as AnalysisResultData[]
+      );
     }
   }
 
@@ -264,8 +271,9 @@ class AnalyticsService {
     _filters?: Record<string, unknown>
   ): Promise<CompetitorAnalytics> {
     // Get complete competitor data with analysis results
-    const { data: competitorData, error } = await (supabase
-      .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+    const { data: competitorData, error } = await (
+      supabase.schema("beekon_data") as any
+    ) // eslint-disable-line @typescript-eslint/no-explicit-any
       .from("mv_competitor_performance")
       .select("*")
       .eq("website_id", websiteId);
@@ -283,11 +291,9 @@ class AnalyticsService {
     _filters?: Record<string, unknown>
   ): Promise<DashboardAnalytics> {
     try {
-      // OPTIMIZED: Use materialized view for dashboard analytics
-      console.log("🚀 Using mv_analysis_results materialized view for dashboard analytics");
-
-      const { data: dashboardData, error } = await (supabase
-        .schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+      const { data: dashboardData, error } = await (
+        supabase.schema("beekon_data") as any
+      ) // eslint-disable-line @typescript-eslint/no-explicit-any
         .from("mv_analysis_results")
         .select("*")
         .in("website_id", websiteIds);
@@ -295,9 +301,11 @@ class AnalyticsService {
       if (error) throw error;
 
       return this.calculateDashboardAnalytics(dashboardData || []);
-
     } catch (error) {
-      console.warn("⚠️ Materialized view query failed for dashboard, falling back:", error);
+      console.warn(
+        "⚠️ Materialized view query failed for dashboard, falling back:",
+        error
+      );
 
       // Fallback to original query
       const { data: dashboardData, error: fallbackError } = await supabase
@@ -369,8 +377,10 @@ class AnalyticsService {
         );
         const avgRank =
           rankedResults.length > 0
-            ? rankedResults.reduce((sum: number, r: AnalysisResultData) => sum + r.rank_position, 0) /
-              rankedResults.length
+            ? rankedResults.reduce(
+                (sum: number, r: AnalysisResultData) => sum + r.rank_position,
+                0
+              ) / rankedResults.length
             : 0;
 
         return {
@@ -385,7 +395,7 @@ class AnalyticsService {
 
     // Group by LLM provider
     const llmGroups = results.reduce((acc, r) => {
-      const provider = r.llm_provider || 'unknown';
+      const provider = r.llm_provider || "unknown";
       if (!acc[provider]) acc[provider] = [];
       acc[provider].push(r);
       return acc;
@@ -393,14 +403,20 @@ class AnalyticsService {
 
     const llmPerformance = Object.entries(llmGroups).map(
       ([provider, llmResults]: [string, AnalysisResultData[]]) => {
-        const mentioned = llmResults.filter((r: AnalysisResultData) => r.is_mentioned).length;
+        const mentioned = llmResults.filter(
+          (r: AnalysisResultData) => r.is_mentioned
+        ).length;
         const mentionRate = (mentioned / llmResults.length) * 100;
         const withConfidence = llmResults.filter(
           (r: AnalysisResultData) => r.is_mentioned && r.confidence_score
         );
         const avgConfidence =
           withConfidence.length > 0
-            ? (withConfidence.reduce((sum: number, r: AnalysisResultData) => sum + r.confidence_score, 0) /
+            ? (withConfidence.reduce(
+                (sum: number, r: AnalysisResultData) =>
+                  sum + r.confidence_score,
+                0
+              ) /
                 withConfidence.length) *
               100
             : 0;
@@ -409,8 +425,10 @@ class AnalyticsService {
         );
         const avgRank =
           withRank.length > 0
-            ? withRank.reduce((sum: number, r: AnalysisResultData) => sum + r.rank_position, 0) /
-              withRank.length
+            ? withRank.reduce(
+                (sum: number, r: AnalysisResultData) => sum + r.rank_position,
+                0
+              ) / withRank.length
             : 0;
 
         return {
@@ -465,9 +483,7 @@ class AnalyticsService {
   /**
    * Calculate competitor analytics from competitor data
    */
-  private calculateCompetitorAnalytics(
-    _data: unknown[]
-  ): CompetitorAnalytics {
+  private calculateCompetitorAnalytics(_data: unknown[]): CompetitorAnalytics {
     // Implementation will depend on the competitor data structure
     return {
       totalCompetitors: 0,
@@ -482,9 +498,7 @@ class AnalyticsService {
   /**
    * Calculate dashboard analytics from dashboard data
    */
-  private calculateDashboardAnalytics(
-    _data: unknown[]
-  ): DashboardAnalytics {
+  private calculateDashboardAnalytics(_data: unknown[]): DashboardAnalytics {
     // Implementation will depend on the dashboard data structure
     return {
       totalWebsites: 0,

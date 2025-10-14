@@ -7,7 +7,10 @@ import {
   type CompetitiveGapAnalysis,
   type CompetitorInsight,
 } from "./competitorAnalysisService";
-import { calculateTimeSeriesShareOfVoice, validateShareOfVoiceTotal } from "@/utils/shareOfVoiceUtils";
+import {
+  calculateTimeSeriesShareOfVoice,
+  validateShareOfVoiceTotal,
+} from "@/utils/shareOfVoiceUtils";
 
 // Re-export types for external use
 export type {
@@ -227,15 +230,18 @@ export class OptimizedCompetitorService extends BaseService {
           const mentionTrend = Number(row.mention_trend_7d) || 0;
           const analysisStatus = String(row.analysis_status || "completed");
 
-          const shareOfVoiceValue = totalMentions > 0
-            ? Math.round((positiveMentions / totalMentions) * 100)
-            : 0;
-          const averageRankValue = avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20
-            ? Math.round(avgRank * 10) / 10
-            : 0;
-          const sentimentScoreValue = avgSentiment && !isNaN(avgSentiment)
-            ? Math.round(Math.max(0, Math.min(100, (avgSentiment + 1) * 50)))
-            : 50;
+          const shareOfVoiceValue =
+            totalMentions > 0
+              ? Math.round((positiveMentions / totalMentions) * 100)
+              : 0;
+          const averageRankValue =
+            avgRank && !isNaN(avgRank) && avgRank > 0 && avgRank <= 20
+              ? Math.round(avgRank * 10) / 10
+              : 0;
+          const sentimentScoreValue =
+            avgSentiment && !isNaN(avgSentiment)
+              ? Math.round(Math.max(0, Math.min(100, (avgSentiment + 1) * 50)))
+              : 50;
 
           return {
             // Database fields (required by CompetitorPerformance interface)
@@ -260,7 +266,11 @@ export class OptimizedCompetitorService extends BaseService {
             ),
             isActive:
               analysisStatus === "completed" || analysisStatus === "analyzing",
-            analysisStatus: analysisStatus as "pending" | "analyzing" | "completed" | "failed",
+            analysisStatus: analysisStatus as
+              | "pending"
+              | "analyzing"
+              | "completed"
+              | "failed",
           };
         });
       } catch (error) {
@@ -300,26 +310,29 @@ export class OptimizedCompetitorService extends BaseService {
 
         // First try: Direct query fallback using the same logic as the RPC function
         try {
-          const directQueryData = await this.getTimeSeriesDirectQuery(websiteId, competitorDomain, days);
+          const directQueryData = await this.getTimeSeriesDirectQuery(
+            websiteId,
+            competitorDomain,
+            days
+          );
           if (directQueryData.length > 0) {
-            console.log("✅ Successfully retrieved data using direct query fallback");
             return directQueryData;
           }
         } catch (directQueryError) {
-          console.error("❌ Direct query fallback also failed:", directQueryError);
+          console.error(
+            "❌ Direct query fallback also failed:",
+            directQueryError
+          );
         }
 
         // Last resort: synthetic data
         console.warn("⚠️ Falling back to synthetic data generation");
-        const fallbackData = await this.getFallbackTimeSeriesData(websiteId, days);
+        const fallbackData = await this.getFallbackTimeSeriesData(
+          websiteId,
+          days
+        );
         return fallbackData;
       }
-
-      console.log('🚀 Time series data received:', {
-        dataCount: Array.isArray(data) ? data.length : 0,
-        websiteId,
-        days
-      });
 
       // Group by date
       const timeSeriesMap = new Map<string, CompetitorTimeSeriesData>();
@@ -327,14 +340,16 @@ export class OptimizedCompetitorService extends BaseService {
 
       // If no data is returned, create fallback time series data
       if (timeSeriesData.length === 0) {
-        console.warn("⚠️ No time series data returned from backend, generating fallback data");
+        console.warn(
+          "⚠️ No time series data returned from backend, generating fallback data"
+        );
 
         // Generate basic time series with "Your Brand" for the last week
         const today = new Date();
         for (let i = 6; i >= 0; i--) {
           const date = new Date(today);
           date.setDate(date.getDate() - i);
-          const dateStr = date.toISOString().split('T')[0];
+          const dateStr = date.toISOString().split("T")[0];
 
           if (!dateStr) {
             console.error("Failed to generate date string for fallback data");
@@ -343,24 +358,22 @@ export class OptimizedCompetitorService extends BaseService {
 
           timeSeriesMap.set(dateStr, {
             date: dateStr,
-            competitors: [{
-              competitorId: "your-brand",
-              name: "Your Brand",
-              shareOfVoice: 100, // 100% when no competitors
-              averageRank: 0,
-              mentionCount: 0,
-              sentimentScore: 50
-            }]
+            competitors: [
+              {
+                competitorId: "your-brand",
+                name: "Your Brand",
+                shareOfVoice: 100, // 100% when no competitors
+                averageRank: 0,
+                mentionCount: 0,
+                sentimentScore: 50,
+              },
+            ],
           });
         }
 
-        const fallbackResult = Array.from(timeSeriesMap.values())
-          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-        console.log("✅ Generated fallback time series data:", {
-          timeSeriesCount: fallbackResult.length,
-          dateRange: [fallbackResult[0]?.date, fallbackResult[fallbackResult.length - 1]?.date]
-        });
+        const fallbackResult = Array.from(timeSeriesMap.values()).sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
 
         return fallbackResult;
       }
@@ -379,22 +392,27 @@ export class OptimizedCompetitorService extends BaseService {
         const dailyAvgRank = Number(row.daily_avg_rank);
 
         // Get share of voice from backend calculation (if available) or use 0 as fallback
-        const backendShareOfVoice = row.share_of_voice !== undefined ? Number(row.share_of_voice) || 0 : 0;
+        const backendShareOfVoice =
+          row.share_of_voice !== undefined
+            ? Number(row.share_of_voice) || 0
+            : 0;
 
         timeSeriesMap.get(dateStr)!.competitors.push({
-          competitorId: row.is_your_brand ? "your-brand" : String(row.competitor_id || ""), // Use special ID for Your Brand
+          competitorId: row.is_your_brand
+            ? "your-brand"
+            : String(row.competitor_id || ""), // Use special ID for Your Brand
           name: String(row.competitor_name || row.competitor_domain),
           shareOfVoice: backendShareOfVoice, // Use backend-calculated share of voice
           averageRank:
             // Your Brand doesn't have rank position, only competitors do
             row.is_your_brand
               ? 0
-              : (dailyAvgRank &&
+              : dailyAvgRank &&
                 !isNaN(dailyAvgRank) &&
                 dailyAvgRank > 0 &&
                 dailyAvgRank <= 20
-                  ? Math.round(dailyAvgRank * 10) / 10 // Round to 1 decimal place
-                  : 0),
+              ? Math.round(dailyAvgRank * 10) / 10 // Round to 1 decimal place
+              : 0,
           mentionCount: dailyPositiveMentions, // Use positive mentions for share calculation
           sentimentScore:
             dailyAvgSentiment && !isNaN(dailyAvgSentiment)
@@ -406,55 +424,68 @@ export class OptimizedCompetitorService extends BaseService {
       });
 
       // Apply normalization only if backend didn't calculate share of voice properly
-      const normalizedResult = Array.from(timeSeriesMap.values()).map(timePoint => {
-        // Check if backend provided valid share of voice calculations
-        const hasValidBackendShares = timePoint.competitors.every(comp => comp.shareOfVoice > 0);
-        const totalBackendShares = timePoint.competitors.reduce((sum, comp) => sum + comp.shareOfVoice, 0);
-        const isBackendShareValid = hasValidBackendShares && Math.abs(totalBackendShares - 100) < 5; // Allow 5% tolerance
+      const normalizedResult = Array.from(timeSeriesMap.values())
+        .map((timePoint) => {
+          // Check if backend provided valid share of voice calculations
+          const hasValidBackendShares = timePoint.competitors.every(
+            (comp) => comp.shareOfVoice > 0
+          );
+          const totalBackendShares = timePoint.competitors.reduce(
+            (sum, comp) => sum + comp.shareOfVoice,
+            0
+          );
+          const isBackendShareValid =
+            hasValidBackendShares && Math.abs(totalBackendShares - 100) < 5; // Allow 5% tolerance
 
-        if (isBackendShareValid) {
-          // Use backend calculations as-is
-          return timePoint;
-        } else {
-          // Fallback to frontend normalization if backend data is invalid
-          const normalizedCompetitors = calculateTimeSeriesShareOfVoice(timePoint.competitors);
-          return {
-            ...timePoint,
-            competitors: normalizedCompetitors
-          };
-        }
-      }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // FIXED: Chronological order (oldest to newest)
+          if (isBackendShareValid) {
+            // Use backend calculations as-is
+            return timePoint;
+          } else {
+            // Fallback to frontend normalization if backend data is invalid
+            const normalizedCompetitors = calculateTimeSeriesShareOfVoice(
+              timePoint.competitors
+            );
+            return {
+              ...timePoint,
+              competitors: normalizedCompetitors,
+            };
+          }
+        })
+        .sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        ); // FIXED: Chronological order (oldest to newest)
 
       // Validate that each date totals to 100%
       normalizedResult.forEach((timePoint, index) => {
         const validation = validateShareOfVoiceTotal(timePoint.competitors);
-        if (!validation.isValid && index < 3) { // Only log first 3 validation failures
-          console.warn(`⚠️ Share of voice validation failed for ${timePoint.date}:`, validation);
+        if (!validation.isValid && index < 3) {
+          // Only log first 3 validation failures
+          console.warn(
+            `⚠️ Share of voice validation failed for ${timePoint.date}:`,
+            validation
+          );
         }
       });
 
       // Count how many time points used backend vs frontend calculation
       let backendCalculated = 0;
       let frontendCalculated = 0;
-      Array.from(timeSeriesMap.values()).forEach(timePoint => {
-        const hasValidBackendShares = timePoint.competitors.every(comp => comp.shareOfVoice > 0);
-        const totalBackendShares = timePoint.competitors.reduce((sum, comp) => sum + comp.shareOfVoice, 0);
-        const isBackendShareValid = hasValidBackendShares && Math.abs(totalBackendShares - 100) < 5;
+      Array.from(timeSeriesMap.values()).forEach((timePoint) => {
+        const hasValidBackendShares = timePoint.competitors.every(
+          (comp) => comp.shareOfVoice > 0
+        );
+        const totalBackendShares = timePoint.competitors.reduce(
+          (sum, comp) => sum + comp.shareOfVoice,
+          0
+        );
+        const isBackendShareValid =
+          hasValidBackendShares && Math.abs(totalBackendShares - 100) < 5;
 
         if (isBackendShareValid) {
           backendCalculated++;
         } else {
           frontendCalculated++;
         }
-      });
-
-      console.log('✅ Time series processed with share of voice calculation:', {
-        timeSeriesCount: normalizedResult.length,
-        backendCalculated,
-        frontendCalculated,
-        hasYourBrand: normalizedResult.some(tp => tp.competitors.some(c => c.competitorId === 'your-brand')),
-        competitorNames: [...new Set(normalizedResult.flatMap(tp => tp.competitors.map(c => c.name)))],
-        firstDateValidation: normalizedResult[0] ? validateShareOfVoiceTotal(normalizedResult[0].competitors) : null
       });
 
       return normalizedResult;
@@ -469,8 +500,6 @@ export class OptimizedCompetitorService extends BaseService {
     competitorDomain?: string,
     days: number = 30
   ): Promise<CompetitorTimeSeriesData[]> {
-    console.log("🔄 Executing direct query for time series data...");
-
     // Calculate the date range
     const endDate = new Date();
     const startDate = new Date();
@@ -482,7 +511,7 @@ export class OptimizedCompetitorService extends BaseService {
       .from("mv_competitor_daily_metrics")
       .select("*")
       .eq("website_id", websiteId)
-      .gte("analysis_date", startDate.toISOString().split('T')[0])
+      .gte("analysis_date", startDate.toISOString().split("T")[0])
       .order("analysis_date", { ascending: false })
       .order("competitor_name", { ascending: true });
 
@@ -533,33 +562,38 @@ export class OptimizedCompetitorService extends BaseService {
       const totalForDate = dailyTotals.get(dateStr) || 1;
 
       // Calculate accurate share of voice
-      const shareOfVoice = totalForDate > 0
-        ? Math.round((dailyMentions / totalForDate) * 100 * 100) / 100 // Round to 2 decimal places
-        : 0;
+      const shareOfVoice =
+        totalForDate > 0
+          ? Math.round((dailyMentions / totalForDate) * 100 * 100) / 100 // Round to 2 decimal places
+          : 0;
 
       timeSeriesMap.get(dateStr)!.competitors.push({
-        competitorId: row.is_your_brand ? "your-brand" : String(row.competitor_id || ""),
+        competitorId: row.is_your_brand
+          ? "your-brand"
+          : String(row.competitor_id || ""),
         name: String(row.competitor_name || row.competitor_domain),
         shareOfVoice, // Use the calculated share of voice
         averageRank: row.is_your_brand
           ? 0
-          : (dailyAvgRank && !isNaN(dailyAvgRank) && dailyAvgRank > 0 && dailyAvgRank <= 20
-              ? Math.round(dailyAvgRank * 10) / 10
-              : 0),
+          : dailyAvgRank &&
+            !isNaN(dailyAvgRank) &&
+            dailyAvgRank > 0 &&
+            dailyAvgRank <= 20
+          ? Math.round(dailyAvgRank * 10) / 10
+          : 0,
         mentionCount: dailyPositiveMentions,
-        sentimentScore: dailyAvgSentiment && !isNaN(dailyAvgSentiment)
-          ? Math.round(Math.max(0, Math.min(100, (dailyAvgSentiment + 1) * 50)))
-          : 50,
+        sentimentScore:
+          dailyAvgSentiment && !isNaN(dailyAvgSentiment)
+            ? Math.round(
+                Math.max(0, Math.min(100, (dailyAvgSentiment + 1) * 50))
+              )
+            : 50,
       });
     });
 
-    const result = Array.from(timeSeriesMap.values())
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    console.log("✅ Direct query processed successfully:", {
-      timeSeriesCount: result.length,
-      sampleData: result[0]?.competitors.map(c => ({ name: c.name, shareOfVoice: c.shareOfVoice }))
-    });
+    const result = Array.from(timeSeriesMap.values()).sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
 
     return result;
   }
@@ -572,8 +606,6 @@ export class OptimizedCompetitorService extends BaseService {
     days: number
   ): Promise<CompetitorTimeSeriesData[]> {
     try {
-      console.log("🔄 Generating fallback time series data...");
-
       // Get competitors from the database directly
       const competitors = await this.getCompetitors(websiteId);
 
@@ -584,7 +616,7 @@ export class OptimizedCompetitorService extends BaseService {
       for (let i = Math.min(days - 1, 6); i >= 0; i--) {
         const date = new Date(today);
         date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = date.toISOString().split("T")[0];
 
         if (!dateStr) continue;
 
@@ -595,58 +627,65 @@ export class OptimizedCompetitorService extends BaseService {
             shareOfVoice: competitors.length === 0 ? 100 : 50, // 100% if no competitors, otherwise 50%
             averageRank: 0,
             mentionCount: competitors.length === 0 ? 1 : 10,
-            sentimentScore: 75
-          }
+            sentimentScore: 75,
+          },
         ];
 
         // Add known competitors with basic data
         competitors.forEach((comp, index) => {
           competitorList.push({
             competitorId: comp.id,
-            name: comp.competitor_name || comp.competitor_domain.replace(/^https?:\/\//, ''),
-            shareOfVoice: competitors.length === 1 ? 50 : Math.round(50 / competitors.length),
+            name:
+              comp.competitor_name ||
+              comp.competitor_domain.replace(/^https?:\/\//, ""),
+            shareOfVoice:
+              competitors.length === 1
+                ? 50
+                : Math.round(50 / competitors.length),
             averageRank: 2 + index,
             mentionCount: Math.max(1, 10 - index * 2),
-            sentimentScore: 60 - index * 5
+            sentimentScore: 60 - index * 5,
           });
         });
 
         timeSeriesMap.set(dateStr, {
           date: dateStr,
-          competitors: competitorList
+          competitors: competitorList,
         });
       }
 
-      const fallbackResult = Array.from(timeSeriesMap.values())
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      console.log("✅ Generated fallback time series data:", {
-        timeSeriesCount: fallbackResult.length,
-        competitorCount: competitors.length,
-        dateRange: [fallbackResult[0]?.date, fallbackResult[fallbackResult.length - 1]?.date]
-      });
+      const fallbackResult = Array.from(timeSeriesMap.values()).sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
 
       return fallbackResult;
     } catch (fallbackError) {
-      console.error("❌ Fallback time series generation failed:", fallbackError);
+      console.error(
+        "❌ Fallback time series generation failed:",
+        fallbackError
+      );
 
       // Last resort: return minimal "Your Brand" only data
-      const dateStr = new Date().toISOString().split('T')[0];
+      const dateStr = new Date().toISOString().split("T")[0];
       if (!dateStr) {
         return []; // Return empty array if date generation fails
       }
 
-      const minimalResult: CompetitorTimeSeriesData[] = [{
-        date: dateStr,
-        competitors: [{
-          competitorId: "your-brand",
-          name: "Your Brand",
-          shareOfVoice: 100,
-          averageRank: 0,
-          mentionCount: 0,
-          sentimentScore: 50
-        }]
-      }];
+      const minimalResult: CompetitorTimeSeriesData[] = [
+        {
+          date: dateStr,
+          competitors: [
+            {
+              competitorId: "your-brand",
+              name: "Your Brand",
+              shareOfVoice: 100,
+              averageRank: 0,
+              mentionCount: 0,
+              sentimentScore: 50,
+            },
+          ],
+        },
+      ];
 
       return minimalResult;
     }
@@ -743,20 +782,6 @@ export class OptimizedCompetitorService extends BaseService {
         0
       );
 
-      if (process.env.NODE_ENV !== "production") {
-        console.log("📈 [DEBUG] Your Brand mention calculation:", {
-          yourBrandResultsCount: yourBrandResults.length,
-          yourBrandMentions,
-          yourBrandAnalyses,
-          sampleResults: yourBrandResults.slice(0, 2).map((r) => ({
-            topicName: r.topic_name,
-            llmResultsCount: r.llm_results.length,
-            mentionedCount: r.llm_results.filter((llm) => llm.is_mentioned)
-              .length,
-          })),
-        });
-      }
-
       // Calculate total mentions across all brands (Your Brand + all competitors)
       const totalCompetitorMentions = shareOfVoice.reduce(
         (sum, comp) => sum + comp.totalMentions,
@@ -844,17 +869,6 @@ export class OptimizedCompetitorService extends BaseService {
         dataType: "share_of_voice" as const,
       };
 
-      if (process.env.NODE_ENV !== "production") {
-        console.log("🏆 [DEBUG] Your Brand data point created:", {
-          yourBrandDataPoint,
-          calculationDetails: {
-            totalMentionsAllBrands,
-            yourBrandTrueShareOfVoice,
-            yourBrandMentionRate,
-          },
-        });
-      }
-
       // Ensure Your Brand data point is valid and always included
       const validShareOfVoice =
         !isNaN(yourBrandTrueShareOfVoice) && isFinite(yourBrandTrueShareOfVoice)
@@ -877,22 +891,6 @@ export class OptimizedCompetitorService extends BaseService {
         dataType: "share_of_voice" as const,
       };
 
-      if (process.env.NODE_ENV !== "production") {
-        console.log("🔧 [DEBUG] Sanitized Your Brand data point:", {
-          original: yourBrandDataPoint,
-          sanitized: safeBrandDataPoint,
-          hadValidationIssues:
-            JSON.stringify(yourBrandDataPoint) !==
-            JSON.stringify(safeBrandDataPoint),
-          fieldMapping: {
-            shareOfVoice: safeBrandDataPoint.shareOfVoice,
-            value: safeBrandDataPoint.value,
-            hasBothFields:
-              safeBrandDataPoint.shareOfVoice === safeBrandDataPoint.value,
-          },
-        });
-      }
-
       const shareOfVoiceData: ShareOfVoiceDataPoint[] = [
         safeBrandDataPoint, // Always ensure Your Brand is included with valid data
         ...competitorTrueShares.map((comp) => ({
@@ -906,25 +904,6 @@ export class OptimizedCompetitorService extends BaseService {
           dataType: "share_of_voice" as const,
         })),
       ];
-
-      if (process.env.NODE_ENV !== "production") {
-        console.log("📊 [DEBUG] Final shareOfVoiceData array created:", {
-          totalDataPoints: shareOfVoiceData.length,
-          hasYourBrand: shareOfVoiceData.some(
-            (item) => item.name === "Your Brand"
-          ),
-          yourBrandData: shareOfVoiceData.find(
-            (item) => item.name === "Your Brand"
-          ),
-          allDataPoints: shareOfVoiceData.map((item) => ({
-            name: item.name,
-            shareOfVoice: item.shareOfVoice,
-            value: 'value' in item ? (item as { value: number }).value : item.shareOfVoice,
-            hasValueField: "value" in item,
-            totalMentions: item.totalMentions,
-          })),
-        });
-      }
 
       // Competitive gaps will be generated in unified analytics from gapAnalysis directly
 
@@ -1110,15 +1089,13 @@ export class OptimizedCompetitorService extends BaseService {
    * Uses database stored procedure for atomic deletion of competitor and all related data
    */
   async deleteCompetitor(competitorId: string): Promise<void> {
-    console.log(`🗑️ Starting transaction-safe deletion for competitor: ${competitorId}`);
-
     try {
       // Execute transaction-safe deletion via database stored procedure
       // This handles all CASCADE deletions atomically with rollback on failure
       const { data: rawResult, error: rpcError } = await supabase.rpc(
         "delete_competitor_with_transaction" as never,
         {
-          competitor_id_param: competitorId
+          competitor_id_param: competitorId,
         } as never
       );
 
@@ -1141,29 +1118,20 @@ export class OptimizedCompetitorService extends BaseService {
 
       // Log the deletion results
       if (result && result.success) {
-        console.log(`✅ Competitor deleted successfully:`, {
-          competitor: result.competitor_name || result.competitor_domain,
-          deletedAnalysisResults: result.deleted_analysis_results,
-          deletedStatusLogs: result.deleted_status_logs,
-          websiteId: result.website_id
-        });
-
         // Clear all related application caches
         await this.clearCompetitorCaches(result.website_id, competitorId);
       }
 
       // Force synchronous materialized view refresh to update analytics immediately
       await this.forceSynchronousViewRefresh();
-
-      console.log(`✅ Successfully completed competitor deletion and cache cleanup`);
-
     } catch (error) {
       console.error(`❌ Error during competitor deletion:`, error);
 
       // Provide detailed error message
-      const errorMessage = error instanceof Error
-        ? error.message
-        : 'Unknown error during deletion';
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Unknown error during deletion";
 
       throw new Error(`Failed to delete competitor: ${errorMessage}`);
     }
@@ -1172,9 +1140,10 @@ export class OptimizedCompetitorService extends BaseService {
   /**
    * Clear all caches related to a competitor
    */
-  private async clearCompetitorCaches(websiteId: string, competitorId: string): Promise<void> {
-    console.log(`🧹 Clearing caches for competitor: ${competitorId}`);
-
+  private async clearCompetitorCaches(
+    websiteId: string,
+    competitorId: string
+  ): Promise<void> {
     try {
       // Clear main competitor data cache
       this.clearCache(`competitors_data_${websiteId}`);
@@ -1184,17 +1153,16 @@ export class OptimizedCompetitorService extends BaseService {
 
       // Clear time series cache for this competitor
       const cacheEntries = Object.keys(this.cache);
-      const competitorCaches = cacheEntries.filter(key =>
-        key.includes(`timeseries_${websiteId}`) ||
-        key.includes(`analytics_${websiteId}`) ||
-        key.includes(competitorId)
+      const competitorCaches = cacheEntries.filter(
+        (key) =>
+          key.includes(`timeseries_${websiteId}`) ||
+          key.includes(`analytics_${websiteId}`) ||
+          key.includes(competitorId)
       );
 
-      competitorCaches.forEach(key => {
+      competitorCaches.forEach((key) => {
         this.clearCache(key);
       });
-
-      console.log(`✅ Cleared ${competitorCaches.length} cache entries for competitor: ${competitorId}`);
     } catch (error) {
       console.error(`❌ Error clearing competitor caches:`, error);
       throw error;
@@ -1205,8 +1173,6 @@ export class OptimizedCompetitorService extends BaseService {
    * Force synchronous materialized view refresh to immediately remove deleted competitors
    */
   private async forceSynchronousViewRefresh(): Promise<void> {
-    console.log(`🔄 Forcing synchronous materialized view refresh...`);
-
     try {
       // Refresh all competitor-related materialized views synchronously
       const refreshPromises = [
@@ -1216,8 +1182,6 @@ export class OptimizedCompetitorService extends BaseService {
 
       // Wait for all refreshes to complete
       await Promise.all(refreshPromises);
-
-      console.log(`✅ Successfully refreshed materialized views`);
     } catch (error) {
       console.error(`❌ Error during synchronous view refresh:`, error);
       // Don't throw - view refresh failure shouldn't block deletion
@@ -1546,18 +1510,6 @@ export class OptimizedCompetitorService extends BaseService {
     websiteId: string,
     dateRange?: { start: string; end: string }
   ): Promise<AnalysisResult[]> {
-    if (process.env.NODE_ENV !== "production") {
-      console.log(
-        "🚀 [DEBUG] getAnalysisResultsForWebsite OPTIMIZED called with:",
-        {
-          websiteId,
-          dateRange,
-          timestamp: new Date().toISOString(),
-          optimizationUsed: "materialized_view_function",
-        }
-      );
-    }
-
     // OPTIMIZED: Use materialized view function instead of expensive raw table JOINs
     const defaultDateRange = {
       start:
@@ -1566,15 +1518,20 @@ export class OptimizedCompetitorService extends BaseService {
       end: dateRange?.end || new Date().toISOString(),
     };
 
-    const { data, error } = await (supabase
-      .schema("beekon_data") as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
-      .rpc("get_analysis_results_optimized", {
-        p_website_id: websiteId,
-        p_date_start: defaultDateRange.start,
-        p_date_end: defaultDateRange.end,
-        p_limit: 10000, // Large limit for comprehensive analysis
-        p_offset: 0,
-      });
+    const { data, error } = await (
+      supabase.schema("beekon_data") as unknown as {
+        rpc: (
+          name: string,
+          params: Record<string, unknown>
+        ) => Promise<{ data: unknown; error: unknown }>;
+      }
+    ).rpc("get_analysis_results_optimized", {
+      p_website_id: websiteId,
+      p_date_start: defaultDateRange.start,
+      p_date_end: defaultDateRange.end,
+      p_limit: 10000, // Large limit for comprehensive analysis
+      p_offset: 0,
+    });
 
     if (error) {
       console.error(
@@ -1582,17 +1539,6 @@ export class OptimizedCompetitorService extends BaseService {
         error
       );
       throw error;
-    }
-
-    if (process.env.NODE_ENV !== "production") {
-      console.log("⚡ [DEBUG] OPTIMIZED analysis results query returned:", {
-        resultsCount: Array.isArray(data) ? data.length : 0,
-        websiteId,
-        dateRange: defaultDateRange,
-        performanceNote:
-          "Using materialized view - 10-100x faster than raw JOINs",
-        sampleData: Array.isArray(data) ? data.slice(0, 2) : [], // Show first 2 results for debugging
-      });
     }
 
     // Transform materialized view data to expected AnalysisResult format
@@ -1635,22 +1581,6 @@ export class OptimizedCompetitorService extends BaseService {
     );
 
     const results = Array.from(resultsMap.values());
-
-    if (process.env.NODE_ENV !== "production") {
-      console.log("🎯 [DEBUG] Final OPTIMIZED analysis results processed:", {
-        topicsCount: results.length,
-        totalLlmResults: results.reduce(
-          (sum, r) => sum + r.llm_results.length,
-          0
-        ),
-        totalMentions: results.reduce((sum, r) => sum + r.total_mentions, 0),
-        sampleTopics: results.slice(0, 3).map((r) => ({
-          topic: r.topic_name,
-          mentions: r.total_mentions,
-          llmResultsCount: r.llm_results.length,
-        })),
-      });
-    }
 
     return results;
   }
@@ -1773,19 +1703,6 @@ export class OptimizedCompetitorService extends BaseService {
     yourBrandMentions: number;
     // Note: totalMentionsAllBrands and yourBrandMentions can be calculated from shareOfVoice data
   }): CompetitorAnalytics {
-    if (process.env.NODE_ENV !== "production") {
-      console.log("🔧 [DEBUG] createUnifiedCompetitorAnalytics called with:", {
-        shareOfVoiceDataCount: shareOfVoiceData.length,
-        hasYourBrandInShareOfVoice: shareOfVoiceData.some(
-          (item) => item.name === "Your Brand"
-        ),
-        shareOfVoiceEntries: shareOfVoiceData.map((item) => ({
-          name: item.name,
-          shareOfVoice: item.shareOfVoice,
-          totalMentions: item.totalMentions,
-        })),
-      });
-    }
     // Validate data consistency before creating analytics
     const validation = this.validateCompetitorData({
       shareOfVoice,
@@ -1811,11 +1728,6 @@ export class OptimizedCompetitorService extends BaseService {
           2
         )}% (expected: 100.00% ±1%)`
       );
-    } else {
-      console.log("✅ Share of voice validation passed:", {
-        total: shareOfVoiceTotal.toFixed(2) + "%",
-        variance: Math.abs(shareOfVoiceTotal - 100).toFixed(2) + "%",
-      });
     }
 
     if (Math.abs(marketShareTotal - 100) > 5) {

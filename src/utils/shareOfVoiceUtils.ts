@@ -55,21 +55,6 @@ export function normalizeShareOfVoice<T extends { shareOfVoice: number }>(
     };
   });
 
-  // Verify the total (optional validation)
-  const finalTotal = normalizedItems.reduce(
-    (sum, item) => sum + item.shareOfVoice,
-    0
-  );
-
-  if (process.env.NODE_ENV === "development") {
-    console.log("🎯 Share of Voice normalization:", {
-      originalTotal: rawTotal.toFixed(2) + "%",
-      finalTotal: finalTotal.toFixed(2) + "%",
-      itemCount: items.length,
-      accuracy: Math.abs(finalTotal - 100) < 0.1 ? "✅ Accurate" : "⚠️ Slight variance",
-    });
-  }
-
   return normalizedItems;
 }
 
@@ -104,7 +89,10 @@ export function calculateTimeSeriesShareOfVoice(
   // Calculate raw share of voice for each competitor
   const competitorsWithRawShare = competitors.map((comp) => ({
     ...comp,
-    shareOfVoice: calculateShareOfVoice(comp.mentionCount, totalPositiveMentions),
+    shareOfVoice: calculateShareOfVoice(
+      comp.mentionCount,
+      totalPositiveMentions
+    ),
   }));
 
   // Apply normalization to ensure total = 100%
