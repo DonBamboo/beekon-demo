@@ -49,6 +49,7 @@ export interface AnalysisSession {
   website_id: string;
   user_id: string;
   workspace_id: string;
+  topic_id: string | null; // Foreign key to topics table
   status: AnalysisStatus;
   configuration: AnalysisConfig;
   progress_data: AnalysisProgress | null;
@@ -107,11 +108,16 @@ export class AnalysisService {
       workspaceId = website.workspace_id;
     }
 
-    // Create analysis session first
-    const analysisSession = await this.createAnalysisSession(config, userId, workspaceId);
-
-    // First, create topics if they don't exist
+    // First, create topics if they don't exist (needed for topic_id in session)
     const topicIds = await this.ensureTopicsExist(config.websiteId, config.topics);
+
+    // Ensure we have at least one topic
+    if (!topicIds[0]) {
+      throw new Error("Failed to create or find topic for analysis");
+    }
+
+    // Create analysis session with topic_id
+    const analysisSession = await this.createAnalysisSession(config, userId, workspaceId, topicIds[0]);
 
     // Create prompts for each topic
     const prompts = await this.createPrompts(config.customPrompts, topicIds);
@@ -203,7 +209,7 @@ export class AnalysisService {
     return prompts;
   }
 
-  private async createAnalysisSession(config: AnalysisConfig, userId: string, workspaceId: string): Promise<AnalysisSession> {
+  private async createAnalysisSession(config: AnalysisConfig, userId: string, workspaceId: string, topicId: string): Promise<AnalysisSession> {
     const { data, error } = await supabase
       .schema("beekon_data")
       .from("analysis_sessions")
@@ -212,6 +218,7 @@ export class AnalysisService {
         website_id: config.websiteId,
         user_id: userId,
         workspace_id: workspaceId,
+        topic_id: topicId, // NEW: Include topic_id foreign key
         status: "pending" as const,
         configuration: config as unknown as Record<string, unknown>,
         progress_data: {
@@ -235,6 +242,7 @@ export class AnalysisService {
       website_id: data.website_id,
       user_id: data.user_id,
       workspace_id: data.workspace_id,
+      topic_id: data.topic_id, // NEW: Include topic_id in returned session
       status: data.status as AnalysisStatus,
       configuration: data.configuration as unknown as AnalysisConfig,
       progress_data: data.progress_data as AnalysisProgress | null,
@@ -1414,6 +1422,7 @@ export class AnalysisService {
       website_id: data.website_id,
       user_id: data.user_id,
       workspace_id: data.workspace_id,
+      topic_id: data.topic_id, // Include topic_id
       status: data.status as AnalysisStatus,
       configuration: data.configuration as unknown as AnalysisConfig,
       progress_data: data.progress_data as AnalysisProgress | null,
@@ -1437,6 +1446,8 @@ export class AnalysisService {
 
     if (error) return [];
 
+    console.log("data", data);
+
     // Transform data array to match AnalysisSession interface
     const sessions: AnalysisSession[] = data.map((item) => ({
       id: item.id,
@@ -1444,6 +1455,7 @@ export class AnalysisService {
       website_id: item.website_id,
       user_id: item.user_id,
       workspace_id: item.workspace_id,
+      topic_id: item.topic_id, // Include topic_id
       status: item.status as AnalysisStatus,
       configuration: item.configuration as unknown as AnalysisConfig,
       progress_data: item.progress_data as AnalysisProgress | null,
@@ -1455,6 +1467,51 @@ export class AnalysisService {
     }));
 
     return sessions;
+  }
+
+  /**
+   * Get topic information for multiple analysis sessions
+   * Returns a Map of session IDs to topic data for efficient lookups
+   */
+  async getTopicsForSessions(sessionIds: string[]): Promise<Map<string, { topicId: string; topicName: string }>> {
+    if (sessionIds.length === 0) {
+      return new Map();
+    }
+
+    const { data, error } = await supabase
+      .schema("beekon_data")
+      .from("analysis_sessions")
+      .select(`
+        id,
+        topic_id,
+        topics:topic_id (
+          id,
+          topic_name
+        )
+      `)
+      .in("id", sessionIds)
+      .not("topic_id", "is", null);
+
+    if (error) {
+      return new Map();
+    }
+
+    // Transform to Map for O(1) lookups
+    const topicMap = new Map<string, { topicId: string; topicName: string }>();
+
+    data?.forEach((row) => {
+      if (row.topic_id && row.topics) {
+        const topics = row.topics as { id: string; topic_name: string } | null;
+        if (topics) {
+          topicMap.set(row.id, {
+            topicId: topics.id,
+            topicName: topics.topic_name,
+          });
+        }
+      }
+    });
+
+    return topicMap;
   }
 
   // This method would be called by webhook handlers or polling

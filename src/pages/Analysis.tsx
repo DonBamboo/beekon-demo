@@ -1704,6 +1704,16 @@ export default function Analysis() {
               description: "The analysis page has been filtered to show results from the selected session.",
             });
           }}
+          onSelectTopic={(topicId, topicName) => {
+            // Filter analysis page to show only results for the selected topic
+            setFilters({ ...(filters || {}), topic: topicId, analysisSession: "all" });
+
+            // Show toast notification
+            toast({
+              title: "Topic filter applied",
+              description: `Now showing results for "${topicName}"`,
+            });
+          }}
         />
       </>
     </AnalysisErrorBoundary>

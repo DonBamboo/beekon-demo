@@ -33,7 +33,8 @@
       "mcp__supabase__get_logs",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "mcp__supabase__get_anon_key"
+      "mcp__supabase__get_anon_key",
+      "mcp__supabase__generate_typescript_types"
     ],
     "deny": [],
     "ask": [],

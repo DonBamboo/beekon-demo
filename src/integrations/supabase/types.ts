@@ -25,6 +25,7 @@ export type Database = {
           progress_data: Json | null;
           started_at: string | null;
           status: string | null;
+          topic_id: string | null;
           updated_at: string;
           user_id: string;
           website_id: string;
@@ -40,6 +41,7 @@ export type Database = {
           progress_data?: Json | null;
           started_at?: string | null;
           status?: string | null;
+          topic_id?: string | null;
           updated_at?: string;
           user_id: string;
           website_id: string;
@@ -55,6 +57,7 @@ export type Database = {
           progress_data?: Json | null;
           started_at?: string | null;
           status?: string | null;
+          topic_id?: string | null;
           updated_at?: string;
           user_id?: string;
           website_id?: string;
@@ -94,6 +97,13 @@ export type Database = {
             columns: ["website_id"];
             isOneToOne: false;
             referencedRelation: "websites";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "analysis_sessions_topic_id_fkey";
+            columns: ["topic_id"];
+            isOneToOne: false;
+            referencedRelation: "topics";
             referencedColumns: ["id"];
           },
           {
