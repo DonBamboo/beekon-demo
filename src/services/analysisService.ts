@@ -17,13 +17,8 @@ function safeBoolean(value: unknown, fallback = false): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-function safeStringArray(
-  value: unknown,
-  fallback: string[] | null = null
-): string[] | null {
-  return Array.isArray(value) && value.every((item) => typeof item === "string")
-    ? value
-    : fallback;
+function safeStringArray(value: unknown, fallback: string[] | null = null): string[] | null {
+  return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : fallback;
 }
 
 export type AnalysisStatus = "pending" | "running" | "completed" | "failed";
@@ -79,8 +74,7 @@ export interface AnalysisProgress {
 
 export class AnalysisService {
   private static instance: AnalysisService;
-  private progressCallbacks: Map<string, (progress: AnalysisProgress) => void> =
-    new Map();
+  private progressCallbacks: Map<string, (progress: AnalysisProgress) => void> = new Map();
   private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   public static getInstance(): AnalysisService {
@@ -90,18 +84,13 @@ export class AnalysisService {
     return AnalysisService.instance;
   }
 
-  async createAnalysis(
-    config: AnalysisConfig,
-    userId?: string,
-    workspaceId?: string
-  ): Promise<string> {
+  async createAnalysis(config: AnalysisConfig, userId?: string, workspaceId?: string): Promise<string> {
     // Get current user if not provided
     if (!userId) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user)
-        throw new Error("User must be authenticated to create analysis");
+      if (!user) throw new Error("User must be authenticated to create analysis");
       userId = user.id;
     }
 
@@ -119,17 +108,10 @@ export class AnalysisService {
     }
 
     // Create analysis session first
-    const analysisSession = await this.createAnalysisSession(
-      config,
-      userId,
-      workspaceId
-    );
+    const analysisSession = await this.createAnalysisSession(config, userId, workspaceId);
 
     // First, create topics if they don't exist
-    const topicIds = await this.ensureTopicsExist(
-      config.websiteId,
-      config.topics
-    );
+    const topicIds = await this.ensureTopicsExist(config.websiteId, config.topics);
 
     // Create prompts for each topic
     const prompts = await this.createPrompts(config.customPrompts, topicIds);
@@ -146,21 +128,12 @@ export class AnalysisService {
     await this.startAnalysis(analysisSession.id, config, promptIds);
 
     // Trigger N8N webhook for actual analysis
-    await this.triggerAnalysisWebhook(
-      analysisSession.id,
-      config,
-      prompts,
-      topicIds,
-      workspaceId
-    );
+    await this.triggerAnalysisWebhook(analysisSession.id, config, prompts, topicIds, workspaceId);
 
     return analysisSession.id;
   }
 
-  private async ensureTopicsExist(
-    websiteId: string,
-    topics: string[]
-  ): Promise<string[]> {
+  private async ensureTopicsExist(websiteId: string, topics: string[]): Promise<string[]> {
     const topicIds: string[] = [];
 
     for (const topicName of topics) {
@@ -196,10 +169,7 @@ export class AnalysisService {
     return topicIds;
   }
 
-  private async createPrompts(
-    customPrompts: string[],
-    topicIds: string[]
-  ): Promise<{ id: string; prompt_text: string }[]> {
+  private async createPrompts(customPrompts: string[], topicIds: string[]): Promise<{ id: string; prompt_text: string }[]> {
     const prompts: { id: string; prompt_text: string }[] = [];
 
     // Ensure we have exactly one topic (enforced by new constraint)
@@ -233,11 +203,7 @@ export class AnalysisService {
     return prompts;
   }
 
-  private async createAnalysisSession(
-    config: AnalysisConfig,
-    userId: string,
-    workspaceId: string
-  ): Promise<AnalysisSession> {
+  private async createAnalysisSession(config: AnalysisConfig, userId: string, workspaceId: string): Promise<AnalysisSession> {
     const { data, error } = await supabase
       .schema("beekon_data")
       .from("analysis_sessions")
@@ -282,17 +248,11 @@ export class AnalysisService {
     return session;
   }
 
-  private async startAnalysis(
-    sessionId: string,
-    config: AnalysisConfig,
-    _: string[]
-  ): Promise<void> {
+  private async startAnalysis(sessionId: string, config: AnalysisConfig, _: string[]): Promise<void> {
     // Calculate total steps, ensuring minimum of 1 to avoid division by zero
     const totalSteps = Math.max(
       1,
-      config.customPrompts.length > 0
-        ? config.customPrompts.length * config.llmModels.length
-        : config.llmModels.length // Default to one step per LLM when no custom prompts
+      config.customPrompts.length > 0 ? config.customPrompts.length * config.llmModels.length : config.llmModels.length // Default to one step per LLM when no custom prompts
     );
 
     // Update analysis session status and progress
@@ -331,9 +291,7 @@ export class AnalysisService {
       // Calculate total steps first, before using in webhook payload
       const totalSteps = Math.max(
         1,
-        config.customPrompts.length > 0
-          ? config.customPrompts.length * config.llmModels.length
-          : config.llmModels.length // Default to one step per LLM when no custom prompts
+        config.customPrompts.length > 0 ? config.customPrompts.length * config.llmModels.length : config.llmModels.length // Default to one step per LLM when no custom prompts
       );
 
       const webhookPayload = {
@@ -378,10 +336,7 @@ export class AnalysisService {
 
       // Analysis webhook triggered with configuration
 
-      const response = await sendN8nWebhook(
-        "webhook/manually-added-analysis",
-        webhookPayload
-      );
+      const response = await sendN8nWebhook("webhook/manually-added-analysis", webhookPayload);
 
       if (!response.success) {
         // Webhook response indicated failure
@@ -414,10 +369,7 @@ export class AnalysisService {
   }
 
   // OPTIMIZED: Transform materialized view data for maximum performance
-  private transformMaterializedViewData(
-    data: Record<string, unknown>[],
-    websiteId?: string
-  ): UIAnalysisResult[] {
+  private transformMaterializedViewData(data: Record<string, unknown>[], websiteId?: string): UIAnalysisResult[] {
     const resultsMap = new Map<string, UIAnalysisResult>();
 
     data?.forEach((row) => {
@@ -445,10 +397,7 @@ export class AnalysisService {
           topic: topicName,
           status: "completed" as AnalysisStatus,
           confidence: safeNumber(row.confidence_score),
-          created_at:
-            safeString(row.analyzed_at) ||
-            safeString(row.created_at) ||
-            new Date().toISOString(),
+          created_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
           updated_at: safeString(row.created_at) || new Date().toISOString(),
           reporting_text: reportingText,
           recommendation_text: recommendationText,
@@ -471,10 +420,7 @@ export class AnalysisService {
         sentiment_score: safeNumber(row.sentiment_score),
         summary_text: safeString(row.summary_text),
         response_text: safeString(row.response_text),
-        analyzed_at:
-          safeString(row.analyzed_at) ||
-          safeString(row.created_at) ||
-          new Date().toISOString(),
+        analyzed_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
       });
     });
 
@@ -482,10 +428,7 @@ export class AnalysisService {
   }
 
   // Shared data transformation function to standardize logic
-  private transformAnalysisData(
-    data: Record<string, unknown>[],
-    websiteId?: string
-  ): UIAnalysisResult[] {
+  private transformAnalysisData(data: Record<string, unknown>[], websiteId?: string): UIAnalysisResult[] {
     const resultsMap = new Map<string, UIAnalysisResult>();
 
     data?.forEach((row, _index) => {
@@ -547,10 +490,7 @@ export class AnalysisService {
         recommendationText = safeString(prompts?.recommendation_text) || null;
         promptStrengths = safeStringArray(prompts?.strengths);
         promptOpportunities = safeStringArray(prompts?.opportunities);
-        topicName = safeString(
-          (prompts?.topics as Record<string, unknown>)?.topic_name,
-          "Unknown topic"
-        );
+        topicName = safeString((prompts?.topics as Record<string, unknown>)?.topic_name, "Unknown topic");
         resultWebsiteId = websiteId || safeString(row.website_id);
       }
 
@@ -562,10 +502,7 @@ export class AnalysisService {
           topic: topicName,
           status: "completed" as AnalysisStatus,
           confidence: safeNumber(row.confidence_score),
-          created_at:
-            safeString(row.analyzed_at) ||
-            safeString(row.created_at) ||
-            new Date().toISOString(),
+          created_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
           updated_at: safeString(row.created_at) || new Date().toISOString(),
           reporting_text: reportingText,
           recommendation_text: recommendationText,
@@ -588,10 +525,7 @@ export class AnalysisService {
         sentiment_score: safeNumber(row.sentiment_score),
         summary_text: safeString(row.summary_text),
         response_text: safeString(row.response_text),
-        analyzed_at:
-          safeString(row.analyzed_at) ||
-          safeString(row.created_at) ||
-          new Date().toISOString(),
+        analyzed_at: safeString(row.analyzed_at) || safeString(row.created_at) || new Date().toISOString(),
       });
     });
 
@@ -662,14 +596,12 @@ export class AnalysisService {
 
       // Apply date range filter at database level for performance
       if (filters?.dateRange) {
-        promptQuery = promptQuery
-          .gte("analyzed_at", filters.dateRange.start)
-          .lte("analyzed_at", filters.dateRange.end);
+        promptQuery = promptQuery.gte("analyzed_at", filters.dateRange.start).lte("analyzed_at", filters.dateRange.end);
       }
 
       // Apply topic filter at database level
       if (filters?.topic && filters.topic !== "all") {
-        promptQuery = promptQuery.eq("topic_name", filters.topic);
+        promptQuery = promptQuery.eq("topic_id", filters.topic);
       }
 
       // Apply LLM provider filter at database level
@@ -684,21 +616,17 @@ export class AnalysisService {
 
       // Get unique prompt IDs (DISTINCT equivalent)
       // Increased multiplier from 5 to 10 for better unique prompt detection
-      const { data: promptsData, error: promptsError } =
-        await promptQuery.limit(limit * 10);
+      const { data: promptsData, error: promptsError } = await promptQuery.limit(limit * 10);
 
       if (promptsError) throw promptsError;
 
       // Get unique prompt IDs and determine pagination
-      const uniquePromptIds = Array.from(
-        new Set(promptsData?.map((p: any) => p.prompt_id) || [])
-      ); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const uniquePromptIds = Array.from(new Set(promptsData?.map((p: any) => p.prompt_id) || [])); // eslint-disable-line @typescript-eslint/no-explicit-any
       const selectedPromptIds = uniquePromptIds.slice(0, limit);
 
       // FIXED: Correct hasMore logic - check if we got full batch (more likely available) OR have excess prompts
       // Previous bug: only checked uniquePromptIds.length > limit, which failed when buffer ran low
-      const hasMore =
-        promptsData?.length === limit * 10 || uniquePromptIds.length > limit;
+      const hasMore = promptsData?.length === limit * 10 || uniquePromptIds.length > limit;
 
       // Early return if no prompts found
       if (selectedPromptIds.length === 0) {
@@ -713,8 +641,7 @@ export class AnalysisService {
       // CRITICAL FIX: Calculate nextCursor from last SELECTED prompt, not last raw row
       // Previous bug: Used promptsData[promptsData.length - 1] which could be row 200
       // This caused massive data skipping (e.g., rows 21-199 would be skipped)
-      const lastSelectedPromptId =
-        selectedPromptIds[selectedPromptIds.length - 1];
+      const lastSelectedPromptId = selectedPromptIds[selectedPromptIds.length - 1];
       const lastPromptRows =
         promptsData?.filter(
           (
@@ -725,9 +652,7 @@ export class AnalysisService {
       // Use the oldest (minimum) analyzed_at from the last selected prompt's rows
       // This ensures we don't skip any data on the next pagination fetch
       const nextCursor =
-        hasMore && lastPromptRows.length > 0
-          ? lastPromptRows[lastPromptRows.length - 1]?.analyzed_at || null
-          : null;
+        hasMore && lastPromptRows.length > 0 ? lastPromptRows[lastPromptRows.length - 1]?.analyzed_at || null : null;
 
       // Step 2: Get ALL analysis data for selected prompts from materialized view
       const analysisQuery = (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -740,10 +665,7 @@ export class AnalysisService {
       if (error) throw error;
 
       // Transform the materialized view data using optimized transformation
-      const transformedResults = this.transformMaterializedViewData(
-        data || [],
-        websiteId
-      );
+      const transformedResults = this.transformMaterializedViewData(data || [], websiteId);
 
       // Apply remaining client-side filters for complex filtering
       let filteredResults = transformedResults;
@@ -755,24 +677,17 @@ export class AnalysisService {
           (result) =>
             result.prompt.toLowerCase().includes(searchTerm) ||
             result.topic.toLowerCase().includes(searchTerm) ||
-            (result.analysis_name &&
-              result.analysis_name.toLowerCase().includes(searchTerm)) ||
-            result.llm_results.some((llm) =>
-              llm.response_text?.toLowerCase().includes(searchTerm)
-            )
+            (result.analysis_name && result.analysis_name.toLowerCase().includes(searchTerm)) ||
+            result.llm_results.some((llm) => llm.response_text?.toLowerCase().includes(searchTerm))
         );
       }
 
       // Apply mention status filter
       if (filters?.mentionStatus && filters.mentionStatus !== "all") {
         if (filters.mentionStatus === "mentioned") {
-          filteredResults = filteredResults.filter((result) =>
-            result.llm_results.some((llm) => llm.is_mentioned)
-          );
+          filteredResults = filteredResults.filter((result) => result.llm_results.some((llm) => llm.is_mentioned));
         } else if (filters.mentionStatus === "not_mentioned") {
-          filteredResults = filteredResults.filter(
-            (result) => !result.llm_results.some((llm) => llm.is_mentioned)
-          );
+          filteredResults = filteredResults.filter((result) => !result.llm_results.some((llm) => llm.is_mentioned));
         }
       }
 
@@ -783,8 +698,7 @@ export class AnalysisService {
         const maxDecimal = maxConfidence / 100;
 
         filteredResults = filteredResults.filter(
-          (result) =>
-            result.confidence >= minDecimal && result.confidence <= maxDecimal
+          (result) => result.confidence >= minDecimal && result.confidence <= maxDecimal
         );
       }
 
@@ -816,10 +730,7 @@ export class AnalysisService {
         totalCount: undefined, // Don't calculate total count for performance
       };
     } catch (error) {
-      console.error(
-        "Optimized analysis results failed, falling back to original method:",
-        error
-      );
+      console.error("Optimized analysis results failed, falling back to original method:", error);
       // Fallback to original method if optimized fails
       return this.getAnalysisResultsPaginatedOriginal(websiteId, options);
     }
@@ -869,9 +780,7 @@ export class AnalysisService {
     }
 
     // Get one extra prompt to determine if there are more results
-    const { data: promptsData, error: promptsError } = await promptQuery.limit(
-      limit + 1
-    );
+    const { data: promptsData, error: promptsError } = await promptQuery.limit(limit + 1);
 
     if (promptsError) throw promptsError;
 
@@ -941,21 +850,13 @@ export class AnalysisService {
     // Apply client-side filtering for complex filters
     let filteredResults = transformedResults;
 
-    // Apply topic filter
-    if (filters?.topic && filters.topic !== "all") {
-      filteredResults = filteredResults.filter(
-        (result) => result.topic === filters.topic
-      );
-    }
+    // Topic filter is already applied at database level (topic_id), no client-side filter needed
+    // The database query filters by topic_id, and results already contain correct topic data
 
     // Apply LLM provider filter
     if (filters?.llmProvider && filters.llmProvider !== "all") {
       filteredResults = filteredResults
-        .filter((result) =>
-          result.llm_results.some(
-            (llm) => llm.llm_provider === filters.llmProvider
-          )
-        )
+        .filter((result) => result.llm_results.some((llm) => llm.llm_provider === filters.llmProvider))
         .map((result) => ({
           ...result,
           llm_results: result.llm_results.map((llm) => ({
@@ -972,24 +873,17 @@ export class AnalysisService {
         (result) =>
           result.prompt.toLowerCase().includes(searchTerm) ||
           result.topic.toLowerCase().includes(searchTerm) ||
-          (result.analysis_name &&
-            result.analysis_name.toLowerCase().includes(searchTerm)) ||
-          result.llm_results.some((llm) =>
-            llm.response_text?.toLowerCase().includes(searchTerm)
-          )
+          (result.analysis_name && result.analysis_name.toLowerCase().includes(searchTerm)) ||
+          result.llm_results.some((llm) => llm.response_text?.toLowerCase().includes(searchTerm))
       );
     }
 
     // Apply mention status filter
     if (filters?.mentionStatus && filters.mentionStatus !== "all") {
       if (filters.mentionStatus === "mentioned") {
-        filteredResults = filteredResults.filter((result) =>
-          result.llm_results.some((llm) => llm.is_mentioned)
-        );
+        filteredResults = filteredResults.filter((result) => result.llm_results.some((llm) => llm.is_mentioned));
       } else if (filters.mentionStatus === "not_mentioned") {
-        filteredResults = filteredResults.filter(
-          (result) => !result.llm_results.some((llm) => llm.is_mentioned)
-        );
+        filteredResults = filteredResults.filter((result) => !result.llm_results.some((llm) => llm.is_mentioned));
       }
     }
 
@@ -1000,10 +894,7 @@ export class AnalysisService {
       const minDecimal = minConfidence / 100; // Convert 4 → 0.04
       const maxDecimal = maxConfidence / 100; // Convert 100 → 1.0
 
-      filteredResults = filteredResults.filter(
-        (result) =>
-          result.confidence >= minDecimal && result.confidence <= maxDecimal
-      );
+      filteredResults = filteredResults.filter((result) => result.confidence >= minDecimal && result.confidence <= maxDecimal);
     }
 
     // Apply sentiment filter
@@ -1026,17 +917,11 @@ export class AnalysisService {
 
     // Apply analysis session filter
     if (filters?.analysisSession && filters.analysisSession !== "all") {
-      filteredResults = filteredResults.filter(
-        (result) =>
-          result.analysis_session_id === (filters.analysisSession ?? null)
-      );
+      filteredResults = filteredResults.filter((result) => result.analysis_session_id === (filters.analysisSession ?? null));
     }
 
     // Get the next cursor from the last selected prompt
-    const nextCursor =
-      selectedPrompts.length > 0
-        ? selectedPrompts[selectedPrompts.length - 1]?.created_at || null
-        : null;
+    const nextCursor = selectedPrompts.length > 0 ? selectedPrompts[selectedPrompts.length - 1]?.created_at || null : null;
 
     return {
       results: filteredResults,
@@ -1069,13 +954,11 @@ export class AnalysisService {
 
       // Apply server-side filters for better performance
       if (filters?.dateRange) {
-        query = query
-          .gte("analyzed_at", filters.dateRange.start)
-          .lte("analyzed_at", filters.dateRange.end);
+        query = query.gte("analyzed_at", filters.dateRange.start).lte("analyzed_at", filters.dateRange.end);
       }
 
       if (filters?.topic && filters.topic !== "all") {
-        query = query.eq("topic_name", filters.topic);
+        query = query.eq("topic_id", filters.topic);
       }
 
       if (filters?.llmProvider && filters.llmProvider !== "all") {
@@ -1095,10 +978,7 @@ export class AnalysisService {
 
       return this.applyClientSideFilters(results, filters);
     } catch (error) {
-      console.error(
-        "Materialized view query failed, falling back to data loader:",
-        error
-      );
+      console.error("Materialized view query failed, falling back to data loader:", error);
 
       // Fallback to original data loader approach
       const { analysisResultsLoader } = await import("./dataLoaders");
@@ -1129,21 +1009,13 @@ export class AnalysisService {
     // Apply client-side filtering for complex filters
     let filteredResults = results;
 
-    // Apply topic filter (if not already applied server-side)
-    if (filters?.topic && filters.topic !== "all") {
-      filteredResults = filteredResults.filter(
-        (result) => result.topic === filters.topic
-      );
-    }
+    // Topic filter is already applied at database level (by topic_id)
+    // No client-side topic filtering needed since database query handles it
 
     // Apply LLM provider filter
     if (filters?.llmProvider && filters.llmProvider !== "all") {
       filteredResults = filteredResults
-        .filter((result) =>
-          result.llm_results.some(
-            (llm) => llm.llm_provider === filters.llmProvider
-          )
-        )
+        .filter((result) => result.llm_results.some((llm) => llm.llm_provider === filters.llmProvider))
         .map((result) => ({
           ...result,
           llm_results: result.llm_results.map((llm) => ({
@@ -1160,24 +1032,17 @@ export class AnalysisService {
         (result) =>
           result.prompt.toLowerCase().includes(searchTerm) ||
           result.topic.toLowerCase().includes(searchTerm) ||
-          (result.analysis_name &&
-            result.analysis_name.toLowerCase().includes(searchTerm)) ||
-          result.llm_results.some((llm) =>
-            llm.response_text?.toLowerCase().includes(searchTerm)
-          )
+          (result.analysis_name && result.analysis_name.toLowerCase().includes(searchTerm)) ||
+          result.llm_results.some((llm) => llm.response_text?.toLowerCase().includes(searchTerm))
       );
     }
 
     // Apply mention status filter
     if (filters?.mentionStatus && filters.mentionStatus !== "all") {
       if (filters.mentionStatus === "mentioned") {
-        filteredResults = filteredResults.filter((result) =>
-          result.llm_results.some((llm) => llm.is_mentioned)
-        );
+        filteredResults = filteredResults.filter((result) => result.llm_results.some((llm) => llm.is_mentioned));
       } else if (filters.mentionStatus === "not_mentioned") {
-        filteredResults = filteredResults.filter(
-          (result) => !result.llm_results.some((llm) => llm.is_mentioned)
-        );
+        filteredResults = filteredResults.filter((result) => !result.llm_results.some((llm) => llm.is_mentioned));
       }
     }
 
@@ -1188,10 +1053,7 @@ export class AnalysisService {
       const minDecimal = minConfidence / 100; // Convert 4 → 0.04
       const maxDecimal = maxConfidence / 100; // Convert 100 → 1.0
 
-      filteredResults = filteredResults.filter(
-        (result) =>
-          result.confidence >= minDecimal && result.confidence <= maxDecimal
-      );
+      filteredResults = filteredResults.filter((result) => result.confidence >= minDecimal && result.confidence <= maxDecimal);
     }
 
     // Apply sentiment filter
@@ -1214,10 +1076,7 @@ export class AnalysisService {
 
     // Apply analysis session filter (if not already applied server-side)
     if (filters?.analysisSession && filters.analysisSession !== "all") {
-      filteredResults = filteredResults.filter(
-        (result) =>
-          result.analysis_session_id === (filters.analysisSession ?? null)
-      );
+      filteredResults = filteredResults.filter((result) => result.analysis_session_id === (filters.analysisSession ?? null));
     }
 
     return filteredResults;
@@ -1226,26 +1085,19 @@ export class AnalysisService {
   /**
    * Get topics for website - main method that tries optimized first, then falls back
    */
-  async getTopicsForWebsite(
-    websiteId: string
-  ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
+  async getTopicsForWebsite(websiteId: string): Promise<Array<{ id: string; name: string; resultCount: number }>> {
     return this.getTopicsForWebsiteOptimized(websiteId);
   }
 
   /**
    * OPTIMIZED: Get topics using materialized views for instant results
    */
-  async getTopicsForWebsiteOptimized(
-    websiteId: string
-  ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
+  async getTopicsForWebsiteOptimized(websiteId: string): Promise<Array<{ id: string; name: string; resultCount: number }>> {
     try {
       // OPTIMIZED: Use materialized view function for instant topics
       const { data, error } = await (
         supabase.schema("beekon_data") as unknown as {
-          rpc: (
-            name: string,
-            params: Record<string, unknown>
-          ) => Promise<{ data: unknown; error: unknown }>;
+          rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
         }
       ).rpc("get_topics_optimized", {
         p_website_id: websiteId,
@@ -1267,19 +1119,14 @@ export class AnalysisService {
         resultCount: Number(row.result_count || 0),
       }));
     } catch (error) {
-      console.error(
-        "Optimized topics failed, falling back to original method:",
-        error
-      );
+      console.error("Optimized topics failed, falling back to original method:", error);
       // Fallback to original method
       return this.getTopicsForWebsiteOriginal(websiteId);
     }
   }
 
   // Keep original method as fallback
-  async getTopicsForWebsiteOriginal(
-    websiteId: string
-  ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
+  async getTopicsForWebsiteOriginal(websiteId: string): Promise<Array<{ id: string; name: string; resultCount: number }>> {
     try {
       const { topicInfoLoader } = await import("./dataLoaders");
       const topics = await topicInfoLoader.load(websiteId);
@@ -1330,9 +1177,7 @@ export class AnalysisService {
     }
   }
 
-  async getAvailableLLMProviders(
-    websiteId: string
-  ): Promise<Array<{ id: string; name: string; resultCount: number }>> {
+  async getAvailableLLMProviders(websiteId: string): Promise<Array<{ id: string; name: string; resultCount: number }>> {
     try {
       const { llmProviderLoader } = await import("./dataLoaders");
       const providers = await llmProviderLoader.load(websiteId);
@@ -1387,15 +1232,11 @@ export class AnalysisService {
   /**
    * Get website metadata for caching and display purposes
    */
-  async getWebsiteMetadata(
-    websiteId: string
-  ): Promise<import("@/contexts/AppStateContext").WebsiteMetadata> {
+  async getWebsiteMetadata(websiteId: string): Promise<import("@/contexts/AppStateContext").WebsiteMetadata> {
     const { data: website, error } = await supabase
       .schema("beekon_data")
       .from("websites")
-      .select(
-        "id, domain, display_name, last_crawled_at, crawl_status, is_active"
-      )
+      .select("id, domain, display_name, last_crawled_at, crawl_status, is_active")
       .eq("id", websiteId)
       .single();
 
@@ -1417,10 +1258,7 @@ export class AnalysisService {
     };
   }
 
-  subscribeToProgress(
-    analysisId: string,
-    callback: (progress: AnalysisProgress) => void
-  ): void {
+  subscribeToProgress(analysisId: string, callback: (progress: AnalysisProgress) => void): void {
     this.progressCallbacks.set(analysisId, callback);
   }
 
@@ -1438,25 +1276,14 @@ export class AnalysisService {
     // Validate and sanitize progress data to prevent NaN issues
     const safeProgress: AnalysisProgress = {
       ...progress,
-      progress: Math.max(
-        0,
-        Math.min(100, isNaN(progress.progress) ? 0 : progress.progress)
-      ),
-      completedSteps: Math.max(
-        0,
-        isNaN(progress.completedSteps) ? 0 : progress.completedSteps
-      ),
-      totalSteps: Math.max(
-        1,
-        isNaN(progress.totalSteps) ? 1 : progress.totalSteps
-      ),
+      progress: Math.max(0, Math.min(100, isNaN(progress.progress) ? 0 : progress.progress)),
+      completedSteps: Math.max(0, isNaN(progress.completedSteps) ? 0 : progress.completedSteps),
+      totalSteps: Math.max(1, isNaN(progress.totalSteps) ? 1 : progress.totalSteps),
     };
 
     // Recalculate progress percentage if needed
     if (safeProgress.totalSteps > 0) {
-      const calculatedProgress = Math.round(
-        (safeProgress.completedSteps / safeProgress.totalSteps) * 100
-      );
+      const calculatedProgress = Math.round((safeProgress.completedSteps / safeProgress.totalSteps) * 100);
       // Use calculated progress if current progress seems invalid
       if (isNaN(progress.progress) || progress.progress === 0) {
         safeProgress.progress = Math.min(calculatedProgress, 100);
@@ -1495,9 +1322,7 @@ export class AnalysisService {
             status: session.status, // Use actual session status, not outdated progress_data.status
             progress: session.status === "completed" ? 100 : 0,
             currentStep:
-              session.status === "completed"
-                ? "Analysis completed successfully!"
-                : session.error_message || "Analysis failed",
+              session.status === "completed" ? "Analysis completed successfully!" : session.error_message || "Analysis failed",
             completedSteps: session.progress_data?.totalSteps || 1,
             totalSteps: session.progress_data?.totalSteps || 1,
             ...(session.status === "failed" &&
@@ -1566,15 +1391,8 @@ export class AnalysisService {
     }
   }
 
-  private async updateAnalysisSession(
-    sessionId: string,
-    updates: Record<string, unknown>
-  ): Promise<void> {
-    const { error } = await supabase
-      .schema("beekon_data")
-      .from("analysis_sessions")
-      .update(updates)
-      .eq("id", sessionId);
+  private async updateAnalysisSession(sessionId: string, updates: Record<string, unknown>): Promise<void> {
+    const { error } = await supabase.schema("beekon_data").from("analysis_sessions").update(updates).eq("id", sessionId);
 
     if (error) throw error;
   }
@@ -1609,9 +1427,7 @@ export class AnalysisService {
     return session;
   }
 
-  async getAnalysisSessionsForWebsite(
-    websiteId: string
-  ): Promise<AnalysisSession[]> {
+  async getAnalysisSessionsForWebsite(websiteId: string): Promise<AnalysisSession[]> {
     const { data, error } = await supabase
       .schema("beekon_data")
       .from("analysis_sessions")
@@ -1642,10 +1458,7 @@ export class AnalysisService {
   }
 
   // This method would be called by webhook handlers or polling
-  async handleAnalysisUpdate(
-    sessionId: string,
-    update: Partial<AnalysisProgress>
-  ): Promise<void> {
+  async handleAnalysisUpdate(sessionId: string, update: Partial<AnalysisProgress>): Promise<void> {
     // Update the analysis session in the database
     const progressData = {
       ...update,
@@ -1672,9 +1485,7 @@ export class AnalysisService {
     }
   }
 
-  public async getCurrentProgress(
-    sessionId: string
-  ): Promise<AnalysisProgress> {
+  public async getCurrentProgress(sessionId: string): Promise<AnalysisProgress> {
     const session = await this.getAnalysisSession(sessionId);
 
     if (session && session.progress_data) {
@@ -1703,29 +1514,24 @@ export class AnalysisService {
     confidenceScore?: number;
     analysisSessionId?: string;
   }): Promise<void> {
-    const { error } = await supabase
-      .schema("beekon_data")
-      .from("llm_analysis_results")
-      .insert({
-        prompt_id: result.promptId,
-        llm_provider: result.llmProvider,
-        website_id: result.websiteId,
-        is_mentioned: result.isMentioned,
-        rank_position: result.rankPosition,
-        sentiment_score: result.sentimentScore,
-        response_text: result.responseText,
-        confidence_score: result.confidenceScore,
-        analysis_session_id: result.analysisSessionId,
-        analyzed_at: new Date().toISOString(),
-      });
+    const { error } = await supabase.schema("beekon_data").from("llm_analysis_results").insert({
+      prompt_id: result.promptId,
+      llm_provider: result.llmProvider,
+      website_id: result.websiteId,
+      is_mentioned: result.isMentioned,
+      rank_position: result.rankPosition,
+      sentiment_score: result.sentimentScore,
+      response_text: result.responseText,
+      confidence_score: result.confidenceScore,
+      analysis_session_id: result.analysisSessionId,
+      analyzed_at: new Date().toISOString(),
+    });
 
     if (error) throw error;
   }
 
   // Transform analysis results into clean, flattened export format
-  private transformAnalysisForExport(
-    results: UIAnalysisResult[]
-  ): Record<string, unknown>[] {
+  private transformAnalysisForExport(results: UIAnalysisResult[]): Record<string, unknown>[] {
     return results.flatMap((result) => {
       const exportRows: Record<string, unknown>[] = [];
 
@@ -1774,36 +1580,22 @@ export class AnalysisService {
       }
 
       // Performance Metrics Section
-      const mentionedCount = result.llm_results.filter(
-        (llm) => llm.is_mentioned
-      ).length;
+      const mentionedCount = result.llm_results.filter((llm) => llm.is_mentioned).length;
       const totalProviders = result.llm_results.length;
       const averageConfidence =
         result.llm_results.length > 0
-          ? (result.llm_results.reduce(
-              (sum, llm) => sum + (llm.confidence_score || 0),
-              0
-            ) /
-              result.llm_results.length) *
-            100
+          ? (result.llm_results.reduce((sum, llm) => sum + (llm.confidence_score || 0), 0) / result.llm_results.length) * 100
           : 0;
       const averageRank =
-        result.llm_results.filter((llm) => llm.rank_position !== null).length >
-        0
+        result.llm_results.filter((llm) => llm.rank_position !== null).length > 0
           ? result.llm_results
               .filter((llm) => llm.rank_position !== null)
               .reduce((sum, llm) => sum + (llm.rank_position || 0), 0) /
-            result.llm_results.filter((llm) => llm.rank_position !== null)
-              .length
+            result.llm_results.filter((llm) => llm.rank_position !== null).length
           : 0;
       const averageSentiment =
         result.llm_results.length > 0
-          ? (result.llm_results.reduce(
-              (sum, llm) => sum + (llm.sentiment_score || 0),
-              0
-            ) /
-              result.llm_results.length) *
-            100
+          ? (result.llm_results.reduce((sum, llm) => sum + (llm.sentiment_score || 0), 0) / result.llm_results.length) * 100
           : 0;
 
       exportRows.push(
@@ -1835,18 +1627,10 @@ export class AnalysisService {
 
       // LLM Results Section
       result.llm_results.forEach((llmResult, _index) => {
-        const mentionStatus = llmResult.is_mentioned
-          ? "Mentioned"
-          : "Not Mentioned";
-        const rankText = llmResult.rank_position
-          ? `Rank ${llmResult.rank_position}`
-          : "No ranking";
-        const confidenceText = `${(
-          (llmResult.confidence_score || 0) * 100
-        ).toFixed(1)}%`;
-        const sentimentText = `${(
-          (llmResult.sentiment_score || 0) * 100
-        ).toFixed(1)}%`;
+        const mentionStatus = llmResult.is_mentioned ? "Mentioned" : "Not Mentioned";
+        const rankText = llmResult.rank_position ? `Rank ${llmResult.rank_position}` : "No ranking";
+        const confidenceText = `${((llmResult.confidence_score || 0) * 100).toFixed(1)}%`;
+        const sentimentText = `${((llmResult.sentiment_score || 0) * 100).toFixed(1)}%`;
 
         exportRows.push(
           {
@@ -1878,9 +1662,7 @@ export class AnalysisService {
         // Add summary text if available (truncated for readability)
         if (llmResult.summary_text) {
           const truncatedSummary =
-            llmResult.summary_text.length > 100
-              ? llmResult.summary_text.substring(0, 100) + "..."
-              : llmResult.summary_text;
+            llmResult.summary_text.length > 100 ? llmResult.summary_text.substring(0, 100) + "..." : llmResult.summary_text;
           exportRows.push({
             category: "LLM Results",
             metric: `${llmResult.llm_provider} - Summary`,
@@ -1902,10 +1684,7 @@ export class AnalysisService {
         });
       }
 
-      if (
-        result.prompt_opportunities &&
-        result.prompt_opportunities.length > 0
-      ) {
+      if (result.prompt_opportunities && result.prompt_opportunities.length > 0) {
         result.prompt_opportunities.forEach((opportunity, index) => {
           exportRows.push({
             category: "Insights",
@@ -1929,10 +1708,7 @@ export class AnalysisService {
     });
   }
 
-  async exportAnalysisResults(
-    analysisIds: string[],
-    format: "pdf" | "csv" | "json" | "word"
-  ): Promise<Blob> {
+  async exportAnalysisResults(analysisIds: string[], format: "pdf" | "csv" | "json" | "word"): Promise<Blob> {
     try {
       const { data, error } = await (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
         .from("mv_analysis_results")
@@ -1967,10 +1743,7 @@ export class AnalysisService {
         customFilename: `analysis_results_${results.length}_items`,
       });
     } catch (error) {
-      console.error(
-        "Materialized view export failed, falling back to original method:",
-        error
-      );
+      console.error("Materialized view export failed, falling back to original method:", error);
 
       // Fallback to original method
       const { data, error: fallbackError } = await supabase
@@ -2024,113 +1797,6 @@ export class AnalysisService {
       });
     }
   }
-
-  // JSON export functionality (reserved for future implementation)
-  // This would generate a structured JSON export of analysis results
-
-  // CSV export functionality (reserved for future implementation)
-  // This would generate a CSV export of analysis results
-
-  /*
-    const headers = [
-      "Analysis ID",
-      "Prompt",
-      "Topic",
-      "Website ID",
-      "Status",
-      "Confidence",
-      "Created At",
-      "LLM Provider",
-      "Mentioned",
-      "Rank Position",
-      "Confidence Score",
-      "Sentiment Score",
-      "Response Text",
-      "Analyzed At",
-    ];
-
-    let csvContent = headers.join(",") + "\n";
-
-    results.forEach((result) => {
-      result.llm_results.forEach((llmResult) => {
-        const row = [
-          result.id,
-          `"${result.prompt.replace(/"/g, '""')}"`, // Escape quotes
-          result.topic,
-          result.website_id,
-          result.status,
-          result.confidence,
-          result.created_at,
-          llmResult.llm_provider,
-          llmResult.is_mentioned ? "Yes" : "No",
-          llmResult.rank_position || "",
-          llmResult.confidence_score || "",
-          llmResult.sentiment_score || "",
-          `"${(llmResult.response_text || "").replace(/"/g, '""')}"`, // Escape quotes
-          llmResult.analyzed_at,
-        ];
-        csvContent += row.join(",") + "\n";
-      });
-    });
-
-    return new Blob([csvContent], { type: "text/csv" });
-  }
-
-  */
-
-  // PDF export functionality (reserved for future implementation)
-  // This would generate a PDF export of analysis results
-
-  /*
-    // For now, generate a structured text document that can be saved as PDF
-    // In a production environment, you would use a PDF library like jsPDF or Puppeteer
-
-    let pdfContent = "ANALYSIS RESULTS EXPORT\n";
-    pdfContent += "========================\n\n";
-    pdfContent += `Exported on: ${new Date().toLocaleString()}\n`;
-    pdfContent += `Total Analysis Results: ${results.length}\n`;
-    pdfContent += `Total LLM Results: ${results.reduce(
-      (sum, r) => sum + r.llm_results.length,
-      0
-    )}\n\n`;
-
-    results.forEach((result, index) => {
-      pdfContent += `${index + 1}. ANALYSIS RESULT\n`;
-      pdfContent += `-`.repeat(50) + "\n";
-      pdfContent += `ID: ${result.id}\n`;
-      pdfContent += `Prompt: ${result.prompt}\n`;
-      pdfContent += `Topic: ${result.topic}\n`;
-      pdfContent += `Confidence: ${result.confidence}%\n`;
-      pdfContent += `Created: ${new Date(
-        result.created_at
-      ).toLocaleString()}\n\n`;
-
-      pdfContent += "LLM RESULTS:\n";
-      result.llm_results.forEach((llm, llmIndex) => {
-        pdfContent += `  ${llmIndex + 1}. ${llm.llm_provider.toUpperCase()}\n`;
-        pdfContent += `     Mentioned: ${llm.is_mentioned ? "Yes" : "No"}\n`;
-        if (llm.rank_position) {
-          pdfContent += `     Rank: ${llm.rank_position}\n`;
-        }
-        if (llm.sentiment_score !== null) {
-          pdfContent += `     Sentiment: ${
-            llm.sentiment_score > 0.1
-              ? "Positive"
-              : llm.sentiment_score < -0.1
-              ? "Negative"
-              : "Neutral"
-          }\n`;
-        }
-        if (llm.response_text) {
-          pdfContent += `     Response: ${llm.response_text}\n`;
-        }
-        pdfContent += "\n";
-      });
-
-      pdfContent += "\n";
-    });
-
-  */
 }
 
 export const analysisService = AnalysisService.getInstance();

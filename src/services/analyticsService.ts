@@ -135,10 +135,7 @@ class AnalyticsService {
   /**
    * Get comprehensive analytics for Analysis page - operates on complete dataset
    */
-  async getAnalysisAnalytics(
-    websiteId: string,
-    filters?: AnalysisFilters
-  ): Promise<AnalysisAnalytics> {
+  async getAnalysisAnalytics(websiteId: string, filters?: AnalysisFilters): Promise<AnalysisAnalytics> {
     try {
       // Build base query using materialized view
       let query = (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -149,9 +146,7 @@ class AnalyticsService {
       // Apply filters to materialized view
       if (filters) {
         if (filters.dateRange && typeof filters.dateRange === "object") {
-          query = query
-            .gte("analyzed_at", filters.dateRange.start)
-            .lte("analyzed_at", filters.dateRange.end);
+          query = query.gte("analyzed_at", filters.dateRange.start).lte("analyzed_at", filters.dateRange.end);
         }
 
         if (filters.topic && filters.topic !== "all") {
@@ -176,8 +171,8 @@ class AnalyticsService {
       if (error) throw error;
 
       // Transform materialized view data to expected format
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const transformedResults = (results || []).map((row: any) => ({
-        // eslint-disable-line @typescript-eslint/no-explicit-any
         llm_provider: row.llm_provider,
         is_mentioned: row.is_mentioned,
         rank_position: row.rank_position,
@@ -200,14 +195,9 @@ class AnalyticsService {
         },
       }));
 
-      return this.calculateAnalysisAnalytics(
-        transformedResults as AnalysisResultData[]
-      );
+      return this.calculateAnalysisAnalytics(transformedResults as AnalysisResultData[]);
     } catch (mvError) {
-      console.warn(
-        "⚠️ Materialized view query failed, falling back to traditional query:",
-        mvError
-      );
+      console.warn("⚠️ Materialized view query failed, falling back to traditional query:", mvError);
 
       // Fallback to original expensive query
       let query = supabase
@@ -234,9 +224,7 @@ class AnalyticsService {
       // Apply fallback filters
       if (filters) {
         if (filters.dateRange && typeof filters.dateRange === "object") {
-          query = query
-            .gte("created_at", filters.dateRange.start)
-            .lte("created_at", filters.dateRange.end);
+          query = query.gte("created_at", filters.dateRange.start).lte("created_at", filters.dateRange.end);
         }
 
         if (filters.topic && filters.topic !== "all") {
@@ -248,32 +236,23 @@ class AnalyticsService {
         }
 
         if (filters.searchQuery) {
-          query = query.or(
-            `summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%`
-          );
+          query = query.or(`summary_text.ilike.%${filters.searchQuery}%, response_text.ilike.%${filters.searchQuery}%`);
         }
       }
 
       const { data: results, error } = await query;
       if (error) throw error;
 
-      return this.calculateAnalysisAnalytics(
-        (results || []) as AnalysisResultData[]
-      );
+      return this.calculateAnalysisAnalytics((results || []) as AnalysisResultData[]);
     }
   }
 
   /**
    * Get analytics for Competitors page
    */
-  async getCompetitorAnalytics(
-    websiteId: string,
-    _filters?: Record<string, unknown>
-  ): Promise<CompetitorAnalytics> {
+  async getCompetitorAnalytics(websiteId: string, _filters?: Record<string, unknown>): Promise<CompetitorAnalytics> {
     // Get complete competitor data with analysis results
-    const { data: competitorData, error } = await (
-      supabase.schema("beekon_data") as any
-    ) // eslint-disable-line @typescript-eslint/no-explicit-any
+    const { data: competitorData, error } = await (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
       .from("mv_competitor_performance")
       .select("*")
       .eq("website_id", websiteId);
@@ -286,14 +265,9 @@ class AnalyticsService {
   /**
    * Get analytics for Dashboard page
    */
-  async getDashboardAnalytics(
-    websiteIds: string[],
-    _filters?: Record<string, unknown>
-  ): Promise<DashboardAnalytics> {
+  async getDashboardAnalytics(websiteIds: string[], _filters?: Record<string, unknown>): Promise<DashboardAnalytics> {
     try {
-      const { data: dashboardData, error } = await (
-        supabase.schema("beekon_data") as any
-      ) // eslint-disable-line @typescript-eslint/no-explicit-any
+      const { data: dashboardData, error } = await (supabase.schema("beekon_data") as any) // eslint-disable-line @typescript-eslint/no-explicit-any
         .from("mv_analysis_results")
         .select("*")
         .in("website_id", websiteIds);
@@ -302,10 +276,7 @@ class AnalyticsService {
 
       return this.calculateDashboardAnalytics(dashboardData || []);
     } catch (error) {
-      console.warn(
-        "⚠️ Materialized view query failed for dashboard, falling back:",
-        error
-      );
+      console.warn("⚠️ Materialized view query failed for dashboard, falling back:", error);
 
       // Fallback to original query
       const { data: dashboardData, error: fallbackError } = await supabase
@@ -323,9 +294,7 @@ class AnalyticsService {
   /**
    * Calculate analytics from analysis results data
    */
-  private calculateAnalysisAnalytics(
-    results: AnalysisResultData[]
-  ): AnalysisAnalytics {
+  private calculateAnalysisAnalytics(results: AnalysisResultData[]): AnalysisAnalytics {
     if (results.length === 0) {
       return this.getEmptyAnalysisAnalytics();
     }
@@ -335,27 +304,17 @@ class AnalyticsService {
     const mentionRate = (mentionedResults / totalResults) * 100;
 
     // Calculate confidence scores (only for mentioned results)
-    const mentionedWithConfidence = results.filter(
-      (r) => r.is_mentioned && r.confidence_score
-    );
+    const mentionedWithConfidence = results.filter((r) => r.is_mentioned && r.confidence_score);
     const averageConfidence =
       mentionedWithConfidence.length > 0
-        ? (mentionedWithConfidence.reduce(
-            (sum, r) => sum + r.confidence_score,
-            0
-          ) /
-            mentionedWithConfidence.length) *
-          100
+        ? (mentionedWithConfidence.reduce((sum, r) => sum + r.confidence_score, 0) / mentionedWithConfidence.length) * 100
         : 0;
 
     // Calculate average rank (only for mentioned results with valid rank)
-    const mentionedWithRank = results.filter(
-      (r) => r.is_mentioned && r.rank_position && r.rank_position > 0
-    );
+    const mentionedWithRank = results.filter((r) => r.is_mentioned && r.rank_position && r.rank_position > 0);
     const averageRank =
       mentionedWithRank.length > 0
-        ? mentionedWithRank.reduce((sum, r) => sum + r.rank_position, 0) /
-          mentionedWithRank.length
+        ? mentionedWithRank.reduce((sum, r) => sum + r.rank_position, 0) / mentionedWithRank.length
         : 0;
 
     // Group by topic for topic-based analytics
@@ -368,19 +327,12 @@ class AnalyticsService {
 
     const topPerformingTopics = Object.entries(topicGroups)
       .map(([topic, topicResults]: [string, AnalysisResultData[]]) => {
-        const topicMentioned = topicResults.filter(
-          (r: AnalysisResultData) => r.is_mentioned
-        ).length;
+        const topicMentioned = topicResults.filter((r: AnalysisResultData) => r.is_mentioned).length;
         const topicMentionRate = (topicMentioned / topicResults.length) * 100;
-        const rankedResults = topicResults.filter(
-          (r: AnalysisResultData) => r.is_mentioned && r.rank_position > 0
-        );
+        const rankedResults = topicResults.filter((r: AnalysisResultData) => r.is_mentioned && r.rank_position > 0);
         const avgRank =
           rankedResults.length > 0
-            ? rankedResults.reduce(
-                (sum: number, r: AnalysisResultData) => sum + r.rank_position,
-                0
-              ) / rankedResults.length
+            ? rankedResults.reduce((sum: number, r: AnalysisResultData) => sum + r.rank_position, 0) / rankedResults.length
             : 0;
 
         return {
@@ -401,54 +353,37 @@ class AnalyticsService {
       return acc;
     }, {} as Record<string, AnalysisResultData[]>);
 
-    const llmPerformance = Object.entries(llmGroups).map(
-      ([provider, llmResults]: [string, AnalysisResultData[]]) => {
-        const mentioned = llmResults.filter(
-          (r: AnalysisResultData) => r.is_mentioned
-        ).length;
-        const mentionRate = (mentioned / llmResults.length) * 100;
-        const withConfidence = llmResults.filter(
-          (r: AnalysisResultData) => r.is_mentioned && r.confidence_score
-        );
-        const avgConfidence =
-          withConfidence.length > 0
-            ? (withConfidence.reduce(
-                (sum: number, r: AnalysisResultData) =>
-                  sum + r.confidence_score,
-                0
-              ) /
-                withConfidence.length) *
-              100
-            : 0;
-        const withRank = llmResults.filter(
-          (r: AnalysisResultData) => r.is_mentioned && r.rank_position > 0
-        );
-        const avgRank =
-          withRank.length > 0
-            ? withRank.reduce(
-                (sum: number, r: AnalysisResultData) => sum + r.rank_position,
-                0
-              ) / withRank.length
-            : 0;
+    const llmPerformance = Object.entries(llmGroups).map(([provider, llmResults]: [string, AnalysisResultData[]]) => {
+      const mentioned = llmResults.filter((r: AnalysisResultData) => r.is_mentioned).length;
+      const mentionRate = (mentioned / llmResults.length) * 100;
+      const withConfidence = llmResults.filter((r: AnalysisResultData) => r.is_mentioned && r.confidence_score);
+      const avgConfidence =
+        withConfidence.length > 0
+          ? (withConfidence.reduce((sum: number, r: AnalysisResultData) => sum + r.confidence_score, 0) /
+              withConfidence.length) *
+            100
+          : 0;
+      const withRank = llmResults.filter((r: AnalysisResultData) => r.is_mentioned && r.rank_position > 0);
+      const avgRank =
+        withRank.length > 0
+          ? withRank.reduce((sum: number, r: AnalysisResultData) => sum + r.rank_position, 0) / withRank.length
+          : 0;
 
-        return {
-          provider,
-          mentionRate,
-          averageRank: avgRank,
-          averageConfidence: avgConfidence,
-          totalResults: llmResults.length,
-        };
-      }
-    );
+      return {
+        provider,
+        mentionRate,
+        averageRank: avgRank,
+        averageConfidence: avgConfidence,
+        totalResults: llmResults.length,
+      };
+    });
 
     // Topic distribution
-    const topicDistribution = Object.entries(topicGroups).map(
-      ([topic, topicResults]) => ({
-        topic,
-        count: topicResults.length,
-        percentage: (topicResults.length / totalResults) * 100,
-      })
-    );
+    const topicDistribution = Object.entries(topicGroups).map(([topic, topicResults]) => ({
+      topic,
+      count: topicResults.length,
+      percentage: (topicResults.length / totalResults) * 100,
+    }));
 
     // Sentiment analysis
     const withSentiment = results.filter((r) => r.sentiment_score !== null);
@@ -456,10 +391,7 @@ class AnalyticsService {
     const negative = withSentiment.filter((r) => r.sentiment_score < 0).length;
     const neutral = withSentiment.filter((r) => r.sentiment_score === 0).length;
     const averageScore =
-      withSentiment.length > 0
-        ? withSentiment.reduce((sum, r) => sum + r.sentiment_score, 0) /
-          withSentiment.length
-        : 0;
+      withSentiment.length > 0 ? withSentiment.reduce((sum, r) => sum + r.sentiment_score, 0) / withSentiment.length : 0;
 
     return {
       totalResults,

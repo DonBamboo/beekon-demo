@@ -1,17 +1,9 @@
 import { AnalysisConfigModal } from "@/components/AnalysisConfigModal";
 import { AnalysisErrorBoundary } from "@/components/AnalysisErrorBoundary";
 import { AnalysisHistoryModal } from "@/components/AnalysisHistoryModal";
-import {
-  AnalysisFilterSkeleton,
-  AnalysisListSkeleton,
-  AnalysisStatsSkeleton,
-} from "@/components/AnalysisLoadingSkeleton";
+import { AnalysisFilterSkeleton, AnalysisListSkeleton, AnalysisStatsSkeleton } from "@/components/AnalysisLoadingSkeleton";
 import { AnalysisSkeleton } from "@/components/skeletons";
-import {
-  AnalysisVisualization,
-  RankingChart,
-  SentimentChart,
-} from "@/components/AnalysisVisualization";
+import { AnalysisVisualization, RankingChart, SentimentChart } from "@/components/AnalysisVisualization";
 import { ContextualEmptyState } from "@/components/ContextualEmptyState";
 import { DetailedAnalysisModal } from "@/components/DetailedAnalysisModal";
 import { FilterBreadcrumbs } from "@/components/FilterBreadcrumbs";
@@ -21,13 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExportDropdown } from "@/components/ui/export-components";
 import { Input } from "@/components/ui/input";
 import { LoadingButton } from "@/components/ui/loading-button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WorkspaceModal } from "@/components/WorkspaceModal";
 import { useToast } from "@/hooks/use-toast";
 import { useAnalysisErrorHandler } from "@/hooks/useAnalysisError";
@@ -66,8 +52,7 @@ export default function Analysis() {
   const { toast } = useToast();
   const { currentWorkspace, loading } = useWorkspace();
   const { enforceLimit, getRemainingCredits } = useSubscriptionEnforcement();
-  const { error, isRetrying, handleError, retryOperation, clearError } =
-    useAnalysisErrorHandler();
+  const { error, isRetrying, handleError, retryOperation, clearError } = useAnalysisErrorHandler();
   // Use global filter state from AppStateContext
   const { filters, setFilters } = usePageFilters("analysis");
   const typedFilters = filters as Record<string, unknown>;
@@ -82,9 +67,7 @@ export default function Analysis() {
   } | null>(null);
 
   // Enhanced filtering state
-  const [sortBy, setSortBy] = useState<
-    "date" | "confidence" | "mentions" | "rank"
-  >("date");
+  const [sortBy, setSortBy] = useState<"date" | "confidence" | "mentions" | "rank">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [filterPresets, setFilterPresets] = useState<
     Array<{
@@ -105,9 +88,7 @@ export default function Analysis() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [selectedResult, setSelectedResult] = useState<UIAnalysisResult | null>(
-    null
-  );
+  const [selectedResult, setSelectedResult] = useState<UIAnalysisResult | null>(null);
   const [isFiltering, setIsFiltering] = useState(false);
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -120,11 +101,7 @@ export default function Analysis() {
   const { handleExport } = useExportHandler();
 
   // Use global website selection state instead of local state
-  const {
-    selectedWebsiteId,
-    setSelectedWebsite,
-    websites: globalWebsites,
-  } = useSelectedWebsite();
+  const { selectedWebsiteId, setSelectedWebsite, websites: globalWebsites } = useSelectedWebsite();
 
   // Debounce search query from global filters
   useEffect(() => {
@@ -139,117 +116,85 @@ export default function Analysis() {
   const [, setDebouncedAdvancedSearchQuery] = useState("");
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedAdvancedSearchQuery(
-        typedFilters.advancedSearchQuery as string
-      );
+      setDebouncedAdvancedSearchQuery(typedFilters.advancedSearchQuery as string);
     }, 500);
 
     return () => clearTimeout(timer);
   }, [typedFilters.advancedSearchQuery]);
 
   // Enhanced search function
-  useCallback(
-    (
-      results: UIAnalysisResult[],
-      query: string,
-      searchInResponses: boolean,
-      searchInInsights: boolean
-    ) => {
-      if (!query.trim()) return results;
+  useCallback((results: UIAnalysisResult[], query: string, searchInResponses: boolean, searchInInsights: boolean) => {
+    if (!query.trim()) return results;
 
-      const searchTerm = query.toLowerCase().trim();
+    const searchTerm = query.toLowerCase().trim();
 
-      return results.filter((result) => {
-        // Basic search in prompt and topic
-        if (
-          result.prompt.toLowerCase().includes(searchTerm) ||
-          result.topic.toLowerCase().includes(searchTerm) ||
-          (result.analysis_name &&
-            result.analysis_name.toLowerCase().includes(searchTerm))
-        ) {
-          return true;
-        }
+    return results.filter((result) => {
+      // Basic search in prompt and topic
+      if (
+        result.prompt.toLowerCase().includes(searchTerm) ||
+        result.topic.toLowerCase().includes(searchTerm) ||
+        (result.analysis_name && result.analysis_name.toLowerCase().includes(searchTerm))
+      ) {
+        return true;
+      }
 
-        // Search in LLM responses if enabled
-        if (searchInResponses) {
-          const hasResponseMatch = result.llm_results.some(
-            (llm) =>
-              llm.response_text?.toLowerCase().includes(searchTerm) ||
-              llm.summary_text?.toLowerCase().includes(searchTerm)
-          );
-          if (hasResponseMatch) return true;
-        }
+      // Search in LLM responses if enabled
+      if (searchInResponses) {
+        const hasResponseMatch = result.llm_results.some(
+          (llm) => llm.response_text?.toLowerCase().includes(searchTerm) || llm.summary_text?.toLowerCase().includes(searchTerm)
+        );
+        if (hasResponseMatch) return true;
+      }
 
-        // Search in insights if enabled
-        if (searchInInsights) {
-          const hasInsightMatch =
-            result.prompt_strengths?.some((strength) =>
-              strength.toLowerCase().includes(searchTerm)
-            ) ||
-            result.prompt_opportunities?.some((opp) =>
-              opp.toLowerCase().includes(searchTerm)
-            ) ||
-            result.recommendation_text?.toLowerCase().includes(searchTerm) ||
-            result.reporting_text?.toLowerCase().includes(searchTerm);
-          if (hasInsightMatch) return true;
-        }
+      // Search in insights if enabled
+      if (searchInInsights) {
+        const hasInsightMatch =
+          result.prompt_strengths?.some((strength) => strength.toLowerCase().includes(searchTerm)) ||
+          result.prompt_opportunities?.some((opp) => opp.toLowerCase().includes(searchTerm)) ||
+          result.recommendation_text?.toLowerCase().includes(searchTerm) ||
+          result.reporting_text?.toLowerCase().includes(searchTerm);
+        if (hasInsightMatch) return true;
+      }
 
-        return false;
-      });
-    },
-    []
-  );
+      return false;
+    });
+  }, []);
 
   // Sorting utility function
-  useCallback(
-    (results: UIAnalysisResult[], sortBy: string, sortOrder: string) => {
-      return [...results].sort((a, b) => {
-        let comparison = 0;
+  useCallback((results: UIAnalysisResult[], sortBy: string, sortOrder: string) => {
+    return [...results].sort((a, b) => {
+      let comparison = 0;
 
-        switch (sortBy) {
-          case "date":
-            comparison =
-              new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime();
-            break;
-          case "confidence":
-            comparison = a.confidence - b.confidence;
-            break;
-          case "mentions": {
-            const aMentions = a.llm_results.filter(
-              (llm) => llm.is_mentioned
-            ).length;
-            const bMentions = b.llm_results.filter(
-              (llm) => llm.is_mentioned
-            ).length;
-            comparison = aMentions - bMentions;
-            break;
-          }
-          case "rank": {
-            const aAvgRank =
-              a.llm_results
-                .filter((llm) => llm.rank_position !== null)
-                .reduce((sum, llm) => sum + (llm.rank_position || 0), 0) /
-                a.llm_results.filter((llm) => llm.rank_position !== null)
-                  .length || 0;
-            const bAvgRank =
-              b.llm_results
-                .filter((llm) => llm.rank_position !== null)
-                .reduce((sum, llm) => sum + (llm.rank_position || 0), 0) /
-                b.llm_results.filter((llm) => llm.rank_position !== null)
-                  .length || 0;
-            comparison = aAvgRank - bAvgRank;
-            break;
-          }
-          default:
-            comparison = 0;
+      switch (sortBy) {
+        case "date":
+          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+        case "confidence":
+          comparison = a.confidence - b.confidence;
+          break;
+        case "mentions": {
+          const aMentions = a.llm_results.filter((llm) => llm.is_mentioned).length;
+          const bMentions = b.llm_results.filter((llm) => llm.is_mentioned).length;
+          comparison = aMentions - bMentions;
+          break;
         }
+        case "rank": {
+          const aAvgRank =
+            a.llm_results.filter((llm) => llm.rank_position !== null).reduce((sum, llm) => sum + (llm.rank_position || 0), 0) /
+              a.llm_results.filter((llm) => llm.rank_position !== null).length || 0;
+          const bAvgRank =
+            b.llm_results.filter((llm) => llm.rank_position !== null).reduce((sum, llm) => sum + (llm.rank_position || 0), 0) /
+              b.llm_results.filter((llm) => llm.rank_position !== null).length || 0;
+          comparison = aAvgRank - bAvgRank;
+          break;
+        }
+        default:
+          comparison = 0;
+      }
 
-        return sortOrder === "asc" ? comparison : -comparison;
-      });
-    },
-    []
-  );
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+  }, []);
 
   // Calculate date range based on global filter selection
   const dateRange = useMemo(() => {
@@ -259,9 +204,7 @@ export default function Analysis() {
     if (typedFilters.dateRange === "custom" && customDateRange) {
       return customDateRange;
     } else {
-      const days = parseInt(
-        (typedFilters.dateRange as string).replace("d", "")
-      );
+      const days = parseInt((typedFilters.dateRange as string).replace("d", ""));
       const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       return {
         start: startDate.toISOString(),
@@ -276,10 +219,7 @@ export default function Analysis() {
       topic: typedFilters.topic !== "all" ? typedFilters.topic : undefined,
       llmProvider: typedFilters.llm !== "all" ? typedFilters.llm : undefined,
       searchQuery: debouncedSearchQuery.trim() || undefined,
-      mentionStatus:
-        typedFilters.mentionStatus !== "all"
-          ? typedFilters.mentionStatus
-          : undefined,
+      mentionStatus: typedFilters.mentionStatus !== "all" ? typedFilters.mentionStatus : undefined,
       dateRange,
       confidenceRange:
         typedFilters.confidenceRange &&
@@ -289,12 +229,8 @@ export default function Analysis() {
           ((typedFilters.confidenceRange as number[])[1] ?? 100) < 100)
           ? (typedFilters.confidenceRange as number[])
           : undefined,
-      sentiment:
-        typedFilters.sentiment !== "all" ? typedFilters.sentiment : undefined,
-      analysisSession:
-        typedFilters.analysisSession !== "all"
-          ? typedFilters.analysisSession
-          : undefined,
+      sentiment: typedFilters.sentiment !== "all" ? typedFilters.sentiment : undefined,
+      analysisSession: typedFilters.analysisSession !== "all" ? typedFilters.analysisSession : undefined,
     }),
     [
       typedFilters.topic,
@@ -357,9 +293,7 @@ export default function Analysis() {
     }
 
     try {
-      const sessions = await analysisService.getAnalysisSessionsForWebsite(
-        selectedWebsiteId
-      );
+      const sessions = await analysisService.getAnalysisSessionsForWebsite(selectedWebsiteId);
       const sessionsWithAll = [
         {
           id: "all",
@@ -391,9 +325,7 @@ export default function Analysis() {
   useEffect(() => {
     // Only validate if we have topics loaded and a specific topic selected
     if (topics.length > 0 && typedFilters.topic !== "all") {
-      const topicExists = topics.some(
-        (topic) => topic.id === typedFilters.topic
-      );
+      const topicExists = topics.some((topic) => topic.id === typedFilters.topic);
       if (!topicExists) {
         const timeoutId = setTimeout(() => {
           setFilters({ ...(filters || {}), topic: "all" });
@@ -446,13 +378,9 @@ export default function Analysis() {
 
   // Memoize expensive statistics calculations - currently unused
   useMemo(() => {
-    const mentionedCount = analysisResults.filter((r) =>
-      r.llm_results.some((llm) => llm.is_mentioned)
-    ).length;
+    const mentionedCount = analysisResults.filter((r) => r.llm_results.some((llm) => llm.is_mentioned)).length;
 
-    const noMentionCount = analysisResults.filter(
-      (r) => !r.llm_results.some((llm) => llm.is_mentioned)
-    ).length;
+    const noMentionCount = analysisResults.filter((r) => !r.llm_results.some((llm) => llm.is_mentioned)).length;
 
     return {
       mentionedCount,
@@ -471,29 +399,6 @@ export default function Analysis() {
           { id: "claude", name: "Claude", resultCount: 0 },
           { id: "gemini", name: "Gemini", resultCount: 0 },
         ];
-
-  // const getSentimentColor = (sentiment: string | null) => {
-  //   if (!sentiment) return "";
-  //   switch (sentiment) {
-  //     case "positive":
-  //       return "text-success";
-  //     case "negative":
-  //       return "text-destructive";
-  //     default:
-  //       return "text-warning";
-  //   }
-  // };
-
-  // const getSentimentBadge = (sentiment: string | null) => {
-  //   if (!sentiment) return null;
-  //   const className =
-  //     sentiment === "positive"
-  //       ? "bg-success"
-  //       : sentiment === "negative"
-  //       ? "bg-destructive"
-  //       : "bg-warning";
-  //   return <Badge className={`${className} text-white`}>{sentiment}</Badge>;
-  // };
 
   const getSentimentBadgeFromScore = (score: number | null) => {
     if (score === null) return null;
@@ -587,10 +492,7 @@ export default function Analysis() {
 
       const updatedPresets = [...filterPresets, preset];
       setFilterPresets(updatedPresets);
-      localStorage.setItem(
-        "analysisFilterPresets",
-        JSON.stringify(updatedPresets)
-      );
+      localStorage.setItem("analysisFilterPresets", JSON.stringify(updatedPresets));
 
       toast({
         title: "Filter Preset Saved",
@@ -638,13 +540,7 @@ export default function Analysis() {
             }
           : null
       );
-      setSortBy(
-        (preset.filters.sortBy as
-          | "date"
-          | "confidence"
-          | "mentions"
-          | "rank") || "date"
-      );
+      setSortBy((preset.filters.sortBy as "date" | "confidence" | "mentions" | "rank") || "date");
       setSortOrder((preset.filters.sortOrder as "asc" | "desc") || "desc");
 
       toast({
@@ -724,9 +620,7 @@ export default function Analysis() {
       setFilters(newFilters);
 
       if (preset.filters.sortBy) {
-        setSortBy(
-          preset.filters.sortBy as "date" | "confidence" | "mentions" | "rank"
-        );
+        setSortBy(preset.filters.sortBy as "date" | "confidence" | "mentions" | "rank");
       }
       if (preset.filters.sortOrder) {
         setSortOrder(preset.filters.sortOrder as "asc" | "desc");
@@ -766,15 +660,7 @@ export default function Analysis() {
   }, [toast, setFilters]);
 
   const handleRemoveFilter = (
-    filterType:
-      | "topic"
-      | "llm"
-      | "search"
-      | "mentionStatus"
-      | "dateRange"
-      | "confidence"
-      | "sentiment"
-      | "analysisSession"
+    filterType: "topic" | "llm" | "search" | "mentionStatus" | "dateRange" | "confidence" | "sentiment" | "analysisSession"
   ) => {
     switch (filterType) {
       case "topic":
@@ -809,8 +695,7 @@ export default function Analysis() {
     if (!analysisResults || analysisResults.length === 0) {
       toast({
         title: "No Data to Export",
-        description:
-          "Please ensure you have analysis results before exporting.",
+        description: "Please ensure you have analysis results before exporting.",
         variant: "destructive",
       });
       return;
@@ -823,10 +708,7 @@ export default function Analysis() {
       const analysisIds = analysisResults.map((result) => result.id);
 
       // Export with comprehensive options using the analysisService
-      const blob = await analysisService.exportAnalysisResults(
-        analysisIds,
-        format
-      );
+      const blob = await analysisService.exportAnalysisResults(analysisIds, format);
 
       await handleExport(() => Promise.resolve(blob), {
         filename: `analysis-results-${new Date().toISOString().split("T")[0]}`,
@@ -836,10 +718,7 @@ export default function Analysis() {
           resultCount: analysisResults.length,
           exportType: "analysis_results",
           filters: {
-            topic:
-              typedFilters.topic !== "all"
-                ? getTopicName(typedFilters.topic as string)
-                : null,
+            topic: typedFilters.topic !== "all" ? getTopicName(typedFilters.topic as string) : null,
             llm: typedFilters.llm !== "all" ? typedFilters.llm : null,
             search: typedFilters.searchQuery || null,
           },
@@ -849,10 +728,7 @@ export default function Analysis() {
       // Export failed
       toast({
         title: "Export Failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred during export.",
+        description: error instanceof Error ? error.message : "An unexpected error occurred during export.",
         variant: "destructive",
       });
     } finally {
@@ -875,22 +751,14 @@ export default function Analysis() {
     }
   };
 
-  const MentionIndicator = ({
-    llmResult,
-    llmName,
-  }: {
-    llmResult: LLMResult | undefined;
-    llmName: string;
-  }) => (
+  const MentionIndicator = ({ llmResult, llmName }: { llmResult: LLMResult | undefined; llmName: string }) => (
     <div className="text-center">
       <div className="text-xs text-muted-foreground mb-1">{llmName}</div>
       {llmResult?.is_mentioned ? (
         <div className="space-y-1">
           <Check className="h-5 w-5 text-success mx-auto" />
           <div className="text-xs font-medium">
-            {llmResult.rank_position !== 0
-              ? `#${llmResult.rank_position}`
-              : "Not Ranked"}
+            {llmResult.rank_position !== 0 ? `#${llmResult.rank_position}` : "Not Ranked"}
           </div>
           {getSentimentBadgeFromScore(llmResult.sentiment_score)}
         </div>
@@ -915,31 +783,21 @@ export default function Analysis() {
         <div className="space-y-6">
           <div>
             <h1 className="text-3xl font-bold">Analysis Results</h1>
-            <p className="text-muted-foreground">
-              Detailed analysis of your brand mentions across AI platforms
-            </p>
+            <p className="text-muted-foreground">Detailed analysis of your brand mentions across AI platforms</p>
           </div>
           <div className="text-center py-12">
             <Building className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Workspace Required</h2>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              To run and view analysis results, you need to create a workspace
-              first. Your workspace will track your usage and manage your
-              analysis credits.
+              To run and view analysis results, you need to create a workspace first. Your workspace will track your usage and
+              manage your analysis credits.
             </p>
-            <LoadingButton
-              onClick={() => setShowCreateWorkspace(true)}
-              icon={<Plus className="h-4 w-4" />}
-              size="lg"
-            >
+            <LoadingButton onClick={() => setShowCreateWorkspace(true)} icon={<Plus className="h-4 w-4" />} size="lg">
               Create Workspace
             </LoadingButton>
           </div>
         </div>
-        <WorkspaceModal
-          isOpen={showCreateWorkspace}
-          onClose={() => setShowCreateWorkspace(false)}
-        />
+        <WorkspaceModal isOpen={showCreateWorkspace} onClose={() => setShowCreateWorkspace(false)} />
       </>
     );
   }
@@ -951,9 +809,7 @@ export default function Analysis() {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-3xl font-bold">Analysis Results</h1>
-              <p className="text-muted-foreground">
-                Detailed analysis of your brand mentions across AI platforms
-              </p>
+              <p className="text-muted-foreground">Detailed analysis of your brand mentions across AI platforms</p>
             </div>
             {analysisResults && analysisResults.length > 0 && (
               <ExportDropdown
@@ -973,13 +829,10 @@ export default function Analysis() {
               <CardContent className="pt-6">
                 <div className="flex items-center space-x-2 mb-4">
                   <AlertCircle className="h-5 w-5 text-destructive" />
-                  <h3 className="font-semibold text-destructive">
-                    Error Loading Analysis Data
-                  </h3>
+                  <h3 className="font-semibold text-destructive">Error Loading Analysis Data</h3>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {error.message ||
-                    "An unexpected error occurred while loading your analysis data."}
+                  {error.message || "An unexpected error occurred while loading your analysis data."}
                 </p>
                 <div className="flex gap-3">
                   <LoadingButton
@@ -1029,19 +882,15 @@ export default function Analysis() {
                     <SelectTrigger className="w-full sm:w-[250px] min-w-[200px]">
                       <div className="flex items-center justify-between w-full">
                         <SelectValue placeholder="Select website" />
-                        {isLoadingResults &&
-                          (!analysisResults ||
-                            analysisResults.length === 0) && (
-                            <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-                          )}
+                        {isLoadingResults && (!analysisResults || analysisResults.length === 0) && (
+                          <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
                       </div>
                     </SelectTrigger>
                     <SelectContent>
                       {globalWebsites.map((website) => (
                         <SelectItem key={website.id} value={website.id}>
-                          <span className="truncate">
-                            {website.display_name || website.domain}
-                          </span>
+                          <span className="truncate">{website.display_name || website.domain}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1054,9 +903,7 @@ export default function Analysis() {
                 {/* Date Range Filter Row */}
                 <div className="flex flex-wrap gap-2 items-center">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Date Range:
-                  </span>
+                  <span className="text-sm font-medium text-muted-foreground">Date Range:</span>
                   {[
                     { id: "all", name: "All Time" },
                     { id: "7d", name: "Last 7 Days" },
@@ -1065,18 +912,10 @@ export default function Analysis() {
                   ].map((filter) => (
                     <LoadingButton
                       key={filter.id}
-                      variant={
-                        typedFilters.dateRange === filter.id
-                          ? "default"
-                          : "outline"
-                      }
+                      variant={typedFilters.dateRange === filter.id ? "default" : "outline"}
                       size="sm"
-                      loading={
-                        isFiltering && typedFilters.dateRange !== filter.id
-                      }
-                      onClick={() =>
-                        setFilters({ ...(filters || {}), dateRange: filter.id })
-                      }
+                      loading={isFiltering && typedFilters.dateRange !== filter.id}
+                      onClick={() => setFilters({ ...(filters || {}), dateRange: filter.id })}
                       disabled={isLoadingResults}
                       className="shrink-0"
                     >
@@ -1109,9 +948,7 @@ export default function Analysis() {
                     <Filter className="h-4 w-4 text-muted-foreground" />
                     <Select
                       value={(typedFilters.topic as string) || "all"}
-                      onValueChange={(value) =>
-                        setFilters({ ...(filters || {}), topic: value })
-                      }
+                      onValueChange={(value) => setFilters({ ...(filters || {}), topic: value })}
                       disabled={isFiltering || isLoadingResults}
                     >
                       <SelectTrigger className="w-full sm:w-[200px] min-w-[150px]">
@@ -1122,10 +959,7 @@ export default function Analysis() {
                           <SelectItem key={topic.id} value={topic.id}>
                             <div className="flex justify-between items-center w-full">
                               <span className="truncate">{topic.name}</span>
-                              <Badge
-                                variant="outline"
-                                className="ml-2 text-xs shrink-0"
-                              >
+                              <Badge variant="outline" className="ml-2 text-xs shrink-0">
                                 {topic.resultCount}
                               </Badge>
                             </div>
@@ -1141,9 +975,7 @@ export default function Analysis() {
                   {llmFilters.map((filter) => (
                     <LoadingButton
                       key={filter.id}
-                      variant={
-                        typedFilters.llm === filter.id ? "default" : "outline"
-                      }
+                      variant={typedFilters.llm === filter.id ? "default" : "outline"}
                       size="sm"
                       loading={isFiltering && typedFilters.llm !== filter.id}
                       onClick={() => handleFilterChange("llm", filter.id)}
@@ -1152,10 +984,7 @@ export default function Analysis() {
                     >
                       <div className="flex items-center gap-2">
                         <span className="whitespace-nowrap">{filter.name}</span>
-                        <Badge
-                          variant="outline"
-                          className="text-xs text-default"
-                        >
+                        <Badge variant="outline" className="text-xs text-default">
                           {filter.resultCount}
                         </Badge>
                       </div>
@@ -1165,9 +994,7 @@ export default function Analysis() {
 
                 {/* Third Row: Mention Status Filter */}
                 <div className="flex flex-wrap gap-2 items-center">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Mention Status:
-                  </span>
+                  <span className="text-sm font-medium text-muted-foreground">Mention Status:</span>
                   {[
                     { id: "all", name: "All Results", icon: null },
                     {
@@ -1183,15 +1010,9 @@ export default function Analysis() {
                   ].map((filter) => (
                     <LoadingButton
                       key={filter.id}
-                      variant={
-                        typedFilters.mentionStatus === filter.id
-                          ? "default"
-                          : "outline"
-                      }
+                      variant={typedFilters.mentionStatus === filter.id ? "default" : "outline"}
                       size="sm"
-                      loading={
-                        isFiltering && typedFilters.mentionStatus !== filter.id
-                      }
+                      loading={isFiltering && typedFilters.mentionStatus !== filter.id}
                       onClick={() =>
                         setFilters({
                           ...(filters || {}),
@@ -1220,9 +1041,7 @@ export default function Analysis() {
                     <Filter className="h-4 w-4 mr-2" />
                     Advanced Filters
                     {showAdvancedFilters ? (
-                      <div className="ml-2 rotate-180 transition-transform">
-                        ▼
-                      </div>
+                      <div className="ml-2 rotate-180 transition-transform">▼</div>
                     ) : (
                       <div className="ml-2 transition-transform">▼</div>
                     )}
@@ -1234,9 +1053,7 @@ export default function Analysis() {
                     typedFilters.sentiment !== "all" ||
                     typedFilters.analysisSession !== "all" ||
                     ((typedFilters.searchQuery as string) || "").trim() ||
-                    (
-                      (typedFilters.advancedSearchQuery as string) || ""
-                    ).trim() ||
+                    ((typedFilters.advancedSearchQuery as string) || "").trim() ||
                     sortBy !== "date" ||
                     sortOrder !== "desc") && (
                     <>
@@ -1262,18 +1079,12 @@ export default function Analysis() {
                     {/* Confidence Range Filter */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium">
-                          Confidence Score Range
-                        </label>
-                        <span className="text-xs text-muted-foreground">
-                          0% - 100%
-                        </span>
+                        <label className="text-sm font-medium">Confidence Score Range</label>
+                        <span className="text-xs text-muted-foreground">0% - 100%</span>
                       </div>
                       <div className="flex items-center gap-4">
                         {/* Confidence range will be implemented later */}
-                        <div className="text-sm text-muted-foreground">
-                          Confidence filtering will be available soon
-                        </div>
+                        <div className="text-sm text-muted-foreground">Confidence filtering will be available soon</div>
                       </div>
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>0%</span>
@@ -1306,11 +1117,7 @@ export default function Analysis() {
                         ].map((filter) => (
                           <Button
                             key={filter.id}
-                            variant={
-                              typedFilters.sentiment === filter.id
-                                ? "default"
-                                : "outline"
-                            }
+                            variant={typedFilters.sentiment === filter.id ? "default" : "outline"}
                             size="sm"
                             onClick={() =>
                               setFilters({
@@ -1321,9 +1128,7 @@ export default function Analysis() {
                             disabled={isLoadingResults}
                             className={`shrink-0 ${filter.color || ""}`}
                           >
-                            <span className="whitespace-nowrap">
-                              {filter.name}
-                            </span>
+                            <span className="whitespace-nowrap">{filter.name}</span>
                           </Button>
                         ))}
                       </div>
@@ -1331,13 +1136,9 @@ export default function Analysis() {
 
                     {/* Analysis Session Filter */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Analysis Session
-                      </label>
+                      <label className="text-sm font-medium">Analysis Session</label>
                       <Select
-                        value={
-                          (typedFilters.analysisSession as string) || "all"
-                        }
+                        value={(typedFilters.analysisSession as string) || "all"}
                         onValueChange={(value) =>
                           setFilters({
                             ...(filters || {}),
@@ -1355,10 +1156,7 @@ export default function Analysis() {
                             <SelectItem key={session.id} value={session.id}>
                               <div className="flex justify-between items-center w-full">
                                 <span className="truncate">{session.name}</span>
-                                <Badge
-                                  variant="outline"
-                                  className="ml-2 text-xs shrink-0"
-                                >
+                                <Badge variant="outline" className="ml-2 text-xs shrink-0">
                                   {session.resultCount}
                                 </Badge>
                               </div>
@@ -1371,15 +1169,11 @@ export default function Analysis() {
                     {/* Enhanced Search Section */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium">
-                          Enhanced Search
-                        </label>
+                        <label className="text-sm font-medium">Enhanced Search</label>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            setShowAdvancedSearch(!showAdvancedSearch)
-                          }
+                          onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
                           className="text-xs"
                         >
                           {showAdvancedSearch ? "Simple" : "Advanced"} Search
@@ -1390,9 +1184,7 @@ export default function Analysis() {
                         <div className="space-y-3">
                           <Input
                             placeholder="Advanced search in analysis data..."
-                            value={
-                              (typedFilters.advancedSearchQuery as string) || ""
-                            }
+                            value={(typedFilters.advancedSearchQuery as string) || ""}
                             onChange={(e) =>
                               setFilters({
                                 ...(filters || {}),
@@ -1406,9 +1198,7 @@ export default function Analysis() {
                               <input
                                 type="checkbox"
                                 checked={searchInResponses}
-                                onChange={(e) =>
-                                  setSearchInResponses(e.target.checked)
-                                }
+                                onChange={(e) => setSearchInResponses(e.target.checked)}
                                 className="w-3 h-3"
                               />
                               Search in LLM responses
@@ -1417,9 +1207,7 @@ export default function Analysis() {
                               <input
                                 type="checkbox"
                                 checked={searchInInsights}
-                                onChange={(e) =>
-                                  setSearchInInsights(e.target.checked)
-                                }
+                                onChange={(e) => setSearchInInsights(e.target.checked)}
                                 className="w-3 h-3"
                               />
                               Search in insights & recommendations
@@ -1431,40 +1219,23 @@ export default function Analysis() {
 
                     {/* Sort Options */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Sort Results
-                      </label>
+                      <label className="text-sm font-medium">Sort Results</label>
                       <div className="flex gap-2">
                         <Select
                           value={sortBy}
-                          onValueChange={(value) =>
-                            setSortBy(
-                              value as
-                                | "date"
-                                | "confidence"
-                                | "mentions"
-                                | "rank"
-                            )
-                          }
+                          onValueChange={(value) => setSortBy(value as "date" | "confidence" | "mentions" | "rank")}
                         >
                           <SelectTrigger className="flex-1">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="date">Date</SelectItem>
-                            <SelectItem value="confidence">
-                              Confidence
-                            </SelectItem>
+                            <SelectItem value="confidence">Confidence</SelectItem>
                             <SelectItem value="mentions">Mentions</SelectItem>
                             <SelectItem value="rank">Average Rank</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Select
-                          value={sortOrder}
-                          onValueChange={(value: "asc" | "desc") =>
-                            setSortOrder(value)
-                          }
-                        >
+                        <Select value={sortOrder} onValueChange={(value: "asc" | "desc") => setSortOrder(value)}>
                           <SelectTrigger className="w-24">
                             <SelectValue />
                           </SelectTrigger>
@@ -1478,9 +1249,7 @@ export default function Analysis() {
 
                     {/* Quick Presets */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Quick Filters
-                      </label>
+                      <label className="text-sm font-medium">Quick Filters</label>
                       <div className="flex flex-wrap gap-2">
                         {quickPresets.map((preset) => (
                           <Button
@@ -1498,9 +1267,7 @@ export default function Analysis() {
 
                     {/* Custom Filter Presets */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Saved Presets
-                      </label>
+                      <label className="text-sm font-medium">Saved Presets</label>
                       <div className="flex flex-wrap gap-2">
                         {filterPresets.map((preset) => (
                           <Button
@@ -1534,9 +1301,7 @@ export default function Analysis() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            setShowPerformanceStats(!showPerformanceStats)
-                          }
+                          onClick={() => setShowPerformanceStats(!showPerformanceStats)}
                           className="text-xs"
                         >
                           {showPerformanceStats ? "Hide" : "Show"} Stats
@@ -1574,9 +1339,7 @@ export default function Analysis() {
                           <input
                             type="checkbox"
                             checked={infiniteScrollEnabled}
-                            onChange={(e) =>
-                              setInfiniteScrollEnabled(e.target.checked)
-                            }
+                            onChange={(e) => setInfiniteScrollEnabled(e.target.checked)}
                             className="w-3 h-3"
                           />
                           Infinite scroll
@@ -1589,20 +1352,12 @@ export default function Analysis() {
                           <div className="grid grid-cols-2 gap-2">
                             <span>Loaded: {analysisResults.length}</span>
                             <span>Has More: {hasMore ? "Yes" : "No"}</span>
-                            <span>
-                              Loading: {isLoadingResults ? "Yes" : "No"}
-                            </span>
-                            <span>
-                              Scroll: {infiniteScrollEnabled ? "On" : "Off"}
-                            </span>
+                            <span>Loading: {isLoadingResults ? "Yes" : "No"}</span>
+                            <span>Scroll: {infiniteScrollEnabled ? "On" : "Off"}</span>
                             <span>Initial: {initialLoadSize}</span>
                             <span>Load More: {loadMoreSize}</span>
                           </div>
-                          {analysisError && (
-                            <div className="text-red-500 text-xs">
-                              Error: {analysisError.message}
-                            </div>
-                          )}
+                          {analysisError && <div className="text-red-500 text-xs">Error: {analysisError.message}</div>}
                         </div>
                       )}
                     </div>
@@ -1620,14 +1375,8 @@ export default function Analysis() {
                     onClick={() => setShowVisualization(!showVisualization)}
                     className="shrink-0"
                   >
-                    {showVisualization ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                    <span className="hidden sm:inline ml-2">
-                      {showVisualization ? "Hide" : "Show"} Analytics
-                    </span>
+                    {showVisualization ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    <span className="hidden sm:inline ml-2">{showVisualization ? "Hide" : "Show"} Analytics</span>
                   </Button>
 
                   <Button
@@ -1637,9 +1386,7 @@ export default function Analysis() {
                     disabled={!selectedWebsiteId || isLoadingResults}
                     className="shrink-0"
                   >
-                    <span className="whitespace-nowrap">
-                      {groupBySession ? "Ungroup" : "Group"} by Session
-                    </span>
+                    <span className="whitespace-nowrap">{groupBySession ? "Ungroup" : "Group"} by Session</span>
                   </Button>
                 </div>
 
@@ -1668,13 +1415,8 @@ export default function Analysis() {
                   >
                     <span className="whitespace-nowrap">New Analysis</span>
                     {currentWorkspace && (
-                      <Badge
-                        variant="outline"
-                        className="ml-2 text-xs shrink-0"
-                      >
-                        <span className="text-background whitespace-nowrap">
-                          {getRemainingCredits()} left
-                        </span>
+                      <Badge variant="outline" className="ml-2 text-xs shrink-0">
+                        <span className="text-background whitespace-nowrap">{getRemainingCredits()} left</span>
                       </Badge>
                     )}
                   </LoadingButton>
@@ -1688,18 +1430,9 @@ export default function Analysis() {
             <FilterBreadcrumbs
               filters={{
                 topic:
-                  typedFilters.topic !== "all"
-                    ? capitalizeFirstLetters(
-                        getTopicName(typedFilters.topic as string)
-                      )
-                    : undefined,
-                llm:
-                  typedFilters.llm !== "all"
-                    ? (typedFilters.llm as string)
-                    : undefined,
-                search:
-                  ((typedFilters.searchQuery as string) || "").trim() ||
-                  undefined,
+                  typedFilters.topic !== "all" ? capitalizeFirstLetters(getTopicName(typedFilters.topic as string)) : undefined,
+                llm: typedFilters.llm !== "all" ? (typedFilters.llm as string) : undefined,
+                search: ((typedFilters.searchQuery as string) || "").trim() || undefined,
               }}
               onRemoveFilter={handleRemoveFilter}
               onClearAll={handleClearFilters}
@@ -1708,23 +1441,17 @@ export default function Analysis() {
           )}
 
           {/* Analysis Visualization */}
-          {!loading &&
-            !isLoadingAnalytics &&
-            showVisualization &&
-            analysisAnalytics && (
-              <AnalysisVisualization analytics={analysisAnalytics} />
-            )}
+          {!loading && !isLoadingAnalytics && showVisualization && analysisAnalytics && (
+            <AnalysisVisualization analytics={analysisAnalytics} />
+          )}
 
           {/* Additional Charts */}
-          {!loading &&
-            !isLoadingResults &&
-            showVisualization &&
-            analysisResults.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <SentimentChart results={analysisResults} />
-                <RankingChart results={analysisResults} />
-              </div>
-            )}
+          {!loading && !isLoadingResults && showVisualization && analysisResults.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <SentimentChart results={analysisResults} />
+              <RankingChart results={analysisResults} />
+            </div>
+          )}
 
           {/* Results */}
           <div className="space-y-4">
@@ -1733,134 +1460,39 @@ export default function Analysis() {
             ) : groupBySession ? (
               // Grouped view
               <div className="space-y-6">
-                {Object.entries(groupedResults.groups || {}).map(
-                  ([sessionKey, sessionResults]) => {
-                    const [sessionId, sessionName] = sessionKey.split(":");
-                    return (
-                      <div key={sessionKey} className="space-y-3">
-                        <div className="flex items-center space-x-2 px-2">
-                          <Badge variant="default" className="text-sm">
-                            {sessionName}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {sessionResults.length} results
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            ID: {sessionId?.slice(0, 8)}...
-                          </Badge>
-                        </div>
-                        {sessionResults.map((result) => (
-                          <Card
-                            key={`${sessionKey}-${result.id}`}
-                            className="ml-4"
-                          >
-                            <CardHeader>
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1 flex flex-col gap-3">
-                                  <CardTitle>{result.prompt}</CardTitle>
-                                  <div className="flex items-center space-x-2">
-                                    <Badge variant="outline">
-                                      {result.topic}
-                                    </Badge>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
-                                      <Calendar className="h-3 w-3 mr-1" />
-                                      {new Date(
-                                        result.created_at
-                                      ).toLocaleDateString()}
-                                    </Badge>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
-                                      Confidence:{" "}
-                                      {parseFloat(
-                                        result.confidence.toFixed(2)
-                                      ) * 100}
-                                      %
-                                    </Badge>
-                                  </div>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleViewDetails(result)}
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
-                                <MentionIndicator
-                                  llmResult={result.llm_results.find(
-                                    (r) => r.llm_provider === "chatgpt"
-                                  )}
-                                  llmName="ChatGPT"
-                                />
-                                <MentionIndicator
-                                  llmResult={result.llm_results.find(
-                                    (r) => r.llm_provider === "claude"
-                                  )}
-                                  llmName="Claude"
-                                />
-                                <MentionIndicator
-                                  llmResult={result.llm_results.find(
-                                    (r) => r.llm_provider === "gemini"
-                                  )}
-                                  llmName="Gemini"
-                                />
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    );
-                  }
-                )}
-                {/* Ungrouped results */}
-                {groupedResults.ungrouped &&
-                  groupedResults.ungrouped.length > 0 && (
-                    <div className="space-y-3">
+                {Object.entries(groupedResults.groups || {}).map(([sessionKey, sessionResults]) => {
+                  const [sessionId, sessionName] = sessionKey.split(":");
+                  return (
+                    <div key={sessionKey} className="space-y-3">
                       <div className="flex items-center space-x-2 px-2">
-                        <Badge variant="outline" className="text-sm">
-                          Ungrouped Results
+                        <Badge variant="default" className="text-sm">
+                          {sessionName}
                         </Badge>
                         <Badge variant="outline" className="text-xs">
-                          {groupedResults.ungrouped.length} results
+                          {sessionResults.length} results
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          ID: {sessionId?.slice(0, 8)}...
                         </Badge>
                       </div>
-                      {groupedResults.ungrouped.map((result) => (
-                        <Card key={`ungrouped-${result.id}`} className="ml-4">
+                      {sessionResults.map((result) => (
+                        <Card key={`${sessionKey}-${result.id}`} className="ml-4">
                           <CardHeader>
                             <div className="flex justify-between items-start">
                               <div className="flex-1 flex flex-col gap-3">
                                 <CardTitle>{result.prompt}</CardTitle>
                                 <div className="flex items-center space-x-2">
-                                  <Badge variant="outline">
-                                    {result.topic}
-                                  </Badge>
+                                  <Badge variant="outline">{result.topic}</Badge>
                                   <Badge variant="outline" className="text-xs">
                                     <Calendar className="h-3 w-3 mr-1" />
-                                    {new Date(
-                                      result.created_at
-                                    ).toLocaleDateString()}
+                                    {new Date(result.created_at).toLocaleDateString()}
                                   </Badge>
                                   <Badge variant="outline" className="text-xs">
-                                    Confidence:{" "}
-                                    {parseFloat(result.confidence.toFixed(2)) *
-                                      100}
-                                    %
+                                    Confidence: {parseFloat(result.confidence.toFixed(2)) * 100}%
                                   </Badge>
                                 </div>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleViewDetails(result)}
-                              >
+                              <Button variant="ghost" size="sm" onClick={() => handleViewDetails(result)}>
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
                             </div>
@@ -1868,21 +1500,15 @@ export default function Analysis() {
                           <CardContent>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
                               <MentionIndicator
-                                llmResult={result.llm_results.find(
-                                  (r) => r.llm_provider === "chatgpt"
-                                )}
+                                llmResult={result.llm_results.find((r) => r.llm_provider === "chatgpt")}
                                 llmName="ChatGPT"
                               />
                               <MentionIndicator
-                                llmResult={result.llm_results.find(
-                                  (r) => r.llm_provider === "claude"
-                                )}
+                                llmResult={result.llm_results.find((r) => r.llm_provider === "claude")}
                                 llmName="Claude"
                               />
                               <MentionIndicator
-                                llmResult={result.llm_results.find(
-                                  (r) => r.llm_provider === "gemini"
-                                )}
+                                llmResult={result.llm_results.find((r) => r.llm_provider === "gemini")}
                                 llmName="Gemini"
                               />
                             </div>
@@ -1890,7 +1516,61 @@ export default function Analysis() {
                         </Card>
                       ))}
                     </div>
-                  )}
+                  );
+                })}
+                {/* Ungrouped results */}
+                {groupedResults.ungrouped && groupedResults.ungrouped.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2 px-2">
+                      <Badge variant="outline" className="text-sm">
+                        Ungrouped Results
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {groupedResults.ungrouped.length} results
+                      </Badge>
+                    </div>
+                    {groupedResults.ungrouped.map((result) => (
+                      <Card key={`ungrouped-${result.id}`} className="ml-4">
+                        <CardHeader>
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1 flex flex-col gap-3">
+                              <CardTitle>{result.prompt}</CardTitle>
+                              <div className="flex items-center space-x-2">
+                                <Badge variant="outline">{result.topic}</Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  <Calendar className="h-3 w-3 mr-1" />
+                                  {new Date(result.created_at).toLocaleDateString()}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  Confidence: {parseFloat(result.confidence.toFixed(2)) * 100}%
+                                </Badge>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => handleViewDetails(result)}>
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
+                            <MentionIndicator
+                              llmResult={result.llm_results.find((r) => r.llm_provider === "chatgpt")}
+                              llmName="ChatGPT"
+                            />
+                            <MentionIndicator
+                              llmResult={result.llm_results.find((r) => r.llm_provider === "claude")}
+                              llmName="Claude"
+                            />
+                            <MentionIndicator
+                              llmResult={result.llm_results.find((r) => r.llm_provider === "gemini")}
+                              llmName="Gemini"
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               // Infinite scroll ungrouped view
@@ -1919,16 +1599,11 @@ export default function Analysis() {
                               {new Date(result.created_at).toLocaleDateString()}
                             </Badge>
                             <Badge variant="outline" className="text-xs">
-                              Confidence:{" "}
-                              {parseFloat(result.confidence.toFixed(2)) * 100}%
+                              Confidence: {parseFloat(result.confidence.toFixed(2)) * 100}%
                             </Badge>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewDetails(result)}
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => handleViewDetails(result)}>
                           <ExternalLink className="h-4 w-4" />
                         </Button>
                       </div>
@@ -1936,21 +1611,15 @@ export default function Analysis() {
                     <CardContent>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
                         <MentionIndicator
-                          llmResult={result.llm_results.find(
-                            (r) => r.llm_provider === "chatgpt"
-                          )}
+                          llmResult={result.llm_results.find((r) => r.llm_provider === "chatgpt")}
                           llmName="ChatGPT"
                         />
                         <MentionIndicator
-                          llmResult={result.llm_results.find(
-                            (r) => r.llm_provider === "claude"
-                          )}
+                          llmResult={result.llm_results.find((r) => r.llm_provider === "claude")}
                           llmName="Claude"
                         />
                         <MentionIndicator
-                          llmResult={result.llm_results.find(
-                            (r) => r.llm_provider === "gemini"
-                          )}
+                          llmResult={result.llm_results.find((r) => r.llm_provider === "gemini")}
                           llmName="Gemini"
                         />
                       </div>
@@ -1967,17 +1636,9 @@ export default function Analysis() {
               hasData={analysisResults.length > 0}
               hasFilters={hasActiveFilters}
               activeFilters={{
-                topic:
-                  typedFilters.topic !== "all"
-                    ? (typedFilters.topic as string)
-                    : undefined,
-                llm:
-                  typedFilters.llm !== "all"
-                    ? (typedFilters.llm as string)
-                    : undefined,
-                search:
-                  ((typedFilters.searchQuery as string) || "").trim() ||
-                  undefined,
+                topic: typedFilters.topic !== "all" ? (typedFilters.topic as string) : undefined,
+                llm: typedFilters.llm !== "all" ? (typedFilters.llm as string) : undefined,
+                search: ((typedFilters.searchQuery as string) || "").trim() || undefined,
               }}
               onClearFilters={handleClearFilters}
               onCreateAnalysis={createAnalysis}
@@ -1995,32 +1656,20 @@ export default function Analysis() {
                   Loaded {analysisResults.length} results
                   {hasMore && " (more available)"}
                   {(typedFilters.searchQuery as string) && (
-                    <span className="hidden sm:inline">
-                      {` for "${typedFilters.searchQuery as string}"`}
-                    </span>
+                    <span className="hidden sm:inline">{` for "${typedFilters.searchQuery as string}"`}</span>
                   )}
                 </span>
                 <div className="flex items-center space-x-4 shrink-0">
                   <div className="flex items-center space-x-1">
                     <TrendingUp className="h-4 w-4 text-success" />
                     <span className="whitespace-nowrap">
-                      {
-                        analysisResults.filter((r) =>
-                          r.llm_results.some((llm) => llm.is_mentioned)
-                        ).length
-                      }{" "}
-                      mentions
+                      {analysisResults.filter((r) => r.llm_results.some((llm) => llm.is_mentioned)).length} mentions
                     </span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <TrendingDown className="h-4 w-4 text-muted-foreground" />
                     <span className="whitespace-nowrap">
-                      {
-                        analysisResults.filter(
-                          (r) => !r.llm_results.some((llm) => llm.is_mentioned)
-                        ).length
-                      }{" "}
-                      no mentions
+                      {analysisResults.filter((r) => !r.llm_results.some((llm) => llm.is_mentioned)).length} no mentions
                     </span>
                   </div>
                 </div>
@@ -2052,8 +1701,7 @@ export default function Analysis() {
             // Show toast notification
             toast({
               title: "Analysis session selected",
-              description:
-                "The analysis page has been filtered to show results from the selected session.",
+              description: "The analysis page has been filtered to show results from the selected session.",
             });
           }}
         />

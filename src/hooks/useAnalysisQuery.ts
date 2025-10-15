@@ -13,19 +13,22 @@ export interface AnalysisFilters {
   status?: AnalysisStatus;
   dateRange?: { start: string; end: string };
   searchQuery?: string;
+  mentionStatus?: string;
+  sentiment?: string;
+  analysisSession?: string;
 }
 
 // Query keys for consistent caching
 export const analysisKeys = {
-  all: ['analysis'] as const,
-  results: (websiteId: string, filters?: AnalysisFilters) => 
-    [...analysisKeys.all, 'results', websiteId, filters] as const,
-  topics: (websiteId: string) => 
-    [...analysisKeys.all, 'topics', websiteId] as const,
-  llmProviders: (websiteId: string) => 
-    [...analysisKeys.all, 'llmProviders', websiteId] as const,
-  progress: (analysisId: string) => 
-    [...analysisKeys.all, 'progress', analysisId] as const,
+  all: ["analysis"] as const,
+  results: (websiteId: string, filters?: AnalysisFilters) =>
+    [...analysisKeys.all, "results", websiteId, filters] as const,
+  topics: (websiteId: string) =>
+    [...analysisKeys.all, "topics", websiteId] as const,
+  llmProviders: (websiteId: string) =>
+    [...analysisKeys.all, "llmProviders", websiteId] as const,
+  progress: (analysisId: string) =>
+    [...analysisKeys.all, "progress", analysisId] as const,
 };
 
 export function useAnalysisResults(
@@ -43,8 +46,10 @@ export function useAnalysisResults(
 
       // Apply additional client-side filters if needed
       if (filters?.llmProvider && filters.llmProvider !== "all") {
-        filteredData = filteredData.filter(result => 
-          result.llm_results.some(llm => llm.llm_provider === filters.llmProvider)
+        filteredData = filteredData.filter((result) =>
+          result.llm_results.some(
+            (llm) => llm.llm_provider === filters.llmProvider
+          )
         );
       }
 
@@ -91,8 +96,14 @@ export function useAnalysisData(websiteId: string, filters?: AnalysisFilters) {
     results: resultsQuery.data || [],
     topics: topicsQuery.data || [],
     llmProviders: llmProvidersQuery.data || [],
-    isLoading: resultsQuery.isLoading || topicsQuery.isLoading || llmProvidersQuery.isLoading,
-    isRefreshing: resultsQuery.isFetching || topicsQuery.isFetching || llmProvidersQuery.isFetching,
+    isLoading:
+      resultsQuery.isLoading ||
+      topicsQuery.isLoading ||
+      llmProvidersQuery.isLoading,
+    isRefreshing:
+      resultsQuery.isFetching ||
+      topicsQuery.isFetching ||
+      llmProvidersQuery.isFetching,
     error: resultsQuery.error || topicsQuery.error || llmProvidersQuery.error,
     refetch: () => {
       resultsQuery.refetch();
@@ -110,16 +121,21 @@ export function useCreateAnalysis() {
   const { clearCache } = useGlobalCache();
 
   return useMutation({
-    mutationFn: (config: AnalysisConfig) => analysisService.createAnalysis(config),
+    mutationFn: (config: AnalysisConfig) =>
+      analysisService.createAnalysis(config),
     onSuccess: (_, variables) => {
       // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: analysisKeys.results(variables.websiteId) });
-      queryClient.invalidateQueries({ queryKey: analysisKeys.topics(variables.websiteId) });
-      
+      queryClient.invalidateQueries({
+        queryKey: analysisKeys.results(variables.websiteId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: analysisKeys.topics(variables.websiteId),
+      });
+
       // Clear global app state cache for this website
       clearCache(`analysis_results_${variables.websiteId}`);
       clearCache(`analysis_metadata_${variables.websiteId}`);
-      
+
       toast({
         title: "Analysis started",
         description: `Analysis "${variables.analysisName}" has been started successfully.`,
@@ -128,7 +144,8 @@ export function useCreateAnalysis() {
     onError: (error) => {
       toast({
         title: "Error starting analysis",
-        description: error instanceof Error ? error.message : "Failed to start analysis",
+        description:
+          error instanceof Error ? error.message : "Failed to start analysis",
         variant: "destructive",
       });
     },
@@ -152,8 +169,10 @@ export function useSaveAnalysisResult() {
     }) => analysisService.saveAnalysisResult(result),
     onSuccess: (_, variables) => {
       // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: analysisKeys.results(variables.websiteId) });
-      
+      queryClient.invalidateQueries({
+        queryKey: analysisKeys.results(variables.websiteId),
+      });
+
       toast({
         title: "Analysis result saved",
         description: "Analysis result has been saved successfully.",
@@ -162,7 +181,10 @@ export function useSaveAnalysisResult() {
     onError: (error) => {
       toast({
         title: "Error saving analysis result",
-        description: error instanceof Error ? error.message : "Failed to save analysis result",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to save analysis result",
         variant: "destructive",
       });
     },
@@ -173,8 +195,13 @@ export function useExportAnalysis() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: ({ analysisIds, format }: { analysisIds: string[]; format: "pdf" | "csv" | "json" }) =>
-      analysisService.exportAnalysisResults(analysisIds, format),
+    mutationFn: ({
+      analysisIds,
+      format,
+    }: {
+      analysisIds: string[];
+      format: "pdf" | "csv" | "json";
+    }) => analysisService.exportAnalysisResults(analysisIds, format),
     onSuccess: (blob, variables) => {
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -194,7 +221,10 @@ export function useExportAnalysis() {
     onError: (error) => {
       toast({
         title: "Export failed",
-        description: error instanceof Error ? error.message : "Failed to export analysis data",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to export analysis data",
         variant: "destructive",
       });
     },
@@ -203,14 +233,16 @@ export function useExportAnalysis() {
 
 // Hook for real-time analysis progress tracking
 export function useAnalysisProgressTracking(analysisId: string) {
-  
   return useQuery({
     queryKey: analysisKeys.progress(analysisId),
     queryFn: () => analysisService.getCurrentProgress(analysisId),
     enabled: !!analysisId,
     refetchInterval: (query) => {
       // Stop polling if analysis is completed or failed
-      if (query.state.data?.status === 'completed' || query.state.data?.status === 'failed') {
+      if (
+        query.state.data?.status === "completed" ||
+        query.state.data?.status === "failed"
+      ) {
         return false;
       }
       return 2000; // Poll every 2 seconds

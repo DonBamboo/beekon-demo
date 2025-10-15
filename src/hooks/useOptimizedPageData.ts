@@ -54,7 +54,7 @@ interface TopicPerformanceData {
 export function useOptimizedAnalysisData() {
   const { selectedWebsiteId } = useSelectedWebsite();
   const { filters, setFilters } = usePageFilters("analysis");
-  const { getFromCache, setCache } = useAppState();
+  const { getFromCache, setCache, clearCache } = useAppState();
 
   // Use shared data for topics and LLM providers (cached across pages)
   const {
@@ -86,10 +86,20 @@ export function useOptimizedAnalysisData() {
     const serviceFilters: AnalysisFilters = {};
 
     // Map UI filters to service filters
-    if (uiFilters.topic) serviceFilters.topic = uiFilters.topic;
-    if (uiFilters.llm) serviceFilters.llmProvider = uiFilters.llm;
-    if (uiFilters.searchQuery)
+    if (uiFilters.topic && uiFilters.topic !== "all")
+      serviceFilters.topic = uiFilters.topic;
+    if (uiFilters.llm && uiFilters.llm !== "all")
+      serviceFilters.llmProvider = uiFilters.llm;
+    if (uiFilters.searchQuery && uiFilters.searchQuery.trim())
       serviceFilters.searchQuery = uiFilters.searchQuery;
+
+    // Add support for additional filters
+    if (uiFilters.mentionStatus && uiFilters.mentionStatus !== "all")
+      serviceFilters.mentionStatus = uiFilters.mentionStatus;
+    if (uiFilters.sentiment && uiFilters.sentiment !== "all")
+      serviceFilters.sentiment = uiFilters.sentiment;
+    if (uiFilters.analysisSession && uiFilters.analysisSession !== "all")
+      serviceFilters.analysisSession = uiFilters.analysisSession;
 
     // Transform dateRange from string to object format expected by services
     if (uiFilters.dateRange && uiFilters.dateRange !== "all") {
@@ -140,14 +150,18 @@ export function useOptimizedAnalysisData() {
       return { data: filteredCache, source: "filtered", key: filteredCacheKey };
     }
 
-    // Priority 2: Try base cache (unfiltered data for this website)
-    const baseCache = getFromCache<UIAnalysisResult[]>(baseCacheKey);
-    if (baseCache && baseCache.length > 0) {
-      return { data: baseCache, source: "base", key: baseCacheKey };
+    // Priority 2: Try base cache ONLY if no filters are active
+    // This prevents showing unfiltered data when filters are applied
+    const hasActiveFilters = Object.keys(transformedFilters).length > 0;
+    if (!hasActiveFilters) {
+      const baseCache = getFromCache<UIAnalysisResult[]>(baseCacheKey);
+      if (baseCache && baseCache.length > 0) {
+        return { data: baseCache, source: "base", key: baseCacheKey };
+      }
     }
 
     return null;
-  }, [selectedWebsiteId, filteredCacheKey, baseCacheKey, getFromCache]);
+  }, [selectedWebsiteId, filteredCacheKey, baseCacheKey, getFromCache, transformedFilters]);
 
   // Stable reference to previous filters to prevent unnecessary updates
   const prevFiltersRef = useRef<AnalysisFilters>(transformedFilters);
@@ -190,8 +204,9 @@ export function useOptimizedAnalysisData() {
         setError(null);
 
         try {
-          // Use current transformed filters (from ref for stability)
-          const currentFilters = prevFiltersRef.current;
+          // FIXED: Use current transformed filters directly to ensure we fetch with the latest filter changes
+          // Previously used prevFiltersRef.current which could be stale
+          const currentFilters = transformedFilters;
 
           // OPTIMIZED: Use materialized view service for lightning-fast pagination
           const response =
@@ -231,7 +246,7 @@ export function useOptimizedAnalysisData() {
         isLoadingAnalysisRef.current = false;
       }
     },
-    [selectedWebsiteId, baseCacheKey, filteredCacheKey, getCachedData, setCache]
+    [selectedWebsiteId, baseCacheKey, filteredCacheKey, getCachedData, setCache, transformedFilters]
   );
 
   // Store the latest loadAnalysisData function in ref to break dependency chain
@@ -247,8 +262,9 @@ export function useOptimizedAnalysisData() {
 
     setIsLoadingMore(true);
     try {
-      // Use stable filter reference for pagination
-      const currentFilters = prevFiltersRef.current;
+      // FIXED: Use current transformed filters to ensure pagination uses latest filter state
+      // Previously used prevFiltersRef.current which could be stale
+      const currentFilters = transformedFilters;
 
       const additionalResults =
         await analysisService.getAnalysisResultsPaginatedOptimized(
@@ -292,6 +308,7 @@ export function useOptimizedAnalysisData() {
     setCache,
     baseCacheKey,
     filteredCacheKey,
+    transformedFilters,
   ]);
 
   // Smart cache-first navigation for instant website switching
@@ -337,6 +354,28 @@ export function useOptimizedAnalysisData() {
     // Only handle filter changes if we have a website selected and filters actually changed
     if (!selectedWebsiteId || !filtersChanged) return;
 
+    // CRITICAL FIX: Detect which filter changed to invalidate appropriate caches
+    const prev = prevFiltersRef.current;
+    const current = transformedFilters;
+    const isTopicChange = prev.topic !== current.topic;
+    const isLLMChange = prev.llmProvider !== current.llmProvider;
+    const isSearchChange = prev.searchQuery !== current.searchQuery;
+    const isMentionStatusChange = prev.mentionStatus !== current.mentionStatus;
+    const isSentimentChange = prev.sentiment !== current.sentiment;
+    const isSessionChange = prev.analysisSession !== current.analysisSession;
+    const isDateRangeChange = JSON.stringify(prev.dateRange) !== JSON.stringify(current.dateRange);
+
+    // If any filter that affects data changed, invalidate base cache
+    if (isTopicChange || isLLMChange || isSearchChange || isMentionStatusChange ||
+        isSentimentChange || isSessionChange || isDateRangeChange) {
+      // Clear base cache to prevent contamination with unfiltered data
+      clearCache(baseCacheKey);
+
+      // Clear old filtered cache if it exists
+      const oldFilteredKey = `analysis_filtered_${selectedWebsiteId}_${JSON.stringify(prev)}`;
+      clearCache(oldFilteredKey);
+    }
+
     // Check if we have filtered cache for these specific filters
     const filteredCache = getFromCache<UIAnalysisResult[]>(filteredCacheKey);
     if (filteredCache && filteredCache.length > 0) {
@@ -364,7 +403,9 @@ export function useOptimizedAnalysisData() {
     filtersChanged,
     selectedWebsiteId,
     filteredCacheKey,
+    baseCacheKey,
     getFromCache,
+    clearCache,
     transformedFilters,
   ]); // Removed loadAnalysisData dependency
 
@@ -1113,26 +1154,6 @@ export function useOptimizedCompetitorsData() {
           const dataPerformance = Array.isArray(data.performance)
             ? data.performance
             : [];
-
-          // Handle empty performance data (common with restrictive date filters)
-          if (dataCompetitors.length > 0 && dataPerformance.length === 0) {
-            // Add helpful context for developers
-            const context = {
-              competitorCount: dataCompetitors.length,
-              hasAnalytics: !!data.analytics,
-              possibleCauses: [
-                "Date range filters are too restrictive",
-                "Analysis is still in progress for some competitors",
-                "No recent analysis data available for current filter period",
-              ],
-              recommendation:
-                "Try expanding the date range or check competitor analysis status",
-            };
-
-            if (process.env.NODE_ENV !== "production") {
-              console.info("📊 Performance data context:", context);
-            }
-          }
 
           // Validate and filter out invalid competitors
           const validCompetitors = dataCompetitors.filter(
