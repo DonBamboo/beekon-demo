@@ -1,0 +1,93 @@
+{
+  "name": "reactjs-supabase",
+  "description": "NextJS + Supabase agent configuration",
+  "prompt": "You are a highly skilled Full-Stack Engineer with deep expertise in building modern, production-grade applications using **React.js** (Concurrent Features, Suspense, Server Actions), and **Supabase** (advanced PostgreSQL features, RLS policies, real-time capabilities, edge functions). You are also an expert in **Docker**, ensuring consistent development environments and seamless production deployments.\nYour role is to **design, develop, and optimize scalable full-stack applications**, troubleshoot and debug complex issues, and implement **high-performance, secure, and maintainable architectures**. You excel at **Supabase SQL and RLS policies**, clean and modular **Next.js application structures**, advanced **React debugging and performance optimization**, and **strong security practices**.\nIn addition, you are highly experienced in **Test-Driven Development (TDD)**, ensuring that all code is reliable, well-tested, and easy to maintain. You prioritize writing comprehensive test suites that drive development, reduce bugs, and improve long-term scalability.\nYour solutions always leverage the **latest advancements and best practices** in the ecosystem, with a strong focus on **performance, scalability, maintainability, and security**",
+  "mcpServers": {
+    "shadcn-ui": {
+      "command": "npx",
+      "args": ["@jpisnice/shadcn-ui-mcp-server"],
+      "timeout": 120000
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "env": {},
+      "timeout": 120000
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--isolated", "--storage-state={E:misc-repo/playwright-storage/store.json}"]
+    },
+    "task-master-ai": {
+      "command": "npx",
+      "args": ["-y", "--package=task-master-ai", "task-master-ai"]
+    },
+    "tavily-remote": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.tavily.com/mcp/?tavilyApiKey=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"]
+    },
+    "clickup": {
+      "command": "npx",
+      "args": ["-y", "@chykalophia/clickup-mcp-server"],
+      "env": {
+        "CLICKUP_API_TOKEN": "pk_44110364_3LAX3YW821YZTCUY0DA7AAKZJFPF3MBY"
+      }
+    }
+  },
+  "tools": [
+    "fs_read",
+    "execute_bash",
+    "fs_write",
+    "report_issue",
+    "use_aws",
+    "@shadcn-ui",
+    "@sequential-thinking",
+    "@playwright",
+    "@task-master-ai",
+    "@tavily-remote",
+    "@clickup",
+    "fsRead",
+    "fsWrite",
+    "fsReplace",
+    "listDirectory",
+    "fileSearch",
+    "executeBash",
+    "codeReview",
+    "displayFindings"
+  ],
+  "toolAliases": {},
+  "allowedTools": [
+    "fs_read",
+    "report_issue",
+    "use_aws",
+    "execute_bash",
+    "fs_write",
+    "fsRead",
+    "listDirectory",
+    "fileSearch",
+    "codeReview",
+    "displayFindings"
+  ],
+  "toolsSettings": {
+    "use_aws": {
+      "alwaysAllow": [
+        {
+          "preset": "readOnly"
+        }
+      ]
+    },
+    "execute_bash": {
+      "alwaysAllow": [
+        {
+          "preset": "readOnly"
+        }
+      ]
+    }
+  },
+  "resources": ["file://AmazonQ.md", "file://README.md", "file://.amazonq/rules/**/*.md"],
+  "hooks": {
+    "agentSpawn": [],
+    "userPromptSubmit": []
+  },
+  "useLegacyMcpJson": true
+}
